@@ -26,12 +26,14 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/export.h>
 #include <linux/printk.h>
 #include <linux/delay.h>
 #include <asm/intel-mid.h>
 
 #include "psb_drv.h"
 #include "gfx_ospm.h"
+#include "gfx_freq.h"
 #include "pmu_tng.h"
 #include "tng_wa.h"
 
@@ -62,7 +64,78 @@ enum GFX_ISLAND_STATUS {
 	POWER_OFF,		/* Powered off or Power gated.*/
 };
 
-static int pm_cmd_freq_wait(u32 reg_freq)
+
+/**
+  * gpu_freq_code_to_mhz() - Given frequency as a code (as defined for *_PM1
+  * register), return frequency in mhz.
+  * @freq_code_in - Input: A frequency code as specified for *_PM1 registers.
+  * Function return value: corresponding frequency in MHz or < 0 if error.
+  */
+static int gpu_freq_code_to_mhz(int freq_code_in)
+{
+	int freq_mhz_out;
+
+	switch (freq_code_in) {
+	case IP_FREQ_100_00:
+		freq_mhz_out = 100;
+		break;
+	case IP_FREQ_106_67:
+		freq_mhz_out = 106;
+		break;
+	case IP_FREQ_133_30:
+		freq_mhz_out = 133;
+		break;
+	case IP_FREQ_160_00:
+		freq_mhz_out = 160;
+		break;
+	case IP_FREQ_177_78:
+		freq_mhz_out = 177;
+		break;
+	case IP_FREQ_200_00:
+		freq_mhz_out = 200;
+		break;
+	case IP_FREQ_213_33:
+		freq_mhz_out = 213;
+		break;
+	case IP_FREQ_266_67:
+		freq_mhz_out = 266;
+		break;
+	case IP_FREQ_320_00:
+		freq_mhz_out = 320;
+		break;
+	case IP_FREQ_355_56:
+		freq_mhz_out = 355;
+		break;
+	case IP_FREQ_400_00:
+		freq_mhz_out = 400;
+		break;
+	case IP_FREQ_533_33:
+		freq_mhz_out = 533;
+		break;
+	case IP_FREQ_640_00:
+		freq_mhz_out = 640;
+		break;
+	case IP_FREQ_800_00:
+		freq_mhz_out = 800;
+		break;
+	default:
+		printk(KERN_ALERT "%s: Invalid freq code: %#x\n", __func__,
+			freq_code_in);
+		return -EINVAL;
+	}
+
+	return freq_mhz_out;
+}
+
+
+/**
+ * pm_cmd_freq_wait() - Wait for frequency valid via specified register.
+ * Optionally, return realized frequency to caller.
+ * @reg_freq: The frequency control register.  One of *_PM1.
+ * @freq_code_rlzd - If non-NULL, pointer to receive the realized Tangier
+ * frequency code.
+ */
+static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd)
 {
 	int tcount;
 	u32 freq_val;
@@ -79,28 +152,135 @@ static int pm_cmd_freq_wait(u32 reg_freq)
 		udelay(1);
 	}
 
+	if (freq_code_rlzd) {
+		*freq_code_rlzd = ((freq_val >> IP_FREQ_STAT_POS) &
+			IP_FREQ_MASK);
+	}
+
 	return 0;
 }
 
-static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code)
+
+/**
+ * pm_cmd_freq_set() - Set operating frequency via specified register.
+ * Optionally, return realized frequency to caller.
+ * @reg_freq: The frequency control register.  One of *_PM1.
+ * @freq_code: Tangier frequency code.
+ * @p_freq_code_rlzd - If non-NULL, pointer to receive the realized Tangier
+ * frequency code.
+ */
+static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd)
 {
 	u32 freq_val;
+	u32 freq_code_realized;
 	int rva;
 
-	pm_cmd_freq_wait(reg_freq);
+	rva = pm_cmd_freq_wait(reg_freq, NULL);
+	if (rva < 0) {
+		printk(KERN_ALERT "%s: pm_cmd_freq_wait 1 failed\n", __func__);
+		return rva;
+	}
 
 	freq_val = IP_FREQ_VALID | freq_code;
 	intel_mid_msgbus_write32(PUNIT_PORT, reg_freq, freq_val);
 
-	rva = pm_cmd_freq_wait(reg_freq);
+	rva = pm_cmd_freq_wait(reg_freq, &freq_code_realized);
+	if (rva < 0) {
+		printk(KERN_ALERT "%s: pm_cmd_freq_wait 2 failed\n", __func__);
+		return rva;
+	}
+
+	if (p_freq_code_rlzd)
+		*p_freq_code_rlzd = freq_code_realized;
 
 	return rva;
 }
 
-int set_gpu_freq(u32 freq_code)
+
+/**
+ * pm_cmd_freq_from_code() - Set operating frequency via specified register.
+ * Optionally, return realized frequency to caller.
+ * @reg_freq: The frequency control register.  One of *_PM1.
+ * @freq_code: Tangier frequency code.
+ * @function return value: - <0 if error, or frequency in MHz.
+ */
+int gpu_freq_set_from_code(int freq_code)
 {
-	return pm_cmd_freq_set(GFX_SS_PM1, freq_code);
+	u32 freq_realized_code;
+	int rva;
+
+	rva = pm_cmd_freq_set(GFX_SS_PM1, freq_code, &freq_realized_code);
+	if (rva < 0)
+		return rva;
+
+	return gpu_freq_code_to_mhz(freq_realized_code);
 }
+EXPORT_SYMBOL(gpu_freq_set_from_code);
+
+
+/**
+  * gpu_freq_mhz_to_code() - Given frequency in MHz, return frequency code
+  * used for frequency control.
+  * Always pick the code less than equal to the integer MHz value.
+  * @freq_mhz_in - Input: A MHz frequency specification.
+  * @*p_freq_out - Out: The quantized MHz frequency specification.
+  * Function return value: frequency code as in register definition.
+  */
+int gpu_freq_mhz_to_code(int freq_mhz_in, int *p_freq_out)
+{
+	int freq_code;
+	int freq_out;
+
+	if (freq_mhz_in >= 800) {
+		freq_code = IP_FREQ_800_00;	/* 800.00 */
+		freq_out = 800;
+	} else if (freq_mhz_in >= 640) {
+		freq_code = IP_FREQ_640_00;	/* 640.00 */
+		freq_out = 640;
+	} else if (freq_mhz_in >= 533) {
+		freq_code = IP_FREQ_533_33;	/* 533.33 */
+		freq_out = 533;
+	} else if (freq_mhz_in >= 400) {
+		freq_code = IP_FREQ_400_00;	/* 400.00 */
+		freq_out = 400;
+	} else if (freq_mhz_in >= 355) {
+		freq_code = IP_FREQ_355_56;	/* 355.56 */
+		freq_out = 355;
+	} else if (freq_mhz_in >= 320) {
+		freq_code = IP_FREQ_320_00;	/* 320.00 */
+		freq_out = 320;
+	} else if (freq_mhz_in >= 266) {
+		freq_code = IP_FREQ_266_67;	/* 266.67 */
+		freq_out = 266;
+	} else if (freq_mhz_in >= 213) {
+		freq_code = IP_FREQ_213_33;	/* 213.33 */
+		freq_out = 213;
+	} else if (freq_mhz_in >= 200) {
+		freq_code = IP_FREQ_200_00;	/* 200.00 */
+		freq_out = 200;
+	} else if (freq_mhz_in >= 177) {
+		freq_code = IP_FREQ_177_78;	/* 177.78 */
+		freq_out = 177;
+	} else if (freq_mhz_in >= 160) {
+		freq_code = IP_FREQ_160_00;	/* 160.00 */
+		freq_out = 160;
+	} else if (freq_mhz_in >= 133) {
+		freq_code = IP_FREQ_133_30;	/* 133.30 */
+		freq_out = 133;
+	} else if (freq_mhz_in >= 106) {
+		freq_code = IP_FREQ_106_67;	/* 106.67 */
+		freq_out = 106;
+	} else {
+		freq_code = IP_FREQ_100_00;	/* 100.00 */
+		freq_out = 100;
+	}
+
+	*p_freq_out = freq_out;
+
+	return freq_code;
+}
+EXPORT_SYMBOL(gpu_freq_mhz_to_code);
+
 
 /***********************************************************
  * All Graphics Island

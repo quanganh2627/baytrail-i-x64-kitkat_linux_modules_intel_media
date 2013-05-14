@@ -132,7 +132,15 @@
 /*
  * Frequency bits for *_PM1 registers above.
  */
-#define IP_FREQ_VALID 0x80
+#define IP_FREQ_VALID     0x80     /* Freq is valid bit */
+
+#define IP_FREQ_SIZE         5     /* number of bits in freq fields */
+#define IP_FREQ_MASK      0x1f     /* Bit mask for freq field */
+
+/*  Positions of various frequency fields */
+#define IP_FREQ_POS          0     /* Freq control [4:0] */
+#define IP_FREQ_GUAR_POS     8     /* Freq guar   [12:8] */
+#define IP_FREQ_STAT_POS    24     /* Freq status [28:24] */
 
 #define IP_FREQ_100_00 0x1f        /* 0b11111 100.00 */
 #define IP_FREQ_106_67 0x1d        /* 0b11101 106.67 */
