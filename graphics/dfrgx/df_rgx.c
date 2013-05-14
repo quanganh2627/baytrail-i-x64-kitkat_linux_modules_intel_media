@@ -11,7 +11,7 @@
  * To-do:
  * - Ensure that this driver also works as built-in (not just module).
  * - Add and use utilization computation based on performance counters.
- * - Change or remove program symbol names that start with gburst* or gbp_*
+ * - Change or remove program symbol names that start with gbp_*
  * - Expose more information and control through sysfs or debugfs.
  * - Polling interval should be 5ms, so use hrtimer and separate work thread
  *   instead of using devfreq polling based on HZ.
@@ -77,7 +77,7 @@
 
 #include <ospm/gfx_freq.h>
 
-#define GBURST_GLOBAL_ENABLE_DEFAULT 1
+#define DFRGX_GLOBAL_ENABLE_DEFAULT 1
 
 #define DF_RGX_NAME_DEV    "dfrgx"
 #define DF_RGX_NAME_DRIVER "dfrgxdrv"
@@ -140,18 +140,18 @@ static struct platform_device *df_rgx_created_dev;
  * Module parameters:
  *
  * - can be updated (if permission allows) via writing:
- *     /sys/module/gburst/parameters/<name>
+ *     /sys/module/dfrgx/parameters/<name>
  * - can be set at module load time:
- *     insmod /lib/modules/gburst.ko enable=0
- * - For built-in modules, can be on kernel command line:
- *     gburst.enable=0
+ *     insmod /lib/modules/dfrgx.ko enable=0
+ * - For built-in drivers, can be on kernel command line:
+ *     dfrgx.enable=0
  */
 
 /**
  * module parameter "enable" is not writable in sysfs as there is presently
  * no code to detect the transition between 0 and 1.
  */
-static unsigned int mprm_enable = GBURST_GLOBAL_ENABLE_DEFAULT;
+static unsigned int mprm_enable = DFRGX_GLOBAL_ENABLE_DEFAULT;
 module_param_named(enable, mprm_enable, uint, S_IRUGO);
 
 static unsigned int mprm_verbosity = 2;
@@ -159,7 +159,7 @@ module_param_named(verbosity, mprm_verbosity, uint, S_IRUGO|S_IWUSR);
 
 
 #define DRIVER_AUTHOR "Intel Corporation"
-#define DRIVER_DESC "gpu burst driver for Intel Clover Trail Plus"
+#define DRIVER_DESC "devfreq driver for rgx graphics"
 
 MODULE_AUTHOR(DRIVER_AUTHOR);
 MODULE_DESCRIPTION(DRIVER_DESC);
@@ -212,18 +212,25 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 
 	sts = 0;
 
-	printk(DFRGX_ALERT "%s: entry, requesting %luKHz\n",
-		__func__, freq_khz);
-
 	/* Warning - this function may be called from devfreq_add_device,
 	 * but if it is, bfdata->devfreq will not yet be set.
 	 */
 	df = bfdata->devfreq;
 
-	if (df && (freq_khz == 0) && df->previous_freq)
+	if (!df) {
+	    /*
+	     * Initial call, so set initial frequency.	Limits from min_freq
+	     * and max_freq would not have been applied by caller.
+	     */
+	    freq_req = DF_RGX_INITIAL_FREQ_KHZ;
+	}
+	else if ((freq_khz == 0) && df->previous_freq)
 		freq_req = df->previous_freq;
 	else
 		freq_req = freq_khz;
+
+	printk(DFRGX_ALERT "%s: entry, caller requesting %luKHz\n",
+		__func__, freq_khz);
 
 	if (freq_req < DF_RGX_FREQ_KHZ_MIN)
 		freq_limited = DF_RGX_FREQ_KHZ_MIN;
@@ -527,7 +534,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	bfdata->gbp_cooldv_state_override = -1;
 
 	{
-		static const char *tcd_type = "gpu_burst";
+		static const char *tcd_type = "dfrgx";
 		static const struct thermal_cooling_device_ops tcd_ops = {
 			.get_max_state = tcd_get_max_state,
 			.get_cur_state = tcd_get_cur_state,
