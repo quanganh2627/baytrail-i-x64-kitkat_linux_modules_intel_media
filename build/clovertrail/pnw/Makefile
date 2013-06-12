@@ -16,7 +16,7 @@ DISPLAYINC=$(MEDIAINC)/display/pnw/drv
 OTM_HDMI_INC=$(MEDIAINC)/otm_hdmi
 
 # Get definitions for PVRINCS-y and PVRDEFS-y
-include $(M)/../pvrdefs.mk
+include $(A)/build/clovertrail/pvrdefs.mk
 
 include_dirs := \
 	$(PVRINCS-y) \
@@ -43,11 +43,6 @@ include_dirs := \
 ifeq ($(DISPLAY_DRIVER_DEBUG_INTERFACE), true)
 ccflags-y += -DDISPLAY_DRIVER_DEBUG_INTERFACE
 endif
-
-ccflags-$(CONFIG_SUPPORT_MIPI_H8C7_CMD_DISPLAY) += \
-	-DCONFIG_SUPPORT_MIPI_H8C7_CMD_DISPLAY
-
-ccflags-$(CONFIG_VB_LCD_DISPLAY) += -DCONFIG_VB_LCD_DISPLAY
 
 #only for internal testing
 ccflags-y += -DOTM_HDMI_UNIT_TEST
@@ -91,7 +86,6 @@ $(DRIVER_NAME)-objs += $(FBDEVDIR)/drmlfb_displayclass.o \
 	$(DISPLAYDIR)/gi_renesas_cmd.o \
 	$(DISPLAYDIR)/yb_cmi_vid.o \
 	$(DISPLAYDIR)/mdfld_hdmi_audio.o \
-	$(DISPLAYDIR)/h8c7_cmd.o \
 	$(VIDEO_COMMON_DIR)/psb_ttm_glue.o \
 	$(ENCODE_DIR)/pnw_topaz.o \
 	$(ENCODE_DIR)/pnw_topazinit.o \
@@ -120,5 +114,21 @@ $(DRIVER_NAME)-objs += $(FBDEVDIR)/drmlfb_displayclass.o \
 	$(OTM_HDMI_SRC)/ipil/specific/ctp/ips_hdmi_priv.o \
 	$(OTM_HDMI_SRC)/pil/specific/ctp/ps_hdmi.o
 
+ifeq ($(CONFIG_SUPPORT_TMD_MIPI_600X1024_DISPLAY), y)
+$(DRIVER_NAME)-objs += $(DISPLAYDIR)/tmd_6x10_vid.o
+endif
+
+ifeq ($(CONFIG_SUPPORT_MIPI_H8C7_CMD_DISPLAY), y)
+$(DRIVER_NAME)-objs += $(DISPLAYDIR)/h8c7_cmd.o
+endif
+
+ifeq ($(CONFIG_SUPPORT_VB_MIPI_DISPLAY), y)
+$(DRIVER_NAME)-objs += $(DISPLAYDIR)/vb_cmd.o
+endif
+
+ifeq ($(CONFIG_R63311_MIPI_VIDEO_MODE), y)
+$(DRIVER_NAME)-objs += $(DISPLAYDIR)/r63311_vid.o
+endif
+
 obj-m += $(DRIVER_NAME).o
-	
+
