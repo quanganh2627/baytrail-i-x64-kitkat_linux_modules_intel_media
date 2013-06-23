@@ -62,6 +62,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMem(IMG_HANDLE hBridge,
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
+
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -85,6 +86,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMemValue32(IMG_HANDLE h
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
+
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -103,11 +105,12 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMemValue32(IMG_HANDLE h
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMemValue64(IMG_HANDLE hBridge,
 								    IMG_HANDLE hPMR,
 								    IMG_DEVMEM_OFFSET_T uiOffset,
-								    IMG_UINT64 ui32Value,
+								    IMG_UINT64 ui64Value,
 								    IMG_UINT32 ui32PDumpFlags)
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
+
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -116,7 +119,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMemValue64(IMG_HANDLE h
 		PMRPDumpLoadMemValue64(
 					psPMRInt,
 					uiOffset,
-					ui32Value,
+					ui64Value,
 					ui32PDumpFlags);
 
 
@@ -132,6 +135,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpSaveToFile(IMG_HANDLE hBrid
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
+
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -160,6 +164,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpSymbolicAddr(IMG_HANDLE hBr
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
+
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -189,6 +194,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpPol32(IMG_HANDLE hBridge,
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
+
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -215,6 +221,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpCBP(IMG_HANDLE hBridge,
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
+
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -242,6 +249,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntPDumpSaveToFileVirtual(IMG
 {
 	PVRSRV_ERROR eError;
 	DEVMEMINT_CTX * psDevmemServerContextInt;
+
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psDevmemServerContextInt = (DEVMEMINT_CTX *) hDevmemServerContext;

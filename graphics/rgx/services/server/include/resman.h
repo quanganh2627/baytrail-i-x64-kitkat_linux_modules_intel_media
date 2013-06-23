@@ -178,9 +178,10 @@ PVRSRV_ERROR PVRSRVResManConnect(PRESMAN_DEFER_CONTEXT hDeferContext,
 
 IMG_VOID PVRSRVResManDisconnect(PRESMAN_CONTEXT hResManContext);
 
-PVRSRV_ERROR PVRSRVResManCreateDeferContext(PRESMAN_DEFER_CONTEXT *phDeferContext);
+PVRSRV_ERROR PVRSRVResManCreateDeferContext(IMG_HANDLE hEventObj,
+										    PRESMAN_DEFER_CONTEXT *phDeferContext);
 
-IMG_VOID PVRSRVResManFlushDeferContext(PRESMAN_DEFER_CONTEXT hDeferContext);
+IMG_BOOL PVRSRVResManFlushDeferContext(PRESMAN_DEFER_CONTEXT hDeferContext);
 
 IMG_VOID PVRSRVResManDestroyDeferContext(PRESMAN_DEFER_CONTEXT hDeferContext);
 

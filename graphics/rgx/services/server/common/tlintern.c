@@ -41,7 +41,6 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
-
 //#define PVR_DPF_FUNCTION_TRACE_ON 1
 #undef PVR_DPF_FUNCTION_TRACE_ON
 #include "pvr_debug.h"
@@ -53,31 +52,31 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_tlcommon.h"
 #include "tlintern.h"
 
-
-
-
 /*
  * Make functions
  */
-
-
 PTL_STREAM_DESC
 TLMakeStreamDesc(PTL_SNODE f1, IMG_UINT32 f2, IMG_HANDLE f3)
 {
 	PTL_STREAM_DESC ps = OSAllocZMem(sizeof(TL_STREAM_DESC));
-	if (ps == NULL) return NULL;
+	if (ps == IMG_NULL) 
+	{
+		return IMG_NULL;
+	}
 	ps->psNode = f1;
 	ps->ui32Flags = f2;
 	ps->hDataEvent = f3;
 	return ps;
-
 }
 
 PTL_SNODE
 TLMakeSNode(IMG_HANDLE f2, TL_STREAM *f3, TL_STREAM_DESC *f4)
 {
 	PTL_SNODE ps = OSAllocZMem(sizeof(TL_SNODE));
-	if (ps == NULL) return NULL;
+	if (ps == IMG_NULL)
+	{
+		return IMG_NULL;
+	}
 	ps->hDataEventObj = f2;
 	ps->psStream = f3;
 	ps->psDesc = f4;
@@ -85,29 +84,119 @@ TLMakeSNode(IMG_HANDLE f2, TL_STREAM *f3, TL_STREAM_DESC *f4)
 	return ps;
 }
 
-
-
 /*
  * Transport Layer Global top variables and functions
  */
-TL_GLOBAL_GDATA *TLGGD(void)	// TLGetGlobalData()
-{
-	static TL_GLOBAL_GDATA sTlGlobalData;
+static TL_GLOBAL_DATA  sTLGlobalData = { 0 };
 
-	return &sTlGlobalData;
+TL_GLOBAL_DATA *TLGGD(IMG_VOID)	// TLGetGlobalData()
+{
+	return &sTLGlobalData;
+}
+
+/* TLInit must only be called once at driver initialisation for one device.
+ * An assert is provided to check this condition on debug builds.
+ */
+PVRSRV_ERROR
+TLInit(PVRSRV_DEVICE_NODE *psDevNode)
+{
+	PVR_DPF_ENTERED;
+
+	PVR_ASSERT(psDevNode);
+	PVR_ASSERT(sTLGlobalData.psRgxDevNode==0);
+
+	/* Store the RGX device node for later use in devmem buffer allocations */
+	sTLGlobalData.psRgxDevNode = (IMG_VOID*)psDevNode;
+
+	/* Allocate the event object used to signal global TL events such as
+	 * - new stream created
+	 * Don't allow the driver to start up on error */
+	PVR_DPF_RETURN_RC( OSEventObjectCreate("TLGlobalEventObj", &sTLGlobalData.hTLEventObj) );
+}
+
+static IMG_VOID RemoveAndFreeStreamNode(PTL_SNODE psRemove)
+{
+	TL_GLOBAL_DATA*  psGD = TLGGD();
+	PTL_SNODE* 		 last;
+	PTL_SNODE 		 psn;
+	PVRSRV_ERROR     eError;
+
+	PVR_DPF_ENTERED;
+
+	// Unlink the stream node from the master list
+	PVR_ASSERT(psGD->psHead);
+	last = &psGD->psHead;
+	for (psn = psGD->psHead; psn; psn=psn->psNext)
+	{
+		if (psn == psRemove)
+		{
+			/* Other calling code may have freed and zero'd the pointers */
+			if (psn->psDesc)
+			{
+				OSFREEMEM(psn->psDesc);
+			}
+			if (psn->psStream)
+			{
+				OSFREEMEM(psn->psStream);
+			}
+			*last = psn->psNext;
+			break;
+		}
+		last = &psn->psNext;
+	}
+
+	// Release the event list object owned by the stream node
+	if (psRemove->hDataEventObj)
+	{
+		eError = OSEventObjectDestroy(psRemove->hDataEventObj);
+		PVR_LOG_IF_ERROR(eError, "OSEventObjectDestroy");
+
+		psRemove->hDataEventObj = NULL;
+	}
+
+	// Release the memory of the stream node
+	OSFREEMEM(psRemove);
+
+	PVR_DPF_RETURN;
 }
 
 IMG_VOID
-TLSetGlobalRgxDevice(PVRSRV_DEVICE_NODE *psDevNode)
+TLDeInit(IMG_VOID)
 {
-	PVR_ASSERT(psDevNode);
-	TLGGD()->psRgxDevNode = (IMG_VOID*)psDevNode;
+	PVR_DPF_ENTERED;
+
+	if (sTLGlobalData.uiClientCnt)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "TLDeInit transport layer but %d clients still connected", sTLGlobalData.uiClientCnt));
+		sTLGlobalData.uiClientCnt = 0;
+	}
+
+	/* Clean up the SNODE list */
+	if (sTLGlobalData.psHead)
+	{
+		while (sTLGlobalData.psHead)
+		{
+			RemoveAndFreeStreamNode(sTLGlobalData.psHead);
+		}
+		/* Leave psHead NULL on loop exit */
+	}
+
+	/* Clean up the TL global event object */
+	if (sTLGlobalData.hTLEventObj)
+	{
+		OSEventObjectDestroy(sTLGlobalData.hTLEventObj);
+		sTLGlobalData.hTLEventObj = NULL;
+	}
+
+	sTLGlobalData.psRgxDevNode = NULL;
+
+	PVR_DPF_RETURN;
 }
 
 PVRSRV_DEVICE_NODE*
-TLGetGlobalRgxDevice(void)
+TLGetGlobalRgxDevice(IMG_VOID)
 {
-	PVRSRV_DEVICE_NODE* p = (PVRSRV_DEVICE_NODE*)(TLGGD()->psRgxDevNode);
+	PVRSRV_DEVICE_NODE *p = (PVRSRV_DEVICE_NODE*)(TLGGD()->psRgxDevNode);
 	if (!p)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "TLGetGlobalRgxDevice() NULL node ptr, TL " \
@@ -130,7 +219,7 @@ IMG_VOID TLAddStreamNode(PTL_SNODE psAdd)
 
 PTL_SNODE TLFindStreamNodeByName(IMG_PCHAR pszName)
 {
-	TL_GLOBAL_GDATA* psGD = TLGGD();
+	TL_GLOBAL_DATA*  psGD = TLGGD();
 	PTL_SNODE 		 psn;
 
 	PVR_DPF_ENTERED;
@@ -138,15 +227,19 @@ PTL_SNODE TLFindStreamNodeByName(IMG_PCHAR pszName)
 	PVR_ASSERT(pszName);
 
 	for (psn = psGD->psHead; psn; psn=psn->psNext)
-		if (OSStringCompare(psn->psStream->szName, pszName)==0)
+	{
+		if (psn->psStream && OSStringCompare(psn->psStream->szName, pszName)==0)
+		{
 			PVR_DPF_RETURN_VAL(psn);
+		}
+	}
 
-	PVR_DPF_RETURN_VAL(NULL);
+	PVR_DPF_RETURN_VAL(IMG_NULL);
 }
 
 PTL_SNODE TLFindStreamNodeByDesc(PTL_STREAM_DESC psDesc)
 {
-	TL_GLOBAL_GDATA* psGD = TLGGD();
+	TL_GLOBAL_DATA*  psGD = TLGGD();
 	PTL_SNODE 		 psn;
 
 	PVR_DPF_ENTERED;
@@ -154,74 +247,55 @@ PTL_SNODE TLFindStreamNodeByDesc(PTL_STREAM_DESC psDesc)
 	PVR_ASSERT(psDesc);
 
 	for (psn = psGD->psHead; psn; psn=psn->psNext)
+	{
 		if (psn->psDesc == psDesc)
+		{
 			PVR_DPF_RETURN_VAL(psn);
-
-	PVR_DPF_RETURN_VAL(NULL);
+		}
+	}
+	PVR_DPF_RETURN_VAL(IMG_NULL);
 }
 
-IMG_VOID TLTryToRemoveAndFreeStreamNode(PTL_SNODE psRemove)
+IMG_VOID TLRemoveStreamAndTryFreeStreamNode(PTL_SNODE psRemove)
 {
-	TL_GLOBAL_GDATA* psGD = TLGGD();
-	PTL_SNODE* 		 last;
-	PTL_SNODE 		 psn;
-	PVRSRV_ERROR     eError;
-
 	PVR_DPF_ENTERED;
 
-
 	PVR_ASSERT(psRemove);
+	psRemove->psStream = IMG_NULL;
 
-	// First check is node is really no longer needed
-	//
-	if (psRemove->psStream != NULL)
-		PVR_DPF_RETURN;
-
-	if (psRemove->psDesc != NULL)
+	if (psRemove->psDesc != IMG_NULL)
 	{
+		PVRSRV_ERROR     eError;
+
 		// Signal client if waiting...so they detect stream has been
 		// destroyed and can return an error.
-		//
 		eError = OSEventObjectSignal(psRemove->hDataEventObj);
-		if ( eError != PVRSRV_OK)
-		{
-			PVR_DPF((PVR_DBG_ERROR, "OSEventObjectSignal() error %d", eError));
-		}
+		PVR_LOG_IF_ERROR(eError, "OSEventObjectSignal");
 
 		PVR_DPF_RETURN;
 	}
 
-	// Unlink the stream node from the master list
-	//
-	PVR_ASSERT(psGD->psHead);
-	last = &psGD->psHead;
-	for (psn = psGD->psHead; psn; psn=psn->psNext)
-	{
-		if (psn == psRemove)
-		{
-			*last = psn->psNext;
-			break;
-		}
-		last = &psn->psNext;
-	}
-
-	// Release the event list object owned by the stream node
-	//
-	if (psRemove->hDataEventObj)
-	{
-		eError = OSEventObjectDestroy(psRemove->hDataEventObj);
-		if (eError != PVRSRV_OK)
-		{
-			PVR_DPF((PVR_DBG_ERROR, "OSEventObjectDestroy() error %d", eError));
-		}
-	}
-
-	// Release the memory of the stream node
-	//
-	OSFreeMem(psRemove);
+	RemoveAndFreeStreamNode(psRemove);
 
 	PVR_DPF_RETURN;
 }
 
+IMG_VOID TLRemoveDescAndTryFreeStreamNode(PTL_SNODE psRemove)
+{
+	PVR_DPF_ENTERED;
 
+	PVR_ASSERT(psRemove);
+
+	psRemove->psDesc = IMG_NULL;
+
+	// First check is node is really no longer needed
+	if (psRemove->psStream != IMG_NULL)
+	{
+		PVR_DPF_RETURN;
+	}
+
+	RemoveAndFreeStreamNode(psRemove);
+
+	PVR_DPF_RETURN;
+}
 

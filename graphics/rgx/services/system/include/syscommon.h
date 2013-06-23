@@ -59,6 +59,17 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig);
 IMG_VOID SysDestroyConfigData(PVRSRV_SYSTEM_CONFIG *psSysConfig);
 PVRSRV_ERROR SysDebugInfo(PVRSRV_SYSTEM_CONFIG *psSysConfig);
 
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+PVRSRV_ERROR SysInstallDeviceLISR(IMG_UINT32 ui32IRQ,
+				  IMG_BOOL bShared,
+				  IMG_CHAR *pszName,
+				  PFN_LISR pfnLISR,
+				  IMG_PVOID pvData,
+				  IMG_HANDLE *phLISRData);
+
+PVRSRV_ERROR SysUninstallDeviceLISR(IMG_HANDLE hLISRData);
+#endif /* defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING) */
+
 /*
  * SysReadHWReg and SysWriteHWReg differ from OSReadHWReg and OSWriteHWReg
  * in that they are always intended for use with real hardware, even on

@@ -47,6 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "img_types.h"
 #include "pdumpdefs.h"
 #include "pvrsrv_error.h"
+#include "pmr.h"
 
 #include "pdump.h"
 
@@ -62,9 +63,17 @@ PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
                /* alignment is alignment of start of buffer _and_
                   minimum contiguity - i.e. smallest allowable
                   page-size.  FIXME: review this decision. */
-               IMG_UINT32 ui32Align,
+               IMG_DEVMEM_ALIGN_T uiAlign,
                IMG_BOOL bForcePersistent,
                IMG_HANDLE *phHandlePtr);
+
+IMG_INTERNAL IMG_VOID
+PDumpPMRMallocPMR(const PMR *psPMR,
+                  IMG_DEVMEM_SIZE_T uiSize,
+                  IMG_DEVMEM_ALIGN_T uiBlockSize,
+                  IMG_BOOL bForcePersistent,
+                  IMG_HANDLE *phPDumpAllocInfoPtr);
+
 extern
 PVRSRV_ERROR PDumpPMRFree(IMG_HANDLE hPDumpAllocationInfoHandle);
 #else	/* PDUMP */
@@ -76,18 +85,32 @@ static INLINE PVRSRV_ERROR
 PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
                const IMG_CHAR *pszSymbolicAddress,
                IMG_UINT64 ui64Size,
-               IMG_UINT32 ui32Align,
+               IMG_DEVMEM_ALIGN_T uiAlign,
                IMG_BOOL bForcePersistent,
                IMG_HANDLE *phHandlePtr)
 {
 	PVR_UNREFERENCED_PARAMETER(pszDevSpace);
 	PVR_UNREFERENCED_PARAMETER(pszSymbolicAddress);
 	PVR_UNREFERENCED_PARAMETER(ui64Size);
-	PVR_UNREFERENCED_PARAMETER(ui32Align);
+	PVR_UNREFERENCED_PARAMETER(uiAlign);
 	PVR_UNREFERENCED_PARAMETER(bForcePersistent);
 	PVR_UNREFERENCED_PARAMETER(phHandlePtr);
 	PVR_UNREFERENCED_PARAMETER(bForcePersistent);
 	return PVRSRV_OK;
+}
+
+static INLINE IMG_VOID
+PDumpPMRMallocPMR(const PMR *psPMR,
+                  IMG_DEVMEM_SIZE_T uiSize,
+                  IMG_DEVMEM_ALIGN_T uiBlockSize,
+                  IMG_BOOL bForcePersistent,
+                  IMG_HANDLE *phPDumpAllocInfoPtr)
+{
+	PVR_UNREFERENCED_PARAMETER(psPMR);
+	PVR_UNREFERENCED_PARAMETER(uiSize);
+	PVR_UNREFERENCED_PARAMETER(uiBlockSize);
+	PVR_UNREFERENCED_PARAMETER(bForcePersistent);
+	PVR_UNREFERENCED_PARAMETER(phPDumpAllocInfoPtr);
 }
 
 #ifdef INLINE_IS_PRAGMA
@@ -111,9 +134,9 @@ PDumpPMRFree(IMG_HANDLE hPDumpAllocationInfoHandle)
     PDumpPMRFree(hHandle)
 #else
 #define PDUMP_PHYSMEM_MALLOC_OSPAGES(pszPDumpMemDevName, ui32SerialNum, ui32Size, ui32Align, phHandlePtr) \
-    ((void)(*phHandlePtr=IMG_NULL))
+    ((IMG_VOID)(*phHandlePtr=IMG_NULL))
 #define PDUMP_PHYSMEM_FREE_OSPAGES(hHandle) \
-    ((void)(0))
+    ((IMG_VOID)(0))
 #endif // defined(PDUMP)
 
 extern PVRSRV_ERROR

@@ -1060,7 +1060,15 @@ DevmemAllocate(DEVMEM_HEAP *psHeap,
 			goto failZero;
 		}
 
-		OSMemSet(pvAddr, 0x0, uiSize);
+		/* FIXME: uiSize is a 64-bit quantity whereas the 3rd argument
+		 * to OSMemSet is a 32-bit quantity on 32-bit systems
+		 * hence a compiler warning of implicit cast and loss of data.
+		 * Added explicit cast and assert to remove warning.
+		 */
+#if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
+		PVR_ASSERT(uiSize<IMG_UINT32_MAX);
+#endif
+		OSMemSet(pvAddr, 0x0, (IMG_SIZE_T)uiSize);
 
 		DevmemReleaseCpuVirtAddr(psMemDesc);
 	}
@@ -1666,3 +1674,75 @@ DevmemGetPMRData(DEVMEM_MEMDESC *psMemDesc,
 	return PVRSRV_OK;
 }
 
+IMG_INTERNAL PVRSRV_ERROR
+DevmemLocalImport(IMG_HANDLE hBridge,
+				  IMG_HANDLE hExtHandle,
+				  DEVMEM_FLAGS_T uiFlags,
+				  DEVMEM_MEMDESC **ppsMemDescPtr,
+				  IMG_DEVMEM_SIZE_T *puiSizePtr)
+{
+    DEVMEM_MEMDESC *psMemDesc = IMG_NULL;
+    DEVMEM_IMPORT *psImport;
+    IMG_DEVMEM_SIZE_T uiSize;
+    IMG_DEVMEM_ALIGN_T uiAlign;
+    IMG_HANDLE hPMR;
+    PVRSRV_ERROR eError;
+
+    if (ppsMemDescPtr == IMG_NULL)
+    {
+        eError = PVRSRV_ERROR_INVALID_PARAMS;
+        goto failParams;
+    }	
+
+	eError =_DevmemMemDescAlloc(&psMemDesc);
+    if (eError != PVRSRV_OK)
+    {
+        goto failMemDescAlloc;
+    }
+
+	eError = _DevmemImportStructAlloc(hBridge,
+									  IMG_TRUE,
+									  &psImport);
+    if (eError != PVRSRV_OK)
+    {
+        eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+        goto failImportAlloc;
+    }
+
+	/* Get the PMR handle and it's size from the server */
+	eError = BridgePMRLocalImportPMR(hBridge,
+									 hExtHandle,
+									 &hPMR,
+									 &uiSize,
+									 &uiAlign);
+	if (eError != PVRSRV_OK)
+	{
+		goto failImport;
+	}
+
+	_DevmemImportStructInit(psImport,
+							uiSize,
+							uiAlign,
+							uiFlags,
+							hPMR);
+
+	_DevmemMemDescInit(psMemDesc,
+					   0,
+					   psImport);
+
+    *ppsMemDescPtr = psMemDesc;
+	if (puiSizePtr)
+		*puiSizePtr = uiSize;
+
+	return PVRSRV_OK;
+
+failImport:
+    _DevmemImportDiscard(psImport);
+failImportAlloc:
+	_DevmemMemDescDiscard(psMemDesc);
+failMemDescAlloc:
+failParams:
+	PVR_ASSERT(eError != PVRSRV_OK);
+
+	return eError;
+}

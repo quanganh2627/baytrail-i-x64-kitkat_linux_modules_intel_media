@@ -49,6 +49,220 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem_utils.h"
 #include "client_mm_bridge.h"
 
+/*
+	The Devmem import structure is the structure we use
+	to manage memory that is "imported" (which is page
+	granular) from the server into our process, this
+	includes allocations.
+
+	This allows memory to be imported without requiring
+	any CPU or device mapping. Memory can then be mapped
+	into the device or CPU on demand, but neither is
+	required.
+*/
+
+IMG_INTERNAL
+IMG_VOID _DevmemImportStructAcquire(DEVMEM_IMPORT *psImport)
+{
+	OSLockAcquire(psImport->hLock);
+	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
+					__FUNCTION__,
+					psImport,
+					psImport->ui32RefCount,
+					psImport->ui32RefCount+1);
+
+	psImport->ui32RefCount++;
+	OSLockRelease(psImport->hLock);
+}
+
+IMG_INTERNAL
+IMG_VOID _DevmemImportStructRelease(DEVMEM_IMPORT *psImport)
+{
+	PVR_ASSERT(psImport->ui32RefCount != 0);
+
+	OSLockAcquire(psImport->hLock);
+	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
+					__FUNCTION__,
+					psImport,
+					psImport->ui32RefCount,
+					psImport->ui32RefCount-1);
+
+	if (--psImport->ui32RefCount == 0)
+	{
+		OSLockRelease(psImport->hLock);
+
+		BridgePMRUnrefPMR(psImport->hBridge,
+						  psImport->hPMR);
+		OSLockDestroy(psImport->sCPUImport.hLock);
+		OSLockDestroy(psImport->sDeviceImport.hLock);
+		OSLockDestroy(psImport->hLock);
+		OSFreeMem(psImport);
+	}
+	else
+	{
+		OSLockRelease(psImport->hLock);
+	}
+}
+
+/*
+	Discard a created, but unitilised import structure.
+	This must only be called before _DevmemImportStructInit
+	after which _DevmemImportStructRelease must be used to
+	"free" the import structure
+*/
+IMG_INTERNAL
+IMG_VOID _DevmemImportDiscard(DEVMEM_IMPORT *psImport)
+{
+	PVR_ASSERT(psImport->ui32RefCount == 0);
+	OSLockDestroy(psImport->sCPUImport.hLock);
+	OSLockDestroy(psImport->sDeviceImport.hLock);
+	OSLockDestroy(psImport->hLock);
+	OSFreeMem(psImport);
+}
+
+IMG_INTERNAL
+PVRSRV_ERROR _DevmemMemDescAlloc(DEVMEM_MEMDESC **ppsMemDesc)
+{
+	DEVMEM_MEMDESC *psMemDesc;
+	PVRSRV_ERROR eError;
+
+	psMemDesc = OSAllocMem(sizeof(DEVMEM_MEMDESC));
+
+	if (psMemDesc == IMG_NULL)
+	{
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto failAlloc;
+	}
+	
+	/* Structure must be zero'd incase it needs to be freed before it is initialised! */
+	OSMemSet(psMemDesc, 0, sizeof(DEVMEM_MEMDESC));
+
+	eError = OSLockCreate(&psMemDesc->hLock, LOCK_TYPE_PASSIVE);
+	if (eError != PVRSRV_OK)
+	{
+		goto failMDLock;
+	}
+
+	eError = OSLockCreate(&psMemDesc->sDeviceMemDesc.hLock, LOCK_TYPE_PASSIVE);
+	if (eError != PVRSRV_OK)
+	{
+		goto failDMDLock;
+	}
+
+	eError = OSLockCreate(&psMemDesc->sCPUMemDesc.hLock, LOCK_TYPE_PASSIVE);
+	if (eError != PVRSRV_OK)
+	{
+		goto failCMDLock;
+	}
+
+	*ppsMemDesc = psMemDesc;
+
+	return PVRSRV_OK;
+
+failCMDLock:
+	OSLockDestroy(psMemDesc->sDeviceMemDesc.hLock);
+failDMDLock:
+	OSLockDestroy(psMemDesc->hLock);
+failMDLock:
+	OSFreeMem(psMemDesc);
+failAlloc:
+	PVR_ASSERT(eError != PVRSRV_OK);
+
+	return eError;
+}
+
+/*
+	Init the MemDesc structure
+*/
+IMG_INTERNAL
+IMG_VOID _DevmemMemDescInit(DEVMEM_MEMDESC *psMemDesc,
+										  IMG_DEVMEM_OFFSET_T uiOffset,
+										  DEVMEM_IMPORT *psImport)
+{
+	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
+					__FUNCTION__,
+					psMemDesc,
+					0,
+					1);
+
+	psMemDesc->psImport = psImport;
+	psMemDesc->uiOffset = uiOffset;
+
+	psMemDesc->sDeviceMemDesc.ui32RefCount = 0;
+	psMemDesc->sCPUMemDesc.ui32RefCount = 0;
+	psMemDesc->ui32RefCount = 1;
+}
+
+IMG_INTERNAL
+IMG_VOID _DevmemMemDescAcquire(DEVMEM_MEMDESC *psMemDesc)
+{
+	OSLockAcquire(psMemDesc->hLock);
+	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
+					__FUNCTION__,
+					psMemDesc,
+					psMemDesc->ui32RefCount,
+					psMemDesc->ui32RefCount+1);
+
+	psMemDesc->ui32RefCount++;
+	OSLockRelease(psMemDesc->hLock);
+}
+
+IMG_INTERNAL
+IMG_VOID _DevmemMemDescRelease(DEVMEM_MEMDESC *psMemDesc)
+{
+	PVR_ASSERT(psMemDesc->ui32RefCount != 0);
+
+	OSLockAcquire(psMemDesc->hLock);
+	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
+					__FUNCTION__,
+					psMemDesc,
+					psMemDesc->ui32RefCount,
+					psMemDesc->ui32RefCount-1);
+
+	if (--psMemDesc->ui32RefCount == 0)
+	{
+		OSLockRelease(psMemDesc->hLock);
+
+		if (!psMemDesc->psImport->bExportable)
+		{
+			RA_Free(psMemDesc->psImport->sDeviceImport.psHeap->psSubAllocRA,
+					psMemDesc->psImport->sDeviceImport.sDevVAddr.uiAddr +
+					psMemDesc->uiOffset);
+		}
+		else
+		{
+			_DevmemImportStructRelease(psMemDesc->psImport);
+		}
+
+		OSLockDestroy(psMemDesc->sCPUMemDesc.hLock);
+		OSLockDestroy(psMemDesc->sDeviceMemDesc.hLock);
+		OSLockDestroy(psMemDesc->hLock);
+		OSFreeMem(psMemDesc);
+	}
+	else
+	{
+		OSLockRelease(psMemDesc->hLock);
+	}
+}
+
+/*
+	Discard a created, but unitilised MemDesc structure.
+	This must only be called before _DevmemMemDescInit
+	after which _DevmemMemDescRelease must be used to
+	"free" the MemDesc structure
+*/
+IMG_INTERNAL
+IMG_VOID _DevmemMemDescDiscard(DEVMEM_MEMDESC *psMemDesc)
+{
+	PVR_ASSERT(psMemDesc->ui32RefCount == 0);
+
+	OSLockDestroy(psMemDesc->sCPUMemDesc.hLock);
+	OSLockDestroy(psMemDesc->sDeviceMemDesc.hLock);
+	OSLockDestroy(psMemDesc->hLock);
+	OSFreeMem(psMemDesc);
+}
+
+
 IMG_INTERNAL
 PVRSRV_ERROR _DevmemValidateParams(IMG_DEVMEM_SIZE_T uiSize,
 								   IMG_DEVMEM_ALIGN_T uiAlign,
@@ -430,11 +644,20 @@ IMG_VOID _DevmemImportStructCPUUnmap(DEVMEM_IMPORT *psImport)
 	if (--psCPUImport->ui32RefCount == 0)
 	{
 		OSLockRelease(psCPUImport->hLock);
+
+		/* FIXME: psImport->uiSize is a 64-bit quantity where as the 5th
+		 * argument to OSUnmapPMR is a 32-bit quantity on 32-bit systems
+		 * hence a compiler warning of implicit cast and loss of data.
+		 * Added explicit cast and assert to remove warning.
+		 */
+#if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
+		PVR_ASSERT(psImport->uiSize<IMG_UINT32_MAX);
+#endif
 		OSMUnmapPMR(psImport->hBridge,
 					psImport->hPMR,
 					psCPUImport->hOSMMapData,
 					psCPUImport->pvCPUVAddr,
-					psImport->uiSize);
+					(IMG_SIZE_T)psImport->uiSize);
 		_DevmemImportStructRelease(psImport);
 	}
 	else

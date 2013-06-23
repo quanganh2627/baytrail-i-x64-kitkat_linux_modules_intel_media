@@ -51,7 +51,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define SYS_DEVICE_COUNT 3 /* RGX, DISPLAY (external), BUFFER (external) */
 
+#if defined(TDMETACODE)
+#define SYS_PHYS_HEAP_COUNT		2
+#else
 #define SYS_PHYS_HEAP_COUNT		1
+#endif
 
 #if defined(__linux__)
 #define SYS_RGX_DEV_NAME    "rgxnohw"

@@ -45,6 +45,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef COMMON_PVRTL_BRIDGE_H
 #define COMMON_PVRTL_BRIDGE_H
 
+#include "devicemem_typedefs.h"
 #include "pvr_tl.h"
 
 

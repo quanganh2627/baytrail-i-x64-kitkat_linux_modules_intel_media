@@ -409,6 +409,26 @@ PMR_ReadBytes(PMR *psPMR,
               IMG_SIZE_T *puiNumBytes);
 
 /*
+ * PMR_WriteBytes()
+ *
+ * calls into the PMR implementation to write up to uiBufSz bytes,
+ * returning the actual number read in *puiNumBytes
+ *
+ * this will write up to the end of the PMR, or the next symbolic name
+ * boundary, or until the requested number of bytes is written, whichever
+ * comes first
+ *
+ * In the case of sparse PMR's the caller doesn't know what offsets are
+ * valid and which ones aren't so we will just ignore data at invalid offsets
+ */
+extern PVRSRV_ERROR
+PMR_WriteBytes(PMR *psPMR,
+			   IMG_DEVMEM_OFFSET_T uiLogicalOffset,
+               IMG_UINT8 *pcBuffer,
+               IMG_SIZE_T uiBufSz,
+               IMG_SIZE_T *puiNumBytes);
+
+/*
  * PMRRefPMR()
  *
  * Take a reference on the passed in PMR

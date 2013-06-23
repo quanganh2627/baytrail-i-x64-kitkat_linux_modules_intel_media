@@ -65,6 +65,8 @@ typedef struct _SYNC_PRIM_CONTEXT_
 	IMG_CHAR					azSpanName[SYNC_PRIM_NAME_SIZE];/*!< Name of the span RA */
 	RA_ARENA					*psSpanRA;						/*!< RA used for span management of SubAllocRA */
 	IMG_UINT32					ui32RefCount;					/*!< Refcount for this context */
+	DLLIST_NODE					sListNode;						/*!< Listnode for per-process context list */
+	DLLIST_NODE					sBlockListHead;					/*!< Head listnode for the blocks in this context */
 	POS_LOCK					hLock;							/*!< Lock for this context */
 } SYNC_PRIM_CONTEXT;
 
@@ -77,7 +79,7 @@ typedef struct _SYNC_PRIM_BLOCK_
 	DEVMEM_MEMDESC		*hMemDesc;				/*!< Host mapping handle */
 	IMG_UINT32			*pui32LinAddr;			/*!< User CPU mapping */
 	IMG_UINT64			uiSpanBase;				/*!< Base of this import in the span RA */
-	DLLIST_NODE			sListNode;				/*!< Listnide for the sync block list */
+	DLLIST_NODE			sListNode;				/*!< List node for the sync block list */
 } SYNC_PRIM_BLOCK;
 
 typedef enum _SYNC_PRIM_TYPE_

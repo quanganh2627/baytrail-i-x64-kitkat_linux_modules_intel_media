@@ -60,7 +60,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if	!defined(INLINE)
 	#define	INLINE					__inline
 #endif
-#if defined(UNDER_WDDM)
+#if defined(UNDER_WDDM) && defined(_X86_)
 	#define	FORCE_INLINE			__forceinline
 #else
 	#define	FORCE_INLINE			static __inline
@@ -74,6 +74,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define	PVR_UNREFERENCED_PARAMETER(param) ((void)(param))
 #endif
 
+/*! Macro used to check structure size and alignment at compile time. */
+#define BLD_ASSERT(expr, file) _impl_ASSERT_LINE(expr,__LINE__,file)
+#define _impl_JOIN(a,b) a##b
+#define _impl_ASSERT_LINE(expr, line, file) \
+	typedef char _impl_JOIN(build_assertion_failed_##file##_,line)[2*!!(expr)-1];
+
+/*! Macro to calculate the n-byte aligned value from that supplied rounding up.
+ * n must be a power of two. */
+#define PVR_ALIGN(_x, _n)   (((_x)+((_n)-1)) & ~((_n)-1))
+
+
 /* The best way to supress unused parameter warnings using GCC is to use a
  * variable attribute.  Place the unref__ between the type and name of an
  * unused parameter in a function parameter list, eg `int unref__ var'. This
@@ -86,36 +97,81 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #if defined(_WIN32)
+#if defined(UNDER_CE)
+	/* This may need to be _stdcall */
+	#define IMG_CALLCONV __cdecl
+	#define IMG_INTERNAL
+	#define IMG_RESTRICT
+	#define C_CALLCONV	__cdecl
 
+	#define IMG_EXPORT
+	#define	IMG_IMPORT	IMG_EXPORT 
+
+	#if defined DEBUG
+		#define IMG_ABORT() __debugbreak();	
+	#else
+		#define IMG_ABORT()	for(;;);
+	#endif
+	#define abort() IMG_ABORT()
+
+	#if defined(x86)
+		#define i386
+	#endif
+
+	#define snprintf sprintf_s
+	#define vsnprintf vsprintf_s
+	#define strdup _strdup
+
+	/*
+	   Catch failures to declare whether inclusion is KM/UM side. Unlike other OSs like
+	   Linux, WinCE includes the same header (windows.h) on both sides, so there is no
+	   built-in way to distinguish. This check verifies the build files are set to build
+	   or or the other.
+    */
+	#ifndef WINDOWSCE_HOST_SIDE_TOOLS
+	#	ifdef WINDOWSCE_TARGET_UM_COMPONENT
+	#		ifdef WINDOWSCE_TARGET_KM_COMPONENT
+	#			error build-file component cannot be both UM and KM.
+	#		endif
+	#	else
+	#		ifndef WINDOWSCE_TARGET_KM_COMPONENT
+	#			error Must specify whether this component is a UM or KM component.
+	#		endif
+	#   endif
+	#endif /* WINDOWSCE_HOST_SIDE_TOOLS */
+#else
 	#define IMG_CALLCONV __stdcall
 	#define IMG_INTERNAL
 	#define	IMG_EXPORT	__declspec(dllexport)
 	#define IMG_RESTRICT __restrict
-
+	#define C_CALLCONV	__cdecl
 
 	/* IMG_IMPORT is defined as IMG_EXPORT so that headers and implementations match.
 	 * Some compilers require the header to be declared IMPORT, while the implementation is declared EXPORT 
 	 */
 	#define	IMG_IMPORT	IMG_EXPORT
-	#if defined(UNDER_WDDM)
-		#ifndef	_INC_STDLIB
-			#if defined (UNDER_WIN8)
-				_CRTIMP __declspec(noreturn) void __cdecl abort(void);
-			#else
-				_CRTIMP void __cdecl abort(void);
-			#endif
-		#endif
-		#if defined(EXIT_ON_ABORT)
-			#define IMG_ABORT()	exit(1);
+
+#if defined(UNDER_WDDM)
+	#ifndef	_INC_STDLIB
+			#if defined (UNDER_MSBUILD)
+			_CRTIMP __declspec(noreturn) void __cdecl abort(void);
 		#else
-			#define IMG_ABORT()	abort();
+			_CRTIMP void __cdecl abort(void);
 		#endif
-//		#define IMG_ABORT()	img_abort()
 	#endif
+	#if defined(EXIT_ON_ABORT)
+		#define IMG_ABORT()	exit(1);
+	#else
+		#define IMG_ABORT()	abort();
+	#endif
+//	#define IMG_ABORT()	img_abort()
+#endif /* UNDER_WDDM */
+#endif /* UNDER_CE */
 #else
 	#if defined(LINUX) || defined(__METAG)
 
 		#define IMG_CALLCONV
+		#define C_CALLCONV
 		#if defined(__linux__)
 			#define IMG_INTERNAL	__attribute__((visibility("hidden")))
 		#else
@@ -135,7 +191,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	#if defined(EXIT_ON_ABORT)
 		#define IMG_ABORT()	exit(1)
 	#else
+#if defined UNDER_CE
+		/* WinCE / WinEC does not have an abort() function */
+		#define IMG_ABORT()	exit(1)
+#else
 		#define IMG_ABORT()	abort()
+#endif
 	#endif
 #endif
 
@@ -161,18 +222,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	#endif
 #endif
 
-#if defined (_WIN64)
-#define IMG_UNDEF	(~0ULL)
-#else
-#define IMG_UNDEF	(~0U)
-#endif
-
 #define MAX(a,b) 					(((a) > (b)) ? (a) : (b))
 #define MIN(a,b) 					(((a) < (b)) ? (a) : (b))
 
 /* Get a structures address from the address of a member */
 #define IMG_CONTAINER_OF(ptr, type, member) \
 	(type *) ((IMG_UINT8 *) (ptr) - offsetof(type, member))
+
+/* The number of elements in a fixed-sized array */
+#define IMG_ARR_NUM_ELEMS(ARR) \
+	(sizeof(ARR) / sizeof((ARR)[0]))
 
 /* To guarantee that __func__ can be used, define it as a macro here if it
    isn't already provided by the compiler. */

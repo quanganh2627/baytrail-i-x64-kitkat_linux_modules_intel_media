@@ -51,8 +51,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgx_fwif_shared.h"
 #include "rgx_fwif_resetframework.h"
 #include "rgxfwutils.h"
-#include "sync_server.h"
-#include "connection_server.h"
 
 #if defined (__cplusplus)
 extern "C" {
@@ -60,6 +58,11 @@ extern "C" {
 
 typedef struct _RGX_FREELIST_ RGX_FREELIST;
 typedef struct _RGX_PMR_NODE_ RGX_PMR_NODE;
+
+typedef struct _RGX_CLEANUP_HOST_DATA_ {
+	IMG_UINT32 ui32SubmittedCommandsTA;
+	IMG_UINT32 ui32SubmittedCommands3D;
+} RGX_CLEANUP_HOST_DATA;
 
 typedef struct {
 	PVRSRV_DEVICE_NODE		*psDeviceNode;
@@ -72,8 +75,6 @@ typedef struct {
 #define RC_CLEANUP_TA_COMPLETE		(1 << 0)
 #define RC_CLEANUP_3D_COMPLETE		(1 << 1)
 	PVRSRV_CLIENT_SYNC_PRIM	*psCleanupSync;
-	IMG_BOOL				bDumpedTACCBCtlAlready;
-	IMG_BOOL				bDumped3DCCBCtlAlready;
 } RGX_RC_CLEANUP_DATA;
 
 typedef struct {
@@ -83,6 +84,7 @@ typedef struct {
 	DEVMEM_MEMDESC			*psRTArrayMemDesc;
 	RGX_FREELIST 			*apsFreeLists[RGXFW_MAX_FREELISTS];
 	PVRSRV_CLIENT_SYNC_PRIM	*psCleanupSync;
+	RGX_CLEANUP_HOST_DATA		sHostCleanup;
 } RGX_RTDATA_CLEANUP_DATA;
 
 struct _RGX_FREELIST_ {
@@ -151,6 +153,7 @@ typedef struct {
 	DLLIST_NODE	sNode;
 
 	PVRSRV_CLIENT_SYNC_PRIM	*psCleanupSync;
+	RGX_CLEANUP_HOST_DATA	sHostCleanup;
 }RGX_ZSBUFFER_DATA;
 
 typedef struct {
@@ -170,6 +173,17 @@ PVRSRV_ERROR RGXCreateHWRTData(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   RGX_FREELIST			*apsFreeLists[RGXFW_MAX_FREELISTS],
 							   RGX_RTDATA_CLEANUP_DATA	**ppsCleanupData,
 							   DEVMEM_MEMDESC			**ppsRTACtlMemDesc,
+							   IMG_UINT32           ui32PPPScreen,
+							   IMG_UINT32           ui32PPPGridOffset,
+							   IMG_UINT64           ui64PPPMultiSampleCtl,
+							   IMG_UINT32           ui32TPCStride,
+							   IMG_DEV_VIRTADDR		sTailPtrsDevVAddr,
+							   IMG_UINT32           ui32TPCSize,
+							   IMG_UINT32           ui32TEScreen,
+							   IMG_UINT32           ui32TEAA,
+							   IMG_UINT32           ui32TEMTILE1,
+							   IMG_UINT32           ui32TEMTILE2,
+							   IMG_UINT32           ui32MTileStride,
 							   IMG_UINT16			ui16MaxRTs,
 							   DEVMEM_MEMDESC		**psMemDesc,
 							   IMG_UINT32			*puiHWRTData);
@@ -369,40 +383,25 @@ PVRSRV_ERROR PVRSRVRGXDestroyRenderContextKM(RGX_RC_CLEANUP_DATA *psCleanupData)
  @Input bKick3D - IMG_TRUE to kick the 3D
  @Input ui32TAcCCBWoffUpdate - New fw Woff for the client TA CCB
  @Input ui323DcCCBWoffUpdate - New fw Woff for the client 3D CCB
+ @Input psRTDataCleanup - RT data associated with the kick (or NULL)
+ @Input psZBuffer - Z-buffer associated with the kick (or NULL)
+ @Input psSBuffer - S-buffer associated with the kick (or NULL)
 
  @Return   PVRSRV_ERROR
 
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA	*psConnection,
-								 PVRSRV_DEVICE_NODE	*psDeviceNode,
+PVRSRV_ERROR PVRSRVRGXKickTA3DKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 								 DEVMEM_MEMDESC 	*psFWRenderContextMemDesc,
 								 IMG_BOOL			bLastTAInScene,
 								 IMG_BOOL			bKickTA,
+								 IMG_BOOL			bKickPR,
 								 IMG_BOOL			bKick3D,
-								 IMG_UINT32			*pui32TAcCCBWoffUpdate,
-								 IMG_UINT32			*pui323DcCCBWoffUpdate,
-								 DEVMEM_MEMDESC 	*psTAcCCBMemDesc,
-								 DEVMEM_MEMDESC 	*psTACCBCtlMemDesc,
-								 DEVMEM_MEMDESC 	*ps3DcCCBMemDesc,
-								 DEVMEM_MEMDESC 	*ps3DCCBCtlMemDesc,
-								 IMG_UINT32			ui32TAServerSyncPrims,
-								 PVRSRV_CLIENT_SYNC_PRIM_OP**	pasTASyncOp,
-								 SERVER_SYNC_PRIMITIVE **pasTAServerSyncs,
-								 IMG_UINT32			ui323DServerSyncPrims,
-								 PVRSRV_CLIENT_SYNC_PRIM_OP**	pas3DSyncOp,
-								 SERVER_SYNC_PRIMITIVE **pas3DServerSyncs,
-								 IMG_UINT32			ui32TACmdSize,
-								 IMG_PBYTE			pui8TACmd,
-								 IMG_UINT32			ui32TAFenceEnd,
-								 IMG_UINT32			ui32TAUpdateEnd,
-								 IMG_UINT32			ui323DCmdSize,
-								 IMG_PBYTE			pui83DCmd,
-								 IMG_UINT32			ui323DFenceEnd,
-								 IMG_UINT32			ui323DUpdateEnd,
-								 IMG_UINT32         ui32NumFenceFds,
-								 IMG_INT32          *ai32FenceFds,
-								 IMG_BOOL			bPDumpContinuous,
-								 RGX_RC_CLEANUP_DATA *psCleanupData);
+								 IMG_UINT32			ui32TAcCCBWoffUpdate,
+								 IMG_UINT32			ui323DcCCBWoffUpdate,
+								 IMG_BOOL			bbPDumpContinuous,
+								 RGX_RTDATA_CLEANUP_DATA        *psRTDataCleanup,
+								 RGX_ZSBUFFER_DATA              *psZBuffer,
+								 RGX_ZSBUFFER_DATA               *psSBuffer);
 
 #endif /* __RGXTA3D_H__ */

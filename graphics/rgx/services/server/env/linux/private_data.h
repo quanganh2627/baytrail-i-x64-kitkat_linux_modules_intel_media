@@ -43,8 +43,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if !defined(__INCLUDED_PRIVATE_DATA_H_)
 #define __INCLUDED_PRIVATE_DATA_H_
 
-#if defined(SUPPORT_DRM) && defined(PVR_DRM_SECURE_AUTH_EXPORT)
+#if defined(SUPPORT_DRM_AUTH_IMPORT)
 #include <linux/list.h>
+#endif
+#if defined(SUPPORT_DRM)
+#include <linux/atomic.h>
 #include <drm/drmP.h>
 #endif
 
@@ -73,16 +76,20 @@ typedef struct
 	IMG_HANDLE hKernelMemInfo;
 #endif /* defined(PVR_SECURE_FD_EXPORT) */
 
-#if defined(SUPPORT_DRM) && defined(PVR_DRM_SECURE_AUTH_EXPORT)
-	/* The private data is on a list in the per-process data structure */
+#if defined(SUPPORT_DRM_AUTH_IMPORT)
 	struct list_head sDRMAuthListItem;
 
-	struct drm_file *psDRMFile;
+	IMG_PID uPID;
 #endif
 
 #if defined(SUPPORT_DRM_EXT)
 	IMG_PVOID pPriv;	/*private data for extending this struct*/
 #endif
+
+#if defined(SUPPORT_DRM)
+	IMG_BOOL			bGEMSharedData;
+#endif
+
 }
 PVRSRV_FILE_PRIVATE_DATA;
 

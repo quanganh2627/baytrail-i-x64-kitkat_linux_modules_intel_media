@@ -52,6 +52,8 @@ extern "C" {
 #include "servicesext.h"
 #include "pdumpdefs.h"
 #include "lock_types.h"
+#include "pvr_debug.h"
+
 /* FIXME: Can't do this as dc_client includes services.h
 #include "dc_client.h"
 */
@@ -125,6 +127,9 @@ typedef enum
 	IMG_D3D				= 0x0000000D,       /*!< D3D */
 	IMG_OPENCL			= 0x0000000E,       /*!< OpenCL */
 	IMG_ANDROID_HAL		= 0x0000000F,       /*!< Graphics HAL */
+	IMG_WEC_GPE			= 0x00000010,		/*!< WinEC-specific GPE */
+	IMG_PVRGPE			= 0x00000011,		/*!< WinEC/WinCE GPE */
+	IMG_RSCOMPUTE       = 0x00000012,       /*!< RenderScript Compute */
 
 } IMG_MODULE_ID;
 
@@ -180,6 +185,8 @@ typedef struct _PVRSRV_DEV_DATA_
 {
 	PVRSRV_CONNECTION	 *psConnection;	/*!< Services connection info */
 	IMG_HANDLE			hDevCookie;				/*!< Dev cookie */
+
+	IMG_BOOL			bSyncPrimAlreadyPdumped;
 
 } PVRSRV_DEV_DATA;
 
@@ -760,20 +767,20 @@ IMG_IMPORT IMG_VOID  IMG_CALLCONV PVRSRVFreeUserModeMem (IMG_PVOID pvMem);
 @Description    Copy a block of memory
 @Input          pvDst       pointer to the destination
 @Input          pvSrc       pointer to the source location
-@Input          ui32Size    the amount of memory to copy
+@Input          uiSize    the amount of memory to copy
 @Return         None
  */ /**************************************************************************/
-IMG_IMPORT IMG_VOID PVRSRVMemCopy(IMG_VOID *pvDst, const IMG_VOID *pvSrc, IMG_SIZE_T ui32Size);
+IMG_IMPORT IMG_VOID PVRSRVMemCopy(IMG_VOID *pvDst, const IMG_VOID *pvSrc, IMG_SIZE_T uiSize);
 
 /**************************************************************************/ /*!
 @Function       PVRSRVMemSet
 @Description    Set all bytes in a region of memory to the specified value
 @Input          pvDest      pointer to the start of the memory region
 @Input          ui8Value    the value to be written
-@Input          ui32Size    the number of bytes to be set to ui8Value
+@Input          uiSize    the number of bytes to be set to ui8Value
 @Return         None
  */ /**************************************************************************/
-IMG_IMPORT IMG_VOID PVRSRVMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T ui32Size);
+IMG_IMPORT IMG_VOID PVRSRVMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T uiSize);
 
 /**************************************************************************/ /*!
 @Function       PVRSRVLockProcessGlobalMutex
@@ -1036,7 +1043,8 @@ PVRSRVDumpDebugInfo(const PVRSRV_CONNECTION *psConnection, IMG_UINT32 ui32VerbLe
                                 error code
                       
 ******************************************************************************/
-PVRSRV_ERROR PVRSRVAcquireGlobalEventObject(const PVRSRV_CONNECTION *psConnection,
+IMG_IMPORT PVRSRV_ERROR
+PVRSRVAcquireGlobalEventObject(const PVRSRV_CONNECTION *psConnection,
 											IMG_HANDLE *phOSEvent);
 
 /*****************************************************************************
@@ -1047,7 +1055,8 @@ PVRSRV_ERROR PVRSRVAcquireGlobalEventObject(const PVRSRV_CONNECTION *psConnectio
                                 error code
                       
 ******************************************************************************/
-PVRSRV_ERROR PVRSRVReleaseGlobalEventObject(const PVRSRV_CONNECTION *psConnection,
+IMG_IMPORT PVRSRV_ERROR
+PVRSRVReleaseGlobalEventObject(const PVRSRV_CONNECTION *psConnection,
 											IMG_HANDLE hOSEvent);
 
 /**************************************************************************/ /*!
@@ -1058,18 +1067,9 @@ PVRSRV_ERROR PVRSRVReleaseGlobalEventObject(const PVRSRV_CONNECTION *psConnectio
 @Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
  */ /**************************************************************************/
-IMG_IMPORT PVRSRV_ERROR PVRSRVEventObjectWait(const PVRSRV_CONNECTION *psConnection,
+IMG_IMPORT PVRSRV_ERROR
+PVRSRVEventObjectWait(const PVRSRV_CONNECTION *psConnection,
 									IMG_HANDLE hOSEvent);
-
-/**************************************************************************/ /*!
-@Function		PVRSRVGetErrorString
-@Description	Returns a text string relating to the PVRSRV_ERROR enum. Note:
-                must be kept in sync with servicesext.h
-@Input          eError                  DOXYGEN_FIXME
-@Return         IMG_CHAR *              DOXYGEN_FIXME
- */ /**************************************************************************/
-IMG_IMPORT
-const IMG_CHAR *PVRSRVGetErrorString(PVRSRV_ERROR eError);
 
 
 IMG_IMPORT PVRSRV_ERROR

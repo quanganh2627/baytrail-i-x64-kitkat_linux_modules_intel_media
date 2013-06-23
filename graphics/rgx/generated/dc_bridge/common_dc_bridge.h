@@ -106,6 +106,8 @@ typedef struct PVRSRV_BRIDGE_OUT_DCDEVICESQUERYCOUNT_TAG
 typedef struct PVRSRV_BRIDGE_IN_DCDEVICESENUMERATE_TAG
 {
 	IMG_UINT32 ui32DeviceArraySize;
+	/* Output pointer pui32DeviceIndex is also an implied input */
+	IMG_UINT32 * pui32DeviceIndex;
 } PVRSRV_BRIDGE_IN_DCDEVICESENUMERATE;
 
 
@@ -197,6 +199,8 @@ typedef struct PVRSRV_BRIDGE_IN_DCPANELQUERY_TAG
 {
 	IMG_HANDLE hDevice;
 	IMG_UINT32 ui32PanelsArraySize;
+	/* Output pointer psPanelInfo is also an implied input */
+	PVRSRV_PANEL_INFO * psPanelInfo;
 } PVRSRV_BRIDGE_IN_DCPANELQUERY;
 
 
@@ -218,6 +222,8 @@ typedef struct PVRSRV_BRIDGE_IN_DCFORMATQUERY_TAG
 	IMG_HANDLE hDevice;
 	IMG_UINT32 ui32NumFormats;
 	PVRSRV_SURFACE_FORMAT * psFormat;
+	/* Output pointer pui32Supported is also an implied input */
+	IMG_UINT32 * pui32Supported;
 } PVRSRV_BRIDGE_IN_DCFORMATQUERY;
 
 
@@ -238,6 +244,8 @@ typedef struct PVRSRV_BRIDGE_IN_DCDIMQUERY_TAG
 	IMG_HANDLE hDevice;
 	IMG_UINT32 ui32NumDims;
 	PVRSRV_SURFACE_DIMS * psDim;
+	/* Output pointer pui32Supported is also an implied input */
+	IMG_UINT32 * pui32Supported;
 } PVRSRV_BRIDGE_IN_DCDIMQUERY;
 
 

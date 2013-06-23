@@ -100,8 +100,10 @@ static struct proc_dir_entry* g_pProcStatus;
 static struct proc_dir_entry* g_pProcDebugLevel;
 #endif
 
+#ifdef DEBUG
 #ifdef PVR_MANUAL_POWER_CONTROL
 static struct proc_dir_entry* g_pProcPowerLevel;
+#endif
 #endif
 
 
@@ -843,7 +845,7 @@ IMG_INT CreateProcEntries(IMG_VOID)
         return -ENOMEM;
     }
 
-	g_pProcVersion = CreateProcReadEntrySeq("version", NULL, NULL, ProcSeqShowVersion, ProcSeq1ElementHeaderOff2Element, NULL);
+	g_pProcVersion = CreateProcReadEntrySeq("version", NULL, NULL, ProcSeqShowVersion, ProcSeqOff2ElementSysNodes, NULL);
 	g_pProcSysNodes = CreateProcReadEntrySeq("nodes", NULL, NULL, ProcSeqShowSysNodes, ProcSeqOff2ElementSysNodes, NULL);
 	g_pProcStatus = CreateProcReadEntrySeq("status", NULL, NULL, ProcSeqShowStatus, ProcSeqOff2ElementStatus, NULL);
 
@@ -872,7 +874,7 @@ IMG_INT CreateProcEntries(IMG_VOID)
 	g_pProcPowerLevel = CreateProcEntrySeq("power_control", NULL, NULL,
 											ProcSeqShowPowerLevel,
 											ProcSeq1ElementOff2Element, NULL,
-										    PVRProcSetPowerLevel);
+										    (IMG_VOID*)PVRProcSetPowerLevel);
 	if(!g_pProcPowerLevel)
     {
         PVR_DPF((PVR_DBG_ERROR, "CreateProcEntries: couldn't make /proc/%s/power_control", PVRProcDirRoot));
@@ -960,20 +962,34 @@ IMG_VOID RemoveProcEntries(IMG_VOID)
  PARAMETERS	:	sfile - /proc seq_file
 				el - Element to print
 *****************************************************************************/
-static void ProcSeqShowVersion(struct seq_file *sfile,void* el)
+static void ProcSeqShowVersion(struct seq_file *sfile, void *el)
 {
-	const IMG_CHAR *pszSystemVersionString = PVRSRVGetSystemName();
-
-	if(el == PVR_PROC_SEQ_START_TOKEN)
+	if (el == PVR_PROC_SEQ_START_TOKEN)
 	{
-		seq_printf( sfile,
-						"Version %s (%s) %s\n",
-						PVRVERSION_STRING,
-						PVR_BUILD_TYPE, PVR_BUILD_DIR);
-		return;
-	}
+		const IMG_CHAR *pszSystemVersionString = PVRSRVGetSystemName();
 
-	seq_printf( sfile, "System Version String: %s\n", pszSystemVersionString);
+		seq_printf(sfile, "Version %s (%s) %s\n",
+			   PVRVERSION_STRING,
+			   PVR_BUILD_TYPE, PVR_BUILD_DIR);
+
+		seq_printf(sfile, "System Version String: %s\n", pszSystemVersionString);
+	}
+	else
+	{
+		PVRSRV_DEVICE_NODE *psDevNode = (PVRSRV_DEVICE_NODE *)el;
+
+		if (psDevNode->pfnDeviceVersionString)
+		{
+			IMG_CHAR *pszDeviceVersionString;
+			
+			if (psDevNode->pfnDeviceVersionString(psDevNode, &pszDeviceVersionString) == PVRSRV_OK)
+			{
+				seq_printf(sfile, "%s\n", pszDeviceVersionString);
+				
+				kfree(pszDeviceVersionString);
+			}
+		}
+	}
 }
 
 
@@ -1060,7 +1076,7 @@ static void ProcSeqShowStatus(struct seq_file *sfile, void* el)
 			psDeviceNode->pfnUpdateHealthStatus(psDeviceNode, IMG_FALSE);
 		}
 
-		/* Write the devce status to the sequence file... */
+		/* Write the device status to the sequence file... */
 		if (psDeviceNode->sDevId.eDeviceType == PVRSRV_DEVICE_TYPE_RGX)
 		{
 			switch (psDeviceNode->eHealthStatus)

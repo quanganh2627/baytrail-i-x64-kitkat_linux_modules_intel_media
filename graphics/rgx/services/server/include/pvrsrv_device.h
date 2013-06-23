@@ -55,6 +55,9 @@ extern "C" {
 
 typedef struct _PVRSRV_DEVICE_CONFIG_ PVRSRV_DEVICE_CONFIG;
 
+/*! The CPU physical base of the LMA physical heap is used as the base for
+ *  device memory physical heap allocations */
+#define PVRSRV_DEVICE_CONFIG_LMA_USE_CPU_ADDR	(1<<0)
 
 typedef IMG_VOID (*PFN_MISR)(IMG_VOID *pvData);
 
@@ -123,6 +126,13 @@ struct _PVRSRV_DEVICE_CONFIG_
 typedef PVRSRV_ERROR (*PFN_SYSTEM_PRE_POWER_STATE)(PVRSRV_SYS_POWER_STATE eNewPowerState);
 typedef PVRSRV_ERROR (*PFN_SYSTEM_POST_POWER_STATE)(PVRSRV_SYS_POWER_STATE eNewPowerState);
 
+typedef enum _PVRSRV_SYSTEM_SNOOP_MODE_ {
+	PVRSRV_SYSTEM_SNOOP_NONE = 0,
+	PVRSRV_SYSTEM_SNOOP_CPU_ONLY,
+	PVRSRV_SYSTEM_SNOOP_DEVICE_ONLY,
+	PVRSRV_SYSTEM_SNOOP_CROSS,
+} PVRSRV_SYSTEM_SNOOP_MODE;
+
 typedef struct _PVRSRV_SYSTEM_CONFIG_
 {
 	IMG_UINT32				uiSysFlags;
@@ -131,10 +141,13 @@ typedef struct _PVRSRV_SYSTEM_CONFIG_
 	PVRSRV_DEVICE_CONFIG	*pasDevices;
 	PFN_SYSTEM_PRE_POWER_STATE pfnSysPrePowerState;
 	PFN_SYSTEM_POST_POWER_STATE pfnSysPostPowerState;
-	IMG_BOOL				bHasCacheSnooping;
+	PVRSRV_SYSTEM_SNOOP_MODE eCacheSnoopingMode;
 
 	PHYS_HEAP_CONFIG		*pasPhysHeaps;
 	IMG_UINT32				ui32PhysHeapCount;
+
+	IMG_UINT32              *pui32BIFTilingHeapConfigs;
+	IMG_UINT32              ui32BIFTilingHeapCount;
 } PVRSRV_SYSTEM_CONFIG;
 
 #if defined(__cplusplus)

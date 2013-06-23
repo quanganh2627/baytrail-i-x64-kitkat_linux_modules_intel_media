@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.31.4.9
+@Title          RGX Config BVNC 1.V.4.12
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,34 +39,15 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_31_4_9_H_
-#define _RGXCONFIG_KM_1_31_4_9_H_
+#ifndef _RGXCONFIG_KM_1_V_4_12_H_
+#define _RGXCONFIG_KM_1_V_4_12_H_
 
-/***** Automatically generated file (1/9/2013 5:43:26 PM): Do not edit manually ********************/
-/***** Timestamp:  (1/9/2013 5:43:26 PM)************************************************************/
-/***** CS: @949011 ******************************************************************/
+/***** Automatically generated file (5/13/2013 9:25:47 AM): Do not edit manually ********************/
+/***** Timestamp:  (5/13/2013 9:25:47 AM)************************************************************/
 
-
-/******************************************************************************
- * BVNC = 1.31.4.9 
- *****************************************************************************/
-#define RGX_BVNC_B 1
-#define RGX_BVNC_V 31
-#define RGX_BVNC_N 4
-#define RGX_BVNC_C 9
-
-/******************************************************************************
- * Errata 
- *****************************************************************************/
-
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-
+#define RGX_BNC_KM_B 1
+#define RGX_BNC_KM_N 4
+#define RGX_BNC_KM_C 12
 
 /******************************************************************************
  * DDK Defines
@@ -77,7 +58,4 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 
 
-#endif /* _RGXCONFIG_KM_1_31_4_9_H_ */
-
-
-
+#endif /* _RGXCONFIG_1_V_4_12_H_ */

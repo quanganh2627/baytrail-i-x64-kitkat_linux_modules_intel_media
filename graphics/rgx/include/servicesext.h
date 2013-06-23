@@ -51,9 +51,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "imgpixfmts_km.h"
 #include "pvrsrv_device_types.h"
 
-#if defined(_WIN32)
-//#include "pvrsrvformats.h"
-#endif
 
 /*
  * Lock buffer read/write flags
@@ -174,7 +171,6 @@ typedef enum _PVRSRV_ROTATION_ {
 
 } PVRSRV_ROTATION;
 
-
 /*!
  *****************************************************************************
  * Resource locking structure
@@ -185,6 +181,7 @@ typedef struct PVRSRV_RESOURCE_TAG
 	IMG_UINT32 			ui32ID;     /*!< the ID of the resource */
 }PVRSRV_RESOURCE;
 typedef PVRSRV_RESOURCE PVRSRV_RES_HANDLE; /*!< Typedef: PVRSRV_RES_HANDLE is a PVRSRV_RESOURCE */
+
 
 /*!
  *****************************************************************************

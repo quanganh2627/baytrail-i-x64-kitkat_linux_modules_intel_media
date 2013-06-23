@@ -41,21 +41,30 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#include <linux/delay.h>
-#include <linux/interrupt.h>
+/* FIXME: We should not have OS specific includes in here! */
+#if defined(_WIN32)
+#include <string.h>
+#endif
+
 #include "pvr_debug.h"
+#include "osfunc.h"
 #include "allocmem.h"
 #include "pvrsrv_device.h"
 #include "syscommon.h"
-#include "rgxsysinfo.h"
+#include "sysinfo.h"
+#include "apollo.h"
 #include "sysconfig.h"
 #include "physheap.h"
 #include "pci_support.h"
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+#include "interrupt_support.h"
+#endif
 #include "tcf_clk_ctrl.h"
 #include "tcf_pll.h"
 #if defined(SUPPORT_ION)
 #include <linux/ion.h>
 #include "ion_support.h"
+#include "ion_sys_private.h"
 #endif
 
 #if defined(LDM_PCI) || defined(SUPPORT_DRM)
@@ -63,17 +72,51 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 extern struct pci_dev *gpsPVRLDMDev;
 #endif
 
-typedef struct _SYS_DATA_
+/* Clock speed module parameters */
+static IMG_UINT32 ui32MemClockSpeed  = RGX_TC_MEM_CLOCK_SPEED;
+static IMG_UINT32 ui32CoreClockSpeed = RGX_TC_CORE_CLOCK_SPEED;
+
+#if defined(LINUX)
+#include <linux/module.h>
+#include <linux/moduleparam.h>
+module_param_named(sys_mem_clk_speed,  ui32MemClockSpeed,  uint, S_IRUGO | S_IWUSR);
+module_param_named(sys_core_clk_speed, ui32CoreClockSpeed, uint, S_IRUGO | S_IWUSR);
+#endif
+
+typedef struct _SYS_DATA_ SYS_DATA;
+
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+typedef struct _SYS_INTERRUPT_DATA_
 {
-	IMG_HANDLE	hRGXPCI;
+	SYS_DATA		*psSysData;
+	IMG_CHAR		*pszName;
+	PFN_LISR		pfnLISR;
+	IMG_VOID		*pvData;
+	IMG_UINT32		ui32InterruptFlag;
+} SYS_INTERRUPT_DATA;
+#endif
 
-	IMG_CHAR	*pszSystemInfoString;
+struct _SYS_DATA_
+{
+	IMG_HANDLE		hRGXPCI;
 
-	IMG_CPU_PHYADDR	sSystemRegCpuPBase;
-	IMG_VOID	*pvSystemRegCpuVBase;
-	IMG_UINT32	uiSystemRegSize;
+	IMG_CHAR		*pszSystemInfoString;
+
+	IMG_CPU_PHYADDR		sSystemRegCpuPBase;
+	IMG_VOID		*pvSystemRegCpuVBase;
+	IMG_SIZE_T		uiSystemRegSize;
+
+	IMG_CPU_PHYADDR		sLocalMemCpuPBase;
+	IMG_SIZE_T		uiLocalMemSize;
+
 	PVRSRV_SYS_POWER_STATE	ePowerState;
-} SYS_DATA;
+
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+	IMG_HANDLE		hLISR;
+	IMG_UINT32		ui32IRQ;
+	SYS_INTERRUPT_DATA	sInterruptData[SYS_DEVICE_COUNT];
+#endif
+};
 
 #define SYSTEM_INFO_FORMAT_STRING	"%s\tFPGA Revision: %s.%s.%s\tTCF Core Revision: %s.%s.%s\tTCF Core Target Build ID: %s\tPCI Version: %s\tMacro Version: %s.%s"
 #define SYSTEM_INFO_REV_NUM_LEN		3
@@ -106,91 +149,127 @@ static IMG_CHAR *GetSystemInfoString(SYS_DATA *psSysData)
 
 	/* Create the components of the PCI and macro versions */
 	ui32Value = OSReadHWReg32(pvHostFPGARegCpuVBase, 0);
-	snprintf(&apszPCIVer[0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & 0x00FF0000) >> 16));
-	snprintf(&apszMacroVer[0][0], SYSTEM_INFO_REV_NUM_LEN, "%d", ((ui32Value & 0x00000F00) >> 8));
-	snprintf(&apszMacroVer[1][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & 0x000000FF) >> 0));
+	OSSNPrintf(&apszPCIVer[0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & 0x00FF0000) >> 16));
+	OSSNPrintf(&apszMacroVer[0][0], SYSTEM_INFO_REV_NUM_LEN, "%d", ((ui32Value & 0x00000F00) >> 8));
+	OSSNPrintf(&apszMacroVer[1][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & 0x000000FF) >> 0));
 
 	/* Unmap the register now that we no longer need it */
 	OSUnMapPhysToLin(pvHostFPGARegCpuVBase, 0x04, 0);
 
 	/* Create the components of the FPGA revision number */
 	ui32Value = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_FPGA_REV_REG);
-	snprintf(&apszFPGARev[0][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & FPGA_REV_REG_MAJOR_MASK) >> FPGA_REV_REG_MAJOR_SHIFT));
-	snprintf(&apszFPGARev[1][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & FPGA_REV_REG_MINOR_MASK) >> FPGA_REV_REG_MINOR_SHIFT));
-	snprintf(&apszFPGARev[2][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & FPGA_REV_REG_MAINT_MASK) >> FPGA_REV_REG_MAINT_SHIFT));
+	OSSNPrintf(&apszFPGARev[0][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & FPGA_REV_REG_MAJOR_MASK) >> FPGA_REV_REG_MAJOR_SHIFT));
+	OSSNPrintf(&apszFPGARev[1][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & FPGA_REV_REG_MINOR_MASK) >> FPGA_REV_REG_MINOR_SHIFT));
+	OSSNPrintf(&apszFPGARev[2][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & FPGA_REV_REG_MAINT_MASK) >> FPGA_REV_REG_MAINT_SHIFT));
 
 	/* Create the components of the TCF core revision number */
 	ui32Value = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TCF_CORE_REV_REG);
-	snprintf(&apszCoreRev[0][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & TCF_CORE_REV_REG_MAJOR_MASK) >> TCF_CORE_REV_REG_MAJOR_SHIFT));
-	snprintf(&apszCoreRev[1][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & TCF_CORE_REV_REG_MINOR_MASK) >> TCF_CORE_REV_REG_MINOR_SHIFT));
-	snprintf(&apszCoreRev[2][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & TCF_CORE_REV_REG_MAINT_MASK) >> TCF_CORE_REV_REG_MAINT_SHIFT));
+	OSSNPrintf(&apszCoreRev[0][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & TCF_CORE_REV_REG_MAJOR_MASK) >> TCF_CORE_REV_REG_MAJOR_SHIFT));
+	OSSNPrintf(&apszCoreRev[1][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & TCF_CORE_REV_REG_MINOR_MASK) >> TCF_CORE_REV_REG_MINOR_SHIFT));
+	OSSNPrintf(&apszCoreRev[2][0], SYSTEM_INFO_REV_NUM_LEN, "%d", UINT8_HEX_TO_DEC((ui32Value & TCF_CORE_REV_REG_MAINT_MASK) >> TCF_CORE_REV_REG_MAINT_SHIFT));
 
 	/* Create the component of the TCF core target build ID */
 	ui32Value = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TCF_CORE_TARGET_BUILD_CFG);
-	snprintf(&apszConfigRev[0], SYSTEM_INFO_REV_NUM_LEN, "%d", (ui32Value & TCF_CORE_TARGET_BUILD_ID_MASK) >> TCF_CORE_TARGET_BUILD_ID_SHIFT);
+	OSSNPrintf(&apszConfigRev[0], SYSTEM_INFO_REV_NUM_LEN, "%d", (ui32Value & TCF_CORE_TARGET_BUILD_ID_MASK) >> TCF_CORE_TARGET_BUILD_ID_SHIFT);
 
 	/* Calculate how much space we need to allocate for the string */
-	ui32StringLength = strlen(SYSTEM_INFO_FORMAT_STRING);
-	ui32StringLength += strlen(TC_SYSTEM_NAME);
-	ui32StringLength += strlen(&apszFPGARev[0][0]) + strlen(&apszFPGARev[1][0]) + strlen(&apszFPGARev[2][0]);
-	ui32StringLength += strlen(&apszCoreRev[0][0]) + strlen(&apszCoreRev[1][0]) + strlen(&apszCoreRev[2][0]);
-	ui32StringLength += strlen(&apszConfigRev[0]);
-	ui32StringLength += strlen(&apszPCIVer[0]);
-	ui32StringLength += strlen(&apszMacroVer[0][0]) + strlen(&apszMacroVer[1][0]);
+	ui32StringLength = OSStringLength(SYSTEM_INFO_FORMAT_STRING);
+	ui32StringLength += OSStringLength(TC_SYSTEM_NAME);
+	ui32StringLength += OSStringLength(&apszFPGARev[0][0]) + OSStringLength(&apszFPGARev[1][0]) + OSStringLength(&apszFPGARev[2][0]);
+	ui32StringLength += OSStringLength(&apszCoreRev[0][0]) + OSStringLength(&apszCoreRev[1][0]) + OSStringLength(&apszCoreRev[2][0]);
+	ui32StringLength += OSStringLength(&apszConfigRev[0]);
+	ui32StringLength += OSStringLength(&apszPCIVer[0]);
+	ui32StringLength += OSStringLength(&apszMacroVer[0][0]) + OSStringLength(&apszMacroVer[1][0]);
 
 	/* Create the system info string */
 	pszSystemInfoString = OSAllocZMem(ui32StringLength * sizeof(IMG_CHAR));
 	if (pszSystemInfoString)
 	{
-		snprintf(&pszSystemInfoString[0], ui32StringLength, SYSTEM_INFO_FORMAT_STRING, TC_SYSTEM_NAME, 
-			 &apszFPGARev[0][0], &apszFPGARev[1][0], &apszFPGARev[2][0],
-			 &apszCoreRev[0][0], &apszCoreRev[1][0], &apszCoreRev[2][0],
-			 &apszConfigRev[0], &apszPCIVer[0],
-			 &apszMacroVer[0][0], &apszMacroVer[1][0]);
+		OSSNPrintf(&pszSystemInfoString[0], ui32StringLength, SYSTEM_INFO_FORMAT_STRING, TC_SYSTEM_NAME, 
+			   &apszFPGARev[0][0], &apszFPGARev[1][0], &apszFPGARev[2][0],
+			   &apszCoreRev[0][0], &apszCoreRev[1][0], &apszCoreRev[2][0],
+			   &apszConfigRev[0], &apszPCIVer[0],
+			   &apszMacroVer[0][0], &apszMacroVer[1][0]);
 	}
 
 	return pszSystemInfoString;
 }
 
-#if (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
-static PVRSRV_ERROR AcquireLocalMemory(SYS_DATA *psSysData, IMG_UINT32 *puiMemCpuPAddr, IMG_UINT32 *puiMemSize)
+static IMG_VOID SPI_Write(IMG_VOID *pvLinRegBaseAddr,
+			  IMG_UINT32 ui32Offset,
+			  IMG_UINT32 ui32Value)
 {
-	IMG_UINT32 uiMemCpuPAddr;
-	IMG_UINT32 uiExpectedMemSize;
-	IMG_UINT32 uiMemSize;
+	OSWriteHWReg32(pvLinRegBaseAddr, TCF_CLK_CTRL_TCF_SPI_MST_ADDR_RDNWR, ui32Offset);
+	OSWriteHWReg32(pvLinRegBaseAddr, TCF_CLK_CTRL_TCF_SPI_MST_WDATA, ui32Value);
+	OSWriteHWReg32(pvLinRegBaseAddr, TCF_CLK_CTRL_TCF_SPI_MST_GO, TCF_SPI_MST_GO_MASK);
+	OSWaitus(1000);
+}
+
+static PVRSRV_ERROR SPI_Read(IMG_VOID *pvLinRegBaseAddr,
+			     IMG_UINT32 ui32Offset,
+			     IMG_UINT32 *pui32Value)
+{
+	IMG_UINT32 ui32Count = 0;
+
+	OSWriteHWReg32(pvLinRegBaseAddr,
+				   TCF_CLK_CTRL_TCF_SPI_MST_ADDR_RDNWR,
+				   TCF_SPI_MST_RDNWR_MASK | ui32Offset);
+	OSWriteHWReg32(pvLinRegBaseAddr, TCF_CLK_CTRL_TCF_SPI_MST_GO, TCF_SPI_MST_GO_MASK);
+	OSWaitus(1000);
+
+	while (((OSReadHWReg32(pvLinRegBaseAddr, TCF_CLK_CTRL_TCF_SPI_MST_STATUS)) != 0x08) &&
+			(ui32Count < 10000))
+	{
+		ui32Count++;
+	}
+
+	if (ui32Count < 10000)
+	{
+		*pui32Value = OSReadHWReg32(pvLinRegBaseAddr, TCF_CLK_CTRL_TCF_SPI_MST_RDATA);
+	}
+	else
+	{
+		PVR_DPF((PVR_DBG_ERROR, "SPI_Read: Time out reading SPI register (0x%x)", ui32Offset));
+		return PVRSRV_ERROR_TIMEOUT_POLLING_FOR_VALUE;
+	}
+	
+	return PVRSRV_OK;
+}
+
+
+#if (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) || (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
+static PVRSRV_ERROR AcquireLocalMemory(SYS_DATA *psSysData, IMG_CPU_PHYADDR *psMemCpuPAddr, IMG_SIZE_T *puiMemSize)
+{
 	IMG_UINT16 uiDevID;
+	IMG_UINT32 uiMemSize;
 	PVRSRV_ERROR eError;
 
-	uiMemCpuPAddr	= OSPCIAddrRangeStart(psSysData->hRGXPCI, SYS_RGX_MEM_PCI_BASENUM);
-	uiMemSize	= OSPCIAddrRangeLen(psSysData->hRGXPCI, SYS_RGX_MEM_PCI_BASENUM);
-
 	OSPCIDevID(psSysData->hRGXPCI, &uiDevID);
-	switch (uiDevID)
+	if (uiDevID != SYS_RGX_DEV_DEVICE_ID)
 	{
-		default:
-			PVR_DPF((PVR_DBG_WARNING, 
-				 "%s: Unexpected device ID. Checking device mem region size against 0x%08X", 
-				 __FUNCTION__, SYS_RGX_DEV1_MEM_REGION_SIZE));
-		case SYS_RGX_DEV_DEVICE_ID:
-			uiExpectedMemSize = SYS_RGX_DEV1_MEM_REGION_SIZE;
-			break;
-		case SYS_RGX_DEV1_DEVICE_ID:
-			uiExpectedMemSize = SYS_RGX_DEV2_MEM_REGION_SIZE;
-			break;
+		PVR_DPF((PVR_DBG_ERROR, "%s: Unexpected device ID 0x%X", __FUNCTION__, uiDevID));
+
+		return PVRSRV_ERROR_PCI_DEVICE_NOT_FOUND;
 	}
 
-	/* Check the address range is large enough. */
-	if (uiMemSize < uiExpectedMemSize)
+	uiMemSize = OSPCIAddrRangeLen(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM);
+	if (RGX_TC_MEM_SIZE > uiMemSize)
 	{
-		PVR_DPF((PVR_DBG_ERROR, 
-			 "%s: Device memory region isn't big enough (was 0x%08x, required 0x%08x)",
-			 __FUNCTION__, uiMemSize, SYS_RGX_DEV1_MEM_REGION_SIZE));
+		PVR_DPF((PVR_DBG_WARNING, 
+			 "%s: Device memory region smaller than requested (got 0x%08X, requested 0x%08X)", 
+			 __FUNCTION__, uiMemSize, RGX_TC_MEM_SIZE));
+	}
+	else if (RGX_TC_MEM_SIZE < uiMemSize)
+	{
+		PVR_DPF((PVR_DBG_MESSAGE, 
+			 "%s: Limiting device memory region size to 0x%08X from 0x%08X", 
+			 __FUNCTION__, RGX_TC_MEM_SIZE, uiMemSize));
 
-		return PVRSRV_ERROR_PCI_REGION_TOO_SMALL;
+		uiMemSize = RGX_TC_MEM_SIZE;
 	}
 
-	/* Reserve the address range */
-	eError = OSPCIRequestAddrRange(psSysData->hRGXPCI, SYS_RGX_MEM_PCI_BASENUM);
+	/* Reserve the address region */
+	eError = OSPCIRequestAddrRegion(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM, 0, uiMemSize);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Device memory region not available", __FUNCTION__));
@@ -199,43 +278,50 @@ static PVRSRV_ERROR AcquireLocalMemory(SYS_DATA *psSysData, IMG_UINT32 *puiMemCp
 	}
 
 	/* Clear any BIOS-configured MTRRs */
-	eError = OSPCIClearResourceMTRRs(psSysData->hRGXPCI, SYS_RGX_MEM_PCI_BASENUM);
+	eError = OSPCIClearResourceMTRRs(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_WARNING, "%s: Failed to clear BIOS MTRRs", __FUNCTION__));
 		/* Soft-fail, the driver can limp along. */
 	}
 
-	*puiMemCpuPAddr = uiMemCpuPAddr;
-	*puiMemSize = uiExpectedMemSize;
+	psMemCpuPAddr->uiAddr = IMG_CAST_TO_CPUPHYADDR_UINT(OSPCIAddrRangeStart(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM));
+	*puiMemSize = (IMG_SIZE_T)uiMemSize;
 
 	return PVRSRV_OK;
 }
 
-static inline void ReleaseLocalMemory(SYS_DATA *psSysData)
+static INLINE void ReleaseLocalMemory(SYS_DATA *psSysData, IMG_CPU_PHYADDR *psMemCpuPAddr, IMG_SIZE_T uiMemSize)
 {
-	OSPCIReleaseAddrRange(psSysData->hRGXPCI, SYS_RGX_MEM_PCI_BASENUM);
+	IMG_CPU_PHYADDR sMemCpuPBaseAddr;
+	IMG_UINT32 uiOffset;
+
+	sMemCpuPBaseAddr.uiAddr = IMG_CAST_TO_CPUPHYADDR_UINT(OSPCIAddrRangeStart(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM));
+
+	PVR_ASSERT(psMemCpuPAddr->uiAddr >= sMemCpuPBaseAddr.uiAddr);
+
+	uiOffset = (IMG_UINT32)(IMG_UINTPTR_T)(psMemCpuPAddr->uiAddr - sMemCpuPBaseAddr.uiAddr);
+
+	OSPCIReleaseAddrRegion(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM, uiOffset, (IMG_UINT32)uiMemSize);
 }
-#endif /* (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) */
+#endif /* (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) || (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED) */
 
 #if (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL)
 static PVRSRV_ERROR InitLocalMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
 {
-	IMG_UINT32 uiMemCpuPAddr;
-	IMG_UINT32 uiMemSize;
 	IMG_UINT32 ui32Value;
 	PVRSRV_ERROR eError;
 
-	eError = AcquireLocalMemory(psSysData, &uiMemCpuPAddr, &uiMemSize);
+	eError = AcquireLocalMemory(psSysData, &psSysData->sLocalMemCpuPBase, &psSysData->uiLocalMemSize);
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
 	}
 
 	/* Setup the RGX heap */
-	psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr	= uiMemCpuPAddr;
+	psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr	= psSysData->sLocalMemCpuPBase.uiAddr;
 	psSysConfig->pasPhysHeaps[0].uiSize =
-		uiMemSize
+		psSysData->uiLocalMemSize
 		- RGX_TC_RESERVE_DC_MEM_SIZE
 #if defined(SUPPORT_ION)
 		- RGX_TC_RESERVE_ION_MEM_SIZE
@@ -243,7 +329,7 @@ static PVRSRV_ERROR InitLocalMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA 
 		;
 
 	/* Setup the DC heap */
-	psSysConfig->pasPhysHeaps[1].sStartAddr.uiAddr	= uiMemCpuPAddr + psSysConfig->pasPhysHeaps[0].uiSize;
+	psSysConfig->pasPhysHeaps[1].sStartAddr.uiAddr	= psSysData->sLocalMemCpuPBase.uiAddr + psSysConfig->pasPhysHeaps[0].uiSize;
 	psSysConfig->pasPhysHeaps[1].uiSize		= RGX_TC_RESERVE_DC_MEM_SIZE;
 
 #if defined(SUPPORT_ION)
@@ -251,21 +337,6 @@ static PVRSRV_ERROR InitLocalMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA 
 	psSysConfig->pasPhysHeaps[2].sStartAddr.uiAddr =
 		psSysConfig->pasPhysHeaps[1].sStartAddr.uiAddr + RGX_TC_RESERVE_DC_MEM_SIZE;
 	psSysConfig->pasPhysHeaps[2].uiSize = RGX_TC_RESERVE_ION_MEM_SIZE;
-
-	/* Set up the ion heap according to the physical heap we just created.
-	   This lets the ion support code continue to work if the heap
-	   configuration changes. FIXME: It's kind of ugly to do this by
-	   tweaking global variables. */
-	{
-		extern struct ion_platform_data gsTCIonConfig;
-		extern IMG_UINT32 gui32IonPhysHeapID;
-		extern IMG_CPU_PHYADDR gsPCIAddrRangeStart;
-		gsTCIonConfig.heaps[0].base =
-			psSysConfig->pasPhysHeaps[2].sStartAddr.uiAddr;
-		gsTCIonConfig.heaps[0].size = RGX_TC_RESERVE_ION_MEM_SIZE;
-		gui32IonPhysHeapID = psSysConfig->pasPhysHeaps[2].ui32PhysHeapID;
-		gsPCIAddrRangeStart = psSysConfig->pasPhysHeaps[0].sStartAddr;
-	}
 #endif
 
 	/* Configure Apollo for regression compatibility (i.e. local memory) mode */
@@ -283,7 +354,7 @@ static PVRSRV_ERROR InitLocalMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA 
 
 static void DeInitLocalMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
 {
-	ReleaseLocalMemory(psSysData);
+	ReleaseLocalMemory(psSysData, &psSysData->sLocalMemCpuPBase, psSysData->uiLocalMemSize);
 
 	psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr	= 0;
 	psSysConfig->pasPhysHeaps[0].uiSize		= 0;
@@ -331,12 +402,10 @@ static void DeInitHostMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysD
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
 static PVRSRV_ERROR InitHybridMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
 {
-	IMG_UINT32 uiMemCpuPAddr;
-	IMG_UINT32 uiMemSize;
 	IMG_UINT32 ui32Value;
 	PVRSRV_ERROR eError;
 
-	eError = AcquireLocalMemory(psSysData, &uiMemCpuPAddr, &uiMemSize);
+	eError = AcquireLocalMemory(psSysData, &psSysData->sLocalMemCpuPBase, &psSysData->uiLocalMemSize);
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
@@ -345,8 +414,8 @@ static PVRSRV_ERROR InitHybridMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA
 	/* Rogue is using system memory so there is no additional heap setup needed */
 
 	/* Setup the DC heap */
-	psSysConfig->pasPhysHeaps[1].sStartAddr.uiAddr	= uiMemCpuPAddr;
-	psSysConfig->pasPhysHeaps[1].uiSize		= uiMemSize;
+	psSysConfig->pasPhysHeaps[1].sStartAddr.uiAddr	= psSysData->sLocalMemCpuPBase.uiAddr;
+	psSysConfig->pasPhysHeaps[1].uiSize		= psSysData->uiLocalMemSize;
 
 	/* Configure Apollo for host physical (i.e. hybrid) mode */
 	ui32Value = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TEST_CTRL);
@@ -359,7 +428,7 @@ static PVRSRV_ERROR InitHybridMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA
 	OSWaitus(10);
 
 	/* Setup the start address of the 1GB window which is redirected to local memory */
-	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_HOST_PHY_OFFSET, uiMemCpuPAddr);
+	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_HOST_PHY_OFFSET, psSysData->sLocalMemCpuPBase.uiAddr);
 
 	/* Flush register write */
 	(void)OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_HOST_PHY_OFFSET);
@@ -370,10 +439,54 @@ static PVRSRV_ERROR InitHybridMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA
 
 static void DeInitHybridMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
 {
-	ReleaseLocalMemory(psSysData);
+	ReleaseLocalMemory(psSysData, &psSysData->sLocalMemCpuPBase, psSysData->uiLocalMemSize);
 
 	psSysConfig->pasPhysHeaps[1].sStartAddr.uiAddr	= 0;
 	psSysConfig->pasPhysHeaps[1].uiSize		= 0;
+
+	/* Set the register back to the default value */
+	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TEST_CTRL, 0x1 << ADDRESS_FORCE_SHIFT);
+
+	/* Flush register write */
+	(void)OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TEST_CTRL);
+	OSWaitus(10);
+}
+#elif (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
+static PVRSRV_ERROR InitDirectMappedMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
+{
+	IMG_UINT32 ui32Value;
+	PVRSRV_ERROR eError;
+
+	eError = AcquireLocalMemory(psSysData, &psSysData->sLocalMemCpuPBase, &psSysData->uiLocalMemSize);
+	if (eError != PVRSRV_OK)
+	{
+		return eError;
+	}
+
+	/* Setup the RGX heap */
+	psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr	= psSysData->sLocalMemCpuPBase.uiAddr;
+	psSysConfig->pasPhysHeaps[0].uiSize		= RGX_TC_RESERVE_SERVICES_MEM_SIZE;
+
+	PVR_ASSERT(psSysData->uiLocalMemSize >= psSysConfig->pasPhysHeaps[0].uiSize);
+
+	/* Configure Apollo for direct mapping mode */
+	ui32Value = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TEST_CTRL);
+	ui32Value &= ~(ADDRESS_FORCE_MASK | PCI_TEST_MODE_MASK | HOST_ONLY_MODE_MASK | HOST_PHY_MODE_MASK);
+	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TEST_CTRL, ui32Value);
+
+	/* Flush register write */
+	(void)OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TEST_CTRL);
+	OSWaitus(10);
+
+	return PVRSRV_OK;
+}
+
+static void DeInitDirectMappedMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
+{
+	ReleaseLocalMemory(psSysData, &psSysData->sLocalMemCpuPBase, psSysData->uiLocalMemSize);
+
+	psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr	= 0;
+	psSysConfig->pasPhysHeaps[0].uiSize		= 0;
 
 	/* Set the register back to the default value */
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_TEST_CTRL, 0x1 << ADDRESS_FORCE_SHIFT);
@@ -392,21 +505,25 @@ static PVRSRV_ERROR InitMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSy
 	return InitHostMemory(psSysConfig, psSysData);
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
 	return InitHybridMemory(psSysConfig, psSysData);
+#elif (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
+	return InitDirectMappedMemory(psSysConfig, psSysData);
 #endif
 }
 
-static inline void DeInitMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
+static INLINE void DeInitMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
 {
 #if (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL)
-	return DeInitLocalMemory(psSysConfig, psSysData);
+	DeInitLocalMemory(psSysConfig, psSysData);
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_HOST)
-	return DeInitHostMemory(psSysConfig, psSysData);
+	DeInitHostMemory(psSysConfig, psSysData);
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
-	return DeInitHybridMemory(psSysConfig, psSysData);
+	DeInitHybridMemory(psSysConfig, psSysData);
+#elif (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
+	DeInitDirectMappedMemory(psSysConfig, psSysData);
 #endif
 }
 
-static IMG_VOID EnableInterrupts(SYS_DATA *psSysData)
+static IMG_VOID EnableInterrupt(SYS_DATA *psSysData, IMG_UINT32 ui32InterruptFlag)
 {
 	IMG_UINT32 ui32Value;
 
@@ -421,7 +538,7 @@ static IMG_VOID EnableInterrupts(SYS_DATA *psSysData)
 
 	/* Enable Rogue and PDP1 interrupts */
 	ui32Value = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_INTERRUPT_ENABLE);
-	ui32Value |= (0x1 << EXT_INT_SHIFT) | (0x1 << PDP1_INT_SHIFT);
+	ui32Value |= ui32InterruptFlag;
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_INTERRUPT_ENABLE, ui32Value);
 
 	/* Flush register write */
@@ -429,12 +546,12 @@ static IMG_VOID EnableInterrupts(SYS_DATA *psSysData)
 	OSWaitus(10);
 }
 
-static IMG_VOID DisableInterrupts(SYS_DATA *psSysData)
+static IMG_VOID DisableInterrupt(SYS_DATA *psSysData, IMG_UINT32 ui32InterruptFlag)
 {
 	IMG_UINT32 ui32Value;
 
 	ui32Value = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_INTERRUPT_ENABLE);
-	ui32Value &= ~(EXT_INT_MASK | PDP1_INT_MASK);
+	ui32Value &= ~(ui32InterruptFlag);
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_INTERRUPT_ENABLE, ui32Value);
 
 	/* Flush register write */
@@ -451,7 +568,7 @@ static IMG_VOID DisableInterrupts(SYS_DATA *psSysData)
 			{ \
 				break; \
 			} \
-			udelay(1000); \
+			OSSleepms(1); \
 		} \
 		if (polnum == 500) \
 		{ \
@@ -484,12 +601,12 @@ static IMG_VOID RGXInitBistery(IMG_CPU_PHYADDR sRegisters, IMG_UINT32 ui32Size)
 	/* Run BIST for SLC (43) */
 	/* Reset BIST */
 	OSWriteHWReg32(pvRegsBaseKM, 0x7000, 0x8);
-	udelay(100);
+	OSWaitus(100);
 
 	/* Clear BIST controller */
 	OSWriteHWReg32(pvRegsBaseKM, 0x7000, 0x10);
 	OSWriteHWReg32(pvRegsBaseKM, 0x7000, 0);
-	udelay(100);
+	OSWaitus(100);
 
 	for (i = 0; i < 3; i++)
 	{
@@ -498,12 +615,12 @@ static IMG_VOID RGXInitBistery(IMG_CPU_PHYADDR sRegisters, IMG_UINT32 ui32Size)
 		/* Start BIST */
 		OSWriteHWReg32(pvRegsBaseKM, 0x7000, 0x4);
 
-		udelay(100);
+		OSWaitus(100);
 
 		/* Wait for pause */
 		polrgx(0x7000, ui32Pol, ui32Pol);
 	}
-	udelay(100);
+	OSWaitus(100);
 
 	/* Check results for 43 RAMs */
 	polrgx(0x7010, 0xffffffff, 0xffffffff);
@@ -513,7 +630,7 @@ static IMG_VOID RGXInitBistery(IMG_CPU_PHYADDR sRegisters, IMG_UINT32 ui32Size)
 	OSWriteHWReg32(pvRegsBaseKM, 0x7008, 0);
 	OSWriteHWReg32(pvRegsBaseKM, 0x7000, 6);
 	polrgx(0x7000, 0x00010000, 0x00010000);
-	udelay(100);
+	OSWaitus(100);
 
 	polrgx(0x75B0, 0, ~0U);
 	polrgx(0x75B4, 0, ~0U);
@@ -526,22 +643,22 @@ static IMG_VOID RGXInitBistery(IMG_CPU_PHYADDR sRegisters, IMG_UINT32 ui32Size)
 
 	/* Sidekick */
 	OSWriteHWReg32(pvRegsBaseKM, 0x7040, 8);
-	udelay(100);
+	OSWaitus(100);
 
 	OSWriteHWReg32(pvRegsBaseKM, 0x7040, 0x10);
 	//OSWriteHWReg32(pvRegsBaseKM, 0x7000, 0);
-	udelay(100);
+	OSWaitus(100);
 
 	for (i = 0; i < 3; i++)
 	{
 		IMG_UINT32 ui32Pol = i == 2 ? 0x10000 : 0x20000;
 
 		OSWriteHWReg32(pvRegsBaseKM, 0x7040, 4);
-		udelay(100);
+		OSWaitus(100);
 		polrgx(0x7040, ui32Pol, ui32Pol);
 	}
 
-	udelay(100);
+	OSWaitus(100);
 	polrgx(0x7050, 0xffffffff, 0xffffffff);
 	polrgx(0x7054, 0xffffffff, 0xffffffff);
 	polrgx(0x7058, 0x1, 0x1);
@@ -552,21 +669,21 @@ static IMG_VOID RGXInitBistery(IMG_CPU_PHYADDR sRegisters, IMG_UINT32 ui32Size)
 		OSWriteHWReg32(pvRegsBaseKM, 0x8010, instance);
 
 		OSWriteHWReg32(pvRegsBaseKM, 0x7088, 8);
-		udelay(100);
+		OSWaitus(100);
 
 		OSWriteHWReg32(pvRegsBaseKM, 0x7088, 0x10);
-		udelay(100);
+		OSWaitus(100);
 
 		for (i = 0; i < 3; i++)
 		{
 			IMG_UINT32 ui32Pol = i == 2 ? 0x10000 : 0x20000;
 
 			OSWriteHWReg32(pvRegsBaseKM, 0x7088, 4);
-			udelay(100);
+			OSWaitus(100);
 			polrgx(0x7088, ui32Pol, ui32Pol);
 		}
 
-		udelay(100);
+		OSWaitus(100);
 		polrgx(0x7098, 0xffffffff, 0xffffffff);
 		polrgx(0x709c, 0xffffffff, 0xffffffff);
 		polrgx(0x70a0, 0x3f, 0x3f);
@@ -578,81 +695,81 @@ static IMG_VOID RGXInitBistery(IMG_CPU_PHYADDR sRegisters, IMG_UINT32 ui32Size)
 		OSWriteHWReg32(pvRegsBaseKM, 0x8018, instance);
 
 		OSWriteHWReg32(pvRegsBaseKM, 0x7380, 8);
-		udelay(100);
+		OSWaitus(100);
 
 		OSWriteHWReg32(pvRegsBaseKM, 0x7380, 0x10);
-		udelay(100);
+		OSWaitus(100);
 
 		for (i = 0; i < 3; i++)
 		{
 			IMG_UINT32 ui32Pol = i == 2 ? 0x10000 : 0x20000;
 
 			OSWriteHWReg32(pvRegsBaseKM, 0x7380, 4);
-			udelay(100);
+			OSWaitus(100);
 			polrgx(0x7380, ui32Pol, ui32Pol);
 		}
 
-		udelay(100);
+		OSWaitus(100);
 		polrgx(0x7390, 0x1fff, 0x1fff);
 	}
 
 	/* TA */
 	OSWriteHWReg32(pvRegsBaseKM, 0x7500, 8);
-	udelay(100);
+	OSWaitus(100);
 
 	OSWriteHWReg32(pvRegsBaseKM, 0x7500, 0x10);
-	udelay(100);
+	OSWaitus(100);
 
 	for (i = 0; i < 3; i++)
 	{
 		IMG_UINT32 ui32Pol = i == 2 ? 0x10000 : 0x20000;
 
 		OSWriteHWReg32(pvRegsBaseKM, 0x7500, 4);
-		udelay(100);
+		OSWaitus(100);
 		polrgx(0x7500, ui32Pol, ui32Pol);
 	}
 
-	udelay(100);
+	OSWaitus(100);
 	polrgx(0x7510, 0x1fffffff, 0x1fffffff);
 
 	/* Rasterisation */
 	OSWriteHWReg32(pvRegsBaseKM, 0x7540, 8);
-	udelay(100);
+	OSWaitus(100);
 
 	OSWriteHWReg32(pvRegsBaseKM, 0x7540, 0x10);
-	udelay(100);
+	OSWaitus(100);
 
 	for (i = 0; i < 3; i++)
 	{
 		IMG_UINT32 ui32Pol = i == 2 ? 0x10000 : 0x20000;
 
 		OSWriteHWReg32(pvRegsBaseKM, 0x7540, 4);
-		udelay(100);
+		OSWaitus(100);
 		polrgx(0x7540, ui32Pol, ui32Pol);
 	}
 
-	udelay(100);
+	OSWaitus(100);
 	polrgx(0x7550, 0xffffffff, 0xffffffff);
 	polrgx(0x7554, 0xffffffff, 0xffffffff);
 	polrgx(0x7558, 0xf, 0xf);
 
 	/* hub_bifpmache */
 	OSWriteHWReg32(pvRegsBaseKM, 0x7588, 8);
-	udelay(100);
+	OSWaitus(100);
 
 	OSWriteHWReg32(pvRegsBaseKM, 0x7588, 0x10);
-	udelay(100);
+	OSWaitus(100);
 
 	for (i = 0; i < 3; i++)
 	{
 		IMG_UINT32 ui32Pol = i == 2 ? 0x10000 : 0x20000;
 
 		OSWriteHWReg32(pvRegsBaseKM, 0x7588, 4);
-		udelay(100);
+		OSWaitus(100);
 		polrgx(0x7588, ui32Pol, ui32Pol);
 	}
 
-	udelay(100);
+	OSWaitus(100);
 	polrgx(0x7598, 0xffffffff, 0xffffffff);
 	polrgx(0x759c, 0xffffffff, 0xffffffff);
 	polrgx(0x75a0, 0x1111111f, 0x1111111f);
@@ -679,10 +796,7 @@ static IMG_VOID ApolloHardReset(SYS_DATA *psSysData)
 	ui32Value |= (0x1 << DUT_DCM_RESETN_SHIFT);
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_CLK_AND_RST_CTRL, ui32Value);
 
-	udelay(1000);
-	udelay(1000);
-	udelay(1000);
-	udelay(1000);
+	OSSleepms(4);
 	pol(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_DCM_LOCK_STATUS, 0x7, DCM_LOCK_STATUS_MASK);
 }
 
@@ -695,7 +809,6 @@ static PVRSRV_ERROR SetClocks(SYS_DATA *psSysData, IMG_UINT32 ui32CoreClock, IMG
 	IMG_CPU_PHYADDR	sPLLRegCpuPBase;
 	IMG_VOID *pvPLLRegCpuVBase;
 	IMG_UINT32 ui32Value;
-	IMG_UINT32 i;
 	PVRSRV_ERROR eError;
 
 	/* Reserve the PLL register region and map the registers in */
@@ -722,21 +835,15 @@ static PVRSRV_ERROR SetClocks(SYS_DATA *psSysData, IMG_UINT32 ui32CoreClock, IMG
 	ui32Value = 0x1 << PLL_CORE_DRP_GO_SHIFT;
 	OSWriteHWReg32(pvPLLRegCpuVBase, TCF_PLL_PLL_CORE_DRP_GO, ui32Value);
 
-	for (i = 0; i < 1000; i++)
-	{
-		udelay(600);
-	}
+	OSSleepms(600);
 
 	/* Modify the memory clock */
-	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_PLL_PLL_MEMIF_CLK0, (ui32MemClock / 1000000));
+	OSWriteHWReg32(pvPLLRegCpuVBase, TCF_PLL_PLL_MEMIF_CLK0, (ui32MemClock / 1000000));
 
 	ui32Value = 0x1 << PLL_MEM_DRP_GO_SHIFT;
 	OSWriteHWReg32(pvPLLRegCpuVBase, TCF_PLL_PLL_MEM_DRP_GO, ui32Value);
 
-	for (i = 0; i < 1000; i++)
-	{
-		udelay(600);
-	}
+	OSSleepms(600);
 
 	/* Unmap and release the PLL registers since we no longer need access to them */
 	OSUnMapPhysToLin(pvPLLRegCpuVBase, SYS_APOLLO_REG_PLL_SIZE, 0);
@@ -745,9 +852,53 @@ static PVRSRV_ERROR SetClocks(SYS_DATA *psSysData, IMG_UINT32 ui32CoreClock, IMG
 	return PVRSRV_OK;
 }
 
-static irqreturn_t SystemISRHandler(int irq, void *dev_id)
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+static IMG_BOOL SystemISRHandler(IMG_VOID *pvData)
 {
-	SYS_DATA *psSysData = (SYS_DATA *)dev_id;
+	SYS_DATA *psSysData = (SYS_DATA *)pvData;
+	IMG_UINT32 ui32InterruptClear = 0;
+	IMG_UINT32 ui32InterruptStatus;
+	IMG_UINT32 i;
+
+	ui32InterruptStatus = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_INTERRUPT_STATUS);
+
+	for (i = 0; i < SYS_DEVICE_COUNT; i++)
+	{
+		if ((ui32InterruptStatus & psSysData->sInterruptData[i].ui32InterruptFlag) != 0)
+		{
+			psSysData->sInterruptData[i].pfnLISR(psSysData->sInterruptData[i].pvData);
+
+			ui32InterruptClear |= psSysData->sInterruptData[i].ui32InterruptFlag;
+		}
+	}
+
+	if (ui32InterruptClear)
+	{
+		OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_INTERRUPT_CLEAR, ui32InterruptClear);
+
+		/* 
+		   CPU-PCI-WRITE-BUFFER
+
+		   On CEPC platforms, this BIOS performance enhancing feature controls the chipset's 
+		   CPU-to-PCI write buffer used to store PCI writes from the CPU before being written 
+		   onto the PCI bus. By reading from the register, this CPU-to-PCI write
+		   buffer is flushed.
+		   
+		   Without this read, at times the CE kernel reports "Unwanted IRQ(11)" due to above INTR
+		   clear not being reflected on the IRQ line after exit from the INTR handler SystemISRWrapper
+		   which calls InterruptDone notifying CE kernel of handler completion.
+		 */
+		(void)OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_INTERRUPT_CLEAR);
+
+		return IMG_TRUE;
+	}
+
+	return IMG_FALSE;
+}
+#else
+IMG_VOID SystemISRHandler(PVRSRV_DEVICE_CONFIG *psDevConfig)
+{
+	SYS_DATA *psSysData = (SYS_DATA *)psDevConfig->hSysData;
 	IMG_UINT32 ui32InterruptClear = 0;
 	IMG_UINT32 ui32InterruptStatus;
 
@@ -767,13 +918,8 @@ static irqreturn_t SystemISRHandler(int irq, void *dev_id)
 	{
 		OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_INTERRUPT_CLEAR, ui32InterruptClear);
 	}
-
-	/* Always return IRQ_NONE because we don't actually handle the interrupts here. 
-	   The expectation is that Rogue and the PDP will clear their own interrupts and 
-	   return IRQ_HANDLED. However, if we don't clear the system control interrupt 
-	   register then the interrupt line will stay asserted. */
-	return IRQ_NONE;
 }
+#endif /* defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING) */
 
 static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 {
@@ -781,7 +927,6 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 	IMG_CPU_PHYADDR	sApolloRegCpuPBase;
 	IMG_UINT32 uiApolloRegSize;
 	IMG_UINT32 ui32Value;
-	IMG_UINT32 i;
 	PVRSRV_ERROR eError;
 
 #if defined(LDM_PCI) || defined(SUPPORT_DRM)
@@ -791,15 +936,6 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 	psSysData->hRGXPCI = OSPCISetDev((IMG_VOID *)gpsPVRLDMDev, HOST_PCI_INIT_FLAG_BUS_MASTER);
 #else
 	psSysData->hRGXPCI = OSPCIAcquireDev(SYS_RGX_DEV_VENDOR_ID, SYS_RGX_DEV_DEVICE_ID, HOST_PCI_INIT_FLAG_BUS_MASTER);
-
-#if defined(SYS_RGX_DEV1_DEVICE_ID)
-	if (!psSysData->hRGXPCI)
-	{
-		PVR_DPF((PVR_DBG_MESSAGE, "%s: Trying alternative PCI device ID", __FUNCTION__));
-
-		psSysData->hRGXPCI = OSPCIAcquireDev(SYS_RGX_DEV_VENDOR_ID, SYS_RGX_DEV1_DEVICE_ID, HOST_PCI_INIT_FLAG_BUS_MASTER);
-	}
-#endif /* defined(SYS_RGX_DEV1_DEVICE_ID) */
 #endif /* defined(LDM_PCI) || defined(SUPPORT_DRM) */
 	if (!psSysData->hRGXPCI)
 	{
@@ -831,11 +967,14 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 		goto ErrorPCIReleaseDevice;
 	}
 	psSysData->sSystemRegCpuPBase.uiAddr	= sApolloRegCpuPBase.uiAddr + SYS_APOLLO_REG_SYS_OFFSET;
-	psSysData->uiSystemRegSize		= SYS_APOLLO_REG_SYS_SIZE;
+	psSysData->uiSystemRegSize		= SYS_APOLLO_REG_REGION_SIZE;
 
 	/* Setup Rogue register information */
 	psDevice->sRegsCpuPBase.uiAddr	= OSPCIAddrRangeStart(psSysData->hRGXPCI, SYS_RGX_REG_PCI_BASENUM);
 	psDevice->ui32RegsSize		= OSPCIAddrRangeLen(psSysData->hRGXPCI, SYS_RGX_REG_PCI_BASENUM);
+	
+	/* Save data for this device */
+	psDevice->hSysData = (IMG_HANDLE)psSysData;
 
 	/* Check the address range is large enough. */
 	if (psDevice->ui32RegsSize < SYS_RGX_REG_REGION_SIZE)
@@ -882,7 +1021,7 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 		goto ErrorSystemRegUnMapPhysToLin;
 	}
 
-	if (SetClocks(psSysData, RGX_TC_CORE_CLOCK_SPEED, RGX_TC_MEM_CLOCK_SPEED) != PVRSRV_OK)
+	if (SetClocks(psSysData, ui32CoreClockSpeed, ui32MemClockSpeed) != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the core and memory clocks", __FUNCTION__));
 	}
@@ -890,10 +1029,12 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 	/* Enable the rogue PLL (defaults to 3x), giving a Rogue clock of 3 x RGX_TC_CORE_CLOCK_SPEED */
 	ui32Value = OSReadHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_DUT_CONTROL_1);
 	OSWriteHWReg32(psSysData->pvSystemRegCpuVBase, TCF_CLK_CTRL_DUT_CONTROL_1, ui32Value & 0xFFFFFFFB);
-	for (i = 0; i < 1000; i++)
-	{
-		udelay(600);
-	}
+
+	OSSleepms(600);
+
+	/* Enable the temperature sensor */
+	SPI_Write(psSysData->pvSystemRegCpuVBase, 0x3, 0x46);
+
 
 	/* Override the system name if we can get the system info string */
 	psSysData->pszSystemInfoString = GetSystemInfoString(psSysData);
@@ -902,7 +1043,11 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 		gsSysConfig.pszSystemName = psSysData->pszSystemInfoString;
 	}
 
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+	eError = OSPCIIRQ(psSysData->hRGXPCI, &psSysData->ui32IRQ);
+#else
 	eError = OSPCIIRQ(psSysData->hRGXPCI, &psDevice->ui32IRQ);
+#endif
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Couldn't get IRQ", __FUNCTION__));
@@ -910,16 +1055,28 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 		goto ErrorDeInitMemory;
 	}
 
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 	/* Register our handler */
-	if (request_irq(psDevice->ui32IRQ, SystemISRHandler, IRQF_SHARED, PVRSRV_MODNAME, psSysData))
+	eError = OSInstallSystemLISR(&psSysData->hLISR,
+								 psSysData->ui32IRQ,
+#if !defined(UNDER_CE)
+								 IMG_NULL,
+#else
+								 (PVR_IRQ_PRIV_DATA *)&psSysData->sSystemRegCpuPBase,
+#endif
+								 SystemISRHandler,
+								 psSysData);
+	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to install the system device interrupt handler", __FUNCTION__));
 
-		eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_ISR_HANDLER;
 		goto ErrorDeInitMemory;
 	}
-
-	EnableInterrupts(psSysData);
+#else
+	psDevice->pfnInterruptHandled = SystemISRHandler;
+	
+	EnableInterrupt(psSysData, (0x1 << EXT_INT_SHIFT) | (0x1 << PDP1_INT_SHIFT));
+#endif		
 
 	return PVRSRV_OK;
 
@@ -951,9 +1108,12 @@ static IMG_VOID PCIDeInitDev(SYS_DATA *psSysData)
 {
 	PVRSRV_DEVICE_CONFIG *psDevice = &gsSysConfig.pasDevices[0];
 
-	DisableInterrupts(psSysData);
-
-	free_irq(psDevice->ui32IRQ, psSysData);
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+	OSUninstallSystemLISR(psSysData->hLISR);
+	psSysData->hLISR = NULL;
+#else
+	DisableInterrupt(psSysData, (0x1 << EXT_INT_SHIFT) | (0x1 << PDP1_INT_SHIFT));
+#endif	
 
 	if (psSysData->pszSystemInfoString)
 	{
@@ -996,7 +1156,7 @@ static IMG_VOID TCLocalDevPAddrToCpuPAddr(IMG_HANDLE hPrivData,
 
 	psCpuPAddr->uiAddr = psDevPAddr->uiAddr + psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr;
 }
-#elif (TC_MEMORY_CONFIG == TC_MEMORY_HOST)  || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
+#elif (TC_MEMORY_CONFIG == TC_MEMORY_HOST) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) || (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
 static IMG_VOID TCSystemCpuPAddrToDevPAddr(IMG_HANDLE hPrivData,
 					   IMG_DEV_PHYADDR *psDevPAddr,
 					   IMG_CPU_PHYADDR *psCpuPAddr)
@@ -1012,9 +1172,9 @@ static IMG_VOID TCSystemDevPAddrToCpuPAddr(IMG_HANDLE hPrivData,
 {
 	PVR_UNREFERENCED_PARAMETER(hPrivData);
 
-	psCpuPAddr->uiAddr = psDevPAddr->uiAddr;
+	psCpuPAddr->uiAddr = (IMG_UINTPTR_T)psDevPAddr->uiAddr;
 }
-#endif /* (TC_MEMORY_CONFIG == TC_MEMORY_HOST) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) */
+#endif /* (TC_MEMORY_CONFIG == TC_MEMORY_HOST) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) || (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED) */
 
 PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 {
@@ -1034,9 +1194,6 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 		goto ErrorFreeSysData;
 	}
 
-	/* Save data for this device */
-	gsSysConfig.pasDevices[0].hSysData = (IMG_HANDLE)psSysData;
-
 	/* Save private data for the physical memory heaps */
 	gsPhysHeapConfig[0].hPrivData = (IMG_HANDLE)&gsSysConfig;
 
@@ -1045,9 +1202,28 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 #endif
 
 #if defined(SUPPORT_ION)
-	gsPhysHeapConfig[2].hPrivData = (IMG_HANDLE)&gsSysConfig;
-	IonInit();
-#endif
+#if TC_MEMORY_CONFIG == TC_MEMORY_LOCAL
+	{
+		/* Set up the ion heap according to the physical heap we created, by
+		   passing down a private data struct that this system's IonInit()
+		   should understand. This lets the ion support code continue to
+		   work if the heap configuration changes. */
+		ION_TC_PRIVATE_DATA sIonPrivateData = {
+			.uiHeapBase = gsSysConfig.pasPhysHeaps[2].sStartAddr.uiAddr,
+			.uiHeapSize = RGX_TC_RESERVE_ION_MEM_SIZE,
+			.ui32IonPhysHeapID = gsSysConfig.pasPhysHeaps[2].ui32PhysHeapID,
+			.sPCIAddrRangeStart = gsSysConfig.pasPhysHeaps[0].sStartAddr
+		};
+
+		gsPhysHeapConfig[2].hPrivData = (IMG_HANDLE)&gsSysConfig;
+		IonInit(&sIonPrivateData);
+	}
+#elif TC_MEMORY_CONFIG == TC_MEMORY_HYBRID
+	IonInit(NULL);
+#else
+#error SUPPORT_ION must be used with TC_MEMORY_LOCAL or TC_MEMORY_HYBRID
+#endif /* TC_MEMORY_CONFIG */
+#endif /* defined(SUPPORT_ION) */
 
 	*ppsSysConfig = &gsSysConfig;
 
@@ -1069,7 +1245,125 @@ IMG_VOID SysDestroyConfigData(PVRSRV_SYSTEM_CONFIG *psSysConfig)
 
 PVRSRV_ERROR SysDebugInfo(PVRSRV_SYSTEM_CONFIG *psSysConfig)
 {
-	PVR_UNREFERENCED_PARAMETER(psSysConfig);
+	PVRSRV_ERROR	eError;
+	SYS_DATA		*psSysData = psSysConfig->pasDevices[0].hSysData;
+	IMG_UINT32		ui32RegOffset;
+	IMG_UINT32		ui32RegVal;
+	
+	PVR_LOG(("------[ rgx_tc system debug ]------"));
+
+	/* Read the temperature */
+	ui32RegOffset = 0x5;
+	eError = SPI_Read(psSysData->pvSystemRegCpuVBase, ui32RegOffset, &ui32RegVal);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "SysDebugInfo: SPI_Read failed for register 0x%x (0x%x)", ui32RegOffset, eError));
+		goto SysDebugInfo_exit;
+	}
+
+	PVR_LOG(("Chip temperature: %d degrees C", (ui32RegVal * 233 / 4096) - 66));
+	
+SysDebugInfo_exit:
+	return eError;
+}
+
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+PVRSRV_ERROR SysInstallDeviceLISR(IMG_UINT32 ui32IRQ,
+				  IMG_BOOL bShared,
+				  IMG_CHAR *pszName,
+				  PFN_LISR pfnLISR,
+				  IMG_PVOID pvData,
+				  IMG_HANDLE *phLISRData)
+{
+	PVRSRV_DEVICE_CONFIG *psDevice = &gsSysConfig.pasDevices[0];
+	SYS_DATA *psSysData = (SYS_DATA *)psDevice->hSysData;
+	IMG_UINT32 ui32InterruptFlag;
+
+	PVR_ASSERT(psDevice->bIRQIsShared == bShared);
+
+	switch (ui32IRQ)
+	{
+		case 0:
+			ui32InterruptFlag = (0x1 << EXT_INT_SHIFT);
+			break;
+		case 1:
+			ui32InterruptFlag = (0x1 << PDP1_INT_SHIFT);
+			break;
+		default:
+			PVR_DPF((PVR_DBG_ERROR, "%s: No device matching IRQ %d", __FUNCTION__, ui32IRQ));
+			return PVRSRV_ERROR_UNABLE_TO_INSTALL_ISR;
+	}
+
+	if (psSysData->sInterruptData[ui32IRQ].pfnLISR)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: ISR for %s already installed!", __FUNCTION__, pszName));
+		return PVRSRV_ERROR_ISR_ALREADY_INSTALLED;
+	}
+
+	psSysData->sInterruptData[ui32IRQ].psSysData		= psSysData;
+	psSysData->sInterruptData[ui32IRQ].pszName		= pszName;
+	psSysData->sInterruptData[ui32IRQ].pfnLISR		= pfnLISR;
+	psSysData->sInterruptData[ui32IRQ].pvData		= pvData;
+	psSysData->sInterruptData[ui32IRQ].ui32InterruptFlag	= ui32InterruptFlag;
+	
+	*phLISRData = &psSysData->sInterruptData[ui32IRQ];
+
+	EnableInterrupt(psSysData, psSysData->sInterruptData[ui32IRQ].ui32InterruptFlag);
+
+	PVR_LOG(("Installed device LISR %s on IRQ %d", pszName, psSysData->ui32IRQ));
 
 	return PVRSRV_OK;
 }
+
+PVRSRV_ERROR SysUninstallDeviceLISR(IMG_HANDLE hLISRData)
+{
+	SYS_INTERRUPT_DATA *psInterruptData = (SYS_INTERRUPT_DATA *)hLISRData;
+
+	PVR_ASSERT(psInterruptData);
+
+	PVR_LOG(("Uninstalling device LISR %s on IRQ %d", psInterruptData->pszName, psInterruptData->psSysData->ui32IRQ));
+
+	/* Disable interrupts for this device */
+	DisableInterrupt(psInterruptData->psSysData, psInterruptData->ui32InterruptFlag);
+
+	/* Reset the interrupt data */
+	psInterruptData->pszName = NULL;
+	psInterruptData->psSysData = NULL;
+	psInterruptData->pfnLISR = NULL;
+	psInterruptData->pvData = NULL;
+	psInterruptData->ui32InterruptFlag = 0;
+
+	return PVRSRV_OK;	
+}
+#endif /* defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING) */
+
+#if defined(_WIN32)
+IMG_VOID GetCpuVBase(IMG_VOID ** ppvSystemRegCpuVBase)
+{
+	SYS_DATA *psSysData = (SYS_DATA *)gsSysConfig.pasDevices[0].hSysData;
+	
+	if (psSysData)
+	{
+		*ppvSystemRegCpuVBase = psSysData->pvSystemRegCpuVBase;
+	}
+	else
+	{
+		*ppvSystemRegCpuVBase = IMG_NULL;
+	}
+
+}
+
+/* used by local wddmconfig.c as psSysData is not exported */
+IMG_UINT32 GetRGXMemBase()
+{
+	SYS_DATA *psSysData = (SYS_DATA *)gsSysConfig.pasDevices[0].hSysData;
+	PVR_ASSERT(psSysData != IMG_NULL);
+	
+	return OSPCIAddrRangeStart(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM);
+}
+
+IMG_UINT64 GetRGXMemHeapSize()
+{
+	return gsSysConfig.pasPhysHeaps[0].uiSize;
+}
+#endif

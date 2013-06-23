@@ -97,14 +97,7 @@ IMG_IMPORT IMG_VOID PVRSRVPowerUnlock(IMG_VOID);
 IMG_IMPORT
 PVRSRV_ERROR PVRSRVSetDevicePowerStateKM(IMG_UINT32				ui32DeviceIndex,
 										 PVRSRV_DEV_POWER_STATE	eNewPowerState,
-										 IMG_UINT32				ui32CallerID,
-										 IMG_BOOL				bRetainMutex,
 										 IMG_BOOL				bForced);
-
-IMG_IMPORT
-PVRSRV_ERROR PVRSRVSystemPrePowerStateKM(PVRSRV_SYS_POWER_STATE eNewPowerState, IMG_BOOL bForced);
-IMG_IMPORT
-PVRSRV_ERROR PVRSRVSystemPostPowerStateKM(PVRSRV_SYS_POWER_STATE eNewPowerState, IMG_BOOL bForced);
 
 IMG_IMPORT
 PVRSRV_ERROR PVRSRVSetPowerStateKM (PVRSRV_SYS_POWER_STATE ePVRState, IMG_BOOL bForced);
@@ -124,6 +117,9 @@ PVRSRV_ERROR PVRSRVRegisterPowerDevice(IMG_UINT32					ui32DeviceIndex,
 
 IMG_IMPORT
 PVRSRV_ERROR PVRSRVRemovePowerDevice (IMG_UINT32 ui32DeviceIndex);
+
+IMG_IMPORT
+PVRSRV_ERROR PVRSRVGetDevicePowerState(IMG_UINT32 ui32DeviceIndex, PPVRSRV_DEV_POWER_STATE pePowerState);
 
 IMG_IMPORT
 IMG_BOOL PVRSRVIsDevicePowered(IMG_UINT32 ui32DeviceIndex);

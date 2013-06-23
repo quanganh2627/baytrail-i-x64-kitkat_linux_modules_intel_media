@@ -51,6 +51,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_rgxcmp_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -58,7 +59,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
+
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
 static PVRSRV_ERROR
 RGXDestroyComputeContextResManProxy(IMG_HANDLE hResmanItem)
@@ -74,24 +83,34 @@ RGXDestroyComputeContextResManProxy(IMG_HANDLE hResmanItem)
 }
 
 
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgeRGXCreateComputeContext(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_RGXCREATECOMPUTECONTEXT *psRGXCreateComputeContextIN,
 					 PVRSRV_BRIDGE_OUT_RGXCREATECOMPUTECONTEXT *psRGXCreateComputeContextOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
-	DEVMEM_MEMDESC * psCmpCCBMemDescInt;
-	DEVMEM_MEMDESC * psCmpCCBCtlMemDescInt;
-	RGX_CC_CLEANUP_DATA * psCleanupCookieInt;
-	IMG_HANDLE hCleanupCookieInt2;
-	DEVMEM_MEMDESC * psFWComputeContextInt;
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
+	DEVMEM_MEMDESC * psCmpCCBMemDescInt = IMG_NULL;
+	DEVMEM_MEMDESC * psCmpCCBCtlMemDescInt = IMG_NULL;
+	RGX_CC_CLEANUP_DATA * psCleanupCookieInt = IMG_NULL;
+	IMG_HANDLE hCleanupCookieInt2 = IMG_NULL;
+	DEVMEM_MEMDESC * psFWComputeContextInt = IMG_NULL;
+	DEVMEM_MEMDESC * psFWComputeContextStateInt = IMG_NULL;
 	IMG_BYTE *psFrameworkCmdInt = IMG_NULL;
-	IMG_HANDLE hPrivDataInt;
+	IMG_HANDLE hPrivDataInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXCMP_RGXCREATECOMPUTECONTEXT);
 
-	psFrameworkCmdInt = kmalloc(RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE), GFP_KERNEL);
+
+
+	psRGXCreateComputeContextOUT->hCleanupCookie = IMG_NULL;
+
+	psFrameworkCmdInt = OSAllocMem(RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE));
 	if (!psFrameworkCmdInt)
 	{
 		psRGXCreateComputeContextOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -100,57 +119,55 @@ PVRSRVBridgeRGXCreateComputeContext(IMG_UINT32 ui32BridgeID,
 	}
 
 
-	if (copy_from_user(psFrameworkCmdInt, psRGXCreateComputeContextIN->psFrameworkCmd,
-		RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE)) != 0)
+	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXCreateComputeContextIN->psFrameworkCmd, RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE)) 
+		|| (OSCopyFromUser(NULL, psFrameworkCmdInt, psRGXCreateComputeContextIN->psFrameworkCmd,
+		RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE)) != PVRSRV_OK) )
 	{
 		psRGXCreateComputeContextOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
 		goto RGXCreateComputeContext_exit;
 	}
 
-
-	NEW_HANDLE_BATCH_OR_ERROR(psRGXCreateComputeContextOUT->eError, psConnection, 2);
-
-	/* Look up the address from the handle */
-	psRGXCreateComputeContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psRGXCreateComputeContextIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateComputeContext_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXCreateComputeContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psCmpCCBMemDescInt,
-						   psRGXCreateComputeContextIN->hCmpCCBMemDesc,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateComputeContext_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXCreateComputeContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psCmpCCBCtlMemDescInt,
-						   psRGXCreateComputeContextIN->hCmpCCBCtlMemDesc,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateComputeContext_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXCreateComputeContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPrivDataInt,
-						   psRGXCreateComputeContextIN->hPrivData,
-						   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
-	if(psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateComputeContext_exit;
-	}
+		/* Look up the address from the handle */
+		psRGXCreateComputeContextOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDevNodeInt,
+							   psRGXCreateComputeContextIN->hDevNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
+		{
+			goto RGXCreateComputeContext_exit;
+		}
+		/* Look up the address from the handle */
+		psRGXCreateComputeContextOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &psCmpCCBMemDescInt,
+							   psRGXCreateComputeContextIN->hCmpCCBMemDesc,
+							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
+		if(psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
+		{
+			goto RGXCreateComputeContext_exit;
+		}
+		/* Look up the address from the handle */
+		psRGXCreateComputeContextOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &psCmpCCBCtlMemDescInt,
+							   psRGXCreateComputeContextIN->hCmpCCBCtlMemDesc,
+							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
+		if(psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
+		{
+			goto RGXCreateComputeContext_exit;
+		}
+		/* Look up the address from the handle */
+		psRGXCreateComputeContextOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hPrivDataInt,
+							   psRGXCreateComputeContextIN->hPrivData,
+							   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
+		if(psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
+		{
+			goto RGXCreateComputeContext_exit;
+		}
 
 	psRGXCreateComputeContextOUT->eError =
 		PVRSRVRGXCreateComputeContextKM(
@@ -159,6 +176,7 @@ PVRSRVBridgeRGXCreateComputeContext(IMG_UINT32 ui32BridgeID,
 					psCmpCCBCtlMemDescInt,
 					&psCleanupCookieInt,
 					&psFWComputeContextInt,
+					&psFWComputeContextStateInt,
 					psRGXCreateComputeContextIN->ui32Priority,
 					psRGXCreateComputeContextIN->sMCUFenceAddr,
 					psRGXCreateComputeContextIN->ui32FrameworkCmdize,
@@ -182,28 +200,63 @@ PVRSRVBridgeRGXCreateComputeContext(IMG_UINT32 ui32BridgeID,
 		goto RGXCreateComputeContext_exit;
 	}
 	psRGXCreateComputeContextOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
-					  &psRGXCreateComputeContextOUT->hCleanupCookie,
-					  (IMG_HANDLE) hCleanupCookieInt2,
-					  PVRSRV_HANDLE_TYPE_RGX_CC_CLEANUP,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
+							&psRGXCreateComputeContextOUT->hCleanupCookie,
+							(IMG_HANDLE) hCleanupCookieInt2,
+							PVRSRV_HANDLE_TYPE_RGX_CC_CLEANUP,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							);
 	if (psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
 	{
 		goto RGXCreateComputeContext_exit;
 	}
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psRGXCreateComputeContextOUT->hFWComputeContext,
-					  (IMG_HANDLE) psFWComputeContextInt,
-					  PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psRGXCreateComputeContextOUT->hCleanupCookie);
-	COMMIT_HANDLE_BATCH_OR_ERROR(psRGXCreateComputeContextOUT->eError, psConnection);
-
+	psRGXCreateComputeContextOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
+							&psRGXCreateComputeContextOUT->hFWComputeContext,
+							(IMG_HANDLE) psFWComputeContextInt,
+							PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							,psRGXCreateComputeContextOUT->hCleanupCookie);
+	if (psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
+	{
+		goto RGXCreateComputeContext_exit;
+	}
+	psRGXCreateComputeContextOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
+							&psRGXCreateComputeContextOUT->hFWComputeContextState,
+							(IMG_HANDLE) psFWComputeContextStateInt,
+							PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							,psRGXCreateComputeContextOUT->hCleanupCookie);
+	if (psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
+	{
+		goto RGXCreateComputeContext_exit;
+	}
 
 
 RGXCreateComputeContext_exit:
+	if (psRGXCreateComputeContextOUT->eError != PVRSRV_OK)
+	{
+		if (psRGXCreateComputeContextOUT->hCleanupCookie)
+		{
+			PVRSRVReleaseHandle(psConnection->psHandleBase,
+						(IMG_HANDLE) psRGXCreateComputeContextOUT->hCleanupCookie,
+						PVRSRV_HANDLE_TYPE_RGX_CC_CLEANUP);
+		}
+
+		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
+		if (hCleanupCookieInt2)
+		{
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hCleanupCookieInt2);
+
+			/* Freeing a resource should never fail... */
+			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
+		}
+		else if (psCleanupCookieInt)
+		{
+			PVRSRVRGXDestroyComputeContextKM(psCleanupCookieInt);
+		}
+	}
+
 	if (psFrameworkCmdInt)
-		kfree(psFrameworkCmdInt);
+		OSFreeMem(psFrameworkCmdInt);
 
 	return 0;
 }
@@ -214,21 +267,23 @@ PVRSRVBridgeRGXDestroyComputeContext(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_RGXDESTROYCOMPUTECONTEXT *psRGXDestroyComputeContextOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hCleanupCookieInt2;
+	IMG_HANDLE hCleanupCookieInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXCMP_RGXDESTROYCOMPUTECONTEXT);
 
 
-	/* Look up the address from the handle */
-	psRGXDestroyComputeContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hCleanupCookieInt2,
-						   psRGXDestroyComputeContextIN->hCleanupCookie,
-						   PVRSRV_HANDLE_TYPE_RGX_CC_CLEANUP);
-	if(psRGXDestroyComputeContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXDestroyComputeContext_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psRGXDestroyComputeContextOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hCleanupCookieInt2,
+							   psRGXDestroyComputeContextIN->hCleanupCookie,
+							   PVRSRV_HANDLE_TYPE_RGX_CC_CLEANUP);
+		if(psRGXDestroyComputeContextOUT->eError != PVRSRV_OK)
+		{
+			goto RGXDestroyComputeContext_exit;
+		}
 
 	psRGXDestroyComputeContextOUT->eError = RGXDestroyComputeContextResManProxy(hCleanupCookieInt2);
 	/* Exit early if bridged call fails */
@@ -254,188 +309,45 @@ PVRSRVBridgeRGXKickCDM(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_RGXKICKCDM *psRGXKickCDMOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
-	DEVMEM_MEMDESC * psFWComputeContextInt;
-	DEVMEM_MEMDESC * pscCCBInt;
-	DEVMEM_MEMDESC * pscCCBCtlInt;
-	PVRSRV_CLIENT_SYNC_PRIM_OP* *sSyncOpInt = IMG_NULL;
-	SERVER_SYNC_PRIMITIVE * *psSyncHandleInt = IMG_NULL;
-	IMG_HANDLE *hSyncHandleInt2 = IMG_NULL;
-	IMG_BYTE *psCmdInt = IMG_NULL;
-	RGX_CC_CLEANUP_DATA * psCleanupCookieInt;
-	IMG_HANDLE hCleanupCookieInt2;
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
+	DEVMEM_MEMDESC * psFWComputeContextInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXCMP_RGXKICKCDM);
 
-	sSyncOpInt = kmalloc(psRGXKickCDMIN->ui32NumServerSyncs * sizeof(PVRSRV_CLIENT_SYNC_PRIM_OP*), GFP_KERNEL);
-	if (!sSyncOpInt)
-	{
-		psRGXKickCDMOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXKickCDM_exit;
-	}
 
 
-	if (copy_from_user(sSyncOpInt, psRGXKickCDMIN->psSyncOp,
-		psRGXKickCDMIN->ui32NumServerSyncs * sizeof(PVRSRV_CLIENT_SYNC_PRIM_OP*)) != 0)
-	{
-		psRGXKickCDMOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
-		goto RGXKickCDM_exit;
-	}
-
-	psSyncHandleInt = kmalloc(psRGXKickCDMIN->ui32NumServerSyncs * sizeof(SERVER_SYNC_PRIMITIVE *), GFP_KERNEL);
-	if (!psSyncHandleInt)
-	{
-		psRGXKickCDMOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXKickCDM_exit;
-	}
-
-	hSyncHandleInt2 = kmalloc(psRGXKickCDMIN->ui32NumServerSyncs * sizeof(IMG_HANDLE), GFP_KERNEL);
-	if (!hSyncHandleInt2)
-	{
-		psRGXKickCDMOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXKickCDM_exit;
-	}
-
-	if (copy_from_user(hSyncHandleInt2, psRGXKickCDMIN->phSyncHandle,
-		psRGXKickCDMIN->ui32NumServerSyncs * sizeof(IMG_HANDLE)) != 0)
-	{
-		psRGXKickCDMOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto RGXKickCDM_exit;
-	}
-
-	psCmdInt = kmalloc(psRGXKickCDMIN->ui32CmdSize * sizeof(IMG_BYTE), GFP_KERNEL);
-	if (!psCmdInt)
-	{
-		psRGXKickCDMOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXKickCDM_exit;
-	}
-
-
-	if (copy_from_user(psCmdInt, psRGXKickCDMIN->psCmd,
-		psRGXKickCDMIN->ui32CmdSize * sizeof(IMG_BYTE)) != 0)
-	{
-		psRGXKickCDMOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto RGXKickCDM_exit;
-	}
-
-
-	/* Look up the address from the handle */
-	psRGXKickCDMOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psRGXKickCDMIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psRGXKickCDMOUT->eError != PVRSRV_OK)
-	{
-		goto RGXKickCDM_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXKickCDMOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psFWComputeContextInt,
-						   psRGXKickCDMIN->hFWComputeContext,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXKickCDMOUT->eError != PVRSRV_OK)
-	{
-		goto RGXKickCDM_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXKickCDMOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &pscCCBInt,
-						   psRGXKickCDMIN->hcCCB,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXKickCDMOUT->eError != PVRSRV_OK)
-	{
-		goto RGXKickCDM_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXKickCDMOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &pscCCBCtlInt,
-						   psRGXKickCDMIN->hcCCBCtl,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXKickCDMOUT->eError != PVRSRV_OK)
-	{
-		goto RGXKickCDM_exit;
-	}
-	{
-	IMG_UINT32 i;
-
-	for (i=0;i<psRGXKickCDMIN->ui32NumServerSyncs;i++)
-	{
-	/* Look up the address from the handle */
-	psRGXKickCDMOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hSyncHandleInt2[i],
-						   hSyncHandleInt2[i],
-						   PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
-	if(psRGXKickCDMOUT->eError != PVRSRV_OK)
-	{
-		goto RGXKickCDM_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psRGXKickCDMOUT->eError = ResManFindPrivateDataByPtr(hSyncHandleInt2[i], (IMG_VOID **) &psSyncHandleInt[i]);
-	if(psRGXKickCDMOUT->eError != PVRSRV_OK)
-	{
-		goto RGXKickCDM_exit;
-	}
-	}
-	}
-	/* Look up the address from the handle */
-	psRGXKickCDMOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hCleanupCookieInt2,
-						   psRGXKickCDMIN->hCleanupCookie,
-						   PVRSRV_HANDLE_TYPE_RGX_CC_CLEANUP);
-	if(psRGXKickCDMOUT->eError != PVRSRV_OK)
-	{
-		goto RGXKickCDM_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psRGXKickCDMOUT->eError = ResManFindPrivateDataByPtr(hCleanupCookieInt2, (IMG_VOID **) &psCleanupCookieInt);
-	if(psRGXKickCDMOUT->eError != PVRSRV_OK)
-	{
-		goto RGXKickCDM_exit;
-	}
+		/* Look up the address from the handle */
+		psRGXKickCDMOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDevNodeInt,
+							   psRGXKickCDMIN->hDevNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psRGXKickCDMOUT->eError != PVRSRV_OK)
+		{
+			goto RGXKickCDM_exit;
+		}
+		/* Look up the address from the handle */
+		psRGXKickCDMOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &psFWComputeContextInt,
+							   psRGXKickCDMIN->hFWComputeContext,
+							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
+		if(psRGXKickCDMOUT->eError != PVRSRV_OK)
+		{
+			goto RGXKickCDM_exit;
+		}
 
 	psRGXKickCDMOUT->eError =
-		PVRSRVRGXKickCDMKM(psConnection,
+		PVRSRVRGXKickCDMKM(
 					hDevNodeInt,
 					psFWComputeContextInt,
-					psRGXKickCDMIN->pvcCCBWoffUpdate,
-					pscCCBInt,
-					pscCCBCtlInt,
-					psRGXKickCDMIN->ui32NumServerSyncs,
-					sSyncOpInt,
-					psSyncHandleInt,
-					psRGXKickCDMIN->ui32CmdSize,
-					psCmdInt,
-					psRGXKickCDMIN->ui32FenceOffset,
-					psRGXKickCDMIN->ui32UpdateOffset,
-					psRGXKickCDMIN->bbPDumpContinuous,
-					psCleanupCookieInt);
+					psRGXKickCDMIN->ui32cCCBWoffUpdate,
+					psRGXKickCDMIN->bbPDumpContinuous);
 
 
 
 RGXKickCDM_exit:
-	if (sSyncOpInt)
-		kfree(sSyncOpInt);
-	if (psSyncHandleInt)
-		kfree(psSyncHandleInt);
-	if (hSyncHandleInt2)
-		kfree(hSyncHandleInt2);
-	if (psCmdInt)
-		kfree(psCmdInt);
 
 	return 0;
 }
@@ -446,32 +358,34 @@ PVRSRVBridgeRGXFlushComputeData(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_RGXFLUSHCOMPUTEDATA *psRGXFlushComputeDataOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
-	DEVMEM_MEMDESC * psFWComputeContextInt;
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
+	DEVMEM_MEMDESC * psFWComputeContextInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXCMP_RGXFLUSHCOMPUTEDATA);
 
 
-	/* Look up the address from the handle */
-	psRGXFlushComputeDataOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psRGXFlushComputeDataIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psRGXFlushComputeDataOUT->eError != PVRSRV_OK)
-	{
-		goto RGXFlushComputeData_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXFlushComputeDataOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psFWComputeContextInt,
-						   psRGXFlushComputeDataIN->hFWComputeContext,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXFlushComputeDataOUT->eError != PVRSRV_OK)
-	{
-		goto RGXFlushComputeData_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psRGXFlushComputeDataOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDevNodeInt,
+							   psRGXFlushComputeDataIN->hDevNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psRGXFlushComputeDataOUT->eError != PVRSRV_OK)
+		{
+			goto RGXFlushComputeData_exit;
+		}
+		/* Look up the address from the handle */
+		psRGXFlushComputeDataOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &psFWComputeContextInt,
+							   psRGXFlushComputeDataIN->hFWComputeContext,
+							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
+		if(psRGXFlushComputeDataOUT->eError != PVRSRV_OK)
+		{
+			goto RGXFlushComputeData_exit;
+		}
 
 	psRGXFlushComputeDataOUT->eError =
 		PVRSRVRGXFlushComputeDataKM(
@@ -486,6 +400,11 @@ RGXFlushComputeData_exit:
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterRGXCMPFunctions(IMG_VOID);
 IMG_VOID UnregisterRGXCMPFunctions(IMG_VOID);
 

@@ -102,8 +102,8 @@ PHYS_HEAP_TYPE PhysHeapGetType(PHYS_HEAP *psPhysHeap);
 PVRSRV_ERROR PhysHeapGetAddress(PHYS_HEAP *psPhysHeap,
 								IMG_CPU_PHYADDR *psCpuPAddr);
 
-PHYS_HEAP_TYPE PhysHeapGetSize(PHYS_HEAP *psPhysHeap,
-							   IMG_UINT64 *puiSize);
+PVRSRV_ERROR PhysHeapGetSize(PHYS_HEAP *psPhysHeap,
+						     IMG_UINT64 *puiSize);
 
 IMG_VOID PhysHeapCpuPAddrToDevPAddr(PHYS_HEAP *psPhysHeap,
 									IMG_DEV_PHYADDR *psDevPAddr,

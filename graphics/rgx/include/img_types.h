@@ -44,15 +44,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __IMG_TYPES_H__
 #define __IMG_TYPES_H__
 
+/* number of bits in the units returned by sizeof */
+#define IMG_CHAR_BIT 8
+
 /* define all address space bit depths: */
 /* CPU virtual address space defaults to 32bits */
 #if !defined(IMG_ADDRSPACE_CPUVADDR_BITS)
 #define IMG_ADDRSPACE_CPUVADDR_BITS		32
-#endif
-
-/* Physical address space defaults to 32bits */
-#if !defined(IMG_ADDRSPACE_PHYSADDR_BITS)
-#define IMG_ADDRSPACE_PHYSADDR_BITS		32
 #endif
 
 typedef unsigned int	IMG_UINT,	*IMG_PUINT;
@@ -75,6 +73,9 @@ typedef signed long		IMG_INT32,	*IMG_PINT32;
 #endif
 #if !defined(IMG_UINT32_MAX)
 	#define IMG_UINT32_MAX 0xFFFFFFFFUL
+#endif
+#if !defined(IMG_UINT16_MAX)
+	#define IMG_UINT16_MAX 0xFFFFU
 #endif
 
 typedef IMG_UINT16 const* IMG_PCUINT16;
@@ -106,7 +107,8 @@ typedef float			IMG_FLOAT,	*IMG_PFLOAT;
 typedef double			IMG_DOUBLE, *IMG_PDOUBLE;
 #endif
 
-#if defined(LINUX)
+
+#if defined(SUPPORT_SECURE_EXPORT)
 typedef int				IMG_SECURE_TYPE;
 #endif
 
@@ -118,6 +120,7 @@ typedef	enum tag_img_bool
 } IMG_BOOL, *IMG_PBOOL;
 
 typedef void            IMG_VOID, *IMG_PVOID;
+typedef IMG_VOID const* IMG_PCVOID;
 
 /* Figure out which headers to include to get uintptr_t. */
 #if !defined(_MSC_VER) && !defined(__KERNEL__)
@@ -132,6 +135,8 @@ typedef void            IMG_VOID, *IMG_PVOID;
 
 typedef uintptr_t		IMG_UINTPTR_T;
 typedef size_t			IMG_SIZE_T;
+
+#define IMG_SIZE_T_MAX ((IMG_SIZE_T) -1)
 
 #if defined(_MSC_VER)
 #define IMG_SIZE_FMTSPEC "%Iu"
@@ -215,9 +220,13 @@ typedef IMG_UINT32 IMG_DEVMEM_LOG2ALIGN_T;
 /* cpu physical address */
 typedef struct _IMG_CPU_PHYADDR
 {
-	/* variable sized type (32,64) */
+#if defined(UNDER_WDDM)
 	IMG_UINTPTR_T uiAddr;
 #define IMG_CAST_TO_CPUPHYADDR_UINT(var)		(IMG_UINTPTR_T)(var)
+#else
+	IMG_UINT64 uiAddr;
+#define IMG_CAST_TO_CPUPHYADDR_UINT(var)		(IMG_UINT64)(var)
+#endif
 } IMG_CPU_PHYADDR;
 
 /* device physical address */
@@ -229,8 +238,11 @@ typedef struct _IMG_DEV_PHYADDR
 /* system physical address */
 typedef struct _IMG_SYS_PHYADDR
 {
-	/* variable sized type (32,64) */
+#if defined(UNDER_WDDM)
 	IMG_UINTPTR_T uiAddr;
+#else
+	IMG_UINT64 uiAddr;
+#endif
 } IMG_SYS_PHYADDR;
 
 /*

@@ -236,6 +236,10 @@ extern IMG_UINT32 g_ui32EveryLineCounter;
 	IMG_VOID PDumpLockKM(IMG_VOID);
 	IMG_VOID PDumpUnlockKM(IMG_VOID);
 
+	PVRSRV_ERROR PDumpIfKM(IMG_CHAR		*pszPDumpCond);
+	PVRSRV_ERROR PDumpElseKM(IMG_CHAR	*pszPDumpCond);
+	PVRSRV_ERROR PDumpFiKM(IMG_CHAR		*pszPDumpCond);
+
     /*
       PDumpWriteShiftedMaskedValue():
 
@@ -301,6 +305,9 @@ PDumpWriteSymbAddress(const IMG_CHAR *pszDestSpaceName,
 	#define PDUMPRESUME				PDumpResumeKM
 	#define PDUMPPOWCMDSTART		PDumpPowerTransitionStartKM
 	#define PDUMPPOWCMDEND			PDumpPowerTransitionEndKM
+	#define PDUMPIF					PDumpIfKM
+	#define PDUMPELSE				PDumpElseKM
+	#define PDUMPFI					PDumpFiKM
 #else
 	/*
 		We should be clearer about which functions can be called

@@ -133,7 +133,17 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
  *  **********************************************************
  */
 
-/* GPU domain */
+/*
+	GPU domain
+	==========
+
+	The following defines are used to control the GPU cache bit field.
+	The defines are mutually exclusive.
+	
+	A helper macro, GPU_CACHE_MODE, is provided to obtain just the GPU cache
+	bit field from the flags. This should be used whenever the GPU cache mode
+	needs to be determined.
+*/
 
 /*!
    GPU domain. Request uncached memory. This means that any writes to memory
@@ -175,17 +185,38 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
     GPU domain.
  
 	Request cached cached coherent memory. This is like 
-	PVRSRV_MEMALLOCFLAG_CPU_CACHE_COHERENT but doesn't fall back on
+	PVRSRV_MEMALLOCFLAG_GPU_CACHE_COHERENT but doesn't fall back on
 	uncached memory if the system doesn't support cache-snooping
 	but rather returns an error.
 */
 #define PVRSRV_MEMALLOCFLAG_GPU_CACHED_CACHE_COHERENT   (4U<<8)
 
+/*!
+	GPU domain.
+
+	This flag is for internal use only and is used to indicate
+	that the underlying allocation should be cached on the GPU
+	after all the snooping and coherent checks have been done
+*/
+#define PVRSRV_MEMALLOCFLAG_GPU_CACHED					(7U<<8)
+
 /* DOXYGEN_FIXME */
 #define PVRSRV_MEMALLOCFLAG_GPU_CACHE_MODE_MASK  (7U<<8)
 
 #define GPU_CACHE_MODE(n)	(n & PVRSRV_MEMALLOCFLAG_GPU_CACHE_MODE_MASK)
-/* CPU domain */
+
+
+/*
+	CPU domain
+	==========
+
+	The following defines are used to control the CPU cache bit field.
+	The defines are mutually exclusive.
+	
+	A helper macro, CPU_CACHE_MODE, is provided to obtain just the CPU cache
+	bit field from the flags. This should be used whenever the GPU cache mode
+	needs to be determined.
+*/
 
 /*!
    CPU domain. Request uncached memory. This means that any writes to memory
@@ -233,6 +264,16 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
 	but rather returns an error.
 */
 #define PVRSRV_MEMALLOCFLAG_CPU_CACHED_CACHE_COHERENT   (4U<<11)
+
+
+/*!
+	CPU domain.
+
+	This flag is for internal use only and is used to indicate
+	that the underlying allocation should be cached on the CPU
+	after all the snooping and coherent checks have been done
+*/
+#define PVRSRV_MEMALLOCFLAG_CPU_CACHED					(7U<<11)
 
 /* DOXYGEN_FIXME */
 #define PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK  (7U<<11)

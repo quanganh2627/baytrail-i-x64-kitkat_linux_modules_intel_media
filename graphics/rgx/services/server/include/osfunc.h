@@ -104,7 +104,7 @@ PVRSRV_ERROR OSThreadCreate(IMG_HANDLE *phThread,
 							IMG_VOID *hData);
 
 /*************************************************************************/ /*!
-@Function       OSThreadDestory
+@Function       OSThreadDestroy
 @Description    Waits for the thread to end and then destroys the thread
                 handle memory. This function will block and wait for the
                 thread to finish successfully, thereby providing a sync point
@@ -113,7 +113,7 @@ PVRSRV_ERROR OSThreadCreate(IMG_HANDLE *phThread,
 @Input          phThread  The thread handle returned by OSThreadCreate().
 @Return         Standard PVRSRV_ERROR error code.
 */ /**************************************************************************/
-PVRSRV_ERROR OSThreadDestory(IMG_HANDLE hThread);
+PVRSRV_ERROR OSThreadDestroy(IMG_HANDLE hThread);
 
 IMG_VOID OSMemCopy(IMG_VOID *pvDst, IMG_VOID *pvSrc, IMG_SIZE_T ui32Size);
 IMG_VOID *OSMapPhysToLin(IMG_CPU_PHYADDR BasePAddr, IMG_SIZE_T ui32Bytes, IMG_UINT32 ui32Flags);
@@ -142,6 +142,7 @@ IMG_VOID OSInvalidateCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 IMG_PID OSGetCurrentProcessIDKM(IMG_VOID);
 IMG_UINTPTR_T OSGetCurrentThreadID( IMG_VOID );
 IMG_VOID OSMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T ui32Size);
+IMG_INT OSMemCmp(IMG_VOID *pvBufA, IMG_VOID *pvBufB, IMG_SIZE_T uiLen);
 
 PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_SIZE_T uiSize,
 							Px_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr);
@@ -251,22 +252,30 @@ typedef enum _img_verify_test
 
 IMG_BOOL OSAccessOK(IMG_VERIFY_TEST eVerification, IMG_VOID *pvUserPtr, IMG_SIZE_T ui32Bytes);
 
-PVRSRV_ERROR OSCopyToUser(IMG_PVOID pvProcess, IMG_VOID *pvDest, IMG_VOID *pvSrc, IMG_SIZE_T ui32Bytes);
-PVRSRV_ERROR OSCopyFromUser(IMG_PVOID pvProcess, IMG_VOID *pvDest, IMG_VOID *pvSrc, IMG_SIZE_T ui32Bytes);
+PVRSRV_ERROR OSCopyToUser(IMG_PVOID pvProcess, IMG_VOID *pvDest, const IMG_VOID *pvSrc, IMG_SIZE_T ui32Bytes);
+PVRSRV_ERROR OSCopyFromUser(IMG_PVOID pvProcess, IMG_VOID *pvDest, const IMG_VOID *pvSrc, IMG_SIZE_T ui32Bytes);
 
 							
 IMG_VOID OSWriteMemoryBarrier(IMG_VOID);
 IMG_VOID OSMemoryBarrier(IMG_VOID);
 
-/* FIXME: need to re-think pvrlock for server syncs */
+/* These functions alter the behaviour of OSEventObjectWait*() calls.
+ * When ReleasePVRLock is set the PVR/bridge lock is released prior to the
+ * thread entering the descheduled wait state to allow other bridge call
+ * activity. When KeepPVRLock is set the bridge lock is not released and is
+ * held while the thread is descheduled in a wait state. ReleasePVRLock
+ * is considered the default state and it is recommended any use of
+ * KeepPVRLock is paired with a call to the RelasePVRLock in the same scope.
+ * NOTE: This release/keep state may only be changed by the thread (by calling
+ * these Set functions) when it has been able to obtain the bridge lock first.
+ */
 IMG_VOID OSSetReleasePVRLock(IMG_VOID);
 IMG_VOID OSSetKeepPVRLock(IMG_VOID);
 IMG_BOOL OSGetReleasePVRLock(IMG_VOID);
-/* end FIXME */
 
 typedef struct _OSWR_LOCK_ *POSWR_LOCK;
 
-#if defined(__linux__)
+#if defined(__linux__) || (UNDER_CE)
 PVRSRV_ERROR OSWRLockCreate(POSWR_LOCK *ppsLock);
 IMG_VOID OSWRLockDestroy(POSWR_LOCK psLock);
 IMG_VOID OSWRLockAcquireRead(POSWR_LOCK psLock);
@@ -313,7 +322,6 @@ IMG_UINT32 OSDivide64(IMG_UINT64 ui64Divident, IMG_UINT32 ui32Divisor, IMG_UINT3
 
 IMG_VOID OSDumpStack(IMG_VOID);
 
-IMG_BOOL OSTryAcquireBridgeLock(IMG_VOID);
 IMG_VOID OSAcquireBridgeLock(IMG_VOID);
 IMG_VOID OSReleaseBridgeLock(IMG_VOID);
 

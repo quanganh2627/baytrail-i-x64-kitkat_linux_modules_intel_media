@@ -473,7 +473,7 @@ PVRSRV_ERROR RGXMMUInit_Register(PVRSRV_DEVICE_NODE *psDeviceNode)
 	/*
 	 * Setup sRGXMMUPTEConfig_1MBDP
 	 */
-	sRGXMMUPTEConfig_1MBDP.uiBytesPerEntry = 8,
+	sRGXMMUPTEConfig_1MBDP.uiBytesPerEntry = 8;
 
 	sRGXMMUPTEConfig_1MBDP.uiAddrMask = IMG_UINT64_C(0xfffff00000);
 	sRGXMMUPTEConfig_1MBDP.uiAddrShift = 20;
@@ -575,7 +575,7 @@ PVRSRV_ERROR RGXMMUInit_Register(PVRSRV_DEVICE_NODE *psDeviceNode)
 
 	/* Functions for establishing configurations for PDE/PTE/DEVVADDR
 	   on per-heap basis */
-	sRGXMMUDeviceAttributes.pfnGetPageSizeConfiguration = RGXGetPageSizeConfigCB,
+	sRGXMMUDeviceAttributes.pfnGetPageSizeConfiguration = RGXGetPageSizeConfigCB;
 	sRGXMMUDeviceAttributes.pfnPutPageSizeConfiguration = RGXPutPageSizeConfigCB;
 
 	/* FIXME: This probably ought to be a call into the mmu code. */

@@ -231,10 +231,10 @@ typedef struct
 #define RGXFW_SEGMMU_DMAP_GPU_ADDR_START	(RGXFW_SEGMMU_DMAP_ADDR_START + 3*RGXFW_SEGMMU_DMAP_SIZE)
 
 /* Segment IDs */
-#define RGXFW_SEGMMU_THR0_ID			(0)
+#define RGXFW_SEGMMU_TEXT_ID			(0)
 #define RGXFW_SEGMMU_SHARED_ID			(1)
 #define RGXFW_SEGMMU_BOOTLDR_ID			(2)
-#define RGXFW_SEGMMU_THR1_ID			(3)
+#define RGXFW_SEGMMU_DATA_ID			(3)
 
 /* To configure the Page Catalog and BIF-DM fed into the BIF for Garten accesses through this segment */
 #define RGXFW_SEGMMU_META_DM_ID						(0x7)
@@ -248,19 +248,24 @@ typedef struct
 #define META_CR_MMCU_SEGMENTn_OUTA0(n)			(0x04850008 + (n)*0x10)
 #define META_CR_MMCU_SEGMENTn_OUTA1(n)			(0x0485000C + (n)*0x10)
 
+/* Win mode for data cache */
+#define RGXFW__SEGMMU_DMAP_DC_WIN (0x3)
+#define RGXFW__SEGMMU_DMAP_DC_SHIFT (0x6)
+
 /************************************************************************
 * RGX FW Bootloader defaults
 ************************************************************************/
-#define RGXFW_BOOTLDR_META_ADDR					(0x40000000)
-#define RGXFW_BOOTLDR_DEVV_ADDR_0				(0xC0000000)
-#define RGXFW_BOOTLDR_DEVV_ADDR_1				(0x000007E1)
-#define RGXFW_BOOTLDR_LIMIT						(0x1FFFF000)
+#define RGXFW_BOOTLDR_META_ADDR		(0x40000000)
+#define RGXFW_BOOTLDR_DEVV_ADDR_0	(0xC0000000)
+#define RGXFW_BOOTLDR_DEVV_ADDR_1	(0x000007E1)
+#define RGXFW_BOOTLDR_DEVV_ADDR		((((IMG_UINT64) RGXFW_BOOTLDR_DEVV_ADDR_1) << 32) | RGXFW_BOOTLDR_DEVV_ADDR_0)
+#define RGXFW_BOOTLDR_LIMIT			(0x1FFFF000)
 
 /************************************************************************
 * 2nd thread
 ************************************************************************/
-#define RGXFW_THR1_PC		(0x78900000)
-#define RGXFW_THR1_SP		(0x7889B000)
+#define RGXFW_THR1_PC		(0x18930000)
+#define RGXFW_THR1_SP		(0x7888E000)
 
 #endif /*  __RGX_META_H__ */
 

@@ -114,7 +114,8 @@ typedef struct PVRSRV_BRIDGE_OUT_DISCONNECT_TAG
 /* Bridge in structure for EnumerateDevices */
 typedef struct PVRSRV_BRIDGE_IN_ENUMERATEDEVICES_TAG
 {
-	 IMG_UINT32 ui32EmptyStructPlaceholder;
+	/* Output pointer psDeviceIdentifier is also an implied input */
+	PVRSRV_DEVICE_IDENTIFIER * psDeviceIdentifier;
 } PVRSRV_BRIDGE_IN_ENUMERATEDEVICES;
 
 

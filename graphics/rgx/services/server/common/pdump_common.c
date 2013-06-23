@@ -71,7 +71,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 /* DEBUG */
-#if 1
+#if 0
 #define PDUMP_DBG(a)   PDumpOSDebugPrintf (a)
 #else
 #define PDUMP_DBG(a)
@@ -367,7 +367,7 @@ PVRSRV_ERROR PDumpLDW(IMG_CHAR      *pcBuffer,
 	                          "LDW :%s:0x%x 0x%x 0x%x %s\n",
 	                          pszDevSpaceName,
 	                          ui32OffsetBytes,
-	                          ui32NumLoadBytes / sizeof(IMG_UINT32),
+	                          ui32NumLoadBytes / (IMG_UINT32)sizeof(IMG_UINT32),
 	                          ui32ParamStreamFileOffset,
 	                          aszParamStreamFilename);
 
@@ -416,7 +416,7 @@ PVRSRV_ERROR PDumpSAW(IMG_CHAR      *pszDevSpaceName,
 	                          "SAW :%s:0x%x 0x%x 0x%x %s\n",
 	                          pszDevSpaceName,
 	                          ui32HPOffsetBytes,
-	                          ui32NumSaveBytes / sizeof(IMG_UINT32),
+	                          ui32NumSaveBytes / (IMG_UINT32)sizeof(IMG_UINT32),
 	                          ui32OutfileOffsetByte,
 	                          pszOutfileName);
 
@@ -682,6 +682,31 @@ PVRSRV_ERROR PDumpBitmapKM(	PVRSRV_DEVICE_NODE *psDeviceNode,
 	
 	switch (ePixelFormat)
 	{
+		case PVRSRV_PDUMP_PIXEL_FORMAT_YUV8:
+		{
+			PDumpCommentWithFlags(ui32PDumpFlags, "YUV data. Switching from SII to SAB. Width=0x%08X Height=0x%08X Stride=0x%08X",
+							 						ui32Width, ui32Height, ui32StrideInBytes);
+							 						
+			eErr = PDumpOSBufprintf(hScript,
+									ui32MaxLen,
+									"SAB :%s:v%x:0x%010llX 0x%08X 0x%08X %s.bin\n",
+									psDevId->pszPDumpDevName,
+									ui32MMUContextID,
+									sDevBaseAddr.uiAddr,
+									ui32Size,
+									ui32FileOffset,
+									pszFileName);
+			
+			if (eErr != PVRSRV_OK)
+			{
+				return eErr;
+			}
+			
+			PDUMP_LOCK();
+			PDumpOSWriteString2( hScript, ui32PDumpFlags);
+			PDUMP_UNLOCK();		
+			break;
+		}
 		case PVRSRV_PDUMP_PIXEL_FORMAT_420PL12YUV8: // YUV420 2 planes
 		{
 			const IMG_UINT32 ui32Plane0Size = ui32StrideInBytes*ui32Height;
@@ -1394,6 +1419,90 @@ IMG_EXPORT IMG_VOID PDumpConnectionNotify(IMG_VOID)
 		}
 		psThis = psThis->psNext;
 	}
+}
+
+/**************************************************************************
+ * Function Name  : PDumpIfKM
+ * Inputs         : pszPDumpCond - string for condition
+ * Outputs        : None
+ * Returns        : None
+ * Description    : Create a PDUMP string which represents IF command 
+					with condition.
+**************************************************************************/
+PVRSRV_ERROR PDumpIfKM(IMG_CHAR		*pszPDumpCond)
+{
+	PVRSRV_ERROR eErr;
+	PDUMP_GET_SCRIPT_STRING()
+	PDUMP_DBG(("PDumpIfKM"));
+
+	eErr = PDumpOSBufprintf(hScript, ui32MaxLen, "IF %s\n", pszPDumpCond);
+
+	if (eErr != PVRSRV_OK)
+	{
+		return eErr;
+	}
+
+	PDUMP_LOCK();
+	PDumpOSWriteString2(hScript, PDUMP_FLAGS_CONTINUOUS);
+	PDUMP_UNLOCK();
+
+	return PVRSRV_OK;
+}
+
+/**************************************************************************
+ * Function Name  : PDumpElseKM
+ * Inputs         : pszPDumpCond - string for condition
+ * Outputs        : None
+ * Returns        : None
+ * Description    : Create a PDUMP string which represents ELSE command 
+					with condition.
+**************************************************************************/
+PVRSRV_ERROR PDumpElseKM(IMG_CHAR		*pszPDumpCond)
+{
+	PVRSRV_ERROR eErr;
+	PDUMP_GET_SCRIPT_STRING()
+	PDUMP_DBG(("PDumpElseKM"));
+
+	eErr = PDumpOSBufprintf(hScript, ui32MaxLen, "ELSE %s\n", pszPDumpCond);
+
+	if (eErr != PVRSRV_OK)
+	{
+		return eErr;
+	}
+
+	PDUMP_LOCK();
+	PDumpOSWriteString2(hScript, PDUMP_FLAGS_CONTINUOUS);
+	PDUMP_UNLOCK();
+
+	return PVRSRV_OK;
+}
+
+/**************************************************************************
+ * Function Name  : PDumpFiKM
+ * Inputs         : pszPDumpCond - string for condition
+ * Outputs        : None
+ * Returns        : None
+ * Description    : Create a PDUMP string which represents FI command 
+					with condition.
+**************************************************************************/
+PVRSRV_ERROR PDumpFiKM(IMG_CHAR		*pszPDumpCond)
+{
+	PVRSRV_ERROR eErr;
+	PDUMP_GET_SCRIPT_STRING()
+	PDUMP_DBG(("PDumpFiKM"));
+
+	eErr = PDumpOSBufprintf(hScript, ui32MaxLen, "FI %s\n", pszPDumpCond);
+
+	if (eErr != PVRSRV_OK)
+	{
+		return eErr;
+	}
+
+	PDUMP_LOCK();
+	PDumpOSWriteString2(hScript, PDUMP_FLAGS_CONTINUOUS);
+	PDUMP_UNLOCK();
+
+	return PVRSRV_OK;
 }
 
 /*****************************************************************************

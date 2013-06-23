@@ -57,6 +57,7 @@ typedef struct
 	DEVMEM_MEMDESC		*psFWFrameworkMemDesc;
 } RGX_FWCOMCTX_CLEANUP;
 
+
 /*
  * Firmware-only allocation (which are initialised by the host) must be aligned to the SLC cache line size.
  * This is because firmware-only allocations are GPU_CACHE_INCOHERENT and this causes problems
@@ -71,6 +72,8 @@ static INLINE PVRSRV_ERROR DevmemFwAllocate(PVRSRV_RGXDEV_INFO *psDevInfo,
 	IMG_DEV_VIRTADDR sTmpDevVAddr;
 	PVRSRV_ERROR eError;
 
+	PVR_DPF_ENTERED;
+
 	eError = DevmemAllocate(psDevInfo->psFirmwareHeap,
 							uiSize,
 							ROGUE_CACHE_LINE_SIZE,
@@ -78,7 +81,7 @@ static INLINE PVRSRV_ERROR DevmemFwAllocate(PVRSRV_RGXDEV_INFO *psDevInfo,
 							ppsMemDescPtr);
 	if (eError != PVRSRV_OK)
 	{
-		return eError;
+		PVR_DPF_RETURN_RC(eError);
 	}
 
 	/*
@@ -88,7 +91,7 @@ static INLINE PVRSRV_ERROR DevmemFwAllocate(PVRSRV_RGXDEV_INFO *psDevInfo,
 	eError = DevmemMapToDevice(*ppsMemDescPtr,
 							   psDevInfo->psFirmwareHeap,
 							   &sTmpDevVAddr);
-	return eError;
+	PVR_DPF_RETURN_RC1(eError, *ppsMemDescPtr);
 }
 
 static INLINE PVRSRV_ERROR DevmemFwAllocateExportable(PVRSRV_DEVICE_NODE *psDeviceNode,
@@ -100,6 +103,8 @@ static INLINE PVRSRV_ERROR DevmemFwAllocateExportable(PVRSRV_DEVICE_NODE *psDevi
 	IMG_DEV_VIRTADDR sTmpDevVAddr;
 	PVRSRV_ERROR eError;
 
+	PVR_DPF_ENTERED;
+
 	eError = DevmemAllocateExportable(IMG_NULL,
 									  (IMG_HANDLE) psDeviceNode,
 									  uiSize,
@@ -108,7 +113,8 @@ static INLINE PVRSRV_ERROR DevmemFwAllocateExportable(PVRSRV_DEVICE_NODE *psDevi
 									  ppsMemDescPtr);
 	if (eError != PVRSRV_OK)
 	{
-		return eError;
+		PVR_DPF((PVR_DBG_ERROR,"FW DevmemAllocateExportable failed (%u)", eError));
+		PVR_DPF_RETURN_RC(eError);
 	}
 
 	/*
@@ -118,13 +124,21 @@ static INLINE PVRSRV_ERROR DevmemFwAllocateExportable(PVRSRV_DEVICE_NODE *psDevi
 	eError = DevmemMapToDevice(*ppsMemDescPtr,
 							   psDevInfo->psFirmwareHeap,
 							   &sTmpDevVAddr);
-	return eError;
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"FW DevmemMapToDevice failed (%u)", eError));
+	}
+	PVR_DPF_RETURN_RC1(eError, *ppsMemDescPtr);
 }
 
 static INLINE IMG_VOID DevmemFwFree(DEVMEM_MEMDESC *psMemDesc)
 {
+	PVR_DPF_ENTERED1(psMemDesc);
+
 	DevmemReleaseDevVirtAddr(psMemDesc);
 	DevmemFree(psMemDesc);
+
+	PVR_DPF_RETURN;
 }
 
 /*
@@ -153,16 +167,17 @@ static INLINE IMG_VOID DevmemFwFree(DEVMEM_MEMDESC *psMemDesc)
 
 
 PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode, 
-							  IMG_DEVMEM_SIZE_T		ui32FWMemAllocSize,
-							  DEVMEM_EXPORTCOOKIE	**ppsFWMemAllocServerExportCookie,
-							  IMG_DEV_VIRTADDR		*psFWMemDevVAddrBase,
-							  IMG_BOOL				bEnableSignatureChecks,
-							  IMG_UINT32			ui32SignatureChecksBufSize,
-							  IMG_UINT32			ui32RGXFWAlignChecksSize,
-							  IMG_UINT32			*pui32RGXFWAlignChecks,
-							  IMG_UINT32			ui32ConfigFlags,
-							  IMG_UINT32			ui32LogType,
-							  RGXFWIF_DEV_VIRTADDR	*psRGXFwInit);
+							     IMG_BOOL				bEnableSignatureChecks,
+							     IMG_UINT32			ui32SignatureChecksBufSize,
+							     IMG_UINT32			ui32HWPerfFWBufSizeKB,
+							     IMG_UINT32			ui32RGXFWAlignChecksSize,
+							     IMG_UINT32			*pui32RGXFWAlignChecks,
+							     IMG_UINT32			ui32ConfigFlags,
+							     IMG_UINT32			ui32LogType,
+							     IMG_UINT32            ui32NumTilingCfgs,
+							     IMG_UINT32            *pui32BIFTilingXStrides,
+							     RGXFWIF_DEV_VIRTADDR	*psRGXFWInitFWAddr);
+
 
 IMG_VOID RGXFreeFirmware(PVRSRV_RGXDEV_INFO 	*psDevInfo);
 
@@ -201,13 +216,28 @@ PVRSRV_ERROR RGXStartFirmware(PVRSRV_RGXDEV_INFO 	*psDevInfo);
  @Function	RGXScheduleProcessQueuesKM
 
  @Description - Software command complete handler
-				(sends uncounted kicks for all the DMs)
+				(sends uncounted kicks for all the DMs through the MISR)
 
  @Input hCmdCompHandle - RGX device node
 
 ******************************************************************************/
 IMG_IMPORT
 IMG_VOID RGXScheduleProcessQueuesKM(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle);
+
+/*!
+******************************************************************************
+
+ @Function	RGXInstallProcessQueuesMISR
+
+ @Description - Installs the MISR to handle Process Queues operations
+
+ @Input phMISR - Pointer to the MISR handler
+
+ @Input psDeviceNode - RGX Device node
+
+******************************************************************************/
+IMG_IMPORT
+PVRSRV_ERROR RGXInstallProcessQueuesMISR(IMG_HANDLE *phMISR, PVRSRV_DEVICE_NODE *psDeviceNode);
 
 /*************************************************************************/ /*!
 @Function       RGXSendCommandWithPowLock
@@ -392,11 +422,14 @@ PVRSRV_ERROR RGXFWRequestCommonContextCleanUp(PVRSRV_DEVICE_NODE *psDeviceNode,
 
  @Input psHWRTData - firmware address of the HWRTData to be cleaned up
 
+ @Input ui32SubmittedCommands - number of commands submitted by the host with this HWRTData
+
  @Input eDM - Data master, to which the cleanup command should be send
 
  ******************************************************************************/
 PVRSRV_ERROR RGXFWRequestHWRTDataCleanUp(PVRSRV_DEVICE_NODE *psDeviceNode,
 										 PRGXFWIF_HWRTDATA psHWRTData,
+										 IMG_UINT32 ui32SubmittedCommands,
 										 PVRSRV_CLIENT_SYNC_PRIM *psSync,
 										 RGXFWIF_DM eDM);
 
@@ -433,13 +466,47 @@ PVRSRV_ERROR RGXFWRequestFreeListCleanUp(PVRSRV_RGXDEV_INFO *psDeviceNode,
 
  @Input psFWZSBuffer - firmware address of the ZS Buffer to be cleaned up
 
+ @Input ui32SubmittedCommands - number of commands submitted by the host with this Z/S Buffer
+
  @Input eDM - Data master, to which the cleanup command should be send
 
  ******************************************************************************/
 
 PVRSRV_ERROR RGXFWRequestZSBufferCleanUp(PVRSRV_RGXDEV_INFO *psDevInfo,
 										 PRGXFWIF_ZSBUFFER psFWZSBuffer,
+										 IMG_UINT32 ui32SubmittedCommands,
 										 PVRSRV_CLIENT_SYNC_PRIM *psSync);
+
+/*!
+******************************************************************************
+
+ @Function	RGXReadMETAReg
+
+ @Description Reads META register at given address and returns its value
+
+ @Input psDevInfo - pointer to device info
+
+ @Input ui32RegAddr - register address
+
+ @Output pui32RegValue - register value
+
+ ******************************************************************************/
+
+PVRSRV_ERROR RGXReadMETAReg(PVRSRV_RGXDEV_INFO	*psDevInfo, 
+							IMG_UINT32 ui32RegAddr, 
+							IMG_UINT32 *pui32RegValue);
+
+/*!
+******************************************************************************
+
+ @Function	RGXCheckFirmwareCCBs
+
+ @Description Processes all commands that are found in any firmware CCB.
+
+ @Input psDevInfo - pointer to device
+
+ ******************************************************************************/
+IMG_VOID RGXCheckFirmwareCCBs(PVRSRV_RGXDEV_INFO *psDevInfo);
 
 /*!
 ******************************************************************************
@@ -462,19 +529,6 @@ PVRSRV_ERROR RGXFWRequestZSBufferCleanUp(PVRSRV_RGXDEV_INFO *psDevInfo,
  ******************************************************************************/
 PVRSRV_ERROR RGXUpdateHealthStatus(PVRSRV_DEVICE_NODE* psDevNode,
                                    IMG_BOOL bCheckAfterTimePassed);
-
-
-/*!
-******************************************************************************
-
- @Function	RGXCheckFirmwareCCBs
-
- @Description Processes all commands that are found in any firmware CCB.
-
- @Input psDevInfo - pointer to device
-
- ******************************************************************************/
-IMG_VOID RGXCheckFirmwareCCBs(PVRSRV_RGXDEV_INFO *psDevInfo);
 
 
 #endif /* __RGXFWUTILS_H__ */

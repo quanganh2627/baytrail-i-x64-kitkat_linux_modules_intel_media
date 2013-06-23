@@ -135,30 +135,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * Return the parent of a handle in *phParent, or IMG_NULL if the handle has
  * no parent.
  *
- * PVRSRV_ERROR PVRSRVNewHandleBatch(PVRSRV_HANDLE_BASE *psBase,
- * 	IMG_UINT32 ui32BatchSize)
- *
- * Allocate a new handle batch.  This preallocates ui32BatchSize handles.
- * Batch mode simplifies the handling of handle allocation failures.
- * The handle API is unchanged in batch mode, except that handles freed
- * in batch mode will not be available for reallocation until the batch
- * is committed or released (see below).
- *
- * PVRSRV_ERROR PVRSRVCommitHandleBatch(PVRSRV_HANDLE_BASE *psBase)
- * void PVRSRVReleaseHandleBatch(PVRSRV_HANDLE_BASE *psBase)
- *
- * When handle allocation from a handle batch is complete, the
- * batch must be committed by calling PVRSRVCommitHandleBatch.  If
- * an error occurred, and none of the handles in the batch are no
- * longer needed, PVRSRVReleaseHandleBatch must be called.
- * The macros PVRSRVAllocHandleNR, and PVRSRVAllocSubHandleNR
- * are defined for use in batch mode.  These work the same way
- * as PVRSRVAllocHandle and PVRSRVAllocSubHandle, except that
- * they don't return a value, relying on the fact that
- * PVRSRVCommitHandleBatch will not commit any of the handles
- * in a batch if there was an error allocating one of the
- * handles in the batch.
- *
  * PVRSRV_ERROR PVRSRVSetMaxHandle(PVRSRV_HANDLE_BASE *psBase,
  * 	IMG_UINT32 ui32MaxHandle)
  * Set the maximum handle number.  This is intended to restrict the
@@ -229,6 +205,7 @@ typedef enum
 	PVRSRV_HANDLE_TYPE_RGX_TQ2D_CLEANUP,
 	PVRSRV_HANDLE_TYPE_RGX_CC_CLEANUP,
 	PVRSRV_HANDLE_TYPE_RGX_CCB_CLEANUP,
+	PVRSRV_HANDLE_TYPE_RGX_RAY_CLEANUP,
 	PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
 	PVRSRV_HANDLE_TYPE_SYNC_PRIMITIVE,
 	PVRSRV_HANDLE_TYPE_SYNC_PRIMITIVE_BLOCK,
@@ -262,10 +239,9 @@ typedef enum
 	PVRSRV_HANDLE_ALLOC_FLAG_PRIVATE = 		0x04
 } PVRSRV_HANDLE_ALLOC_FLAG;
 
-struct _PVRSRV_HANDLE_BASE_;
-typedef struct _PVRSRV_HANDLE_BASE_ PVRSRV_HANDLE_BASE;
+typedef struct _HANDLE_BASE_ PVRSRV_HANDLE_BASE;
 
-#ifdef	PVR_SECURE_HANDLES
+#if defined(PVR_SECURE_HANDLES)
 extern PVRSRV_HANDLE_BASE *gpsKernelHandleBase;
 
 #define	KERNEL_HANDLE_BASE (gpsKernelHandleBase)
@@ -282,17 +258,11 @@ PVRSRV_ERROR PVRSRVLookupHandle(PVRSRV_HANDLE_BASE *psBase, IMG_PVOID *ppvData, 
 
 PVRSRV_ERROR PVRSRVLookupSubHandle(PVRSRV_HANDLE_BASE *psBase, IMG_PVOID *ppvData, IMG_HANDLE hHandle, PVRSRV_HANDLE_TYPE eType, IMG_HANDLE hAncestor);
 
-PVRSRV_ERROR PVRSRVGetParentHandle(PVRSRV_HANDLE_BASE *psBase, IMG_PVOID *phParent, IMG_HANDLE hHandle, PVRSRV_HANDLE_TYPE eType);
+PVRSRV_ERROR PVRSRVGetParentHandle(PVRSRV_HANDLE_BASE *psBase, IMG_HANDLE *phParent, IMG_HANDLE hHandle, PVRSRV_HANDLE_TYPE eType);
 
 PVRSRV_ERROR PVRSRVLookupAndReleaseHandle(PVRSRV_HANDLE_BASE *psBase, IMG_PVOID *ppvData, IMG_HANDLE hHandle, PVRSRV_HANDLE_TYPE eType);
 
 PVRSRV_ERROR PVRSRVReleaseHandle(PVRSRV_HANDLE_BASE *psBase, IMG_HANDLE hHandle, PVRSRV_HANDLE_TYPE eType);
-
-PVRSRV_ERROR PVRSRVNewHandleBatch(PVRSRV_HANDLE_BASE *psBase, IMG_UINT32 ui32BatchSize);
-
-PVRSRV_ERROR PVRSRVCommitHandleBatch(PVRSRV_HANDLE_BASE *psBase);
-
-IMG_VOID PVRSRVReleaseHandleBatch(PVRSRV_HANDLE_BASE *psBase);
 
 PVRSRV_ERROR PVRSRVSetMaxHandle(PVRSRV_HANDLE_BASE *psBase, IMG_UINT32 ui32MaxHandle);
 
@@ -310,7 +280,7 @@ PVRSRV_ERROR PVRSRVHandleInit(IMG_VOID);
 
 PVRSRV_ERROR PVRSRVHandleDeInit(IMG_VOID);
 
-#else	/* #ifdef  PVR_SECURE_HANDLES */
+#else /* defined(PVR_SECURE_HANDLES) */
 
 #define KERNEL_HANDLE_BASE IMG_NULL
 
@@ -442,38 +412,6 @@ PVRSRV_ERROR PVRSRVReleaseHandle(PVRSRV_HANDLE_BASE *psBase, IMG_HANDLE hHandle,
 }
 
 #ifdef INLINE_IS_PRAGMA
-#pragma inline(PVRSRVNewHandleBatch)
-#endif
-static INLINE
-PVRSRV_ERROR PVRSRVNewHandleBatch(PVRSRV_HANDLE_BASE *psBase, IMG_UINT32 ui32BatchSize)
-{
-	PVR_UNREFERENCED_PARAMETER(psBase);
-	PVR_UNREFERENCED_PARAMETER(ui32BatchSize);
-
-	return PVRSRV_OK;
-}
-
-#ifdef INLINE_IS_PRAGMA
-#pragma inline(PVRSRVCommitHandleBatch)
-#endif
-static INLINE
-PVRSRV_ERROR PVRSRVCommitHandleBatch(PVRSRV_HANDLE_BASE *psBase)
-{
-	PVR_UNREFERENCED_PARAMETER(psBase);
-
-	return PVRSRV_OK;
-}
-
-#ifdef INLINE_IS_PRAGMA
-#pragma inline(PVRSRVReleaseHandleBatch)
-#endif
-static INLINE
-IMG_VOID PVRSRVReleaseHandleBatch(PVRSRV_HANDLE_BASE *psBase)
-{
-	PVR_UNREFERENCED_PARAMETER(psBase);
-}
-
-#ifdef INLINE_IS_PRAGMA
 #pragma inline(PVRSRVSetMaxHandle)
 #endif
 static INLINE
@@ -558,18 +496,7 @@ PVRSRV_ERROR PVRSRVHandleDeInit(IMG_VOID)
 	return PVRSRV_OK;
 }
 
-#endif	/* #ifdef  PVR_SECURE_HANDLES */
-
-/*
- * Versions of PVRSRVAllocHandle and PVRSRVAllocSubHandle with no return
- * values.  Intended for use with batched handle allocation, relying on
- * CommitHandleBatch to detect handle allocation errors.
- */
-#define PVRSRVAllocHandleNR(psBase, phHandle, pvData, eType, eFlag) \
-	(IMG_VOID)PVRSRVAllocHandle(psBase, phHandle, pvData, eType, eFlag)
-
-#define PVRSRVAllocSubHandleNR(psBase, phHandle, pvData, eType, eFlag, hParent) \
-	(IMG_VOID)PVRSRVAllocSubHandle(psBase, phHandle, pvData, eType, eFlag, hParent)
+#endif /* defined(PVR_SECURE_HANDLES) */
 
 #if defined (__cplusplus)
 }

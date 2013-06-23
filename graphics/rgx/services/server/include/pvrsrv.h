@@ -89,6 +89,8 @@ typedef struct PVRSRV_DATA_TAG
 	PRESMAN_DEFER_CONTEXT		hResManDeferContext;		/*!< Device driver global defer resman context */
 
 	IMG_HANDLE					hCleanupThread;				/*!< Cleanup thread */
+	IMG_HANDLE					hCleanupEventObject;		/*!< Event object to drive cleanup thread */
+
 	IMG_HANDLE					hFatalErrorDetectionThread;	/*!< Fatal Error Detection thread */
 	IMG_BOOL					bUnload;					/*!< Driver unload is in progress */
 } PVRSRV_DATA;
@@ -231,6 +233,26 @@ IMG_BOOL PVRSRVSystemHasCacheSnooping(IMG_VOID);
 
 /*!
 *****************************************************************************
+ @Function	: PVRSRVSystemSnoopingOfCPUCache
+
+ @Description	: Returns whether the system supports snooping of the CPU cache
+
+ @Return : IMG_TRUE if the system has CPU cache snooping
+*****************************************************************************/
+IMG_BOOL PVRSRVSystemSnoopingOfCPUCache(IMG_VOID);
+
+/*!
+*****************************************************************************
+ @Function	: PVRSRVSystemSnoopingOfDeviceCache
+
+ @Description	: Returns whether the system supports snooping of the device cache
+
+ @Return : IMG_TRUE if the system has device cache snooping
+*****************************************************************************/
+IMG_BOOL PVRSRVSystemSnoopingOfDeviceCache(IMG_VOID);
+
+/*!
+*****************************************************************************
  @Function	: PVRSRVSystemWaitCycles
 
  @Description	: Waits for at least ui32Cycles of the Device clk.
@@ -302,7 +324,7 @@ IMG_VOID IMG_CALLCONV PVRSRVDebugRequest(IMG_UINT32 ui32VerbLevel);
  @Function	: PVRSRVRegisterDebugRequestNotify
 
  @Description	: Register a notify function which is called when a debug
-				  reqiuest is made into the driver (that is, when someone
+				  request is made into the driver (that is, when someone
 				  calls to PVRSRVDebugRequest). There are a number of levels
 				  of verbosity, starting at 0 and going to
 				  DEBUG_REQUEST_VERBOSITY_MAX. For each level that's required
@@ -352,4 +374,31 @@ PVRSRV_ERROR AcquireGlobalEventObjectServer(IMG_HANDLE *phGlobalEventObject);
 
 *****************************************************************************/
 PVRSRV_ERROR ReleaseGlobalEventObjectServer(IMG_HANDLE hGlobalEventObject);
+
+
+/*!
+*****************************************************************************
+ @Function	: GetBIFTilingHeapXStride
+
+ @Description	: return the default x-stride configuration for the given
+                  BIF tiling heap number
+
+ @Input uiHeapNum: BIF tiling heap number, starting from 1
+
+ @Output puiXStride: pointer to x-stride output of the requested heap
+
+*****************************************************************************/
+PVRSRV_ERROR GetBIFTilingHeapXStride(IMG_UINT32 uiHeapNum, IMG_UINT32 *puiXStride);
+
+/*!
+*****************************************************************************
+ @Function	: GetNumBIFTilingHeaps
+
+ @Description	: return the number of BIF tiling heaps on this system
+
+ @Output puiNumHeaps: pointer to uint to hold number of heaps
+
+*****************************************************************************/
+PVRSRV_ERROR GetNumBifTilingHeapConfigs(IMG_UINT32 *puiNumHeaps);
+
 #endif /* PVRSRV_H */

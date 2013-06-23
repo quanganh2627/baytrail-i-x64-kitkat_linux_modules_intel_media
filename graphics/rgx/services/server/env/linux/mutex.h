@@ -44,6 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __INCLUDED_LINUX_MUTEX_H_
 
 #include <linux/version.h>
+#include <linux/sched.h>
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
 #include <linux/mutex.h>
@@ -56,7 +57,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
 
-typedef struct mutex PVRSRV_LINUX_MUTEX;
+typedef struct {
+	struct mutex sMutex;
+	pid_t        hHeldBy;
+} PVRSRV_LINUX_MUTEX;
+
 
 #else /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)) */
 
@@ -86,6 +91,7 @@ extern IMG_VOID LinuxUnLockMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex);
 
 extern IMG_BOOL LinuxIsLockedMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex);
 
+extern IMG_BOOL LinuxIsLockedByMeMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex);
 
 #endif /* __INCLUDED_LINUX_MUTEX_H_ */
 

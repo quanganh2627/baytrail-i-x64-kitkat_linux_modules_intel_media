@@ -39,6 +39,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
+#include <linux/version.h>
 #include <asm/io.h>
 #include <linux/mm.h>
 #include <asm/page.h>
@@ -51,6 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "handle.h"
 #include "pvrsrv.h"
 #include "connection_server.h"
+#include "devicemem_server_utils.h"
 
 #include "private_data.h"
 #include "driverlock.h"
@@ -119,16 +121,29 @@ static int MMapVAccess(struct vm_area_struct *ps_vma, unsigned long addr,
 
     ulOffset = addr - ps_vma->vm_start;
 
-	eError = PMR_ReadBytes(psPMR,
-						   (IMG_DEVMEM_OFFSET_T) ulOffset,
-						   buf,
-						   len,
-						   &uiBytesCopied);
+	if (write)
+	{
+		eError = PMR_WriteBytes(psPMR,
+								(IMG_DEVMEM_OFFSET_T) ulOffset,
+								buf,
+								len,
+								&uiBytesCopied);
+	}
+	else
+	{
+		eError = PMR_ReadBytes(psPMR,
+							   (IMG_DEVMEM_OFFSET_T) ulOffset,
+							   buf,
+							   len,
+							   &uiBytesCopied);
+	}
 
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Error from PMR_ReadBytes (%d)",
-				 __FUNCTION__, eError));
+		PVR_DPF((PVR_DBG_ERROR, "%s: Error from %s (%d)",
+				 __FUNCTION__,
+				 write?"PMR_WriteBytes":"PMR_ReadBytes",
+				 eError));
 	}
 	else
 	{
@@ -145,6 +160,44 @@ static struct vm_operations_struct gsMMapOps =
 	.access=MMapVAccess,
 };
 
+// INTEL_TEMP
+// SINCE PVR_DRM_FILE_FROM_FILE is NOT found
+/*
+#if defined(SUPPORT_DRM)
+#define DRM_PRIVATE_DATA(pFile) ((pFile)->driver_priv)
+
+static int MMapGEM(struct file* pFile, struct vm_area_struct* ps_vma)
+{
+	extern struct drm_device *gpsPVRDRMDev;
+	uint32_t uHandle = (uint32_t)ps_vma->vm_pgoff;
+	struct drm_file *pDRMFile = PVR_DRM_FILE_FROM_FILE(pFile);
+	struct drm_gem_object *pObj = drm_gem_object_lookup(gpsPVRDRMDev, pDRMFile, uHandle); 
+	int ret;
+
+	if (pObj == NULL)
+	{
+		return -EEXIST;
+	}
+
+	if (ps_vma->vm_file != NULL)
+	{
+		fput(ps_vma->vm_file);
+
+		ps_vma->vm_file = pObj->filp;
+		get_file(pObj->filp);
+	}
+
+	ps_vma->vm_pgoff = 0;
+
+	ret = pObj->filp->f_op->mmap(pObj->filp, ps_vma);
+
+	drm_gem_object_unreference_unlocked(pObj);
+
+	return ret;
+}
+#endif
+*/
+
 int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 {
     PVRSRV_ERROR eError;
@@ -155,11 +208,23 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
     IMG_HANDLE hPMRResmanHandle;
     PMR *psPMR;
     PMR_FLAGS_T ulPMRFlags;
+    IMG_UINT32 ui32CPUCacheFlags;
     unsigned long ulNewFlags = 0;
     pgprot_t sPageProt;
 
 #if defined(SUPPORT_DRM)
+	// INTEL_TEMP
+	// SINCE PVR_DRM_FILE_FROM_FILE is NOT found
+	//struct drm_file *pDRMFile = PVR_DRM_FILE_FROM_FILE(pFile);
+    //PVRSRV_FILE_PRIVATE_DATA *psPrivateData = DRM_PRIVATE_DATA(pDRMFile);
     CONNECTION_DATA *psConnection = LinuxConnectionFromFile(pFile->private_data);
+
+	// INTEL_TEMP
+	// SINCE PVR_DRM_FILE_FROM_FILE is NOT found
+	//if (psPrivateData->bGEMSharedData)
+	//{
+	//	return MMapGEM(pFile, ps_vma);
+	//}
 #else
     CONNECTION_DATA *psConnection = LinuxConnectionFromFile(pFile);
 #endif
@@ -246,17 +311,17 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 
 #if defined(__arm__)
 	sPageProt = __pgprot_modify(ps_vma->vm_page_prot, L_PTE_MT_MASK, vm_get_page_prot(ulNewFlags));
-#elif defined(__i386__)
+#elif defined(__i386__) || defined(__x86_64)
 	sPageProt = pgprot_modify(ps_vma->vm_page_prot,
 							   vm_get_page_prot(ulNewFlags));
+#elif defined(__metag__)
+	sPageProt = vm_get_page_prot(ulNewFlags);
 #else
 #error Please add pgprot_modify equivalent for your system
 #endif
-
-	switch (ulPMRFlags & PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK)
+	ui32CPUCacheFlags = DevmemCPUCacheMode(ulPMRFlags);
+	switch (ui32CPUCacheFlags)
 	{
-		/* FIXME: What do we do for cache coherent? For now make uncached*/
-		case PVRSRV_MEMALLOCFLAG_CPU_CACHE_COHERENT:
 		case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
 				sPageProt = pgprot_noncached(sPageProt);
 				break;
@@ -265,7 +330,7 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 				sPageProt = pgprot_writecombine(sPageProt);
 				break;
 
-		case PVRSRV_MEMALLOCFLAG_CPU_CACHE_INCOHERENT:
+		case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
 				break;
 
 		default:
@@ -279,14 +344,10 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
     for (uiOffset = 0; uiOffset < uiLength; uiOffset += 1ULL<<PAGE_SHIFT)
     {
         IMG_SIZE_T uiNumContiguousBytes;
-        int remap_pfn_range(struct vm_area_struct *vma, unsigned long from,
-                            unsigned long pfn, unsigned long size,
-                            pgprot_t prot);
-        
         IMG_INT32 iStatus;
         IMG_CPU_PHYADDR sCpuPAddr;
         IMG_BOOL bValid;
-	struct page *psPage = NULL;
+		struct page *psPage = NULL;
 
 
         uiNumContiguousBytes = 1ULL<<PAGE_SHIFT;
@@ -327,7 +388,14 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
         (void)pFile;
     }
 
-    ps_vma->vm_flags |= (VM_IO | VM_RESERVED);
+    ps_vma->vm_flags |= VM_IO;
+
+/* Don't include the mapping in core dumps */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+    ps_vma->vm_flags |= VM_DONTDUMP;
+#else
+    ps_vma->vm_flags |= VM_RESERVED;
+#endif
 
     /*
      * Disable mremap because our nopage handler assumes all

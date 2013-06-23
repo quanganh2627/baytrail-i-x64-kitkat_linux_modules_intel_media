@@ -54,6 +54,12 @@ typedef struct _DLLIST_NODE_	*PDLLIST_NODE;
 /*!
 	Node in a linked list
 */
+/*
+ * Note: the following structure's size is architecture-dependent and
+ * clients may need to create a mirror the structure definition if it needs
+ * to be used in a structure shared between host and device. Consider such
+ * clients if any changes are made to this structure.
+ */ 
 typedef struct _DLLIST_NODE_
 {
 	struct _DLLIST_NODE_	*psPrevNode;

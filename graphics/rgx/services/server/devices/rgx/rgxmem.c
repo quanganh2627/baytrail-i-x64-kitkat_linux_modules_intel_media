@@ -45,6 +45,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxmem.h"
 #include "allocmem.h"
 #include "devicemem.h"
+#include "devicemem_server_utils.h"
 #include "devicemem_pdump.h"
 #include "rgxdevice.h"
 #include "rgx_fwif_km.h"
@@ -52,6 +53,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pdump_km.h"
 #include "pvrsrv.h"
 #include "sync_internal.h"
+#include "rgx_memallocflags.h"
 
 /*
 	FIXME:
@@ -89,6 +91,7 @@ PVRSRV_ERROR RGXSLCCacheInvalidateRequest(PVRSRV_DEVICE_NODE *psDeviceNode,
 {
 	RGXFWIF_KCCB_CMD sFlushInvalCmd;
 	IMG_UINT32 ulPMRFlags;
+	IMG_UINT32 ui32DeviceCacheFlags;
 	PVRSRV_ERROR eError = PVRSRV_OK;
 
 	PVR_ASSERT(psDeviceNode);
@@ -96,7 +99,7 @@ PVRSRV_ERROR RGXSLCCacheInvalidateRequest(PVRSRV_DEVICE_NODE *psDeviceNode,
 	/* In DEINIT state, we stop scheduling SLC flush commands, because we don't know in what state the firmware is.
 	 * Anyway, if we are in DEINIT state, we don't care anymore about FW memory consistency
 	 */
-	if (psDeviceNode->eDevState != PVRSVR_DEVICE_STATE_DEINIT)
+	if (psDeviceNode->eDevState != PVRSRV_DEVICE_STATE_DEINIT)
 	{
 
 		/* get the PMR's caching flags */
@@ -106,12 +109,13 @@ PVRSRV_ERROR RGXSLCCacheInvalidateRequest(PVRSRV_DEVICE_NODE *psDeviceNode,
 			PVR_DPF((PVR_DBG_WARNING, "RGXSLCCacheInvalidateRequest: Unable to get the caching attributes of PMR %p",psPmr));
 		}
 
+		ui32DeviceCacheFlags = DevmemDeviceCacheMode(ulPMRFlags);
+
 		/* Schedule a SLC flush and invalidate if
-		 * - the memory is not UNCACHED.
+		 * - the memory is cached.
 		 * - we can't get the caching attributes (by precaution).
 		 */
-		if (((ulPMRFlags & PVRSRV_MEMALLOCFLAG_GPU_CACHE_MODE_MASK) != PVRSRV_MEMALLOCFLAG_GPU_UNCACHED) ||
-				(eError != PVRSRV_OK))
+		if ((ui32DeviceCacheFlags == PVRSRV_MEMALLOCFLAG_GPU_CACHED) || (eError != PVRSRV_OK))
 		{
 			/* Schedule the SLC flush command ... */
 #if defined(PDUMP)

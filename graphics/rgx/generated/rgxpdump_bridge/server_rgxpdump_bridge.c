@@ -51,6 +51,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_rgxpdump_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -58,30 +59,45 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
 
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
+
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgePDumpTraceBuffer(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_PDUMPTRACEBUFFER *psPDumpTraceBufferIN,
 					 PVRSRV_BRIDGE_OUT_PDUMPTRACEBUFFER *psPDumpTraceBufferOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDeviceNodeInt;
+	IMG_HANDLE hDeviceNodeInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXPDUMP_PDUMPTRACEBUFFER);
 
 
-	/* Look up the address from the handle */
-	psPDumpTraceBufferOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDeviceNodeInt,
-						   psPDumpTraceBufferIN->hDeviceNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psPDumpTraceBufferOUT->eError != PVRSRV_OK)
-	{
-		goto PDumpTraceBuffer_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psPDumpTraceBufferOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDeviceNodeInt,
+							   psPDumpTraceBufferIN->hDeviceNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psPDumpTraceBufferOUT->eError != PVRSRV_OK)
+		{
+			goto PDumpTraceBuffer_exit;
+		}
 
 	psPDumpTraceBufferOUT->eError =
 		PVRSRVPDumpTraceBufferKM(
@@ -101,21 +117,23 @@ PVRSRVBridgePDumpSignatureBuffer(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PDUMPSIGNATUREBUFFER *psPDumpSignatureBufferOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDeviceNodeInt;
+	IMG_HANDLE hDeviceNodeInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXPDUMP_PDUMPSIGNATUREBUFFER);
 
 
-	/* Look up the address from the handle */
-	psPDumpSignatureBufferOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDeviceNodeInt,
-						   psPDumpSignatureBufferIN->hDeviceNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psPDumpSignatureBufferOUT->eError != PVRSRV_OK)
-	{
-		goto PDumpSignatureBuffer_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psPDumpSignatureBufferOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDeviceNodeInt,
+							   psPDumpSignatureBufferIN->hDeviceNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psPDumpSignatureBufferOUT->eError != PVRSRV_OK)
+		{
+			goto PDumpSignatureBuffer_exit;
+		}
 
 	psPDumpSignatureBufferOUT->eError =
 		PVRSRVPDumpSignatureBufferKM(
@@ -130,6 +148,11 @@ PDumpSignatureBuffer_exit:
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterRGXPDUMPFunctions(IMG_VOID);
 IMG_VOID UnregisterRGXPDUMPFunctions(IMG_VOID);
 

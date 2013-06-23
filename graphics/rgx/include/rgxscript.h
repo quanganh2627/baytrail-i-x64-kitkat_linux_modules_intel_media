@@ -64,9 +64,7 @@ typedef	enum _RGX_INIT_OPERATION
 	RGX_INIT_OP_DBG_READ32_HW_REG,
 	RGX_INIT_OP_DBG_READ64_HW_REG,
 	RGX_INIT_OP_DBG_CALC,
-#if defined(PDUMP)
 	RGX_INIT_OP_PDUMP_HW_REG,
-#endif
 } RGX_INIT_OPERATION;
 
 typedef union _RGX_INIT_COMMAND_
@@ -79,13 +77,11 @@ typedef union _RGX_INIT_COMMAND_
 		IMG_UINT32 ui32Value;
 	} sWriteHWReg;
 
-#if defined(PDUMP)
 	struct {
 		RGX_INIT_OPERATION eOp;
 		IMG_UINT32 ui32Offset;
 		IMG_UINT32 ui32Value;
 	} sPDumpHWReg;
-#endif
 	
 	struct 
 	{

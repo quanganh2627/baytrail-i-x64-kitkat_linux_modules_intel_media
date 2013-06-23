@@ -62,12 +62,12 @@ static struct ion_platform_data generic_config = {
 	.heaps = {
 				{
 					.type = ION_HEAP_TYPE_SYSTEM_CONTIG,
-					.name = "System contig",
+					.name = "system_contig",
 					.id = ION_HEAP_TYPE_SYSTEM_CONTIG,
 				},
 				{
 					.type = ION_HEAP_TYPE_SYSTEM,
-					.name = "System",
+					.name = "system",
 					.id = ION_HEAP_TYPE_SYSTEM,
 				}
 			}
@@ -76,11 +76,13 @@ static struct ion_platform_data generic_config = {
 struct ion_heap **g_apsIonHeaps;
 struct ion_device *g_psIonDev;
 
-PVRSRV_ERROR IonInit(IMG_VOID)
+PVRSRV_ERROR IonInit(void *phPrivateData)
 {
 	int uiHeapCount = generic_config.nr;
 	int uiError;
 	int i;
+
+	PVR_UNREFERENCED_PARAMETER(phPrivateData);
 
 	g_apsIonHeaps = kzalloc(sizeof(struct ion_heap *) * uiHeapCount, GFP_KERNEL);
 

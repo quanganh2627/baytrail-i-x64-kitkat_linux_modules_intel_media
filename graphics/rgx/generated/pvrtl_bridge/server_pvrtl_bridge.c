@@ -52,6 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_pvrtl_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -59,7 +60,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
+
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
 static PVRSRV_ERROR
 TLCloseStreamResManProxy(IMG_HANDLE hResmanItem)
@@ -75,6 +84,11 @@ TLCloseStreamResManProxy(IMG_HANDLE hResmanItem)
 }
 
 
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgeTLConnect(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_TLCONNECT *psTLConnectIN,
@@ -82,9 +96,10 @@ PVRSRVBridgeTLConnect(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLCONNECT);
+
 	PVR_UNREFERENCED_PARAMETER(psTLConnectIN);
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLCONNECT);
 
 
 
@@ -105,9 +120,10 @@ PVRSRVBridgeTLDisconnect(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLDISCONNECT);
+
 	PVR_UNREFERENCED_PARAMETER(psTLDisconnectIN);
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLDISCONNECT);
 
 
 
@@ -128,13 +144,17 @@ PVRSRVBridgeTLOpenStream(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 	IMG_CHAR *uiNameInt = IMG_NULL;
-	TL_STREAM_DESC * psSDInt;
-	IMG_HANDLE hSDInt2;
-	DEVMEM_EXPORTCOOKIE * psClientBUFExportCookieInt;
+	TL_STREAM_DESC * psSDInt = IMG_NULL;
+	IMG_HANDLE hSDInt2 = IMG_NULL;
+	DEVMEM_EXPORTCOOKIE * psClientBUFExportCookieInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLOPENSTREAM);
 
-	uiNameInt = kmalloc(PRVSRVTL_MAX_STREAM_NAME_SIZE * sizeof(IMG_CHAR), GFP_KERNEL);
+
+
+	psTLOpenStreamOUT->hSD = IMG_NULL;
+
+	uiNameInt = OSAllocMem(PRVSRVTL_MAX_STREAM_NAME_SIZE * sizeof(IMG_CHAR));
 	if (!uiNameInt)
 	{
 		psTLOpenStreamOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -143,16 +163,14 @@ PVRSRVBridgeTLOpenStream(IMG_UINT32 ui32BridgeID,
 	}
 
 
-	if (copy_from_user(uiNameInt, psTLOpenStreamIN->puiName,
-		PRVSRVTL_MAX_STREAM_NAME_SIZE * sizeof(IMG_CHAR)) != 0)
+	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psTLOpenStreamIN->puiName, PRVSRVTL_MAX_STREAM_NAME_SIZE * sizeof(IMG_CHAR)) 
+		|| (OSCopyFromUser(NULL, uiNameInt, psTLOpenStreamIN->puiName,
+		PRVSRVTL_MAX_STREAM_NAME_SIZE * sizeof(IMG_CHAR)) != PVRSRV_OK) )
 	{
 		psTLOpenStreamOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
 		goto TLOpenStream_exit;
 	}
-
-
-	NEW_HANDLE_BATCH_OR_ERROR(psTLOpenStreamOUT->eError, psConnection, 2);
 
 
 	psTLOpenStreamOUT->eError =
@@ -179,28 +197,53 @@ PVRSRVBridgeTLOpenStream(IMG_UINT32 ui32BridgeID,
 		goto TLOpenStream_exit;
 	}
 	psTLOpenStreamOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
-					  &psTLOpenStreamOUT->hSD,
-					  (IMG_HANDLE) hSDInt2,
-					  PVRSRV_HANDLE_TYPE_PVR_TL_SD,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
+							&psTLOpenStreamOUT->hSD,
+							(IMG_HANDLE) hSDInt2,
+							PVRSRV_HANDLE_TYPE_PVR_TL_SD,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							);
 	if (psTLOpenStreamOUT->eError != PVRSRV_OK)
 	{
 		goto TLOpenStream_exit;
 	}
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psTLOpenStreamOUT->hClientBUFExportCookie,
-					  (IMG_HANDLE) psClientBUFExportCookieInt,
-					  PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psTLOpenStreamOUT->hSD);
-	COMMIT_HANDLE_BATCH_OR_ERROR(psTLOpenStreamOUT->eError, psConnection);
-
+	psTLOpenStreamOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
+							&psTLOpenStreamOUT->hClientBUFExportCookie,
+							(IMG_HANDLE) psClientBUFExportCookieInt,
+							PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							,psTLOpenStreamOUT->hSD);
+	if (psTLOpenStreamOUT->eError != PVRSRV_OK)
+	{
+		goto TLOpenStream_exit;
+	}
 
 
 TLOpenStream_exit:
+	if (psTLOpenStreamOUT->eError != PVRSRV_OK)
+	{
+		if (psTLOpenStreamOUT->hSD)
+		{
+			PVRSRVReleaseHandle(psConnection->psHandleBase,
+						(IMG_HANDLE) psTLOpenStreamOUT->hSD,
+						PVRSRV_HANDLE_TYPE_PVR_TL_SD);
+		}
+
+		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
+		if (hSDInt2)
+		{
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hSDInt2);
+
+			/* Freeing a resource should never fail... */
+			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
+		}
+		else if (psSDInt)
+		{
+			TLServerCloseStreamKM(psSDInt);
+		}
+	}
+
 	if (uiNameInt)
-		kfree(uiNameInt);
+		OSFreeMem(uiNameInt);
 
 	return 0;
 }
@@ -211,21 +254,23 @@ PVRSRVBridgeTLCloseStream(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_TLCLOSESTREAM *psTLCloseStreamOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hSDInt2;
+	IMG_HANDLE hSDInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLCLOSESTREAM);
 
 
-	/* Look up the address from the handle */
-	psTLCloseStreamOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hSDInt2,
-						   psTLCloseStreamIN->hSD,
-						   PVRSRV_HANDLE_TYPE_PVR_TL_SD);
-	if(psTLCloseStreamOUT->eError != PVRSRV_OK)
-	{
-		goto TLCloseStream_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psTLCloseStreamOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hSDInt2,
+							   psTLCloseStreamIN->hSD,
+							   PVRSRV_HANDLE_TYPE_PVR_TL_SD);
+		if(psTLCloseStreamOUT->eError != PVRSRV_OK)
+		{
+			goto TLCloseStream_exit;
+		}
 
 	psTLCloseStreamOUT->eError = TLCloseStreamResManProxy(hSDInt2);
 	/* Exit early if bridged call fails */
@@ -251,29 +296,31 @@ PVRSRVBridgeTLAcquireData(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_TLACQUIREDATA *psTLAcquireDataOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	TL_STREAM_DESC * psSDInt;
-	IMG_HANDLE hSDInt2;
+	TL_STREAM_DESC * psSDInt = IMG_NULL;
+	IMG_HANDLE hSDInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLACQUIREDATA);
 
 
-	/* Look up the address from the handle */
-	psTLAcquireDataOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hSDInt2,
-						   psTLAcquireDataIN->hSD,
-						   PVRSRV_HANDLE_TYPE_PVR_TL_SD);
-	if(psTLAcquireDataOUT->eError != PVRSRV_OK)
-	{
-		goto TLAcquireData_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psTLAcquireDataOUT->eError = ResManFindPrivateDataByPtr(hSDInt2, (IMG_VOID **) &psSDInt);
-	if(psTLAcquireDataOUT->eError != PVRSRV_OK)
-	{
-		goto TLAcquireData_exit;
-	}
+
+		/* Look up the address from the handle */
+		psTLAcquireDataOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hSDInt2,
+							   psTLAcquireDataIN->hSD,
+							   PVRSRV_HANDLE_TYPE_PVR_TL_SD);
+		if(psTLAcquireDataOUT->eError != PVRSRV_OK)
+		{
+			goto TLAcquireData_exit;
+		}
+
+		/* Look up the data from the resman address */
+		psTLAcquireDataOUT->eError = ResManFindPrivateDataByPtr(hSDInt2, (IMG_VOID **) &psSDInt);
+		if(psTLAcquireDataOUT->eError != PVRSRV_OK)
+		{
+			goto TLAcquireData_exit;
+		}
 
 	psTLAcquireDataOUT->eError =
 		TLServerAcquireDataKM(
@@ -294,29 +341,31 @@ PVRSRVBridgeTLReleaseData(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_TLRELEASEDATA *psTLReleaseDataOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	TL_STREAM_DESC * psSDInt;
-	IMG_HANDLE hSDInt2;
+	TL_STREAM_DESC * psSDInt = IMG_NULL;
+	IMG_HANDLE hSDInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLRELEASEDATA);
 
 
-	/* Look up the address from the handle */
-	psTLReleaseDataOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hSDInt2,
-						   psTLReleaseDataIN->hSD,
-						   PVRSRV_HANDLE_TYPE_PVR_TL_SD);
-	if(psTLReleaseDataOUT->eError != PVRSRV_OK)
-	{
-		goto TLReleaseData_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psTLReleaseDataOUT->eError = ResManFindPrivateDataByPtr(hSDInt2, (IMG_VOID **) &psSDInt);
-	if(psTLReleaseDataOUT->eError != PVRSRV_OK)
-	{
-		goto TLReleaseData_exit;
-	}
+
+		/* Look up the address from the handle */
+		psTLReleaseDataOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hSDInt2,
+							   psTLReleaseDataIN->hSD,
+							   PVRSRV_HANDLE_TYPE_PVR_TL_SD);
+		if(psTLReleaseDataOUT->eError != PVRSRV_OK)
+		{
+			goto TLReleaseData_exit;
+		}
+
+		/* Look up the data from the resman address */
+		psTLReleaseDataOUT->eError = ResManFindPrivateDataByPtr(hSDInt2, (IMG_VOID **) &psSDInt);
+		if(psTLReleaseDataOUT->eError != PVRSRV_OK)
+		{
+			goto TLReleaseData_exit;
+		}
 
 	psTLReleaseDataOUT->eError =
 		TLServerReleaseDataKM(
@@ -339,11 +388,13 @@ PVRSRVBridgeTLTestIoctl(IMG_UINT32 ui32BridgeID,
 {
 	IMG_BYTE *psIn1Int = IMG_NULL;
 
-	PVR_UNREFERENCED_PARAMETER(psConnection);
-
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PVRTL_TLTESTIOCTL);
 
-	psIn1Int = kmalloc(PVR_TL_TEST_PARAM_MAX_SIZE * sizeof(IMG_BYTE), GFP_KERNEL);
+	PVR_UNREFERENCED_PARAMETER(psConnection);
+
+
+
+	psIn1Int = OSAllocMem(PVR_TL_TEST_PARAM_MAX_SIZE * sizeof(IMG_BYTE));
 	if (!psIn1Int)
 	{
 		psTLTestIoctlOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -352,14 +403,14 @@ PVRSRVBridgeTLTestIoctl(IMG_UINT32 ui32BridgeID,
 	}
 
 
-	if (copy_from_user(psIn1Int, psTLTestIoctlIN->psIn1,
-		PVR_TL_TEST_PARAM_MAX_SIZE * sizeof(IMG_BYTE)) != 0)
+	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psTLTestIoctlIN->psIn1, PVR_TL_TEST_PARAM_MAX_SIZE * sizeof(IMG_BYTE)) 
+		|| (OSCopyFromUser(NULL, psIn1Int, psTLTestIoctlIN->psIn1,
+		PVR_TL_TEST_PARAM_MAX_SIZE * sizeof(IMG_BYTE)) != PVRSRV_OK) )
 	{
 		psTLTestIoctlOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
 		goto TLTestIoctl_exit;
 	}
-
 
 
 	psTLTestIoctlOUT->eError =
@@ -374,12 +425,17 @@ PVRSRVBridgeTLTestIoctl(IMG_UINT32 ui32BridgeID,
 
 TLTestIoctl_exit:
 	if (psIn1Int)
-		kfree(psIn1Int);
+		OSFreeMem(psIn1Int);
 
 	return 0;
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterPVRTLFunctions(IMG_VOID);
 IMG_VOID UnregisterPVRTLFunctions(IMG_VOID);
 

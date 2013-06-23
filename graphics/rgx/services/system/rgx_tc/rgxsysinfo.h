@@ -45,12 +45,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __SYSINFO_H__
 
 #define SYS_RGX_DEV_VENDOR_ID	(0x1010)
-#define SYS_RGX_DEV_DEVICE_ID	(0x1CF1)
-#define SYS_RGX_DEV1_DEVICE_ID	(0x1CF2)
+#define SYS_RGX_DEV_DEVICE_ID	(0x1CF2)
 
 /*!< System specific poll/timeout details */
-#define MAX_HW_TIME_US		(500000)
-#define WAIT_TRY_COUNT		(10000)
+#define MAX_HW_TIME_US                 (500000)
+#define FATAL_ERROR_DETECTION_POLL_MS  (10000)
+#define WAIT_TRY_COUNT                 (10000)
 
 /* RGX, DISPLAY (external), BUFFER (external) */
 #define SYS_DEVICE_COUNT	(3)

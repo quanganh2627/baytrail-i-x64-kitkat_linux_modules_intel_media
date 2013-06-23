@@ -158,6 +158,16 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig = {
 	IMG_NULL,
 };
 #endif
+
+/* default BIF tiling heap x-stride configurations. */
+static IMG_UINT32 gauiBIFTilingHeapXStrides[RGXFWIF_NUM_BIF_TILING_CONFIGS] =
+{
+	0, /* BIF tiling heap 1 x-stride */
+	1, /* BIF tiling heap 2 x-stride */
+	2, /* BIF tiling heap 3 x-stride */
+	3  /* BIF tiling heap 4 x-stride */
+};
+
 static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 	/* uiSysFlags */
 	0,
@@ -171,8 +181,8 @@ static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 	IMG_NULL,
 	/* pfnSysPostPowerState */
 	IMG_NULL,
-	/* bHasCacheSnooping */
-	IMG_FALSE,
+	/* eCacheSnoopingMode */
+	PVRSRV_SYSTEM_SNOOP_NONE,
 #if defined(LMA)
 	/* pasPhysHeaps */
 	&gsPhysHeapConfig[0],
@@ -182,6 +192,10 @@ static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 	/* Physcial memory heaps */
 	/* ui32PhysHeapCount */
 	sizeof(gsPhysHeapConfig) / sizeof(PHYS_HEAP_CONFIG),
+
+	/* BIF tiling heap config */
+	gauiBIFTilingHeapXStrides,
+	IMG_ARR_NUM_ELEMS(gauiBIFTilingHeapXStrides),
 };
 
 /*****************************************************************************

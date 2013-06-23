@@ -49,32 +49,38 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_debug.h"
 #include "ion_support.h"
 #include "ion_sys.h"
-#include "ion_tc_heap.h"
+#include "ion_sys_private.h"
+#include "ion_lma_heap.h"
 
 struct ion_platform_data gsTCIonConfig = {
 	.nr = 1,
 	.heaps = {
 		{
+			/* This heap must be first. The base address and size are filled
+			   in from data passed down by sysconfig.c. */
 			.type = ION_HEAP_TYPE_CUSTOM,
 			.name = "tc_local_mem",
 			.id = ION_HEAP_TYPE_CUSTOM + 1,
-			/* Base address and size are filled in by sysconfig.c */
-			.base = 0,
-			.size = 0,
+			.base = 0,			/* filled in later */
+			.size = 0,			/* filled in later */
 		}
 	}
 };
 
 struct ion_heap **gapsIonHeaps;
 struct ion_device *gpsIonDev;
-/* These are filled in by sysconfig.c. */
-IMG_UINT32 gui32IonPhysHeapID;
-IMG_CPU_PHYADDR gsPCIAddrRangeStart;
+ION_TC_PRIVATE_DATA sPrivateData;
 
-PVRSRV_ERROR IonInit(void)
+PVRSRV_ERROR IonInit(void *pvPrivateData)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;
 	int i;
+
+	sPrivateData = *(ION_TC_PRIVATE_DATA *)pvPrivateData;
+
+	/* Fill in the heap base and size according to the private data. */
+	gsTCIonConfig.heaps[0].base = sPrivateData.uiHeapBase;
+	gsTCIonConfig.heaps[0].size = sPrivateData.uiHeapSize;
 
 	gapsIonHeaps = kzalloc(sizeof(struct ion_heap *) * gsTCIonConfig.nr,
 						   GFP_KERNEL);
@@ -94,13 +100,13 @@ PVRSRV_ERROR IonInit(void)
 			case ION_HEAP_TYPE_CUSTOM:
 				/* Custom heap: this is used to mean a TC-specific heap,
 				   which allocates from local memory. */
-				gapsIonHeaps[i] = tc_heap_create(psPlatHeapData);
+				gapsIonHeaps[i] = lma_heap_create(psPlatHeapData);
 				break;
 			default:
 				/* For any other type of heap, hand this to ion to create as
-				   appropriate. We won't need any of these - this just gives
-				   us the flexibility to have another kind of heap if
-				   necessary. */
+				   appropriate. We don't necessarily need any of these -
+				   this just gives us the flexibility to have another kind
+				   of heap if necessary. */
 				gapsIonHeaps[i] = ion_heap_create(psPlatHeapData);
 				break;
 		}
@@ -136,16 +142,19 @@ IMG_VOID IonDevRelease(struct ion_device *psIonDev)
 
 IMG_UINT32 IonPhysHeapID(IMG_VOID)
 {
-	return gui32IonPhysHeapID;
+	return sPrivateData.ui32IonPhysHeapID;
 }
 
+#if defined(LMA)
 IMG_DEV_PHYADDR IonCPUPhysToDevPhys(IMG_CPU_PHYADDR sCPUPhysAddr,
 									IMG_UINT32 ui32Offset)
 {
 	return (IMG_DEV_PHYADDR){
-		.uiAddr = sCPUPhysAddr.uiAddr + ui32Offset - gsPCIAddrRangeStart.uiAddr,
+		.uiAddr = sCPUPhysAddr.uiAddr + ui32Offset
+			- sPrivateData.sPCIAddrRangeStart.uiAddr,
 	};
 }
+#endif /* defined(LMA) */
 
 IMG_VOID IonDeinit(void)
 {

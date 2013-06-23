@@ -50,35 +50,72 @@ extern "C" {
 #include "devicemem_typedefs.h"
 #include "pvr_tlcommon.h"
 #include "device.h"
+//Thread Safety: Not yet implemented	#include "lock.h"
 
 /* Forward declarations */
 typedef struct _TL_SNODE_* PTL_SNODE;
 
 /*! TL stream structure container.
- *    ui32Buffer holds the circular buffer.
- *    ui32Start points to the beginning of the buffer and takes values from 
- *      0 to ui32Size.
- *    ui32Count counts how many data have been committed.
- *    ui32CountPending counts space that has been reserved but may have not 
- *      yet been filled with data.
+ *    pbyBuffer   holds the circular buffer.
+ *    ui32Read    points to the beginning of the buffer, ie to where data to
+ *                  Read begin.
+ *    ui32Write   points to the end of data that have been committed, ie this is
+ *                  where new data will be written.
+ *    ui32Pending number of bytes reserved in last reserve call which have not
+ *                  yet been submitted. Therefore these data are not ready to
+ *                  be transported.
+ *
+ *      ui32Read < ui32Write <= ui32Pending 
+ *        where < and <= operators are overloaded to make sense in a circular way.
  */
-typedef struct _IMG_TLBUF 
+typedef struct _TL_STREAM_ 
 {
-	IMG_CHAR szName[PRVSRVTL_MAX_STREAM_NAME_SIZE];	/*!< String name identifier */
-	IMG_BOOL bDrop; 							/*!< Flag: When buffer is full drop new data instead of overwriting older data */
-// Currently not implemented 	IMG_BOOL bOWriteLast;						/*!< Flag: Overwrite most recent data when buffer is full */
+	IMG_CHAR 			szName[PRVSRVTL_MAX_STREAM_NAME_SIZE];	/*!< String name identifier */
+	IMG_BOOL 			bDrop; 					/*!< Flag: When buffer is full drop new data instead of 
+														   overwriting older data */
+	IMG_BOOL 			bBlock;					/*!< Flag: When buffer is full reserve will block until there is
+														   enough free space in the buffer to fullfil the request. */
+	IMG_BOOL 			bWaitForEmptyOnDestroy; /*!< Flag: On destroying a non empty stream block until 
+														   stream is drained. */
+	IMG_BOOL            bNoSignalOnCommit;      /*!< Flag: Used to avoid the TL signalling waiting consumers
+                                                           that new data is available on every commit. Producers
+                                                           using this flag will need to manually signal when
+                                                           appropriate using the TLStreamSync() API */
 
-	volatile IMG_UINT32 ui32Start; 				/*!< Pointer to the beginning of available data */
-	volatile IMG_UINT32 ui32Count;				/*!< Pointer to already committed data which are ready to be copied to user space*/
-	IMG_UINT32 ui32CountPending;				/*!< Pointer to next unallocated position in buffer */
-	IMG_UINT32 ui32Size; 						/*!< Buffer size */
-	IMG_UINT32 *ui32Buffer;			 			/*!< Actual data buffer */
+	volatile IMG_UINT32 ui32Read; 				/*!< Pointer to the beginning of available data */
+	volatile IMG_UINT32 ui32Write;				/*!< Pointer to already committed data which are ready to be
+													 copied to user space*/
+	IMG_UINT32 			ui32Pending;			/*!< Count pending bytes reserved in buffer */
+	IMG_UINT32 			ui32Size; 				/*!< Buffer size */
+	IMG_BYTE 			*pbyBuffer;				/*!< Actual data buffer */
 
-	PTL_SNODE psNode;                           /*!< Ptr to parent stream node */
-	DEVMEM_MEMDESC *psStreamMemDesc;	 		/*!< MemDescriptor used to allocate buffer space through PMR */
+	PTL_SNODE 			psNode;                 /*!< Ptr to parent stream node */
+	DEVMEM_MEMDESC 		*psStreamMemDesc;		/*!< MemDescriptor used to allocate buffer space through PMR */
 	DEVMEM_EXPORTCOOKIE sExportCookie; 			/*!< Export cookie for stream DEVMEM */
-}IMG_TLBUF;
-typedef IMG_TLBUF TL_STREAM, *PTL_STREAM;
+
+	IMG_HANDLE			hProducerEvent;			/*!< Handle to wait on if there is not enough space */
+	IMG_HANDLE			hProducerEventObj;		/*!< Handle to signal blocked reserve calls */
+
+//Thread Safety: Not yet implemented	POS_LOCK 			hLock;					/*!< lock this structure */
+	IMG_INT				uiRefCount;				/*!< Stream reference count */
+} TL_STREAM, *PTL_STREAM;
+
+/* there need to be enough space reserved in the buffer for 2 minimal packets
+ * and it needs to be aligned the same way the buffer is or there will be a
+ * compile error.*/
+#define BUFFER_RESERVED_SPACE 2*PVRSRVTL_PACKET_ALIGNMENT
+
+/* ensure the space reserved follows the buffer's alignment */
+BLD_ASSERT(!(BUFFER_RESERVED_SPACE&(PVRSRVTL_PACKET_ALIGNMENT-1)), tlintern_h);
+
+/* Define the largest value that a uint that matches the 
+ * PVRSRVTL_PACKET_ALIGNMENT size can hold */
+#define MAX_UINT 0xffffFFFF
+
+/*! Defines the value used for TL_STREAM.ui32Pending when no reserve is
+ * outstanding on the stream. */
+#define NOTHING_PENDING IMG_UINT32_MAX
+
 
 /*
  * Transport Layer Stream Descriptor types/defs
@@ -87,13 +124,13 @@ typedef struct _TL_STREAM_DESC_
 {
 	PTL_SNODE	psNode;			/*!< Ptr to parent stream node */
 	IMG_UINT32	ui32Flags;
-	IMG_HANDLE	hDataEvent; 	/* For wait call */
+	IMG_HANDLE	hDataEvent; 	/*!< For wait call */
 } TL_STREAM_DESC, *PTL_STREAM_DESC;
 
 PTL_STREAM_DESC TLMakeStreamDesc(PTL_SNODE f1, IMG_UINT32 f2, IMG_HANDLE f3);
 
 #define TL_STREAM_KM_FLAG_MASK	0xFFFF0000
-#define TL_STREAM_FLAG_TEST 	0x10000000
+#define TL_STREAM_FLAG_TEST		0x10000000
 #define TL_STREAM_FLAG_WRAPREAD	0x00010000
 
 #define TL_STREAM_UM_FLAG_MASK	0x0000FFFF
@@ -114,35 +151,33 @@ PTL_SNODE TLMakeSNode(IMG_HANDLE f2, TL_STREAM *f3, TL_STREAM_DESC *f4);
 /*
  * Transport Layer global top types and variables
  * Use access function to obtain pointer.
+ * TODO: Add Lock in case Destroy stream clash with client APIs?
  */
 typedef struct _TL_GDATA_
 {
-	/* Only allow one client for now... */
-	IMG_PVOID psTlClient;
+	IMG_PVOID  psRgxDevNode;        /* Device node to use for buffer allocations */
+	IMG_HANDLE hTLEventObj;         /* Global TL signal object, new streams, etc */
 
-	/* List of Streams, only 1 node supported at presnet */
-	PTL_SNODE psHead;
+	IMG_UINT   uiClientCnt;         /* Counter to track the number of client connections. */
+	PTL_SNODE  psHead;              /* List of Streams, only 1 node supported at present */
 
-	// TODO: Add Lock in case Destroy stream clash with client APIs?
-
-	/* Void pointer to */
-	IMG_PVOID psRgxDevNode;					/* PVRSRV_DEVICE_NODE*    */
-
-} TL_GLOBAL_GDATA, *PTL_GLOBAL_DATA;
+} TL_GLOBAL_DATA, *PTL_GLOBAL_DATA;
 
 /*
  * Transport Layer Internal Kernel-Mode Server API
  */
-TL_GLOBAL_GDATA* TLGGD(void);		/* TLGetGlobalData() */
+TL_GLOBAL_DATA* TLGGD(IMG_VOID);		/* TLGetGlobalData() */
 
-IMG_VOID TLSetGlobalRgxDevice(PVRSRV_DEVICE_NODE *psDevNode);
+PVRSRV_ERROR TLInit(PVRSRV_DEVICE_NODE *psDevNode);
+IMG_VOID TLDeInit(IMG_VOID);
 
-PVRSRV_DEVICE_NODE* TLGetGlobalRgxDevice(void);
+PVRSRV_DEVICE_NODE* TLGetGlobalRgxDevice(IMG_VOID);
 
 IMG_VOID  TLAddStreamNode(PTL_SNODE psAdd);
 PTL_SNODE TLFindStreamNodeByName(IMG_PCHAR pszName);
 PTL_SNODE TLFindStreamNodeByDesc(PTL_STREAM_DESC psDesc);
-IMG_VOID  TLTryToRemoveAndFreeStreamNode(PTL_SNODE psRemove);
+IMG_VOID  TLRemoveStreamAndTryFreeStreamNode(PTL_SNODE psRemove);
+IMG_VOID  TLRemoveDescAndTryFreeStreamNode(PTL_SNODE psRemove);
 
 /*
  * Transport Layer stream interface to server part declared here to avoid
@@ -153,6 +188,11 @@ IMG_VOID TLStreamAdvanceReadPos(PTL_STREAM psStream, IMG_UINT32 uiReadLen);
 
 DEVMEM_EXPORTCOOKIE* TLStreamGetBufferCookie(PTL_STREAM psStream);
 IMG_BOOL TLStreamEOS(PTL_STREAM psStream);
+
+/*
+ * Test related functions
+ */
+PVRSRV_ERROR TLDeInitialiseCleanupTestThread (IMG_VOID);
 
 #if defined (__cplusplus)
 }

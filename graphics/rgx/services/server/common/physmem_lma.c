@@ -230,7 +230,7 @@ _AllocLMPageArray(PVRSRV_DEVICE_NODE *psDevNode,
 			to be virtually contiguous we also have to be physically contiguous.
 		*/
 		psPageArrayData->uiNumAllocs = 1;
-		psPageArrayData->uiAllocSize = uiSize;
+		psPageArrayData->uiAllocSize = TRUNCATE_64BITS_TO_32BITS(uiSize);
 		psPageArrayData->uiLog2AllocSize = uiLog2PageSize;
 	}
 	else
@@ -240,7 +240,7 @@ _AllocLMPageArray(PVRSRV_DEVICE_NODE *psDevNode,
 		/* Use of cast below is justified by the assertion that follows to
 		prove that no significant bits have been truncated */
 		uiNumPages = (IMG_UINT32)(((uiSize-1)>>uiLog2PageSize) + 1);
-		PVR_ASSERT((uiNumPages << uiLog2PageSize) == uiSize);
+		PVR_ASSERT(((PMR_SIZE_T)uiNumPages << uiLog2PageSize) == uiSize);
 
 		psPageArrayData->uiNumAllocs = uiNumPages;
 		psPageArrayData->uiAllocSize = 1 << uiLog2PageSize;
@@ -308,7 +308,7 @@ _AllocLMPages(PMR_LMALLOCARRAY_DATA *psPageArrayDataPtr)
 		bAllocResult = RA_Alloc(psDevNode->psLocalDevMemArena, 
 								uiAllocSize,
 								0,					/* No flags */
-								1 << uiLog2AllocSize,
+								1ULL << uiLog2AllocSize,
 								&uiCardAddr,
 								&uiActualSize,
 								IMG_NULL);			/* No private handle */
@@ -409,56 +409,6 @@ _FreeLMPages(PMR_LMALLOCARRAY_DATA *psPageArrayData)
 	return PVRSRV_OK;
 }
 
-#if defined(PDUMP)
-static IMG_VOID
-_PDumpPMRMalloc(const PMR *psPMR,
-				IMG_DEVMEM_SIZE_T uiSize,
-				IMG_DEVMEM_ALIGN_T uiBlockSize,
-				IMG_HANDLE *phPDumpAllocInfoPtr)
-{
-	PVRSRV_ERROR eError;
-	IMG_HANDLE hPDumpAllocInfo;
-	IMG_CHAR aszMemspaceName[30];
-	IMG_CHAR aszSymbolicName[30];
-	IMG_DEVMEM_OFFSET_T uiOffset;
-	IMG_DEVMEM_OFFSET_T uiNextSymName;
-
-	uiOffset = 0;
-	eError = PMR_PDumpSymbolicAddr(psPMR,
-								   uiOffset,
-								   sizeof(aszMemspaceName),
-								   &aszMemspaceName[0],
-								   sizeof(aszSymbolicName),
-								   &aszSymbolicName[0],
-								   &uiOffset,
-				   &uiNextSymName);
-	PVR_ASSERT(eError == PVRSRV_OK);
-	PVR_ASSERT(uiOffset == 0);
-	PVR_ASSERT((uiOffset + uiSize) <= uiNextSymName);
-
-	PDumpPMRMalloc(aszMemspaceName,
-				   aszSymbolicName,
-				   uiSize,
-				   uiBlockSize,
-				   IMG_FALSE,
-				   &hPDumpAllocInfo);
-
-	*phPDumpAllocInfoPtr = hPDumpAllocInfo;
-}
-#else	/* PDUMP */
-static IMG_VOID
-_PDumpPMRMalloc(const PMR *psPMR,
-                IMG_DEVMEM_SIZE_T uiSize,
-                IMG_DEVMEM_ALIGN_T uiBlockSize,
-                IMG_HANDLE *phPDumpAllocInfoPtr)
-{
-	PVR_UNREFERENCED_PARAMETER(psPMR);
-	PVR_UNREFERENCED_PARAMETER(uiSize);
-	PVR_UNREFERENCED_PARAMETER(uiBlockSize);
-	PVR_UNREFERENCED_PARAMETER(phPDumpAllocInfoPtr);
-}
-#endif	/* PDUMP */
-
 /*
  *
  * Implementation of callback functions
@@ -556,8 +506,8 @@ PMRSysPhysAddrLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 {
 	IMG_UINT32 uiLog2AllocSize;
 	IMG_UINT32 uiNumAllocs;
-	IMG_UINT32 uiAllocIndex;
-	IMG_UINT32 uiInAllocOffset;
+	IMG_UINT64 uiAllocIndex;
+	IMG_DEVMEM_OFFSET_T uiInAllocOffset;
 	PMR_LMALLOCARRAY_DATA *psLMAllocArrayData = IMG_NULL;
 
 	psLMAllocArrayData = pvPriv;
@@ -571,7 +521,7 @@ PMRSysPhysAddrLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 		uiAllocIndex = uiOffset >> uiLog2AllocSize;
 		uiInAllocOffset = uiOffset - (uiAllocIndex << uiLog2AllocSize);
 		PVR_ASSERT(uiAllocIndex < uiNumAllocs);
-		PVR_ASSERT(uiInAllocOffset < (1 << uiLog2AllocSize));
+		PVR_ASSERT(uiInAllocOffset < (1ULL << uiLog2AllocSize));
 
 		psDevPAddr->uiAddr = psLMAllocArrayData->pasDevPAddr[uiAllocIndex].uiAddr + uiInAllocOffset;
 	}
@@ -655,11 +605,14 @@ static IMG_VOID PMRReleaseKernelMappingDataLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 
 
 static PVRSRV_ERROR
-PMRReadBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
+CopyBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 				  IMG_DEVMEM_OFFSET_T uiOffset,
 				  IMG_UINT8 *pcBuffer,
 				  IMG_SIZE_T uiBufSz,
-				  IMG_SIZE_T *puiNumBytes)
+				  IMG_SIZE_T *puiNumBytes,
+				  IMG_VOID (*pfnCopyBytes)(IMG_UINT8 *pcBuffer,
+										   IMG_UINT8 *pcPMR,
+										   IMG_SIZE_T uiSize))
 {
 	PMR_LMALLOCARRAY_DATA *psLMAllocArrayData = IMG_NULL;
 	IMG_SIZE_T uiBytesCopied;
@@ -667,9 +620,9 @@ PMRReadBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 	IMG_SIZE_T uiBytesCopyableFromAlloc;
 	IMG_VOID *pvMapping = IMG_NULL;
 	IMG_UINT8 *pcKernelPointer = IMG_NULL;
-	IMG_UINT32 uiBufferOffset;
-	IMG_UINT32 uiAllocIndex;
-	IMG_UINT32 uiInAllocOffset;
+	IMG_SIZE_T uiBufferOffset;
+	IMG_UINT64 uiAllocIndex;
+	IMG_DEVMEM_OFFSET_T uiInAllocOffset;
 	PVRSRV_ERROR eError;
 
 	psLMAllocArrayData = pvPriv;
@@ -687,14 +640,14 @@ PMRReadBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 			uiAllocIndex = uiOffset >> psLMAllocArrayData->uiLog2AllocSize;
 			uiInAllocOffset = uiOffset - (uiAllocIndex << psLMAllocArrayData->uiLog2AllocSize);
 			uiBytesCopyableFromAlloc = uiBytesToCopy;
-			if (uiBytesCopyableFromAlloc + uiInAllocOffset > (1 << psLMAllocArrayData->uiLog2AllocSize))
+			if (uiBytesCopyableFromAlloc + uiInAllocOffset > (1ULL << psLMAllocArrayData->uiLog2AllocSize))
 			{
-				uiBytesCopyableFromAlloc = (1 << psLMAllocArrayData->uiLog2AllocSize)-uiInAllocOffset;
+				uiBytesCopyableFromAlloc = TRUNCATE_64BITS_TO_SIZE_T((1ULL << psLMAllocArrayData->uiLog2AllocSize)-uiInAllocOffset);
 			}
 
 			PVR_ASSERT(uiBytesCopyableFromAlloc != 0);
 			PVR_ASSERT(uiAllocIndex < psLMAllocArrayData->uiNumAllocs);
-			PVR_ASSERT(uiInAllocOffset < (1 << psLMAllocArrayData->uiLog2AllocSize));
+			PVR_ASSERT(uiInAllocOffset < (1ULL << psLMAllocArrayData->uiLog2AllocSize));
 
 			eError = _MapAlloc(psLMAllocArrayData->psDevNode,
 								&psLMAllocArrayData->pasDevPAddr[uiAllocIndex],
@@ -705,7 +658,7 @@ PMRReadBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 				goto e0;
 			}
 			pcKernelPointer = pvMapping;
-			OSMemCopy(&pcBuffer[uiBufferOffset], &pcKernelPointer[uiInAllocOffset], uiBytesCopyableFromAlloc);
+			pfnCopyBytes(&pcBuffer[uiBufferOffset], &pcKernelPointer[uiInAllocOffset], uiBytesCopyableFromAlloc);
 			_UnMapAlloc(psLMAllocArrayData->psDevNode, psLMAllocArrayData->uiAllocSize, pvMapping);
 			uiBufferOffset += uiBytesCopyableFromAlloc;
 			uiBytesToCopy -= uiBytesCopyableFromAlloc;
@@ -726,7 +679,7 @@ PMRReadBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 				goto e0;
 			}
 			pcKernelPointer = pvMapping;
-			OSMemCopy(pcBuffer, &pcKernelPointer[uiOffset], uiBufSz);
+			pfnCopyBytes(pcBuffer, &pcKernelPointer[uiOffset], uiBufSz);
 			_UnMapAlloc(psLMAllocArrayData->psDevNode, psLMAllocArrayData->uiAllocSize, pvMapping);
 			uiBytesCopied = uiBufSz;
 	}
@@ -735,6 +688,50 @@ PMRReadBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
 e0:
 	*puiNumBytes = uiBytesCopied;
 	return eError;
+}
+
+static IMG_VOID ReadLocalMem(IMG_UINT8 *pcBuffer,
+							 IMG_UINT8 *pcPMR,
+							 IMG_SIZE_T uiSize)
+{
+	OSMemCopy(pcBuffer, pcPMR, uiSize);
+}
+
+static PVRSRV_ERROR
+PMRReadBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
+				  IMG_DEVMEM_OFFSET_T uiOffset,
+				  IMG_UINT8 *pcBuffer,
+				  IMG_SIZE_T uiBufSz,
+				  IMG_SIZE_T *puiNumBytes)
+{
+	return CopyBytesLocalMem(pvPriv,
+							 uiOffset,
+							 pcBuffer,
+							 uiBufSz,
+							 puiNumBytes,
+							 ReadLocalMem);
+}
+
+static IMG_VOID WriteLocalMem(IMG_UINT8 *pcBuffer,
+							  IMG_UINT8 *pcPMR,
+							  IMG_SIZE_T uiSize)
+{
+	OSMemCopy(pcPMR, pcBuffer, uiSize);
+}
+
+static PVRSRV_ERROR
+PMRWriteBytesLocalMem(PMR_IMPL_PRIVDATA pvPriv,
+					  IMG_DEVMEM_OFFSET_T uiOffset,
+					  IMG_UINT8 *pcBuffer,
+					  IMG_SIZE_T uiBufSz,
+					  IMG_SIZE_T *puiNumBytes)
+{
+	return CopyBytesLocalMem(pvPriv,
+							 uiOffset,
+							 pcBuffer,
+							 uiBufSz,
+							 puiNumBytes,
+							 WriteLocalMem);
 }
 
 static PMR_IMPL_FUNCTAB _sPMRLMAFuncTab = {
@@ -752,6 +749,8 @@ static PMR_IMPL_FUNCTAB _sPMRLMAFuncTab = {
 	&PMRReleaseKernelMappingDataLocalMem,
 	/* pfnReadBytes */
 	&PMRReadBytesLocalMem,
+	/* pfnWriteBytes */
+	&PMRWriteBytesLocalMem,
 	/* pfnFinalize */
 	&PMRFinalizeLocalMem
 };
@@ -806,6 +805,9 @@ PhysmemNewLocalRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
 		bPoisonOnFree = IMG_FALSE;
 	}
 
+#if defined (UNDER_WDDM)
+	bContig = IMG_TRUE;
+#else
 	if (uiFlags & PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE)
 	{
 		bContig = IMG_TRUE;
@@ -814,6 +816,7 @@ PhysmemNewLocalRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
 	{
 		bContig = IMG_FALSE;
 	}
+#endif
 
 	if ((uiFlags & PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC) &&
 		(uiFlags & PVRSRV_MEMALLOCFLAG_POISON_ON_ALLOC))
@@ -894,13 +897,14 @@ PhysmemNewLocalRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
 		goto errorOnCreate;
 	}
 
-	_PDumpPMRMalloc(psPMR,
-					uiChunkSize * ui32NumPhysChunks,
-					/* alignment is alignment of start of buffer _and_
-					   minimum contiguity - i.e. smallest allowable
-					   page-size.  FIXME: review this decision. */
-					1U<<uiLog2PageSize,
-					&hPDumpAllocInfo);
+	PDumpPMRMallocPMR(psPMR,
+					  uiChunkSize * ui32NumPhysChunks,
+					  /* alignment is alignment of start of buffer _and_
+					     minimum contiguity - i.e. smallest allowable
+					     page-size.  FIXME: review this decision. */
+					  1ULL<<uiLog2PageSize,
+	                  IMG_FALSE,
+					  &hPDumpAllocInfo);
 	psPrivData->hPDumpAllocInfo = hPDumpAllocInfo;
 	psPrivData->bPDumpMalloced = IMG_TRUE;
 

@@ -51,6 +51,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_rgxccb_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -58,7 +59,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
+
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
 static PVRSRV_ERROR
 RGXDestroyCCBResManProxy(IMG_HANDLE hResmanItem)
@@ -74,35 +83,41 @@ RGXDestroyCCBResManProxy(IMG_HANDLE hResmanItem)
 }
 
 
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgeRGXCreateCCB(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_RGXCREATECCB *psRGXCreateCCBIN,
 					 PVRSRV_BRIDGE_OUT_RGXCREATECCB *psRGXCreateCCBOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
-	RGX_CCB_CLEANUP_DATA * psCleanupCookieInt;
-	IMG_HANDLE hCleanupCookieInt2;
-	DEVMEM_MEMDESC * psClientCCBMemDescInt;
-	DEVMEM_MEMDESC * psClientCCBCtlMemDescInt;
-	DEVMEM_EXPORTCOOKIE * psClientCCBExportCookieInt;
-	DEVMEM_EXPORTCOOKIE * psClientCCBCtlExportCookieInt;
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
+	RGX_CCB_CLEANUP_DATA * psCleanupCookieInt = IMG_NULL;
+	IMG_HANDLE hCleanupCookieInt2 = IMG_NULL;
+	DEVMEM_MEMDESC * psClientCCBMemDescInt = IMG_NULL;
+	DEVMEM_MEMDESC * psClientCCBCtlMemDescInt = IMG_NULL;
+	DEVMEM_EXPORTCOOKIE * psClientCCBExportCookieInt = IMG_NULL;
+	DEVMEM_EXPORTCOOKIE * psClientCCBCtlExportCookieInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXCCB_RGXCREATECCB);
 
 
-	NEW_HANDLE_BATCH_OR_ERROR(psRGXCreateCCBOUT->eError, psConnection, 5);
 
-	/* Look up the address from the handle */
-	psRGXCreateCCBOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psRGXCreateCCBIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psRGXCreateCCBOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateCCB_exit;
-	}
+	psRGXCreateCCBOUT->hCleanupCookie = IMG_NULL;
+
+		/* Look up the address from the handle */
+		psRGXCreateCCBOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDevNodeInt,
+							   psRGXCreateCCBIN->hDevNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psRGXCreateCCBOUT->eError != PVRSRV_OK)
+		{
+			goto RGXCreateCCB_exit;
+		}
 
 	psRGXCreateCCBOUT->eError =
 		PVRSRVRGXCreateCCBKM(
@@ -132,44 +147,81 @@ PVRSRVBridgeRGXCreateCCB(IMG_UINT32 ui32BridgeID,
 		goto RGXCreateCCB_exit;
 	}
 	psRGXCreateCCBOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
-					  &psRGXCreateCCBOUT->hCleanupCookie,
-					  (IMG_HANDLE) hCleanupCookieInt2,
-					  PVRSRV_HANDLE_TYPE_RGX_CCB_CLEANUP,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
+							&psRGXCreateCCBOUT->hCleanupCookie,
+							(IMG_HANDLE) hCleanupCookieInt2,
+							PVRSRV_HANDLE_TYPE_RGX_CCB_CLEANUP,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							);
 	if (psRGXCreateCCBOUT->eError != PVRSRV_OK)
 	{
 		goto RGXCreateCCB_exit;
 	}
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psRGXCreateCCBOUT->hClientCCBMemDesc,
-					  (IMG_HANDLE) psClientCCBMemDescInt,
-					  PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psRGXCreateCCBOUT->hCleanupCookie);
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psRGXCreateCCBOUT->hClientCCBCtlMemDesc,
-					  (IMG_HANDLE) psClientCCBCtlMemDescInt,
-					  PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psRGXCreateCCBOUT->hCleanupCookie);
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psRGXCreateCCBOUT->hClientCCBExportCookie,
-					  (IMG_HANDLE) psClientCCBExportCookieInt,
-					  PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psRGXCreateCCBOUT->hCleanupCookie);
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psRGXCreateCCBOUT->hClientCCBCtlExportCookie,
-					  (IMG_HANDLE) psClientCCBCtlExportCookieInt,
-					  PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psRGXCreateCCBOUT->hCleanupCookie);
-	COMMIT_HANDLE_BATCH_OR_ERROR(psRGXCreateCCBOUT->eError, psConnection);
-
+	psRGXCreateCCBOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
+							&psRGXCreateCCBOUT->hClientCCBMemDesc,
+							(IMG_HANDLE) psClientCCBMemDescInt,
+							PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							,psRGXCreateCCBOUT->hCleanupCookie);
+	if (psRGXCreateCCBOUT->eError != PVRSRV_OK)
+	{
+		goto RGXCreateCCB_exit;
+	}
+	psRGXCreateCCBOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
+							&psRGXCreateCCBOUT->hClientCCBCtlMemDesc,
+							(IMG_HANDLE) psClientCCBCtlMemDescInt,
+							PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							,psRGXCreateCCBOUT->hCleanupCookie);
+	if (psRGXCreateCCBOUT->eError != PVRSRV_OK)
+	{
+		goto RGXCreateCCB_exit;
+	}
+	psRGXCreateCCBOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
+							&psRGXCreateCCBOUT->hClientCCBExportCookie,
+							(IMG_HANDLE) psClientCCBExportCookieInt,
+							PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							,psRGXCreateCCBOUT->hCleanupCookie);
+	if (psRGXCreateCCBOUT->eError != PVRSRV_OK)
+	{
+		goto RGXCreateCCB_exit;
+	}
+	psRGXCreateCCBOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
+							&psRGXCreateCCBOUT->hClientCCBCtlExportCookie,
+							(IMG_HANDLE) psClientCCBCtlExportCookieInt,
+							PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							,psRGXCreateCCBOUT->hCleanupCookie);
+	if (psRGXCreateCCBOUT->eError != PVRSRV_OK)
+	{
+		goto RGXCreateCCB_exit;
+	}
 
 
 RGXCreateCCB_exit:
+	if (psRGXCreateCCBOUT->eError != PVRSRV_OK)
+	{
+		if (psRGXCreateCCBOUT->hCleanupCookie)
+		{
+			PVRSRVReleaseHandle(psConnection->psHandleBase,
+						(IMG_HANDLE) psRGXCreateCCBOUT->hCleanupCookie,
+						PVRSRV_HANDLE_TYPE_RGX_CCB_CLEANUP);
+		}
+
+		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
+		if (hCleanupCookieInt2)
+		{
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hCleanupCookieInt2);
+
+			/* Freeing a resource should never fail... */
+			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
+		}
+		else if (psCleanupCookieInt)
+		{
+			PVRSRVRGXDestroyCCBKM(psCleanupCookieInt);
+		}
+	}
+
 
 	return 0;
 }
@@ -180,21 +232,23 @@ PVRSRVBridgeRGXDestroyCCB(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_RGXDESTROYCCB *psRGXDestroyCCBOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hCleanupCookieInt2;
+	IMG_HANDLE hCleanupCookieInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXCCB_RGXDESTROYCCB);
 
 
-	/* Look up the address from the handle */
-	psRGXDestroyCCBOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hCleanupCookieInt2,
-						   psRGXDestroyCCBIN->hCleanupCookie,
-						   PVRSRV_HANDLE_TYPE_RGX_CCB_CLEANUP);
-	if(psRGXDestroyCCBOUT->eError != PVRSRV_OK)
-	{
-		goto RGXDestroyCCB_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psRGXDestroyCCBOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hCleanupCookieInt2,
+							   psRGXDestroyCCBIN->hCleanupCookie,
+							   PVRSRV_HANDLE_TYPE_RGX_CCB_CLEANUP);
+		if(psRGXDestroyCCBOUT->eError != PVRSRV_OK)
+		{
+			goto RGXDestroyCCB_exit;
+		}
 
 	psRGXDestroyCCBOUT->eError = RGXDestroyCCBResManProxy(hCleanupCookieInt2);
 	/* Exit early if bridged call fails */
@@ -215,6 +269,11 @@ RGXDestroyCCB_exit:
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterRGXCCBFunctions(IMG_VOID);
 IMG_VOID UnregisterRGXCCBFunctions(IMG_VOID);
 

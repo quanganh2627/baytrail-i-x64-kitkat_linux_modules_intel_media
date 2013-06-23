@@ -46,9 +46,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __DEBUG_REQUEST_IDS__
 
 /* Services controlled devices should be 1st */
-#define DEBUG_REQUEST_RGX			0
-#define DEBUG_REQUEST_DC			1
-#define DEBUG_REQUEST_SERVERSYNC	2
+#define DEBUG_REQUEST_RGX			(0)
+#define DEBUG_REQUEST_DC			(1)
+#define DEBUG_REQUEST_SERVERSYNC	(2)
+#define DEBUG_REQUEST_SYS           (3)
 
 #endif /* __DEBUG_REQUEST_IDS__ */
 

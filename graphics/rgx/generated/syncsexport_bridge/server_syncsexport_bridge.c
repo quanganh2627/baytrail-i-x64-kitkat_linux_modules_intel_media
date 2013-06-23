@@ -51,6 +51,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_syncsexport_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -58,7 +59,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
+
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
 static PVRSRV_ERROR
 SyncPrimServerSecureUnexportResManProxy(IMG_HANDLE hResmanItem)
@@ -74,38 +83,45 @@ SyncPrimServerSecureUnexportResManProxy(IMG_HANDLE hResmanItem)
 }
 
 
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgeSyncPrimServerSecureExport(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_SYNCPRIMSERVERSECUREEXPORT *psSyncPrimServerSecureExportIN,
 					 PVRSRV_BRIDGE_OUT_SYNCPRIMSERVERSECUREEXPORT *psSyncPrimServerSecureExportOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	SERVER_SYNC_PRIMITIVE * psSyncHandleInt;
-	IMG_HANDLE hSyncHandleInt2;
-	SERVER_SYNC_EXPORT * psExportInt;
-	IMG_HANDLE hExportInt2;
-
+	SERVER_SYNC_PRIMITIVE * psSyncHandleInt = IMG_NULL;
+	IMG_HANDLE hSyncHandleInt2 = IMG_NULL;
+	SERVER_SYNC_EXPORT * psExportInt = IMG_NULL;
+	IMG_HANDLE hExportInt2 = IMG_NULL;
 	CONNECTION_DATA *psSecureConnection;
+
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_SYNCSEXPORT_SYNCPRIMSERVERSECUREEXPORT);
 
 
-	/* Look up the address from the handle */
-	psSyncPrimServerSecureExportOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hSyncHandleInt2,
-						   psSyncPrimServerSecureExportIN->hSyncHandle,
-						   PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
-	if(psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
-	{
-		goto SyncPrimServerSecureExport_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psSyncPrimServerSecureExportOUT->eError = ResManFindPrivateDataByPtr(hSyncHandleInt2, (IMG_VOID **) &psSyncHandleInt);
-	if(psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
-	{
-		goto SyncPrimServerSecureExport_exit;
-	}
+
+		/* Look up the address from the handle */
+		psSyncPrimServerSecureExportOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hSyncHandleInt2,
+							   psSyncPrimServerSecureExportIN->hSyncHandle,
+							   PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
+		if(psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
+		{
+			goto SyncPrimServerSecureExport_exit;
+		}
+
+		/* Look up the data from the resman address */
+		psSyncPrimServerSecureExportOUT->eError = ResManFindPrivateDataByPtr(hSyncHandleInt2, (IMG_VOID **) &psSyncHandleInt);
+		if(psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
+		{
+			goto SyncPrimServerSecureExport_exit;
+		}
 
 	psSyncPrimServerSecureExportOUT->eError =
 		PVRSRVSyncPrimServerSecureExportKM(psConnection,
@@ -132,6 +148,22 @@ PVRSRVBridgeSyncPrimServerSecureExport(IMG_UINT32 ui32BridgeID,
 
 
 SyncPrimServerSecureExport_exit:
+	if (psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
+	{
+		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
+		if (hExportInt2)
+		{
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hExportInt2);
+
+			/* Freeing a resource should never fail... */
+			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
+		}
+		else if (psExportInt)
+		{
+			PVRSRVSyncPrimServerSecureUnexportKM(psExportInt);
+		}
+	}
+
 
 	return 0;
 }
@@ -142,21 +174,23 @@ PVRSRVBridgeSyncPrimServerSecureUnexport(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_SYNCPRIMSERVERSECUREUNEXPORT *psSyncPrimServerSecureUnexportOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hExportInt2;
+	IMG_HANDLE hExportInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_SYNCSEXPORT_SYNCPRIMSERVERSECUREUNEXPORT);
 
 
-	/* Look up the address from the handle */
-	psSyncPrimServerSecureUnexportOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hExportInt2,
-						   psSyncPrimServerSecureUnexportIN->hExport,
-						   PVRSRV_HANDLE_TYPE_SERVER_SYNC_EXPORT);
-	if(psSyncPrimServerSecureUnexportOUT->eError != PVRSRV_OK)
-	{
-		goto SyncPrimServerSecureUnexport_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psSyncPrimServerSecureUnexportOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hExportInt2,
+							   psSyncPrimServerSecureUnexportIN->hExport,
+							   PVRSRV_HANDLE_TYPE_SERVER_SYNC_EXPORT);
+		if(psSyncPrimServerSecureUnexportOUT->eError != PVRSRV_OK)
+		{
+			goto SyncPrimServerSecureUnexport_exit;
+		}
 
 	psSyncPrimServerSecureUnexportOUT->eError = SyncPrimServerSecureUnexportResManProxy(hExportInt2);
 	/* Exit early if bridged call fails */
@@ -182,13 +216,13 @@ PVRSRVBridgeSyncPrimServerSecureImport(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_SYNCPRIMSERVERSECUREIMPORT *psSyncPrimServerSecureImportOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	SERVER_SYNC_PRIMITIVE * psSyncHandleInt;
-	IMG_HANDLE hSyncHandleInt2;
+	SERVER_SYNC_PRIMITIVE * psSyncHandleInt = IMG_NULL;
+	IMG_HANDLE hSyncHandleInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_SYNCSEXPORT_SYNCPRIMSERVERSECUREIMPORT);
 
 
-	NEW_HANDLE_BATCH_OR_ERROR(psSyncPrimServerSecureImportOUT->eError, psConnection, 1);
+
 
 
 	psSyncPrimServerSecureImportOUT->eError =
@@ -213,22 +247,45 @@ PVRSRVBridgeSyncPrimServerSecureImport(IMG_UINT32 ui32BridgeID,
 		psSyncPrimServerSecureImportOUT->eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_RESOURCE;
 		goto SyncPrimServerSecureImport_exit;
 	}
-	PVRSRVAllocHandleNR(psConnection->psHandleBase,
-					  &psSyncPrimServerSecureImportOUT->hSyncHandle,
-					  (IMG_HANDLE) hSyncHandleInt2,
-					  PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
-	COMMIT_HANDLE_BATCH_OR_ERROR(psSyncPrimServerSecureImportOUT->eError, psConnection);
-
+	psSyncPrimServerSecureImportOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
+							&psSyncPrimServerSecureImportOUT->hSyncHandle,
+							(IMG_HANDLE) hSyncHandleInt2,
+							PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							);
+	if (psSyncPrimServerSecureImportOUT->eError != PVRSRV_OK)
+	{
+		goto SyncPrimServerSecureImport_exit;
+	}
 
 
 SyncPrimServerSecureImport_exit:
+	if (psSyncPrimServerSecureImportOUT->eError != PVRSRV_OK)
+	{
+		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
+		if (hSyncHandleInt2)
+		{
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hSyncHandleInt2);
+
+			/* Freeing a resource should never fail... */
+			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
+		}
+		else if (psSyncHandleInt)
+		{
+			PVRSRVServerSyncFreeKM(psSyncHandleInt);
+		}
+	}
+
 
 	return 0;
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterSYNCSEXPORTFunctions(IMG_VOID);
 IMG_VOID UnregisterSYNCSEXPORTFunctions(IMG_VOID);
 

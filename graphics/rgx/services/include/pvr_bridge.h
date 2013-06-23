@@ -48,10 +48,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 extern "C" {
 #endif
 
+#include "pvrsrv_error.h"
 #include "cache_defines.h"
 
+#if defined(SUPPORT_DISPLAY_CLASS)
 #include "common_dc_bridge.h"
+#endif
 #include "common_mm_bridge.h"
+#if defined(SUPPORT_MMPLAT_BRIDGE)
+#include "common_mmplat_bridge.h"
+#endif
+#if defined(UNDER_CE)
+#include "common_mmpmr_bridge.h"
+#endif
+#if defined(SUPPORT_MMPLAT_BRIDGE)
+#include "common_mmplat_bridge.h"
+#endif
 #include "common_cmm_bridge.h"
 #include "common_pdumpmm_bridge.h"
 #include "common_pdumpcmm_bridge.h"
@@ -97,7 +109,7 @@ extern "C" {
 
 #else /* __linux__ */
 
-	#if defined(UNDER_WDDM)
+	#if defined(UNDER_CE) || defined(UNDER_WDDM)
 		#define PVRSRV_IOC_GID          (0x800UL)			/*!< (see ioctldef.h for details) */
 	#else
 		#error Unknown platform: Cannot define ioctls
@@ -144,7 +156,18 @@ extern "C" {
 
 /* Memory Management */
 #define PVRSRV_BRIDGE_MM_START      		(PVRSRV_BRIDGE_PDUMP_CMD_LAST + 1)
-#define PVRSRV_BRIDGE_CMM_START      		(PVRSRV_BRIDGE_MM_CMD_LAST + 1)
+
+#define PVRSRV_BRIDGE_MMPLAT_START              (PVRSRV_BRIDGE_MM_CMD_LAST + 1)
+#if !defined(SUPPORT_MMPLAT_BRIDGE)
+#define PVRSRV_BRIDGE_MMPLAT_CMD_LAST           (PVRSRV_BRIDGE_MMPLAT_START - 1)
+#endif
+
+#define PVRSRV_BRIDGE_MMPMR_START      		(PVRSRV_BRIDGE_MMPLAT_CMD_LAST + 1)
+#if !defined(UNDER_CE)
+#define PVRSRV_BRIDGE_MMPMR_CMD_LAST        (PVRSRV_BRIDGE_MMPMR_START - 1)
+#endif
+
+#define PVRSRV_BRIDGE_CMM_START      		(PVRSRV_BRIDGE_MMPMR_CMD_LAST + 1)
 #define PVRSRV_BRIDGE_PDUMPMM_START      	(PVRSRV_BRIDGE_CMM_CMD_LAST + 1)
 #define PVRSRV_BRIDGE_PDUMPCMM_START      	(PVRSRV_BRIDGE_PDUMPMM_CMD_LAST + 1)
 #define PVRSRV_BRIDGE_PMMIF_START			(PVRSRV_BRIDGE_PDUMPCMM_CMD_LAST + 1)
@@ -158,6 +181,9 @@ extern "C" {
 
 /* Display Class */
 #define PVRSRV_BRIDGE_DC_START				(PVRSRV_BRIDGE_ION_CMD_LAST + 1)
+#if !defined(SUPPORT_DISPLAY_CLASS)
+#define PVRSRV_BRIDGE_DC_CMD_LAST			(PVRSRV_BRIDGE_DC_START - 1)
+#endif
 
 /* Generic cache interface */
 #define PVRSRV_BRIDGE_CACHEGENERIC_START	(PVRSRV_BRIDGE_DC_CMD_LAST + 1)

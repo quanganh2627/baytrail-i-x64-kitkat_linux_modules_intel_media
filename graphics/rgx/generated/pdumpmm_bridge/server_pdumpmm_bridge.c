@@ -53,6 +53,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_pdumpmm_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -60,38 +61,53 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
 
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
+
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgePMRPDumpLoadMem(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_PMRPDUMPLOADMEM *psPMRPDumpLoadMemIN,
 					 PVRSRV_BRIDGE_OUT_PMRPDUMPLOADMEM *psPMRPDumpLoadMemOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPMRInt;
-	IMG_HANDLE hPMRInt2;
+	PMR * psPMRInt = IMG_NULL;
+	IMG_HANDLE hPMRInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMPMM_PMRPDUMPLOADMEM);
 
 
-	/* Look up the address from the handle */
-	psPMRPDumpLoadMemOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPMRInt2,
-						   psPMRPDumpLoadMemIN->hPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRPDumpLoadMemOUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpLoadMem_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psPMRPDumpLoadMemOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-	if(psPMRPDumpLoadMemOUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpLoadMem_exit;
-	}
+
+		/* Look up the address from the handle */
+		psPMRPDumpLoadMemOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hPMRInt2,
+							   psPMRPDumpLoadMemIN->hPMR,
+							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+		if(psPMRPDumpLoadMemOUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpLoadMem_exit;
+		}
+
+		/* Look up the data from the resman address */
+		psPMRPDumpLoadMemOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+		if(psPMRPDumpLoadMemOUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpLoadMem_exit;
+		}
 
 	psPMRPDumpLoadMemOUT->eError =
 		PMRPDumpLoadMem(
@@ -113,29 +129,31 @@ PVRSRVBridgePMRPDumpLoadMemValue32(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PMRPDUMPLOADMEMVALUE32 *psPMRPDumpLoadMemValue32OUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPMRInt;
-	IMG_HANDLE hPMRInt2;
+	PMR * psPMRInt = IMG_NULL;
+	IMG_HANDLE hPMRInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMPMM_PMRPDUMPLOADMEMVALUE32);
 
 
-	/* Look up the address from the handle */
-	psPMRPDumpLoadMemValue32OUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPMRInt2,
-						   psPMRPDumpLoadMemValue32IN->hPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRPDumpLoadMemValue32OUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpLoadMemValue32_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psPMRPDumpLoadMemValue32OUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-	if(psPMRPDumpLoadMemValue32OUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpLoadMemValue32_exit;
-	}
+
+		/* Look up the address from the handle */
+		psPMRPDumpLoadMemValue32OUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hPMRInt2,
+							   psPMRPDumpLoadMemValue32IN->hPMR,
+							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+		if(psPMRPDumpLoadMemValue32OUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpLoadMemValue32_exit;
+		}
+
+		/* Look up the data from the resman address */
+		psPMRPDumpLoadMemValue32OUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+		if(psPMRPDumpLoadMemValue32OUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpLoadMemValue32_exit;
+		}
 
 	psPMRPDumpLoadMemValue32OUT->eError =
 		PMRPDumpLoadMemValue32(
@@ -157,35 +175,37 @@ PVRSRVBridgePMRPDumpLoadMemValue64(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PMRPDUMPLOADMEMVALUE64 *psPMRPDumpLoadMemValue64OUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPMRInt;
-	IMG_HANDLE hPMRInt2;
+	PMR * psPMRInt = IMG_NULL;
+	IMG_HANDLE hPMRInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMPMM_PMRPDUMPLOADMEMVALUE64);
 
 
-	/* Look up the address from the handle */
-	psPMRPDumpLoadMemValue64OUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPMRInt2,
-						   psPMRPDumpLoadMemValue64IN->hPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRPDumpLoadMemValue64OUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpLoadMemValue64_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psPMRPDumpLoadMemValue64OUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-	if(psPMRPDumpLoadMemValue64OUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpLoadMemValue64_exit;
-	}
+
+		/* Look up the address from the handle */
+		psPMRPDumpLoadMemValue64OUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hPMRInt2,
+							   psPMRPDumpLoadMemValue64IN->hPMR,
+							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+		if(psPMRPDumpLoadMemValue64OUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpLoadMemValue64_exit;
+		}
+
+		/* Look up the data from the resman address */
+		psPMRPDumpLoadMemValue64OUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+		if(psPMRPDumpLoadMemValue64OUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpLoadMemValue64_exit;
+		}
 
 	psPMRPDumpLoadMemValue64OUT->eError =
 		PMRPDumpLoadMemValue64(
 					psPMRInt,
 					psPMRPDumpLoadMemValue64IN->uiOffset,
-					psPMRPDumpLoadMemValue64IN->ui32Value,
+					psPMRPDumpLoadMemValue64IN->ui64Value,
 					psPMRPDumpLoadMemValue64IN->ui32PDumpFlags);
 
 
@@ -201,13 +221,16 @@ PVRSRVBridgePMRPDumpSaveToFile(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PMRPDUMPSAVETOFILE *psPMRPDumpSaveToFileOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPMRInt;
-	IMG_HANDLE hPMRInt2;
+	PMR * psPMRInt = IMG_NULL;
+	IMG_HANDLE hPMRInt2 = IMG_NULL;
 	IMG_CHAR *uiFileNameInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMPMM_PMRPDUMPSAVETOFILE);
 
-	uiFileNameInt = kmalloc(psPMRPDumpSaveToFileIN->ui32ArraySize * sizeof(IMG_CHAR), GFP_KERNEL);
+
+
+
+	uiFileNameInt = OSAllocMem(psPMRPDumpSaveToFileIN->ui32ArraySize * sizeof(IMG_CHAR));
 	if (!uiFileNameInt)
 	{
 		psPMRPDumpSaveToFileOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -216,32 +239,32 @@ PVRSRVBridgePMRPDumpSaveToFile(IMG_UINT32 ui32BridgeID,
 	}
 
 
-	if (copy_from_user(uiFileNameInt, psPMRPDumpSaveToFileIN->puiFileName,
-		psPMRPDumpSaveToFileIN->ui32ArraySize * sizeof(IMG_CHAR)) != 0)
+	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPMRPDumpSaveToFileIN->puiFileName, psPMRPDumpSaveToFileIN->ui32ArraySize * sizeof(IMG_CHAR)) 
+		|| (OSCopyFromUser(NULL, uiFileNameInt, psPMRPDumpSaveToFileIN->puiFileName,
+		psPMRPDumpSaveToFileIN->ui32ArraySize * sizeof(IMG_CHAR)) != PVRSRV_OK) )
 	{
 		psPMRPDumpSaveToFileOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
 		goto PMRPDumpSaveToFile_exit;
 	}
 
+		/* Look up the address from the handle */
+		psPMRPDumpSaveToFileOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hPMRInt2,
+							   psPMRPDumpSaveToFileIN->hPMR,
+							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+		if(psPMRPDumpSaveToFileOUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpSaveToFile_exit;
+		}
 
-	/* Look up the address from the handle */
-	psPMRPDumpSaveToFileOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPMRInt2,
-						   psPMRPDumpSaveToFileIN->hPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRPDumpSaveToFileOUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpSaveToFile_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psPMRPDumpSaveToFileOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-	if(psPMRPDumpSaveToFileOUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpSaveToFile_exit;
-	}
+		/* Look up the data from the resman address */
+		psPMRPDumpSaveToFileOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+		if(psPMRPDumpSaveToFileOUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpSaveToFile_exit;
+		}
 
 	psPMRPDumpSaveToFileOUT->eError =
 		PMRPDumpSaveToFile(
@@ -255,7 +278,7 @@ PVRSRVBridgePMRPDumpSaveToFile(IMG_UINT32 ui32BridgeID,
 
 PMRPDumpSaveToFile_exit:
 	if (uiFileNameInt)
-		kfree(uiFileNameInt);
+		OSFreeMem(uiFileNameInt);
 
 	return 0;
 }
@@ -266,14 +289,19 @@ PVRSRVBridgePMRPDumpSymbolicAddr(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PMRPDUMPSYMBOLICADDR *psPMRPDumpSymbolicAddrOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPMRInt;
-	IMG_HANDLE hPMRInt2;
+	PMR * psPMRInt = IMG_NULL;
+	IMG_HANDLE hPMRInt2 = IMG_NULL;
 	IMG_CHAR *puiMemspaceNameInt = IMG_NULL;
 	IMG_CHAR *puiSymbolicAddrInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMPMM_PMRPDUMPSYMBOLICADDR);
 
-	puiMemspaceNameInt = kmalloc(psPMRPDumpSymbolicAddrIN->ui32MemspaceNameLen * sizeof(IMG_CHAR), GFP_KERNEL);
+
+	psPMRPDumpSymbolicAddrOUT->puiMemspaceName = psPMRPDumpSymbolicAddrIN->puiMemspaceName;
+	psPMRPDumpSymbolicAddrOUT->puiSymbolicAddr = psPMRPDumpSymbolicAddrIN->puiSymbolicAddr;
+
+
+	puiMemspaceNameInt = OSAllocMem(psPMRPDumpSymbolicAddrIN->ui32MemspaceNameLen * sizeof(IMG_CHAR));
 	if (!puiMemspaceNameInt)
 	{
 		psPMRPDumpSymbolicAddrOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -282,7 +310,7 @@ PVRSRVBridgePMRPDumpSymbolicAddr(IMG_UINT32 ui32BridgeID,
 	}
 
 
-	puiSymbolicAddrInt = kmalloc(psPMRPDumpSymbolicAddrIN->ui32SymbolicAddrLen * sizeof(IMG_CHAR), GFP_KERNEL);
+	puiSymbolicAddrInt = OSAllocMem(psPMRPDumpSymbolicAddrIN->ui32SymbolicAddrLen * sizeof(IMG_CHAR));
 	if (!puiSymbolicAddrInt)
 	{
 		psPMRPDumpSymbolicAddrOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -291,24 +319,23 @@ PVRSRVBridgePMRPDumpSymbolicAddr(IMG_UINT32 ui32BridgeID,
 	}
 
 
+		/* Look up the address from the handle */
+		psPMRPDumpSymbolicAddrOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hPMRInt2,
+							   psPMRPDumpSymbolicAddrIN->hPMR,
+							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+		if(psPMRPDumpSymbolicAddrOUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpSymbolicAddr_exit;
+		}
 
-	/* Look up the address from the handle */
-	psPMRPDumpSymbolicAddrOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPMRInt2,
-						   psPMRPDumpSymbolicAddrIN->hPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRPDumpSymbolicAddrOUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpSymbolicAddr_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psPMRPDumpSymbolicAddrOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-	if(psPMRPDumpSymbolicAddrOUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpSymbolicAddr_exit;
-	}
+		/* Look up the data from the resman address */
+		psPMRPDumpSymbolicAddrOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+		if(psPMRPDumpSymbolicAddrOUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpSymbolicAddr_exit;
+		}
 
 	psPMRPDumpSymbolicAddrOUT->eError =
 		PMR_PDumpSymbolicAddr(
@@ -322,16 +349,18 @@ PVRSRVBridgePMRPDumpSymbolicAddr(IMG_UINT32 ui32BridgeID,
 					&psPMRPDumpSymbolicAddrOUT->uiNextSymName);
 
 
-	if (copy_to_user(psPMRPDumpSymbolicAddrOUT->puiMemspaceName, puiMemspaceNameInt,
-		(psPMRPDumpSymbolicAddrIN->ui32MemspaceNameLen * sizeof(IMG_CHAR)))  != 0)
+	if ( !OSAccessOK(PVR_VERIFY_WRITE, (IMG_VOID*) psPMRPDumpSymbolicAddrOUT->puiMemspaceName, (psPMRPDumpSymbolicAddrIN->ui32MemspaceNameLen * sizeof(IMG_CHAR))) 
+		|| (OSCopyToUser(NULL, psPMRPDumpSymbolicAddrOUT->puiMemspaceName, puiMemspaceNameInt,
+		(psPMRPDumpSymbolicAddrIN->ui32MemspaceNameLen * sizeof(IMG_CHAR))) != PVRSRV_OK) )
 	{
 		psPMRPDumpSymbolicAddrOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
 		goto PMRPDumpSymbolicAddr_exit;
 	}
 
-	if (copy_to_user(psPMRPDumpSymbolicAddrOUT->puiSymbolicAddr, puiSymbolicAddrInt,
-		(psPMRPDumpSymbolicAddrIN->ui32SymbolicAddrLen * sizeof(IMG_CHAR)))  != 0)
+	if ( !OSAccessOK(PVR_VERIFY_WRITE, (IMG_VOID*) psPMRPDumpSymbolicAddrOUT->puiSymbolicAddr, (psPMRPDumpSymbolicAddrIN->ui32SymbolicAddrLen * sizeof(IMG_CHAR))) 
+		|| (OSCopyToUser(NULL, psPMRPDumpSymbolicAddrOUT->puiSymbolicAddr, puiSymbolicAddrInt,
+		(psPMRPDumpSymbolicAddrIN->ui32SymbolicAddrLen * sizeof(IMG_CHAR))) != PVRSRV_OK) )
 	{
 		psPMRPDumpSymbolicAddrOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
@@ -341,9 +370,9 @@ PVRSRVBridgePMRPDumpSymbolicAddr(IMG_UINT32 ui32BridgeID,
 
 PMRPDumpSymbolicAddr_exit:
 	if (puiMemspaceNameInt)
-		kfree(puiMemspaceNameInt);
+		OSFreeMem(puiMemspaceNameInt);
 	if (puiSymbolicAddrInt)
-		kfree(puiSymbolicAddrInt);
+		OSFreeMem(puiSymbolicAddrInt);
 
 	return 0;
 }
@@ -354,29 +383,31 @@ PVRSRVBridgePMRPDumpPol32(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PMRPDUMPPOL32 *psPMRPDumpPol32OUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPMRInt;
-	IMG_HANDLE hPMRInt2;
+	PMR * psPMRInt = IMG_NULL;
+	IMG_HANDLE hPMRInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMPMM_PMRPDUMPPOL32);
 
 
-	/* Look up the address from the handle */
-	psPMRPDumpPol32OUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPMRInt2,
-						   psPMRPDumpPol32IN->hPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRPDumpPol32OUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpPol32_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psPMRPDumpPol32OUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-	if(psPMRPDumpPol32OUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpPol32_exit;
-	}
+
+		/* Look up the address from the handle */
+		psPMRPDumpPol32OUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hPMRInt2,
+							   psPMRPDumpPol32IN->hPMR,
+							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+		if(psPMRPDumpPol32OUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpPol32_exit;
+		}
+
+		/* Look up the data from the resman address */
+		psPMRPDumpPol32OUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+		if(psPMRPDumpPol32OUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpPol32_exit;
+		}
 
 	psPMRPDumpPol32OUT->eError =
 		PMRPDumpPol32(
@@ -400,29 +431,31 @@ PVRSRVBridgePMRPDumpCBP(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PMRPDUMPCBP *psPMRPDumpCBPOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPMRInt;
-	IMG_HANDLE hPMRInt2;
+	PMR * psPMRInt = IMG_NULL;
+	IMG_HANDLE hPMRInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMPMM_PMRPDUMPCBP);
 
 
-	/* Look up the address from the handle */
-	psPMRPDumpCBPOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPMRInt2,
-						   psPMRPDumpCBPIN->hPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRPDumpCBPOUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpCBP_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psPMRPDumpCBPOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-	if(psPMRPDumpCBPOUT->eError != PVRSRV_OK)
-	{
-		goto PMRPDumpCBP_exit;
-	}
+
+		/* Look up the address from the handle */
+		psPMRPDumpCBPOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hPMRInt2,
+							   psPMRPDumpCBPIN->hPMR,
+							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+		if(psPMRPDumpCBPOUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpCBP_exit;
+		}
+
+		/* Look up the data from the resman address */
+		psPMRPDumpCBPOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+		if(psPMRPDumpCBPOUT->eError != PVRSRV_OK)
+		{
+			goto PMRPDumpCBP_exit;
+		}
 
 	psPMRPDumpCBPOUT->eError =
 		PMRPDumpCBP(
@@ -445,13 +478,16 @@ PVRSRVBridgeDevmemIntPDumpSaveToFileVirtual(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_DEVMEMINTPDUMPSAVETOFILEVIRTUAL *psDevmemIntPDumpSaveToFileVirtualOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	DEVMEMINT_CTX * psDevmemServerContextInt;
-	IMG_HANDLE hDevmemServerContextInt2;
+	DEVMEMINT_CTX * psDevmemServerContextInt = IMG_NULL;
+	IMG_HANDLE hDevmemServerContextInt2 = IMG_NULL;
 	IMG_CHAR *uiFileNameInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMPMM_DEVMEMINTPDUMPSAVETOFILEVIRTUAL);
 
-	uiFileNameInt = kmalloc(psDevmemIntPDumpSaveToFileVirtualIN->ui32ArraySize * sizeof(IMG_CHAR), GFP_KERNEL);
+
+
+
+	uiFileNameInt = OSAllocMem(psDevmemIntPDumpSaveToFileVirtualIN->ui32ArraySize * sizeof(IMG_CHAR));
 	if (!uiFileNameInt)
 	{
 		psDevmemIntPDumpSaveToFileVirtualOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -460,32 +496,32 @@ PVRSRVBridgeDevmemIntPDumpSaveToFileVirtual(IMG_UINT32 ui32BridgeID,
 	}
 
 
-	if (copy_from_user(uiFileNameInt, psDevmemIntPDumpSaveToFileVirtualIN->puiFileName,
-		psDevmemIntPDumpSaveToFileVirtualIN->ui32ArraySize * sizeof(IMG_CHAR)) != 0)
+	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDevmemIntPDumpSaveToFileVirtualIN->puiFileName, psDevmemIntPDumpSaveToFileVirtualIN->ui32ArraySize * sizeof(IMG_CHAR)) 
+		|| (OSCopyFromUser(NULL, uiFileNameInt, psDevmemIntPDumpSaveToFileVirtualIN->puiFileName,
+		psDevmemIntPDumpSaveToFileVirtualIN->ui32ArraySize * sizeof(IMG_CHAR)) != PVRSRV_OK) )
 	{
 		psDevmemIntPDumpSaveToFileVirtualOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
 		goto DevmemIntPDumpSaveToFileVirtual_exit;
 	}
 
+		/* Look up the address from the handle */
+		psDevmemIntPDumpSaveToFileVirtualOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDevmemServerContextInt2,
+							   psDevmemIntPDumpSaveToFileVirtualIN->hDevmemServerContext,
+							   PVRSRV_HANDLE_TYPE_DEVMEMINT_CTX);
+		if(psDevmemIntPDumpSaveToFileVirtualOUT->eError != PVRSRV_OK)
+		{
+			goto DevmemIntPDumpSaveToFileVirtual_exit;
+		}
 
-	/* Look up the address from the handle */
-	psDevmemIntPDumpSaveToFileVirtualOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevmemServerContextInt2,
-						   psDevmemIntPDumpSaveToFileVirtualIN->hDevmemServerContext,
-						   PVRSRV_HANDLE_TYPE_DEVMEMINT_CTX);
-	if(psDevmemIntPDumpSaveToFileVirtualOUT->eError != PVRSRV_OK)
-	{
-		goto DevmemIntPDumpSaveToFileVirtual_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psDevmemIntPDumpSaveToFileVirtualOUT->eError = ResManFindPrivateDataByPtr(hDevmemServerContextInt2, (IMG_VOID **) &psDevmemServerContextInt);
-	if(psDevmemIntPDumpSaveToFileVirtualOUT->eError != PVRSRV_OK)
-	{
-		goto DevmemIntPDumpSaveToFileVirtual_exit;
-	}
+		/* Look up the data from the resman address */
+		psDevmemIntPDumpSaveToFileVirtualOUT->eError = ResManFindPrivateDataByPtr(hDevmemServerContextInt2, (IMG_VOID **) &psDevmemServerContextInt);
+		if(psDevmemIntPDumpSaveToFileVirtualOUT->eError != PVRSRV_OK)
+		{
+			goto DevmemIntPDumpSaveToFileVirtual_exit;
+		}
 
 	psDevmemIntPDumpSaveToFileVirtualOUT->eError =
 		DevmemIntPDumpSaveToFileVirtual(
@@ -501,12 +537,17 @@ PVRSRVBridgeDevmemIntPDumpSaveToFileVirtual(IMG_UINT32 ui32BridgeID,
 
 DevmemIntPDumpSaveToFileVirtual_exit:
 	if (uiFileNameInt)
-		kfree(uiFileNameInt);
+		OSFreeMem(uiFileNameInt);
 
 	return 0;
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterPDUMPMMFunctions(IMG_VOID);
 IMG_VOID UnregisterPDUMPMMFunctions(IMG_VOID);
 

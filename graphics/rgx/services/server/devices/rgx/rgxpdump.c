@@ -41,6 +41,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
+#if defined(PDUMP)
+
 #include "devicemem_pdump.h"
 #include "rgxpdump.h"
 
@@ -94,15 +96,17 @@ PVRSRV_ERROR PVRSRVPDumpTraceBufferKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 	/* Dump hwperf buffer */
 	PDumpCommentWithFlags(ui32PDumpFlags, "** Dump HWPerf Buffer");
-	DevmemPDumpSaveToFileVirtual(psDevInfo->psRGXFWIfTraceBufCtlMemDesc,
-				offsetof(RGXFWIF_TRACEBUF, asHWPerfPackets),
-				RGXFW_HWPERF_FIRMWARE_COUNT*sizeof(RGX_HWPERF_PACKET),
-				"out.hwperf",
-				0,
-				ui32PDumpFlags);
-
+	DevmemPDumpSaveToFileVirtual(psDevInfo->psRGXFWIfHWPerfBufCtlMemDesc,
+								 0,
+								 psDevInfo->ui32RGXFWIfHWPerfBufSize,
+								 "out.hwperf",
+								 0,
+								 ui32PDumpFlags);
 	return PVRSRV_OK;
 }
+
+#endif /* PDUMP */
+
 /******************************************************************************
  End of file (rgxpdump.c)
 ******************************************************************************/

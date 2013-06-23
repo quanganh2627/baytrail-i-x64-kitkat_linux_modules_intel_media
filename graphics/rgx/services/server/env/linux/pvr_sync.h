@@ -50,17 +50,20 @@ PVRSRV_ERROR PVRFDSyncDeviceInitKM(void);
 void PVRFDSyncDeviceDeInitKM(void);
 
 PVRSRV_ERROR
-PVRFDSyncQueryFencesKM(IMG_UINT32 ui32NumFDFences,
-					   IMG_INT32 *ai32FDFences,
-					   IMG_BOOL bUpdate,
-					   IMG_UINT32 *pui32NumFenceSyncs,
-					   IMG_UINT32 **ppui32FenceFWAddrs,
-					   IMG_UINT32 **ppui32FenceValues,
-					   IMG_UINT32 *pui32NumUpdateSyncs,
-					   IMG_UINT32 **ppui32UpdateFWAddrs,
-					   IMG_UINT32 **ppui32UpdateValues);
+PVRFDSyncSizeFenceKM(IMG_INT32 i32FDFence,
+					 IMG_BOOL bUpdate,
+					 IMG_UINT32 *pui32NumFenceSyncs,
+					 IMG_UINT32 *pui32NumUpdateSyncs);
 
 PVRSRV_ERROR
-PVRFDSyncNoHwUpdateFenceKM(IMG_INT32 i32FDFence);
+PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
+					  IMG_BOOL bUpdate,
+					  IMG_UINT32 ui32MaxNumSyncs,
+					  IMG_UINT32 *pui32NumSyncs,
+					  PVR_SYNC_POINT_DATA *aPts);
+
+PVRSRV_ERROR
+PVRFDSyncNoHwUpdateFenceKM(IMG_INT32 i32FDFence,
+						   IMG_UINT32 ui32UpdateValue);
 
 #endif /* _PVR_SYNC_H */

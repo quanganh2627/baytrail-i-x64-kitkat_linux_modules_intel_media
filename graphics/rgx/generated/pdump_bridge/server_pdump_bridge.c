@@ -51,6 +51,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_pdump_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -58,9 +59,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
 
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
+
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgePVRSRVPDumpIsCapturing(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_PVRSRVPDUMPISCAPTURING *psPVRSRVPDumpIsCapturingIN,
@@ -68,11 +82,11 @@ PVRSRVBridgePVRSRVPDumpIsCapturing(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 
-	PVR_UNREFERENCED_PARAMETER(psConnection);
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPISCAPTURING);
 
+	PVR_UNREFERENCED_PARAMETER(psConnection);
 	PVR_UNREFERENCED_PARAMETER(psPVRSRVPDumpIsCapturingIN);
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPISCAPTURING);
 
 
 
@@ -94,11 +108,13 @@ PVRSRVBridgePVRSRVPDumpComment(IMG_UINT32 ui32BridgeID,
 {
 	IMG_CHAR *uiCommentInt = IMG_NULL;
 
-	PVR_UNREFERENCED_PARAMETER(psConnection);
-
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPCOMMENT);
 
-	uiCommentInt = kmalloc(PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR), GFP_KERNEL);
+	PVR_UNREFERENCED_PARAMETER(psConnection);
+
+
+
+	uiCommentInt = OSAllocMem(PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR));
 	if (!uiCommentInt)
 	{
 		psPVRSRVPDumpCommentOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -107,14 +123,14 @@ PVRSRVBridgePVRSRVPDumpComment(IMG_UINT32 ui32BridgeID,
 	}
 
 
-	if (copy_from_user(uiCommentInt, psPVRSRVPDumpCommentIN->puiComment,
-		PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR)) != 0)
+	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPVRSRVPDumpCommentIN->puiComment, PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR)) 
+		|| (OSCopyFromUser(NULL, uiCommentInt, psPVRSRVPDumpCommentIN->puiComment,
+		PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR)) != PVRSRV_OK) )
 	{
 		psPVRSRVPDumpCommentOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
 		goto PVRSRVPDumpComment_exit;
 	}
-
 
 
 	psPVRSRVPDumpCommentOUT->eError =
@@ -126,7 +142,7 @@ PVRSRVBridgePVRSRVPDumpComment(IMG_UINT32 ui32BridgeID,
 
 PVRSRVPDumpComment_exit:
 	if (uiCommentInt)
-		kfree(uiCommentInt);
+		OSFreeMem(uiCommentInt);
 
 	return 0;
 }
@@ -138,9 +154,10 @@ PVRSRVBridgePVRSRVPDumpSetFrame(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPSETFRAME);
+
 	PVR_UNREFERENCED_PARAMETER(psConnection);
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPSETFRAME);
 
 
 
@@ -161,11 +178,11 @@ PVRSRVBridgePVRSRVPDumpIsLastCaptureFrame(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 
-	PVR_UNREFERENCED_PARAMETER(psConnection);
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPISLASTCAPTUREFRAME);
 
+	PVR_UNREFERENCED_PARAMETER(psConnection);
 	PVR_UNREFERENCED_PARAMETER(psPVRSRVPDumpIsLastCaptureFrameIN);
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPISLASTCAPTUREFRAME);
 
 
 
@@ -186,11 +203,11 @@ PVRSRVBridgePVRSRVPDumpStartInitPhase(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 
-	PVR_UNREFERENCED_PARAMETER(psConnection);
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPSTARTINITPHASE);
 
+	PVR_UNREFERENCED_PARAMETER(psConnection);
 	PVR_UNREFERENCED_PARAMETER(psPVRSRVPDumpStartInitPhaseIN);
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPSTARTINITPHASE);
 
 
 
@@ -211,9 +228,10 @@ PVRSRVBridgePVRSRVPDumpStopInitPhase(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPSTOPINITPHASE);
+
 	PVR_UNREFERENCED_PARAMETER(psConnection);
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPSTOPINITPHASE);
 
 
 
@@ -228,6 +246,11 @@ PVRSRVBridgePVRSRVPDumpStopInitPhase(IMG_UINT32 ui32BridgeID,
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterPDUMPFunctions(IMG_VOID);
 IMG_VOID UnregisterPDUMPFunctions(IMG_VOID);
 

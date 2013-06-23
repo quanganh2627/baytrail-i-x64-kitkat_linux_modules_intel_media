@@ -47,8 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_debug.h"
 #include "mm.h"
 #include "pvrsrv_memallocflags.h"
-
-
+#include "devicemem_server_utils.h"
 
 IMG_VOID *
 _IORemapWrapper(IMG_CPU_PHYADDR BasePAddr,
@@ -58,13 +57,10 @@ _IORemapWrapper(IMG_CPU_PHYADDR BasePAddr,
                IMG_UINT32 ui32Line)
 {
     IMG_VOID *pvIORemapCookie;
+	IMG_UINT32 ui32CPUCacheMode = DevmemCPUCacheMode(ui32MappingFlags);
 
-#if 1    
-	/* FIXME: We should not be using PVRSRV_HAP_*, heap flags should have no meaning here */
-	switch (ui32MappingFlags & PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK)
+	switch (ui32CPUCacheMode)
 	{
-		/* FIXME: What do we do for cache coherent? For now make uncached*/
-		case PVRSRV_MEMALLOCFLAG_CPU_CACHE_COHERENT:
 		case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
 				pvIORemapCookie = (IMG_VOID *)IOREMAP_UC(BasePAddr.uiAddr, ui32Bytes);
 				break;
@@ -73,7 +69,7 @@ _IORemapWrapper(IMG_CPU_PHYADDR BasePAddr,
 				pvIORemapCookie = (IMG_VOID *)IOREMAP_WC(BasePAddr.uiAddr, ui32Bytes);
 				break;
 
-		case PVRSRV_MEMALLOCFLAG_CPU_CACHE_INCOHERENT:
+		case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
 				pvIORemapCookie = (IMG_VOID *)IOREMAP(BasePAddr.uiAddr, ui32Bytes);
 				break;
 
@@ -81,18 +77,12 @@ _IORemapWrapper(IMG_CPU_PHYADDR BasePAddr,
 				return IMG_NULL;
 				break;
 	}
-#else
-    PVR_UNREFERENCED_PARAMETER(ui32MappingFlags);
-
-    pvIORemapCookie = (IMG_VOID *)IOREMAP_UC(BasePAddr.uiAddr, ui32Bytes);
-#endif
 
     PVR_UNREFERENCED_PARAMETER(pszFileName);
     PVR_UNREFERENCED_PARAMETER(ui32Line);
 
     return pvIORemapCookie;
 }
-
 
 IMG_VOID
 _IOUnmapWrapper(IMG_VOID *pvIORemapCookie, IMG_CHAR *pszFileName, IMG_UINT32 ui32Line)

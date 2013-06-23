@@ -135,13 +135,13 @@ typedef struct _Px_HANDLE_
 	}u;
 } Px_HANDLE;
 
-typedef enum _PVRSVR_DEVICE_STATE_
+typedef enum _PVRSRV_DEVICE_STATE_
 {
-	PVRSVR_DEVICE_STATE_UNDEFINED = 0,
-	PVRSVR_DEVICE_STATE_INIT,
-	PVRSVR_DEVICE_STATE_ACTIVE,
-	PVRSVR_DEVICE_STATE_DEINIT,
-} PVRSVR_DEVICE_STATE;
+	PVRSRV_DEVICE_STATE_UNDEFINED = 0,
+	PVRSRV_DEVICE_STATE_INIT,
+	PVRSRV_DEVICE_STATE_ACTIVE,
+	PVRSRV_DEVICE_STATE_DEINIT,
+} PVRSRV_DEVICE_STATE;
 
 typedef enum _PVRSRV_DEVICE_HEALTH_
 {
@@ -156,7 +156,7 @@ typedef struct _PVRSRV_DEVICE_NODE_
 	PVRSRV_DEVICE_IDENTIFIER	sDevId;
 	IMG_UINT32					ui32RefCount;
 
-	PVRSVR_DEVICE_STATE			eDevState;
+	PVRSRV_DEVICE_STATE			eDevState;
 	PVRSRV_DEVICE_HEALTH_STATUS eHealthStatus;
 
 	/* device specific MMU attributes */
@@ -202,6 +202,11 @@ typedef struct _PVRSRV_DEVICE_NODE_
 
 	PVRSRV_ERROR (*pfnUpdateHealthStatus)(struct _PVRSRV_DEVICE_NODE_ *psDevNode,
 	                                      IMG_BOOL bIsTimerPoll);
+
+	/* Method to drain device HWPerf packets from firmware buffer to host buffer */
+	PVRSRV_ERROR (*pfnServiceHWPerf)(struct _PVRSRV_DEVICE_NODE_ *psDevNode);
+
+	PVRSRV_ERROR (*pfnDeviceVersionString)(struct _PVRSRV_DEVICE_NODE_ *psDevNode, IMG_CHAR **ppszVersionString);
 
 	PVRSRV_DEVICE_CONFIG	*psDevConfig;
 

@@ -1,5 +1,6 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.39.4.19
+@File           ion_sys_private.h
+@Title          System-specific private data for ion support code
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,41 +40,12 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_39_4_19_H_
-#define _RGXCONFIG_KM_1_39_4_19_H_
+#include <linux/ion.h>
 
-/***** Automatically generated file (4/8/2013 10:23:31 AM): Do not edit manually ********************/
-/***** Timestamp:  (4/8/2013 10:23:31 AM)************************************************************/
-/***** CS: @2292017 ******************************************************************/
-
-
-/******************************************************************************
- * BVNC = 1.39.4.19 
- *****************************************************************************/
-#define RGX_BVNC_B 1
-#define RGX_BVNC_V 39
-#define RGX_BVNC_N 4
-#define RGX_BVNC_C 19
-
-/******************************************************************************
- * Errata 
- *****************************************************************************/
-
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-/******************************************************************************
-* DDK Defines
-*****************************************************************************/
-
-#define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
-#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
-#define RGX_FEATURE_AXI_ACELITE 
-#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
-#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
-
-#endif /* _RGXCONFIG_KM_1_39_4_19_H_ */
+typedef struct
+{
+	ion_phys_addr_t uiHeapBase;
+	size_t uiHeapSize;
+	IMG_UINT32 ui32IonPhysHeapID;
+	IMG_CPU_PHYADDR sPCIAddrRangeStart;
+} ION_TC_PRIVATE_DATA;

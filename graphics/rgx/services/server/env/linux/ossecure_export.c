@@ -90,8 +90,13 @@ PVRSRV_ERROR OSSecureExport(CONNECTION_DATA *psConnection,
 		Get a reference to the dentry so when close is called we don't
 		drop the last reference too early and delete the file
 	*/
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0))
+	secure_dentry = dget(connection_file->f_path.dentry);
+	secure_mnt = mntget(connection_file->f_path.mnt);
+#else
 	secure_dentry = dget(connection_file->f_dentry);
 	secure_mnt = mntget(connection_file->f_vfsmnt);
+#endif
 
 	/*
 		FIXME: Release the "master" lock as the open below will trigger the 

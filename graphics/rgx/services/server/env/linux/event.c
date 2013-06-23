@@ -1,6 +1,6 @@
 /*************************************************************************/ /*!
 @File
-@Title          Event Object 
+@Title          Event Object
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -73,26 +73,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_debug.h"
 #include "pvrsrv.h"
 
-/* FIXME: need to re-think PVRLock */
 #include "osfunc.h"
 
 typedef struct PVRSRV_LINUX_EVENT_OBJECT_LIST_TAG
 {
-   rwlock_t 			   sLock;
-   struct list_head        sList;
-   
+	rwlock_t sLock;
+	struct list_head sList;
+
 } PVRSRV_LINUX_EVENT_OBJECT_LIST;
 
 
 typedef struct PVRSRV_LINUX_EVENT_OBJECT_TAG
 {
-   	atomic_t	sTimeStamp;
-   	IMG_UINT32  ui32TimeStampPrevious;
+	atomic_t sTimeStamp;
+	IMG_UINT32 ui32TimeStampPrevious;
 #if defined(DEBUG)
-	IMG_UINT	ui32Stats;
+	IMG_UINT ui32Stats;
 #endif
-    wait_queue_head_t sWait;	
-	struct list_head        sList;
+	wait_queue_head_t sWait;
+	struct list_head sList;
 	PVRSRV_LINUX_EVENT_OBJECT_LIST *psLinuxEventObjectList;
 } PVRSRV_LINUX_EVENT_OBJECT;
 
@@ -100,13 +99,13 @@ typedef struct PVRSRV_LINUX_EVENT_OBJECT_TAG
 ******************************************************************************
 
  @Function	LinuxEventObjectListCreate
- 
- @Description 
- 
+
+ @Description
+
  Linux wait object list creation
 
- @Output    hOSEventKM : Pointer to the event object list handle 
- 
+ @Output    hOSEventKM : Pointer to the event object list handle
+
  @Return   PVRSRV_ERROR  :  Error code
 
 ******************************************************************************/
@@ -117,14 +116,14 @@ PVRSRV_ERROR LinuxEventObjectListCreate(IMG_HANDLE *phEventObjectList)
 	psEvenObjectList = OSAllocMem(sizeof(PVRSRV_LINUX_EVENT_OBJECT_LIST));
 	if (psEvenObjectList == IMG_NULL)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "LinuxEventObjectCreate: failed to allocate memory for event list"));		
-		return PVRSRV_ERROR_OUT_OF_MEMORY;	
+		PVR_DPF((PVR_DBG_ERROR, "LinuxEventObjectCreate: failed to allocate memory for event list"));
+		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
 
-    INIT_LIST_HEAD(&psEvenObjectList->sList);
+	INIT_LIST_HEAD(&psEvenObjectList->sList);
 
 	rwlock_init(&psEvenObjectList->sLock);
-	
+
 	*phEventObjectList = (IMG_HANDLE *) psEvenObjectList;
 
 	return PVRSRV_OK;
@@ -134,13 +133,13 @@ PVRSRV_ERROR LinuxEventObjectListCreate(IMG_HANDLE *phEventObjectList)
 ******************************************************************************
 
  @Function	LinuxEventObjectListDestroy
- 
- @Description 
- 
+
+ @Description
+
  Linux wait object list destruction
 
- @Input    hOSEventKM : Event object list handle 
- 
+ @Input    hOSEventKM : Event object list handle
+
  @Return   PVRSRV_ERROR  :  Error code
 
 ******************************************************************************/
@@ -149,9 +148,9 @@ PVRSRV_ERROR LinuxEventObjectListDestroy(IMG_HANDLE hEventObjectList)
 
 	PVRSRV_LINUX_EVENT_OBJECT_LIST *psEvenObjectList = (PVRSRV_LINUX_EVENT_OBJECT_LIST *) hEventObjectList ;
 
-	if(psEvenObjectList)	
+	if(psEvenObjectList)
 	{
-		if (!list_empty(&psEvenObjectList->sList)) 
+		if (!list_empty(&psEvenObjectList->sList))
 		{
 			 PVR_DPF((PVR_DBG_ERROR, "LinuxEventObjectListDestroy: Event List is not empty"));
 			 return PVRSRV_ERROR_UNABLE_TO_DESTROY_EVENT;
@@ -167,13 +166,13 @@ PVRSRV_ERROR LinuxEventObjectListDestroy(IMG_HANDLE hEventObjectList)
 ******************************************************************************
 
  @Function	LinuxEventObjectDelete
- 
- @Description 
- 
+
+ @Description
+
  Linux wait object removal
 
- @Input    hOSEventObject : Event object handle 
- 
+ @Input    hOSEventObject : Event object handle
+
  @Return   PVRSRV_ERROR  :  Error code
 
 ******************************************************************************/
@@ -181,7 +180,7 @@ PVRSRV_ERROR LinuxEventObjectDelete(IMG_HANDLE hOSEventObject)
 {
 	if(hOSEventObject)
 	{
-		PVRSRV_LINUX_EVENT_OBJECT *psLinuxEventObject = (PVRSRV_LINUX_EVENT_OBJECT *)hOSEventObject; 
+		PVRSRV_LINUX_EVENT_OBJECT *psLinuxEventObject = (PVRSRV_LINUX_EVENT_OBJECT *)hOSEventObject;
 		PVRSRV_LINUX_EVENT_OBJECT_LIST *psLinuxEventObjectList = psLinuxEventObject->psLinuxEventObjectList;
 
 		write_lock_bh(&psLinuxEventObjectList->sLock);
@@ -190,7 +189,7 @@ PVRSRV_ERROR LinuxEventObjectDelete(IMG_HANDLE hOSEventObject)
 
 #if defined(DEBUG)
 //		PVR_DPF((PVR_DBG_MESSAGE, "LinuxEventObjectDelete: Event object waits: %u", psLinuxEventObject->ui32Stats));
-#endif	
+#endif
 
 		OSFreeMem(psLinuxEventObject);
 		/*not nulling pointer, copy on stack*/
@@ -204,30 +203,30 @@ PVRSRV_ERROR LinuxEventObjectDelete(IMG_HANDLE hOSEventObject)
 ******************************************************************************
 
  @Function	LinuxEventObjectAdd
- 
- @Description 
- 
+
+ @Description
+
  Linux wait object addition
 
- @Input    hOSEventObjectList : Event object list handle 
- @Output   phOSEventObject : Pointer to the event object handle 
- 
+ @Input    hOSEventObjectList : Event object list handle
+ @Output   phOSEventObject : Pointer to the event object handle
+
  @Return   PVRSRV_ERROR  :  Error code
 
 ******************************************************************************/
 PVRSRV_ERROR LinuxEventObjectAdd(IMG_HANDLE hOSEventObjectList, IMG_HANDLE *phOSEventObject)
  {
-	PVRSRV_LINUX_EVENT_OBJECT *psLinuxEventObject; 
-	PVRSRV_LINUX_EVENT_OBJECT_LIST *psLinuxEventObjectList = (PVRSRV_LINUX_EVENT_OBJECT_LIST*)hOSEventObjectList; 
+	PVRSRV_LINUX_EVENT_OBJECT *psLinuxEventObject;
+	PVRSRV_LINUX_EVENT_OBJECT_LIST *psLinuxEventObjectList = (PVRSRV_LINUX_EVENT_OBJECT_LIST*)hOSEventObjectList;
 
 	/* allocate completion variable */
 	psLinuxEventObject = OSAllocMem(sizeof(PVRSRV_LINUX_EVENT_OBJECT));
-	if (psLinuxEventObject == IMG_NULL) 
+	if (psLinuxEventObject == IMG_NULL)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "LinuxEventObjectAdd: failed to allocate memory "));		
-		return PVRSRV_ERROR_OUT_OF_MEMORY;	
+		PVR_DPF((PVR_DBG_ERROR, "LinuxEventObjectAdd: failed to allocate memory "));
+		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
-	
+
 	INIT_LIST_HEAD(&psLinuxEventObject->sList);
 
 	atomic_set(&psLinuxEventObject->sTimeStamp, 0);
@@ -236,66 +235,66 @@ PVRSRV_ERROR LinuxEventObjectAdd(IMG_HANDLE hOSEventObjectList, IMG_HANDLE *phOS
 #if defined(DEBUG)
 	psLinuxEventObject->ui32Stats = 0;
 #endif
-    init_waitqueue_head(&psLinuxEventObject->sWait);
+	init_waitqueue_head(&psLinuxEventObject->sWait);
 
 	psLinuxEventObject->psLinuxEventObjectList = psLinuxEventObjectList;
 
 	write_lock_bh(&psLinuxEventObjectList->sLock);
 	list_add(&psLinuxEventObject->sList, &psLinuxEventObjectList->sList);
-    write_unlock_bh(&psLinuxEventObjectList->sLock);
-	
+	write_unlock_bh(&psLinuxEventObjectList->sLock);
+
 	*phOSEventObject = psLinuxEventObject;
 
-	return PVRSRV_OK;	 
+	return PVRSRV_OK;
 }
 
 /*!
 ******************************************************************************
 
  @Function	LinuxEventObjectSignal
- 
- @Description 
- 
+
+ @Description
+
  Linux wait object signaling function
- 
- @Input    hOSEventObjectList : Event object list handle 
- 
+
+ @Input    hOSEventObjectList : Event object list handle
+
  @Return   PVRSRV_ERROR  :  Error code
 
 ******************************************************************************/
 PVRSRV_ERROR LinuxEventObjectSignal(IMG_HANDLE hOSEventObjectList)
 {
 	PVRSRV_LINUX_EVENT_OBJECT *psLinuxEventObject;
-	PVRSRV_LINUX_EVENT_OBJECT_LIST *psLinuxEventObjectList = (PVRSRV_LINUX_EVENT_OBJECT_LIST*)hOSEventObjectList; 
+	PVRSRV_LINUX_EVENT_OBJECT_LIST *psLinuxEventObjectList = (PVRSRV_LINUX_EVENT_OBJECT_LIST*)hOSEventObjectList;
 	struct list_head *psListEntry, *psListEntryTemp, *psList;
 	psList = &psLinuxEventObjectList->sList;
 
 	read_lock_bh(&psLinuxEventObjectList->sLock);
-	list_for_each_safe(psListEntry, psListEntryTemp, psList) 
-	{       	
+	list_for_each_safe(psListEntry, psListEntryTemp, psList)
+	{
 
-		psLinuxEventObject = (PVRSRV_LINUX_EVENT_OBJECT *)list_entry(psListEntry, PVRSRV_LINUX_EVENT_OBJECT, sList);	
-		
-		atomic_inc(&psLinuxEventObject->sTimeStamp);	
-	 	wake_up_interruptible(&psLinuxEventObject->sWait);
+		psLinuxEventObject = (PVRSRV_LINUX_EVENT_OBJECT *)list_entry(psListEntry, PVRSRV_LINUX_EVENT_OBJECT, sList);
+
+		atomic_inc(&psLinuxEventObject->sTimeStamp);
+		wake_up_interruptible(&psLinuxEventObject->sWait);
 	}
 	read_unlock_bh(&psLinuxEventObjectList->sLock);
 
 	return 	PVRSRV_OK;
-  	
+
 }
 
 /*!
 ******************************************************************************
 
  @Function	LinuxEventObjectWait
- 
- @Description 
- 
+
+ @Description
+
  Linux wait object routine
- 
- @Input    hOSEventObject : Event object handle 
- 
+
+ @Input    hOSEventObject : Event object handle
+
  @Input   ui32MSTimeout : Time out value in msec
 
  @Return   PVRSRV_ERROR  :  Error code
@@ -317,27 +316,29 @@ PVRSRV_ERROR LinuxEventObjectWait(IMG_HANDLE hOSEventObject, IMG_UINT32 ui32MSTi
 	{
 		return PVRSRV_ERROR_TIMEOUT;
 	}
-	
-	do	
+
+	do
 	{
 		prepare_to_wait(&psLinuxEventObject->sWait, &sWait, TASK_INTERRUPTIBLE);
 		ui32TimeStamp = (IMG_UINT32)atomic_read(&psLinuxEventObject->sTimeStamp);
-   	
+
 		if(psLinuxEventObject->ui32TimeStampPrevious != ui32TimeStamp)
 		{
 			break;
 		}
 
-		/* FIXME: Need to re-think PVRSRVLocking */
-		bReleasePVRLock = OSGetReleasePVRLock();
+		/* Check thread holds the current PVR/bridge lock before obeying the
+		 * 'release before deschedule' behaviour. Some threads choose not to
+		 * hold the bridge lock in their implementation.
+		 */
+		bReleasePVRLock = (OSGetReleasePVRLock() && LinuxIsLockedByMeMutex(&gPVRSRVLock));
 		if (bReleasePVRLock == IMG_TRUE)
 		{
 			LinuxUnLockMutex(&gPVRSRVLock);
 		}
 
 		ui32TimeOutJiffies = (IMG_UINT32)schedule_timeout((IMG_INT32)ui32TimeOutJiffies);
-		
-		/* FIXME: Need to re-think PVRSRVLocking */
+
 		if (bReleasePVRLock == IMG_TRUE)
 		{
 			LinuxLockMutex(&gPVRSRVLock);
@@ -345,16 +346,15 @@ PVRSRV_ERROR LinuxEventObjectWait(IMG_HANDLE hOSEventObject, IMG_UINT32 ui32MSTi
 
 #if defined(DEBUG)
 		psLinuxEventObject->ui32Stats++;
-#endif			
+#endif
 
-		
+
 	} while (ui32TimeOutJiffies);
 
-	finish_wait(&psLinuxEventObject->sWait, &sWait);	
+	finish_wait(&psLinuxEventObject->sWait, &sWait);
 
 	psLinuxEventObject->ui32TimeStampPrevious = ui32TimeStamp;
 
 	return ui32TimeOutJiffies ? PVRSRV_OK : PVRSRV_ERROR_TIMEOUT;
 
 }
-

@@ -80,6 +80,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 
+#if defined(SUPPORT_DRM_AUTH_IMPORT)
+#include <linux/list.h>
+#endif
+
 #if defined(SUPPORT_DRM)
 #include <drm/drmP.h>
 #endif
@@ -120,9 +124,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "env_connection.h"
 #include "rgxsysinfo.h"
 
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+#include "syscommon.h"
+#endif
+
 #if defined(SUPPORT_DRM)
 #include "pvr_drm.h"
 #endif
+#if defined(SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 #include "pvr_sync.h"
 #endif
@@ -170,6 +182,12 @@ EXPORT_SYMBOL(PhysHeapGetAddress);
 EXPORT_SYMBOL(PhysHeapGetSize);
 EXPORT_SYMBOL(PhysHeapCpuPAddrToDevPAddr);
 
+/* System interface (required by DC drivers) */
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+EXPORT_SYMBOL(SysInstallDeviceLISR);
+EXPORT_SYMBOL(SysUninstallDeviceLISR);
+#endif
+
 #if defined(PVR_LDM_DEVICE_CLASS) && !defined(SUPPORT_DRM)
 /*
  * Device class used for /sys entries (and udev device node creation)
@@ -209,6 +227,10 @@ static IMG_BOOL bCalledSysInit = IMG_FALSE;
 
 #if defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL)
 static IMG_UINT32 gPVRPowerLevel;
+#endif
+
+#if defined(SUPPORT_DRM_AUTH_IMPORT)
+static LIST_HEAD(sDRMAuthListHead);
 #endif
 
 #if defined(PVR_LDM_MODULE)
@@ -692,10 +714,6 @@ static int PVRSRVOpen(struct inode unref__ * pInode, struct file *pFile)
 	int iRet = -ENOMEM;
 	PVRSRV_ERROR eError;
 
-#if defined(SUPPORT_DRM) && defined(PVR_DRM_SECURE_AUTH_EXPORT)
-	ENV_CONNECTION_DATA *psEnvConnection;
-#endif
-
 	if (!try_module_get(THIS_MODULE))
 	{
 		PVR_DPF((PVR_DBG_ERROR, "Failed to get module"));
@@ -714,8 +732,8 @@ static int PVRSRVOpen(struct inode unref__ * pInode, struct file *pFile)
 		OSConnectionPrivateDataInit function where we can save it so
 		we can back reference the file structure from it's connection
 	*/
-	eError = PVRSRVConnectionConnect(&psPrivateData->pvConnectionData,
-									(IMG_PVOID) pFile);
+	eError = PVRSRVConnectionConnect(&psPrivateData->pvConnectionData, (IMG_PVOID) pFile);
+
 	if (eError != PVRSRV_OK)
 	{
 		OSFreeMem(psPrivateData);
@@ -725,14 +743,16 @@ static int PVRSRVOpen(struct inode unref__ * pInode, struct file *pFile)
 #if defined(PVR_SECURE_FD_EXPORT)
 	psPrivateData->hKernelMemInfo = NULL;
 #endif
-#if defined(SUPPORT_DRM) && defined(PVR_DRM_SECURE_AUTH_EXPORT)
-	psEnvConnection = PVRSRVConnectionPrivateData(psPrivateData->pvConnectionData);
-	psPrivateData->psDRMFile = pFile;
-
-	list_add_tail(&psPrivateData->sDRMAuthListItem, &psEnvConnection->sDRMAuthListHead);
+#if defined(SUPPORT_DRM_AUTH_IMPORT)
+	psPrivateData->uPID = OSGetCurrentProcessIDKM();
+	list_add_tail(&psPrivateData->sDRMAuthListItem, &sDRMAuthListHead);
+#endif
+#if defined(SUPPORT_DRM)
+	psPrivateData->bGEMSharedData = IMG_FALSE;
 #endif
 	PRIVATE_DATA(pFile) = psPrivateData;
 	LinuxUnLockMutex(&gPVRSRVLock);
+
 	return 0;
 
 err_unlock:	
@@ -773,13 +793,12 @@ static int PVRSRVRelease(struct inode unref__ * pInode, struct file *pFile)
 
 	if (psPrivateData != IMG_NULL)
 	{
-#if defined(SUPPORT_DRM) && defined(PVR_DRM_SECURE_AUTH_EXPORT)
-	list_del(&psPrivateData->sDRMAuthListItem);
+#if defined(SUPPORT_DRM_AUTH_IMPORT)
+		list_del(&psPrivateData->sDRMAuthListItem);
 #endif
+		PVRSRVConnectionDisconnect(psPrivateData->pvConnectionData);
 
-	PVRSRVConnectionDisconnect(psPrivateData->pvConnectionData);
-
-	OSFreeMem(psPrivateData);
+		OSFreeMem(psPrivateData);
 
 #if !defined(SUPPORT_DRM)
 		PRIVATE_DATA(pFile) = IMG_NULL; /*nulling shared pointer*/
@@ -801,9 +820,7 @@ CONNECTION_DATA *LinuxConnectionFromFile(struct drm_file *pFile)
 CONNECTION_DATA *LinuxConnectionFromFile(struct file *pFile)
 #endif
 {
-	PVRSRV_FILE_PRIVATE_DATA *psPrivateData;
-
-	psPrivateData = PRIVATE_DATA(pFile);
+	PVRSRV_FILE_PRIVATE_DATA *psPrivateData = PRIVATE_DATA(pFile);
 
 	return psPrivateData->pvConnectionData;
 }
@@ -816,6 +833,72 @@ struct file *LinuxFileFromEnvConnection(ENV_CONNECTION_DATA *psEnvConnection)
 	return psEnvConnection->psFile;
 #endif
 }
+
+#if defined(SUPPORT_DRM_AUTH_IMPORT)
+static IMG_BOOL PVRDRMCheckAuthentication(struct drm_file *pFile, IMG_PID uPID)
+{
+	PVRSRV_FILE_PRIVATE_DATA *psPrivateData;
+
+	BUG_ON(!LinuxIsLockedMutex(&gPVRSRVLock));
+
+	list_for_each_entry(psPrivateData, &sDRMAuthListHead, sDRMAuthListItem)
+	{
+		if (uPID == psPrivateData->uPID)
+		{
+			ENV_CONNECTION_DATA *psEnvConnection = PVRSRVConnectionPrivateData(psPrivateData->pvConnectionData);
+
+			if (pFile->master == psEnvConnection->psFile->master)
+			{
+				if (psEnvConnection->psFile->authenticated)
+				{
+					return IMG_TRUE;
+				}
+			}
+		}
+	}
+
+	return IMG_FALSE;
+}
+
+PVRSRV_ERROR OSCheckAuthentication(CONNECTION_DATA *psConnection, IMG_UINT32 ui32Level)
+{
+	ENV_CONNECTION_DATA *psEnvConnection;
+	PVRSRV_FILE_PRIVATE_DATA *psPrivateData;
+	IMG_BOOL bAuthenticated = IMG_FALSE;
+
+	if (ui32Level == 0)
+	{
+		return PVRSRV_OK;
+	}
+
+	psEnvConnection = PVRSRVConnectionPrivateData(psConnection);
+	psPrivateData = PRIVATE_DATA(psEnvConnection->psFile);
+
+	bAuthenticated |= psEnvConnection->bAuthenticated;
+	bAuthenticated |= psEnvConnection->psFile->authenticated;
+	if (bAuthenticated)
+	{
+		goto check_auth_exit;
+	}
+
+	/*
+	 * If our connection was not authenticated, see if we have another
+	 * one that is.
+	 */
+	bAuthenticated = PVRDRMCheckAuthentication(psEnvConnection->psFile, psPrivateData->uPID);
+
+check_auth_exit:
+	if (!bAuthenticated)
+	{
+		PVR_DPF((PVR_DBG_WARNING, "%s: PVR Services Connection not authenticated", __FUNCTION__));
+		return PVRSRV_ERROR_NOT_AUTHENTICATED;
+	}
+
+	psEnvConnection->bAuthenticated = bAuthenticated;
+
+	return PVRSRV_OK;
+}
+#endif /* defined(SUPPORT_DRM_AUTH_IMPORT) */
 
 /*!
 ******************************************************************************
@@ -881,7 +964,6 @@ static int __init PVRCore_Init(void)
 	 */
 	PVRDPFInit();
 #endif
-	PVR_TRACE(("PVRCore_Init"));
 
 #if defined(PVR_LDM_MODULE) || defined(SUPPORT_DRM)
 	LinuxInitMutex(&gsPMMutex);
@@ -1086,6 +1168,10 @@ static void __exit PVRCore_Cleanup(void)
 #endif
 {
 	PVR_TRACE(("PVRCore_Cleanup"));
+
+#if defined(SUPPORT_DRM_AUTH_IMPORT)
+	BUG_ON(!list_empty(&sDRMAuthListHead));
+#endif
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 	PVRFDSyncDeviceDeInitKM();

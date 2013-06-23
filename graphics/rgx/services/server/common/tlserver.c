@@ -56,27 +56,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "tltestdefs.h"
 
-#define NO_DATA_WAIT_PERIOD	5000
-#define NO_ACQUIRE 			0xffffffffU
-
+#define NO_STREAM_WAIT_PERIOD 2000
+#define NO_DATA_WAIT_PERIOD   1000
+#define NO_ACQUIRE            0xffffffffU
 
 /*
  * Transport Layer Client API Kernel-Mode bridge implementation
  */
-
 PVRSRV_ERROR
 TLServerConnectKM(CONNECTION_DATA *psConnection)
 {
 	PVR_DPF_ENTERED;
-
 	PVR_ASSERT(psConnection);
-	if (TLGGD()->psTlClient != 0)
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_SRV_CONNECT_FAILED);
 
-	TLGGD()->psTlClient = psConnection;
-
-	// TODO: Create event object to give daemon something to wait on until the
-	// stream is created
+	TLGGD()->uiClientCnt++;
 
 	PVR_DPF_RETURN_OK;
 }
@@ -88,12 +81,11 @@ TLServerDisconnectKM(CONNECTION_DATA *psConnection)
 
 	PVR_ASSERT(psConnection);
 
-	if (TLGGD()->psTlClient != psConnection)
+	if (TLGGD()->uiClientCnt <= 0)
+	{
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_SRV_DISCONNECT_FAILED);
-
-	TLGGD()->psTlClient = 0;
-
-	// TODO: Add resource clean up to mirror the above connect call
+	}
+	TLGGD()->uiClientCnt--;
 
 	PVR_DPF_RETURN_OK;
 }
@@ -107,33 +99,71 @@ TLServerOpenStreamKM(IMG_PCHAR  	 	   pszName,
 	PVRSRV_ERROR 	eError = PVRSRV_OK;
 	PTL_SNODE		psNode = 0;
 	TL_STREAM_DESC* psNewSD = 0;
-	IMG_HANDLE 		hEventObj;
+	IMG_HANDLE 		hEvent;
 	PTL_GLOBAL_DATA psGD = TLGGD();
 
-	PVR_DPF_ENTERED;
+#if defined(PVR_DPF_FUNCTION_TRACE_ON)
+    PVR_DPF((PVR_DBG_CALLTRACE, "--> %s:%d entered (%s, %x)", __func__, __LINE__, pszName, ui32Mode));
+#endif
 
-	// Sanity check, quick exit if there are no streams
-	if (psGD->psHead == NULL)
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_NOT_FOUND);
+	PVR_ASSERT(pszName);
 
-	// There are one or more streams, find the correct one in the list
 	psNode = TLFindStreamNodeByName(pszName);
+	if ((psNode == NULL) && (ui32Mode & PVRSRV_STREAM_FLAG_OPEN_BLOCKING))
+	{	/* Blocking code to wait for stream to be created if it does not exist
+	     */
+		eError = OSEventObjectOpen(psGD->hTLEventObj, &hEvent);
+		PVR_LOGR_IF_ERROR(eError, "OSEventObjectOpen");
+
+		do
+		{
+			if ((psNode = TLFindStreamNodeByName(pszName)) == NULL)
+			{
+				PVR_DPF((PVR_DBG_MESSAGE, "Stream %s does not exist, waiting...", pszName));
+				/* Will exit OK or with timeout, both cases safe to ignore */
+				eError = OSEventObjectWaitTimeout(hEvent, NO_STREAM_WAIT_PERIOD);
+			}
+		}
+		while ((psNode == NULL) && (eError == PVRSRV_OK));
+
+		eError = OSEventObjectClose(hEvent);
+		PVR_LOGR_IF_ERROR(eError, "OSEventObjectClose");
+	}
+
+	/* Make sure we have found a stream node after wait/search */
 	if (psNode == NULL)
+	{
+		/* Did we exit the wait with timeout, inform caller */
+		if (eError == PVRSRV_ERROR_TIMEOUT)
+		{
+			PVR_DPF_RETURN_RC(eError);
+		}
+		PVR_DPF((PVR_DBG_ERROR, "Stream does not exist"));
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_NOT_FOUND);
+	}
 
 	// Only one client/descriptor per stream supported
 	if (psNode->psDesc != NULL)
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_ALREADY_OPEN)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "Can not open stream, stream already opened"));
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_ALREADY_OPEN);
+	}
 
 	// Create an event handle for this client to wait on when no data in stream
 	// buffer.
-	eError = OSEventObjectOpen(psNode->hDataEventObj, &hEventObj);
+	eError = OSEventObjectOpen(psNode->hDataEventObj, &hEvent);
 	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "Not possible to open node's event object"));
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_UNABLE_TO_CREATE_EVENT);
+	}
 
-	psNewSD = TLMakeStreamDesc(psNode, ui32Mode, hEventObj);
+	psNewSD = TLMakeStreamDesc(psNode, ui32Mode, hEvent);
 	if (!psNewSD)
-		goto e1;
+	{
+		PVR_DPF((PVR_DBG_ERROR, "Not possible to make a new stream descriptor"));
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_OUT_OF_MEMORY);
+	}
 
 	// Copy the export cookie back to the user mode API to enable access to
 	// the stream buffer from user-mode process.
@@ -142,17 +172,12 @@ TLServerOpenStreamKM(IMG_PCHAR  	 	   pszName,
 	psNode->psDesc = psNewSD;
 	*ppsSD = psNewSD;
 
-	PVR_DPF((PVR_DBG_VERBOSE, "TLServerOpenStreamKM evList=%p, evObj=%p", psNode->hDataEventObj, psNode->psDesc->hDataEvent));
+	PVR_DPF((PVR_DBG_VERBOSE, 
+			 "TLServerOpenStreamKM evList=%p, evObj=%p", 
+			 psNode->hDataEventObj, 
+			 psNode->psDesc->hDataEvent));
 
 	PVR_DPF_RETURN_OK;
-
-
-// Cleanup jump for event object
-e1:
-	OSEventObjectClose(hEventObj);
-	eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-//e0:
-	PVR_DPF_RETURN_RC(eError);
 }
 
 PVRSRV_ERROR
@@ -168,12 +193,16 @@ TLServerCloseStreamKM(PTL_STREAM_DESC psSD)
 
 	// Sanity check, quick exit if there are no streams
 	if (psGD->psHead == NULL)
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_HANDLE_NOT_FOUND)
+	{
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_HANDLE_NOT_FOUND);
+	}
 
 	// Check stream still valid
 	psNode = TLFindStreamNodeByDesc(psSD);
 	if ((psNode == NULL) || (psNode != psSD->psNode))
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_HANDLE_NOT_FOUND)
+	{
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_HANDLE_NOT_FOUND);
+	}
 
 	// Close and free the event handle resource used by this descriptor
 	eError = OSEventObjectClose(psSD->hDataEvent);
@@ -184,12 +213,11 @@ TLServerCloseStreamKM(PTL_STREAM_DESC psSD)
 		eError = PVRSRV_ERROR_UNABLE_TO_DESTROY_EVENT;
 	}
 
-	// Remove from stream object/list
-	psSD->psNode->psDesc = NULL;
-	TLTryToRemoveAndFreeStreamNode(psSD->psNode);
+	// Remove descriptor from stream object/list
+	TLRemoveDescAndTryFreeStreamNode(psNode);
 
 	// Free the stream descriptor object
-	OSFreeMem(psSD);
+	OSFREEMEM(psSD);
 
 	PVR_DPF_RETURN_RC(eError);
 }
@@ -200,9 +228,9 @@ TLServerAcquireDataKM(PTL_STREAM_DESC psSD,
 		   	   		  IMG_UINT32* 	  puiReadLen)
 {
 	PVRSRV_ERROR 		eError = PVRSRV_OK;
-	TL_GLOBAL_GDATA*	psGD = TLGGD();
+	TL_GLOBAL_DATA*		psGD = TLGGD();
 	IMG_UINT32		    uiTmpOffset = NO_ACQUIRE;
-	IMG_UINT32  		uiTmpLen;
+	IMG_UINT32  		uiTmpLen = 0;
 	PTL_SNODE			psNode = 0;
 
 	PVR_DPF_ENTERED;
@@ -211,44 +239,55 @@ TLServerAcquireDataKM(PTL_STREAM_DESC psSD,
 
 	// Sanity check, quick exit if there are no streams
 	if (psGD->psHead == NULL)
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_ERROR)
+	{
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_ERROR);
+	}
 
 	// Check stream still valid
 	psNode = TLFindStreamNodeByDesc(psSD);
 	if ((psNode == NULL) || (psNode != psSD->psNode))
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_HANDLE_NOT_FOUND)
+	{
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_HANDLE_NOT_FOUND);
+	}
 
 	// Does stream still exist?
 	if (psNode->psStream == NULL)
+	{
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_RESOURCE_UNAVAILABLE);
+	}
 
 	//PVR_DPF((PVR_DBG_VERBOSE, "TLServerAcquireDataKM evList=%p, evObj=%p", psSD->psNode->hDataEventObj, psSD->hDataEvent));
 
-	// Check for data in the associated stream buffer, sleep/wait if none
-	while ((uiTmpLen =TLStreamAcquireReadPos(psSD->psNode->psStream, &uiTmpOffset)) == 0 && (!(psSD->ui32Flags&PVRSRV_STREAM_FLAG_NONBLOCKING)))
+	/* If stream still exists (has not be nulled in the mean time),
+	 * check for data in the associated stream buffer, sleep/wait if none
+	 */
+	while ((psNode->psStream != NULL) &&
+	       ((uiTmpLen = TLStreamAcquireReadPos(psNode->psStream, &uiTmpOffset)) == 0) &&
+	       (!(psSD->ui32Flags&PVRSRV_STREAM_FLAG_ACQUIRE_NONBLOCKING)) )
 	{
 		PVR_DPF((PVR_DBG_VERBOSE, "TLAcquireDataKM sleeping..."));
 
 		// Loop around if EndOfStream (nothing to read) and wait times out,
 		// exit loop if not time out but data is ready for client
-		while (TLStreamEOS(psSD->psNode->psStream))
+		while ((psNode->psStream != NULL) && TLStreamEOS(psNode->psStream))
 		{
 			eError = OSEventObjectWaitTimeout(psSD->hDataEvent, NO_DATA_WAIT_PERIOD);
-			if ((eError != PVRSRV_OK) && (eError != PVRSRV_ERROR_TIMEOUT))
-				PVR_DPF_RETURN_RC(eError);
-
-			// Check we have been woken up because of data OR because
-			// the stream has been destroyed?
-			//
-			if (psSD->psNode->psStream == NULL)
+			if (eError != PVRSRV_OK)
 			{
-				PVR_DPF((PVR_DBG_VERBOSE, "TLAcquireDataKM awake, but stream now NULL"));
-				PVR_DPF_RETURN_RC(PVRSRV_ERROR_RESOURCE_UNAVAILABLE);
+				/* Return timeout or other error condition to the caller who
+				 * can choose to call again if desired */
+				PVR_DPF_RETURN_RC(eError);
 			}
 		}
 	}
 
-	PVR_DPF((PVR_DBG_VERBOSE, "TLAcquireDataKM awake, buffer start =%d, count=%d ", uiTmpOffset, uiTmpLen));
+	// Check we have been woken up because of data OR because
+	// the stream has been destroyed?
+	if (psNode->psStream == NULL)
+	{
+		PVR_DPF((PVR_DBG_VERBOSE, "TLAcquireDataKM awake, but stream now NULL"));
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_RESOURCE_UNAVAILABLE);
+	}
 
 	// If non blocking then default tmp values get returned, client code must
 	// handle it. if blocking data should now be available, return offset and
@@ -266,25 +305,34 @@ TLServerReleaseDataKM(PTL_STREAM_DESC psSD,
 		 	 		  IMG_UINT32  	  uiReadOffset,
 		 	 		  IMG_UINT32  	  uiReadLen)
 {
-	TL_GLOBAL_GDATA*	psGD = TLGGD();
+	TL_GLOBAL_DATA*		psGD = TLGGD();
 	PTL_SNODE			psNode = 0;
 
 	PVR_DPF_ENTERED;
+
+	/* Unreferenced in release builds */
+	PVR_UNREFERENCED_PARAMETER(uiReadOffset);
 
 	PVR_ASSERT(psSD);
 
 	// Sanity check, quick exit if there are no streams
 	if (psGD->psHead == NULL)
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_ERROR)
+	{
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_ERROR);
+	}
 
 	// Check stream still valid
 	psNode = TLFindStreamNodeByDesc(psSD);
 	if ((psNode == NULL) || (psNode != psSD->psNode))
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_HANDLE_NOT_FOUND)
+	{
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_HANDLE_NOT_FOUND);
+	}
 
 	// Does stream still exist?
 	if (psNode->psStream == NULL)
+	{
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_RESOURCE_UNAVAILABLE);
+	}
 
 	PVR_DPF((PVR_DBG_VERBOSE, "TLReleaseDataKM uiReadOffset=%d, uiReadLen=%d", uiReadOffset, uiReadLen));
 

@@ -136,6 +136,23 @@ PVRSRV_ERROR RGXPostClockSpeedChange(IMG_HANDLE				hDevHandle,
 									 IMG_BOOL				bIdleDevice,
 									 PVRSRV_DEV_POWER_STATE	eCurrentPowerState);
 
+
+/*!
+******************************************************************************
+
+ @Function	RGXDustCountChange
+
+ @Description Change of number of DUSTs
+
+ @Input	   hDevHandle : RGX Device Node
+ @Input	   ui32NumberOfDusts : Number of DUSTs to make transition to
+
+ @Return   PVRSRV_ERROR :
+
+******************************************************************************/
+PVRSRV_ERROR RGXDustCountChange(IMG_HANDLE				hDevHandle,
+								IMG_UINT32				ui32NumberOfDusts);
+
 /*!
 ******************************************************************************
 

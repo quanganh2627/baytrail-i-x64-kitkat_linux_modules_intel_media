@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.36.2.2
+@Title          RGX Core BVNC 1.69.4.4
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,21 +39,21 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_36_2_2_H_
-#define _RGXCONFIG_KM_1_36_2_2_H_
+#ifndef _RGXCORE_KM_1_69_4_4_H_
+#define _RGXCORE_KM_1_69_4_4_H_
 
-/***** Automatically generated file (4/8/2013 10:23:31 AM): Do not edit manually ********************/
-/***** Timestamp:  (4/8/2013 10:23:31 AM)************************************************************/
-/***** CS: @2111706 ******************************************************************/
+/***** Automatically generated file (5/13/2013 9:25:43 AM): Do not edit manually ********************/
+/***** Timestamp:  (5/13/2013 9:25:43 AM)************************************************************/
+/***** CS: @2281645 ******************************************************************/
 
 
 /******************************************************************************
- * BVNC = 1.36.2.2 
+ * BVNC = 1.69.4.4 
  *****************************************************************************/
-#define RGX_BVNC_B 1
-#define RGX_BVNC_V 36
-#define RGX_BVNC_N 2
-#define RGX_BVNC_C 2
+#define RGX_BVNC_KM_B 1
+#define RGX_BVNC_KM_V 69
+#define RGX_BVNC_KM_N 4
+#define RGX_BVNC_KM_C 4
 
 /******************************************************************************
  * Errata 
@@ -67,13 +67,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * Enhancements 
  *****************************************************************************/
 
-/******************************************************************************
-* DDK Defines
-*****************************************************************************/
 
-#define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
-#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
-#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
-#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 
-#endif /* _RGXCONFIG_KM_1_36_2_2_H_ */
+#endif /* _RGXCORE_KM_1_69_4_4_H_ */

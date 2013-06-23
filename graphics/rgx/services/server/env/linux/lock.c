@@ -47,7 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct _OS_LOCK_
 {
-	struct mutex sMutex;
+	PVRSRV_LINUX_MUTEX sMutex;
 };
 
 PVRSRV_ERROR OSLockCreate(POS_LOCK *ppsLock, LOCK_TYPE eLockType)
@@ -64,7 +64,7 @@ PVRSRV_ERROR OSLockCreate(POS_LOCK *ppsLock, LOCK_TYPE eLockType)
 	{
 		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
-	mutex_init(&psLock->sMutex);
+	LinuxInitMutex(&psLock->sMutex);
 
 	*ppsLock = psLock;
 
@@ -78,15 +78,21 @@ IMG_VOID OSLockDestroy(POS_LOCK psLock)
 
 IMG_VOID OSLockAcquire(POS_LOCK psLock)
 {
-	mutex_lock(&psLock->sMutex);
+	LinuxLockMutex(&psLock->sMutex);
 }
 
 IMG_VOID OSLockRelease(POS_LOCK psLock)
 {
-	mutex_unlock(&psLock->sMutex);
+	LinuxUnLockMutex(&psLock->sMutex);
 }
 
 IMG_BOOL IMG_CALLCONV OSLockIsLocked(POS_LOCK psLock)
 {
-	return mutex_is_locked(&psLock->sMutex);
+	return LinuxIsLockedMutex(&psLock->sMutex);
 }
+
+IMG_BOOL IMG_CALLCONV OSLockIsLockedByMe(POS_LOCK psLock)
+{
+	return LinuxIsLockedByMeMutex(&psLock->sMutex);
+}
+

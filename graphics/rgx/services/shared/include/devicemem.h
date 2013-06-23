@@ -532,4 +532,10 @@ DevmemGetPMRData(DEVMEM_MEMDESC *psMemDesc,
 		IMG_HANDLE *hPMR,
 		IMG_DEVMEM_OFFSET_T *puiPMROffset);
 
+PVRSRV_ERROR
+DevmemLocalImport(IMG_HANDLE hBridge,
+				  IMG_HANDLE hExtHandle,
+				  DEVMEM_FLAGS_T uiFlags,
+				  DEVMEM_MEMDESC **ppsMemDescPtr,
+				  IMG_DEVMEM_SIZE_T *puiSizePtr);
 #endif /* #ifndef SRVCLIENT_DEVICEMEM_CLIENT_H */

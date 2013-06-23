@@ -52,7 +52,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "pdump_km.h"
 
+#if defined LINUX
 #include "env_data.h" /* FIXME when this is removed, -Werror should be re-enabled for this file */ 
+#endif
 
 #include "srvkm.h"
 #include "allocmem.h"
@@ -71,7 +73,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * an osfunc.c abstraction or override the entire function in question within
  * env,*,pvr_bridge_k.c
  */
-
 
 PVRSRV_BRIDGE_DISPATCH_TABLE_ENTRY g_BridgeDispatchTable[BRIDGE_DISPATCH_TABLE_ENTRY_COUNT];
 
@@ -212,9 +213,6 @@ PVRSRVDumpDebugInfoKM(IMG_UINT32 ui32VerbLevel)
 	}
 	PVR_LOG(("User requested PVR debug info"));
 
-	/* Dump system specific debug info */
-	PVRSRVSystemDebugInfo();
-
 	PVRSRVDebugRequest(ui32VerbLevel);
 									   
 	return PVRSRV_OK;
@@ -232,7 +230,7 @@ PVRSRVHWOpTimeoutKM(IMG_VOID)
 	OSPanic();
 #endif
 	PVR_LOG(("HW operation timeout, dump server info"));
-	PVRSRVDumpDebugInfoKM(DEBUG_REQUEST_VERBOSITY_MAX);
+	PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_LOW);
 	return PVRSRV_OK;
 }
 
@@ -280,7 +278,7 @@ _SetDispatchTableEntry(IMG_UINT32 ui32Index,
 					   BridgeWrapperFunction pfFunction,
 					   const IMG_CHAR *pszFunctionName)
 {
-	static IMG_UINT32 ui32PrevIndex = ~0UL;		/* -1 */
+	static IMG_UINT32 ui32PrevIndex = IMG_UINT32_MAX;		/* -1 */
 #if !defined(DEBUG)
 	PVR_UNREFERENCED_PARAMETER(pszIOCName);
 #endif
@@ -300,7 +298,7 @@ _SetDispatchTableEntry(IMG_UINT32 ui32Index,
 	 */
 	if(g_BridgeDispatchTable[ui32Index].pfFunction)
 	{
-#if defined(DEBUG_BRIDGE_KM)
+#if defined(DEBUG_BRIDGE_KM_DISPATCH_TABLE)
 		PVR_DPF((PVR_DBG_ERROR,
 				 "%s: BUG!: Adding dispatch table entry for %s clobbers an existing entry for %s",
 				 __FUNCTION__, pszIOCName, g_BridgeDispatchTable[ui32Index].pszIOCName));
@@ -320,26 +318,30 @@ _SetDispatchTableEntry(IMG_UINT32 ui32Index,
 	 * This will currently flag up any gaps > 5 entries.
 	 *
 	 * NOTE: This shouldn't be debug only since switching from debug->release
-	 * etc is likly to modify the available ioctls and thus be a point where
+	 * etc is likely to modify the available ioctls and thus be a point where
 	 * mistakes are exposed. This isn't run at at a performance critical time.
 	 */
-//	if((ui32PrevIndex != (IMG_UINT32)-1) &&
-	if((ui32PrevIndex != ~0UL) &&
+	if((ui32PrevIndex != IMG_UINT32_MAX) &&
 	   ((ui32Index >= ui32PrevIndex + DISPATCH_TABLE_GAP_THRESHOLD) ||
 		(ui32Index <= ui32PrevIndex)))
 	{
-#if defined(DEBUG_BRIDGE_KM)
+#if defined(DEBUG_BRIDGE_KM_DISPATCH_TABLE)
 		PVR_DPF((PVR_DBG_WARNING,
 				 "%s: There is a gap in the dispatch table between indices %u (%s) and %u (%s)",
 				 __FUNCTION__, ui32PrevIndex, g_BridgeDispatchTable[ui32PrevIndex].pszIOCName,
 				 ui32Index, pszIOCName));
 #else
-		PVR_DPF((PVR_DBG_WARNING,
+		PVR_DPF((PVR_DBG_MESSAGE,
 				 "%s: There is a gap in the dispatch table between indices %u and %u (%s)",
 				 __FUNCTION__, (IMG_UINT)ui32PrevIndex, (IMG_UINT)ui32Index, pszIOCName));
 #endif
+#if !defined(PVRSRV_ALLOW_BRIDGE_DISPATCH_TABLE_GAPS)
+		/* In WDDM we do not register all the bridge modules and therefore
+		 * it is natural to have gaps, hence do not panic.
+		 */
 		PVR_DPF((PVR_DBG_ERROR, "NOTE: Enabling DEBUG_BRIDGE_KM_DISPATCH_TABLE may help debug this issue."));
 		OSPanic();
+#endif
 	}
 
 	g_BridgeDispatchTable[ui32Index].pfFunction = pfFunction;
@@ -399,20 +401,20 @@ PVRSRVInitSrvDisconnectKM(CONNECTION_DATA *psConnection,
 IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 					  PVRSRV_BRIDGE_PACKAGE   * psBridgePackageKM)
 {
-
 	IMG_VOID   * psBridgeIn;
 	IMG_VOID   * psBridgeOut;
 	BridgeWrapperFunction pfBridgeHandler;
 	IMG_UINT32   ui32BridgeID = psBridgePackageKM->ui32BridgeID;
 	IMG_INT      err          = -EFAULT;
 
-#if defined(DEBUG_TRACE_BRIDGE_KM)
-	PVR_DPF((PVR_DBG_ERROR, "%s: %s",
+#if defined(DEBUG_BRIDGE_KM_STOP_AT_DISPATCH)
+	PVR_DBG_BREAK;
+#endif
+	
+#if defined(DEBUG_BRIDGE_KM)
+	PVR_DPF((PVR_DBG_MESSAGE, "%s: %s",
 			 __FUNCTION__,
 			 g_BridgeDispatchTable[ui32BridgeID].pszIOCName));
-#endif
-
-#if defined(DEBUG_BRIDGE_KM)
 	g_BridgeDispatchTable[ui32BridgeID].ui32CallCount++;
 	g_BridgeGlobalStats.ui32IOCTLCount++;
 #endif
@@ -421,7 +423,12 @@ IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 	{
 		if(PVRSRVGetInitServerState(PVRSRV_INIT_SERVER_RAN))
 		{
-			if(!PVRSRVGetInitServerState(PVRSRV_INIT_SERVER_SUCCESSFUL))
+			if (ui32BridgeID == PVRSRV_GET_BRIDGE_ID(PVRSRV_BRIDGE_SRVCORE_RELEASEGLOBALEVENTOBJECT))
+			{
+				PVR_DPF((PVR_DBG_MESSAGE, "%s: Allowing release call through.",
+						 __FUNCTION__));
+			}
+			else if (!PVRSRVGetInitServerState(PVRSRV_INIT_SERVER_SUCCESSFUL))
 			{
 				PVR_DPF((PVR_DBG_ERROR, "%s: Initialisation failed.  Driver unusable.",
 						 __FUNCTION__));
@@ -495,23 +502,6 @@ IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 				goto return_fault;
 			}
 		}
-
-		if(psBridgePackageKM->ui32OutBufferSize > 0)
-		{
-			/*
-			 * Copy the output structure as it might contain
-			 * pointers which from our point of view are inputs
-			 */
-			if(CopyFromUserWrapper(psConnection,
-					               ui32BridgeID,
-								   psBridgeOut,
-								   psBridgePackageKM->pvParamOut,
-								   psBridgePackageKM->ui32OutBufferSize)
-			  != PVRSRV_OK)
-			{
-				goto return_fault;
-			}
-		}
 	}
 #else
 	psBridgeIn  = psBridgePackageKM->pvParamIn;
@@ -526,10 +516,19 @@ IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 	}
 	pfBridgeHandler =
 		(BridgeWrapperFunction)g_BridgeDispatchTable[ui32BridgeID].pfFunction;
+	
+	if (pfBridgeHandler == NULL)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: ui32BridgeID = %d is not a registered function!",
+				 __FUNCTION__, ui32BridgeID));
+		goto return_fault;
+	}
+	
 	err = pfBridgeHandler(ui32BridgeID,
 						  psBridgeIn,
 						  psBridgeOut,
 						  psConnection);
+
 	if(err < 0)
 	{
 		goto return_fault;
@@ -558,7 +557,7 @@ IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 #endif
 
 	err = 0;
+
 return_fault:
-	ReleaseHandleBatch(psConnection);
 	return err;
 }

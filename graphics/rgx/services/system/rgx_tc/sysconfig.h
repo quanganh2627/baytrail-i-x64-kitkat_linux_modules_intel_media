@@ -47,85 +47,71 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrsrv_device.h"
 #include "rgxdevice.h"
 
-#define TC_SYSTEM_NAME			"Rogue Test Chip"
-
-/* Valid values for the TC_MEMORY_CONFIG configuration option */
-#define TC_MEMORY_LOCAL			(1)
-#define TC_MEMORY_HOST			(2)
-#define TC_MEMORY_HYBRID		(3)
-
-#define RGX_TC_CORE_CLOCK_SPEED		(90000000)
-#define RGX_TC_MEM_CLOCK_SPEED		(65000000)
-
-/* Memory reserved for use by the PDP DC. */
-#define RGX_TC_RESERVE_DC_MEM_SIZE	(32 * 1024 * 1024)
-#if defined(SUPPORT_ION)
-/* Memory reserved for use by ion. */
-#define RGX_TC_RESERVE_ION_MEM_SIZE (128 * 1024 * 1024)
-#endif
-
-#define PCI_BASEREG_OFFSET_DWORDS	(3)
-
-/* Apollo reg on base register 0 */
-#define SYS_APOLLO_REG_PCI_BASENUM	(0)
-#define SYS_APOLLO_REG_PCI_OFFSET	(SYS_APOLLO_REG_PCI_BASENUM + PCI_BASEREG_OFFSET_DWORDS)
-#define SYS_APOLLO_REG_REGION_SIZE	(0x00010000)
-
-#define SYS_APOLLO_REG_SYS_OFFSET	(0x0000)
-#define SYS_APOLLO_REG_SYS_SIZE		(0x0400)
-
-#define SYS_APOLLO_REG_PLL_OFFSET	(0x1000)
-#define SYS_APOLLO_REG_PLL_SIZE		(0x0400)
-
-/* RGX reg on base register 1 */
-#define SYS_RGX_REG_PCI_BASENUM		(1)
-#define SYS_RGX_REG_PCI_OFFSET		(SYS_RGX_REG_PCI_BASENUM + PCI_BASEREG_OFFSET_DWORDS)
-#define SYS_RGX_REG_REGION_SIZE		(0x00004000)
-
-/* RGX mem (including HP mapping) on base register 2 */
-#define SYS_RGX_MEM_PCI_BASENUM		(2)
-#define SYS_RGX_MEM_PCI_OFFSET		(SYS_RGX_MEM_PCI_BASENUM + PCI_BASEREG_OFFSET_DWORDS)
-#define SYS_RGX_DEV1_MEM_REGION_SIZE	(0x10000000)
-#define SYS_RGX_DEV2_MEM_REGION_SIZE	(0x20000000)
-
-
-static RGX_TIMING_INFORMATION gsRGXTimingInfo = 
+static RGX_TIMING_INFORMATION gsRGXTimingInfo =
 {
-	.ui32CoreClockSpeed		= RGX_TC_CORE_CLOCK_SPEED,
-	.bEnableActivePM		= IMG_FALSE,
-	.bEnableRDPowIsland		= IMG_FALSE,
+	/* ui32CoreClockSpeed */
+	RGX_TC_CORE_CLOCK_SPEED,
+	/* bEnableActivePM */ 
+	IMG_FALSE,
+	/* bEnableRDPowIsland */ 
+	IMG_FALSE
 };
 
 static RGX_DATA gsRGXData =
 {
-	.psRGXTimingInfo = &gsRGXTimingInfo,
+	/* psRGXTimingInfo */
+	&gsRGXTimingInfo
 };
 
 static PVRSRV_DEVICE_CONFIG gsDevices[] = 
 {
 	{
-		.pszName                	= "RGX",
-		.eDeviceType            	= PVRSRV_DEVICE_TYPE_RGX,
+		/* uiFlags */
+#if (TC_MEMORY_CONFIG != TC_MEMORY_DIRECT_MAPPED)
+		0,
+#else
+		PVRSRV_DEVICE_CONFIG_LMA_USE_CPU_ADDR,
+#endif
+		/* pszName */
+		"RGX",
+		/* eDeviceType */
+		PVRSRV_DEVICE_TYPE_RGX,
 
 		/* Device setup information */
-		.sRegsCpuPBase.uiAddr   	= 0,
-		.ui32RegsSize           	= 0,
+		/* sRegsCpuPBase.uiAddr */
+		{ 0 },
+		/* ui32RegsSize */
+		0,
 
-		.ui32IRQ                	= 0,
-		.bIRQIsShared           	= IMG_TRUE,
+		/* ui32IRQ */
+		0,
+		/* bIRQIsShared */
+		IMG_TRUE,
 
-		.hDevData               	= &gsRGXData,
-		.hSysData               	= IMG_NULL,
+		/* hDevData */
+		&gsRGXData,
+		/* hSysData */
+		IMG_NULL,
 
-		.ui32PhysHeapID			= 0,
+		/* ui32PhysHeapID */
+		0,
 
 		/* FIXME */
-		.pfnPrePowerState       	= IMG_NULL,
-		.pfnPostPowerState      	= IMG_NULL,
+		/* pfnPrePowerState */
+		IMG_NULL,
+		/* pfnPostPowerState */
+		IMG_NULL,
 
-		.pfnClockFreqGet        	= IMG_NULL,
+		/* pfnClockFreqGet */
+		IMG_NULL,
 
-		.pfnInterruptHandled		= IMG_NULL,
+		/* pfnInterruptHandled */
+		IMG_NULL,
+		
+		/* eBPDM */
+		RGXFWIF_DM_TA,
+		/* bBPSet */
+		IMG_FALSE
 	}
 };
 
@@ -137,7 +123,7 @@ static IMG_VOID TCLocalCpuPAddrToDevPAddr(IMG_HANDLE hPrivData,
 static IMG_VOID TCLocalDevPAddrToCpuPAddr(IMG_HANDLE hPrivData,
 					  IMG_CPU_PHYADDR *psCpuPAddr,
 					  IMG_DEV_PHYADDR *psDevPAddr);
-#elif (TC_MEMORY_CONFIG == TC_MEMORY_HOST) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
+#elif (TC_MEMORY_CONFIG == TC_MEMORY_HOST) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) || (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
 static IMG_VOID TCSystemCpuPAddrToDevPAddr(IMG_HANDLE hPrivData,
 					   IMG_DEV_PHYADDR *psDevPAddr,
 					   IMG_CPU_PHYADDR *psCpuPAddr);
@@ -145,34 +131,50 @@ static IMG_VOID TCSystemCpuPAddrToDevPAddr(IMG_HANDLE hPrivData,
 static IMG_VOID TCSystemDevPAddrToCpuPAddr(IMG_HANDLE hPrivData,
 					   IMG_CPU_PHYADDR *psCpuPAddr,
 					   IMG_DEV_PHYADDR *psDevPAddr);
-#endif /* (TC_MEMORY_CONFIG == TC_MEMORY_HOST) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) */
+#endif /* (TC_MEMORY_CONFIG == TC_MEMORY_HOST) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) || (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED) */
 
 #if (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL)
 static PHYS_HEAP_FUNCTIONS gsLocalPhysHeapFuncs =
 {
-	.pfnCpuPAddrToDevPAddr	= TCLocalCpuPAddrToDevPAddr,
-	.pfnDevPAddrToCpuPAddr	= TCLocalDevPAddrToCpuPAddr,
+	/* pfnCpuPAddrToDevPAddr */
+	TCLocalCpuPAddrToDevPAddr,
+	/* pfnDevPAddrToCpuPAddr */
+	TCLocalDevPAddrToCpuPAddr,
 };
 
 static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 {
 	{
-		.ui32PhysHeapID		= 0,
-		.eType			= PHYS_HEAP_TYPE_LMA,
-		.sStartAddr		= { 0 },
-		.uiSize			= 0,
-		.pszPDumpMemspaceName	= "LMA",
-		.psMemFuncs		= &gsLocalPhysHeapFuncs,
-		.hPrivData		= IMG_NULL,
+		/* ui32PhysHeapID */
+		0,
+		/* eType */
+		PHYS_HEAP_TYPE_LMA,
+		/* sStartAddr */
+		{ 0 },
+		/* uiSize */
+		 0,
+		/* pszPDumpMemspaceName */
+		"LMA",
+		/* psMemFuncs */
+		&gsLocalPhysHeapFuncs,
+		/* hPrivData */
+		IMG_NULL,
 	},
 	{
-		.ui32PhysHeapID		= 1,
-		.eType			= PHYS_HEAP_TYPE_LMA,
-		.sStartAddr		= { 0 },
-		.uiSize			= 0,
-		.pszPDumpMemspaceName	= "LMA",
-		.psMemFuncs		= &gsLocalPhysHeapFuncs,
-		.hPrivData		= IMG_NULL,
+		/* ui32PhysHeapID */
+		1,
+		/* eType */
+		PHYS_HEAP_TYPE_LMA,
+		/* sStartAddr */
+		{ 0 },
+		/* uiSize */
+		0,
+		/* pszPDumpMemspaceName */
+		"LMA",
+		/* psMemFuncs */
+		&gsLocalPhysHeapFuncs,
+		/* hPrivData */
+		IMG_NULL,
 	},
 #if defined(SUPPORT_ION)
 	{
@@ -196,70 +198,146 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_HOST)
 static PHYS_HEAP_FUNCTIONS gsSystemPhysHeapFuncs =
 {
-	.pfnCpuPAddrToDevPAddr	= TCSystemCpuPAddrToDevPAddr,
-	.pfnDevPAddrToCpuPAddr	= TCSystemDevPAddrToCpuPAddr,
+	/* pfnCpuPAddrToDevPAddr */
+	TCSystemCpuPAddrToDevPAddr,
+	/* pfnDevPAddrToCpuPAddr */
+	TCSystemDevPAddrToCpuPAddr,
 };
 
 static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 {
 	{
-		.ui32PhysHeapID		= 0,
-		.eType			= PHYS_HEAP_TYPE_UMA,
-		.sStartAddr		= { 0 },
-		.uiSize			= 0,
-		.pszPDumpMemspaceName	= "SYSMEM",
-		.psMemFuncs		= &gsSystemPhysHeapFuncs,
-		.hPrivData		= IMG_NULL,
+		/* ui32PhysHeapID */
+		0,
+		/* eType */
+		PHYS_HEAP_TYPE_UMA,
+		/* sStartAddr */
+		{ 0 },
+		/* uiSize */
+		0,
+		/* pszPDumpMemspaceName */
+		"SYSMEM",
+		/* psMemFuncs */
+		&gsSystemPhysHeapFuncs,
+		/* hPrivData */
+		IMG_NULL,
 	}
 };
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
 static PHYS_HEAP_FUNCTIONS gsHybridPhysHeapFuncs =
 {
-	.pfnCpuPAddrToDevPAddr	= TCSystemCpuPAddrToDevPAddr,
-	.pfnDevPAddrToCpuPAddr	= TCSystemDevPAddrToCpuPAddr,
+	/* pfnCpuPAddrToDevPAddr */
+	TCSystemCpuPAddrToDevPAddr,
+	/* pfnDevPAddrToCpuPAddr */
+	TCSystemDevPAddrToCpuPAddr,
 };
 
 static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 {
 	{
-		.ui32PhysHeapID		= 0,
-		.eType			= PHYS_HEAP_TYPE_UMA,
-		.sStartAddr		= { 0 },
-		.uiSize			= 0,
-		.pszPDumpMemspaceName	= "SYSMEM",
-		.psMemFuncs		= &gsHybridPhysHeapFuncs,
-		.hPrivData		= IMG_NULL,
+		/* ui32PhysHeapID */
+		0,
+		/* eType */
+		PHYS_HEAP_TYPE_UMA,
+		/* sStartAddr */
+		{ 0 },
+		/* uiSize */
+		0,
+		/* pszPDumpMemspaceName */
+		"SYSMEM",
+		/* psMemFuncs */
+		&gsHybridPhysHeapFuncs,
+		/* hPrivData */
+		IMG_NULL,
 	},
 	{
-		.ui32PhysHeapID		= 1,
-		.eType			= PHYS_HEAP_TYPE_LMA,
-		.sStartAddr		= { 0 },
-		.uiSize			= 0,
-		.pszPDumpMemspaceName	= "LMA",
-		.psMemFuncs		= &gsHybridPhysHeapFuncs,
-		.hPrivData		= IMG_NULL,
+		/* ui32PhysHeapID */
+		1,
+		/* eType */
+		PHYS_HEAP_TYPE_LMA,
+		/* sStartAddr */
+		{ 0 },
+		/* uiSize */
+		0,
+		/* pszPDumpMemspaceName */
+		"LMA",
+		/* psMemFuncs */
+		&gsHybridPhysHeapFuncs,
+		/* hPrivData */
+		IMG_NULL,
+	}
+};
+#elif (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
+static PHYS_HEAP_FUNCTIONS gsDirectMappedPhysHeapFuncs =
+{
+	/* pfnCpuPAddrToDevPAddr */
+	TCSystemCpuPAddrToDevPAddr,
+	/* pfnDevPAddrToCpuPAddr */
+	TCSystemDevPAddrToCpuPAddr,
+};
+
+static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
+{
+	{
+		/* ui32PhysHeapID */
+		0,
+		/* eType */
+		PHYS_HEAP_TYPE_LMA,
+		/* sStartAddr */
+		{ 0 },
+		/* uiSize */
+		 0,
+		/* pszPDumpMemspaceName */
+		"LMA",
+		/* psMemFuncs */
+		&gsDirectMappedPhysHeapFuncs,
+		/* hPrivData */
+		IMG_NULL,
 	}
 };
 #else
 #error "TC_MEMORY_CONFIG not valid"
 #endif
 
+/* default BIF tiling heap x-stride configurations. */
+static IMG_UINT32 gauiBIFTilingHeapXStrides[RGXFWIF_NUM_BIF_TILING_CONFIGS] =
+{
+	0, /* BIF tiling heap 1 x-stride */
+	1, /* BIF tiling heap 2 x-stride */
+	2, /* BIF tiling heap 3 x-stride */
+	3  /* BIF tiling heap 4 x-stride */
+};
+
 static PVRSRV_SYSTEM_CONFIG gsSysConfig =
 {
-	.pszSystemName			= TC_SYSTEM_NAME,
-	.uiDeviceCount			= sizeof(gsDevices) / sizeof(PVRSRV_DEVICE_CONFIG),
-	.pasDevices			= &gsDevices[0],
-
-	/* Physcial memory heaps */
-	.ui32PhysHeapCount		= sizeof(gsPhysHeapConfig) / sizeof(PHYS_HEAP_CONFIG),
-	.pasPhysHeaps			= &gsPhysHeapConfig[0],
+	/* uiSysFlags */
+	0,
+	/* pszSystemName */
+	TC_SYSTEM_NAME,
+	/* uiDeviceCount */
+	(IMG_UINT32)(sizeof(gsDevices) / sizeof(PVRSRV_DEVICE_CONFIG)),
+	/* pasDevices */
+	&gsDevices[0],
 
 	/* No power management on no HW system */
-	.pfnSysPrePowerState		= IMG_NULL,
-	.pfnSysPostPowerState		= IMG_NULL,
+	/* pfnSysPrePowerState */
+	IMG_NULL,
+	/* pfnSysPostPowerState */
+	IMG_NULL,
 
 	/* no cache snooping */
-	.bHasCacheSnooping		= IMG_FALSE,
+	/* eCacheSnoopingMode */
+	PVRSRV_SYSTEM_SNOOP_NONE,
+	
+	/* Physcial memory heaps */
+	/* pasPhysHeaps */
+	&gsPhysHeapConfig[0],
+	/* ui32PhysHeapCount */
+	(IMG_UINT32)(sizeof(gsPhysHeapConfig) / sizeof(PHYS_HEAP_CONFIG)),
+
+	/* BIF tiling heap config */
+	&gauiBIFTilingHeapXStrides[0],
+	IMG_ARR_NUM_ELEMS(gauiBIFTilingHeapXStrides),
 };
 
 /*****************************************************************************

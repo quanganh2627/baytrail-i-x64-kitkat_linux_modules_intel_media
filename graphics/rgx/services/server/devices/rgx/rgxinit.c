@@ -76,6 +76,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "debug_request_ids.h"
 
 static PVRSRV_ERROR RGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_UINT32 ui32ClientBuildOptions);
+static PVRSRV_ERROR RGXDevVersionString(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_CHAR **ppszVersionString);
 
 #define RGX_MMU_LOG2_PAGE_SIZE_4KB   (12)
 #define RGX_MMU_LOG2_PAGE_SIZE_16KB  (14)
@@ -147,20 +148,22 @@ static IMG_VOID RGXCheckFWActivePowerState(PVRSRV_DEVICE_NODE *psDeviceNode)
 	RGXFWIF_TRACEBUF *psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
 	PVRSRV_ERROR eError = PVRSRV_OK;
 	
-	if (psFWTraceBuf->ePowState == RGXFWIF_APM_IDLE)
+	if (psFWTraceBuf->ePowState == RGXFWIF_POW_IDLE)
 	{
 		/* The FW is IDLE and therefore could be shut down */
 		eError = RGXActivePowerRequest(psDeviceNode);
-		if (eError != PVRSRV_OK)
+
+		if ((eError != PVRSRV_OK) && (eError != PVRSRV_ERROR_DEVICE_POWER_CHANGE_DENIED))
 		{
-			PVR_DPF((PVR_DBG_ERROR,"RGXCheckFWActivePowerState: Failed RGXActivePowerRequest call (device index: %d) with %s", 
+			PVR_DPF((PVR_DBG_WARNING,"RGXCheckFWActivePowerState: Failed RGXActivePowerRequest call (device index: %d) with %s", 
 						psDeviceNode->sDevId.ui32DeviceIndex,
 						PVRSRVGetErrorStringKM(eError)));
+			
+			PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
 		}
 	}
 
 }
-
 
 /*
 	RGX MISR Handler
@@ -168,21 +171,20 @@ static IMG_VOID RGXCheckFWActivePowerState(PVRSRV_DEVICE_NODE *psDeviceNode)
 static IMG_VOID RGX_MISRHandler (IMG_VOID *pvData)
 {
 	PVRSRV_DEVICE_NODE	*psDeviceNode = pvData;
-	PVRSRV_RGXDEV_INFO	*psDevInfo	  = psDeviceNode->pvDevice;
+	PVRSRV_RGXDEV_INFO  *psDevInfo = psDeviceNode->pvDevice;
 
 	g_ui32HostSampleIRQCount = psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount;
 
 	/* Inform other services devices that we have finished an operation */
 	PVRSRVCheckStatus(psDeviceNode);
 
-	/* Check that the server has HWPerf enabled i.e. the stream is created
-	 * and extract the HWPerf data from the FW L1 buffer into the Server 
-	 * L2 stream buffer.
+	/* Give the HWPerf service a chance to transfer some data from the FW
+	 * buffer to the host driver transport layer buffer.
 	 */
-	if (psDevInfo->hHWPerfStream != 0)
-	{
-		RGXHWPerfDataStore(psDevInfo);
-	}
+	RGXHWPerfDataStoreCB(psDeviceNode);
+
+	/* Process all firmware CCBs for pending commands */
+	RGXCheckFirmwareCCBs(psDeviceNode->pvDevice);
 
 	/* Check APM state */
 	if (psDevInfo->pfnActivePowerCheck)
@@ -190,8 +192,6 @@ static IMG_VOID RGX_MISRHandler (IMG_VOID *pvData)
 		psDevInfo->pfnActivePowerCheck(psDeviceNode);
 	}
 
-	/* Process all firmware CCBs for pending commands */
-	RGXCheckFirmwareCCBs(psDeviceNode->pvDevice);
 }
 #endif
 
@@ -235,7 +235,8 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 #endif /* !NO_HARDWARE */
 
 	/* free the export cookies provided to srvinit */
-	DevmemUnexport(psDevInfo->psRGXFWMemDesc, &psDevInfo->sRGXFWExportCookie);
+	DevmemUnexport(psDevInfo->psRGXFWCodeMemDesc, &psDevInfo->sRGXFWCodeExportCookie);
+	DevmemUnexport(psDevInfo->psRGXFWDataMemDesc, &psDevInfo->sRGXFWDataExportCookie);
 
 	/*
 	 * Copy scripts
@@ -266,20 +267,19 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 		psDevInfo->ui32DeviceFlags |= RGXKM_DEVICE_STATE_ZERO_FREELIST;
 	}
 
-
 	/* Initialise lists of ZSBuffers */
 	eError = OSLockCreate(&psDevInfo->hLockZSBuffer,LOCK_TYPE_PASSIVE);
 	PVR_ASSERT(eError == PVRSRV_OK);
 	dllist_init(&psDevInfo->sZSBufferHead);
 	psDevInfo->ui32ZSBufferCurrID = 1;
 
-	eDefaultPowerState = PVRSRV_DEV_POWER_STATE_ON;
-
 	/* Initialise lists of growable Freelists */
 	eError = OSLockCreate(&psDevInfo->hLockFreeList,LOCK_TYPE_PASSIVE);
 	PVR_ASSERT(eError == PVRSRV_OK);
 	dllist_init(&psDevInfo->sFreeListHead);
 	psDevInfo->ui32FreelistCurrID = 1;
+
+	eDefaultPowerState = PVRSRV_DEV_POWER_STATE_ON;
 
 	/* set-up the Active Power Mgmt callback */
 #if !defined(NO_HARDWARE)
@@ -313,11 +313,18 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 	}
 
 #if !defined(NO_HARDWARE)
+	eError = RGXInstallProcessQueuesMISR(&psDevInfo->hProcessQueuesMISR, psDeviceNode);
+	if (eError != PVRSRV_OK)
+	{
+		return eError;
+	}
+
 	/* Register the interrupt handlers */
 	eError = OSInstallMISR(&psDevInfo->pvMISRData,
 									RGX_MISRHandler, psDeviceNode);
 	if (eError != PVRSRV_OK)
 	{
+		(IMG_VOID) OSUninstallMISR(psDevInfo->hProcessQueuesMISR);
 		return eError;
 	}
 
@@ -325,7 +332,8 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 								 RGX_LISRHandler, psDeviceNode);
 	if (eError != PVRSRV_OK)
 	{
-		(IMG_VOID) OSUninstallMISR(psDevInfo->pvLISRData);
+		(IMG_VOID) OSUninstallMISR(psDevInfo->hProcessQueuesMISR);
+		(IMG_VOID) OSUninstallMISR(psDevInfo->pvMISRData);
 		return eError;
 	}
 
@@ -335,32 +343,284 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 	return PVRSRV_OK;
 }
 
+static
+PVRSRV_ERROR RGXAllocateFWCodeRegion(PVRSRV_DEVICE_NODE	*psDeviceNode,
+                                     IMG_DEVMEM_SIZE_T ui32FWCodeAllocSize,
+                                     IMG_UINT32 uiMemAllocFlags)
+{
+ 	PVRSRV_ERROR eError;
+
+#if ! defined(TDMETACODE)
+	PVRSRV_RGXDEV_INFO 	*psDevInfo = psDeviceNode->pvDevice;
+
+	uiMemAllocFlags |= PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE |
+	                   PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC;
+
+	PDUMPCOMMENT("Allocate and export code memory for fw");
+
+	eError = DevmemFwAllocateExportable(psDeviceNode,
+										ui32FWCodeAllocSize,
+										uiMemAllocFlags,
+	                                    &psDevInfo->psRGXFWCodeMemDesc);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"DevmemFwAllocateExportable failed (%u)",
+				eError));
+	}
+
+	return eError;
+
+#else
+	PMR *psTDMetaCodePMR;
+	IMG_DEVMEM_SIZE_T uiMemDescSize;
+	IMG_DEV_VIRTADDR sTmpDevVAddr;
+	PVRSRV_RGXDEV_INFO *psDevInfo = (PVRSRV_RGXDEV_INFO *) psDeviceNode->pvDevice;
+
+	PDUMPCOMMENT("Allocate TD META code memory for fw");
+
+	eError = PhysmemNewTDMetaCodePMR(psDeviceNode,
+	                                 ui32FWCodeAllocSize,
+	                                 12,
+	                                 uiMemAllocFlags,
+	                                 &psTDMetaCodePMR);
+	if(eError != PVRSRV_OK)
+	{
+		goto PMRCreateError;
+	}
+
+	PDUMPCOMMENT("Import TD META code memory for fw");
+
+	/* NB: psTDMetaCodePMR refcount: 1 -> 2 */
+	eError = DevmemLocalImport(IMG_NULL, /* bridge handle not applicable here */
+	                           psTDMetaCodePMR,
+	                           uiMemAllocFlags,
+	                           &psDevInfo->psRGXFWMemDesc,
+	                           &uiMemDescSize);
+	if(eError != PVRSRV_OK)
+	{
+		goto ImportError;
+	}
+
+	eError = DevmemMapToDevice(psDevInfo->psRGXFWMemDesc,
+							   psDevInfo->psFirmwareHeap,
+							   &sTmpDevVAddr);
+	if(eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"Failed to map TD META code PMR (%u)", eError));
+		goto MapError;
+	}
+
+	/* Caution, oddball code follows:
+	   When doing the DevmemLocalImport above, we wrap the PMR in a memdesc and increment
+	   the PMR's refcount. We would like to implicitly say now, that memdesc is our
+	   tracking mechanism for the PMR, and no longer the original pointer to it. The call
+	   to PMRUnimportPMR below does that. For reasons explained below, this is only done
+	   if this function will return successfully.
+
+	   NB: i.e., psTDMetaCodePMR refcount: 2 -> 1
+	*/
+	PMRUnimportPMR(psTDMetaCodePMR);
+
+	return eError;
+
+MapError:
+	DevmemFree(psDevInfo->psRGXFWMemDesc);
+
+ImportError:
+	/* This is done even after the DevmemFree above because as a result of the PMRUnimportPMR
+	   at the end of the function never getting hit on an error condition, the PMR must be
+	   unreferenced "again" as part of the cleanup */
+	PMRUnimportPMR(psTDMetaCodePMR);
+
+PMRCreateError:
+
+	return eError;
+#endif
+}
+
+IMG_EXPORT
+PVRSRV_ERROR PVRSRVRGXInitAllocFWImgMemKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
+										  IMG_DEVMEM_SIZE_T 	uiFWCodeLen,
+									 	  IMG_DEVMEM_SIZE_T 	uiFWDataLen,
+									 	  DEVMEM_EXPORTCOOKIE	**ppsFWCodeAllocServerExportCookie,
+									 	  IMG_DEV_VIRTADDR		*psFWCodeDevVAddrBase,
+									 	  DEVMEM_EXPORTCOOKIE	**ppsFWDataAllocServerExportCookie,
+									 	  IMG_DEV_VIRTADDR		*psFWDataDevVAddrBase)
+{
+	DEVMEM_FLAGS_T		uiMemAllocFlags;
+	PVRSRV_RGXDEV_INFO 	*psDevInfo = psDeviceNode->pvDevice;
+	PVRSRV_ERROR        eError;
+
+	/* set up memory contexts */
+
+	/* Register callbacks for creation of device memory contexts */
+	psDeviceNode->pfnRegisterMemoryContext = RGXRegisterMemoryContext;
+	psDeviceNode->pfnUnregisterMemoryContext = RGXUnregisterMemoryContext;
+
+	/* Create the memory context for the firmware. */
+	eError = DevmemCreateContext(IMG_NULL, psDeviceNode,
+								 DEVMEM_HEAPCFG_META,
+								 &psDevInfo->psKernelDevmemCtx);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitAllocFWImgMemKM: Failed DevmemCreateContext (%u)", eError));
+		goto failed_to_create_ctx;
+	}
+	
+	eError = DevmemFindHeapByName(psDevInfo->psKernelDevmemCtx,
+								  "Firmware", /* FIXME: We need to create an IDENT macro for this string.
+								                 Make sure the IDENT macro is not accessible to userland */
+								  &psDevInfo->psFirmwareHeap);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitAllocFWImgMemKM: Failed DevmemFindHeapByName (%u)", eError));
+		goto failed_to_find_heap;
+	}
+
+	/* 
+	 * Set up Allocation for FW code section 
+	 */
+	uiMemAllocFlags = PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
+	                  PVRSRV_MEMALLOCFLAG_GPU_READABLE | 
+	                  PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
+	                  PVRSRV_MEMALLOCFLAG_CPU_READABLE |
+	                  PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE |
+	                  PVRSRV_MEMALLOCFLAG_GPU_CACHE_INCOHERENT |
+	                  PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE;
+
+
+	eError = RGXAllocateFWCodeRegion(psDeviceNode,
+                                     uiFWCodeLen,
+	                                 uiMemAllocFlags);
+
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"Failed to allocate fw code mem (%u)",
+				eError));
+		goto failFWCodeMemDescAlloc;
+	}
+
+	eError = DevmemExport(psDevInfo->psRGXFWCodeMemDesc,
+	                      &psDevInfo->sRGXFWCodeExportCookie);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"Failed to export fw code mem (%u)",
+				eError));
+		goto failFWCodeMemDescExport;
+	}
+
+	eError = DevmemAcquireDevVirtAddr(psDevInfo->psRGXFWCodeMemDesc,
+	                                  psFWCodeDevVAddrBase);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"Failed to acquire devVAddr for fw code mem (%u)",
+				eError));
+		goto failFWCodeMemDescAqDevVirt;
+	}
+
+	/*
+	* The FW code must be the first allocation in the firmware heap, otherwise
+	* the bootloader will not work (META will not be able to find the bootloader).
+	*/
+	PVR_ASSERT(psFWCodeDevVAddrBase->uiAddr == RGX_FIRMWARE_HEAP_BASE);
+
+	/* 
+	 * Set up Allocation for FW data section 
+	 */
+	uiMemAllocFlags = PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
+	                  PVRSRV_MEMALLOCFLAG_GPU_READABLE | 
+	                  PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
+	                  PVRSRV_MEMALLOCFLAG_CPU_READABLE |
+	                  PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE |
+	                  PVRSRV_MEMALLOCFLAG_GPU_CACHE_INCOHERENT |
+	                  PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE |
+	                  PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE |
+	                  PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC;
+
+	PDUMPCOMMENT("Allocate and export data memory for fw");
+
+	eError = DevmemFwAllocateExportable(psDeviceNode,
+										uiFWDataLen,
+										uiMemAllocFlags,
+	                                    &psDevInfo->psRGXFWDataMemDesc);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"Failed to allocate fw data mem (%u)",
+				eError));
+		goto failFWDataMemDescAlloc;
+	}
+
+	eError = DevmemExport(psDevInfo->psRGXFWDataMemDesc,
+	                      &psDevInfo->sRGXFWDataExportCookie);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"Failed to export fw data mem (%u)",
+				eError));
+		goto failFWDataMemDescExport;
+	}
+
+	eError = DevmemAcquireDevVirtAddr(psDevInfo->psRGXFWDataMemDesc,
+	                                  psFWDataDevVAddrBase);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"Failed to acquire devVAddr for fw data mem (%u)",
+				eError));
+		goto failFWDataMemDescAqDevVirt;
+	}
+
+	*ppsFWCodeAllocServerExportCookie = &psDevInfo->sRGXFWCodeExportCookie;
+	*ppsFWDataAllocServerExportCookie = &psDevInfo->sRGXFWDataExportCookie;
+
+	return PVRSRV_OK;
+
+
+failFWDataMemDescAqDevVirt:
+
+	DevmemUnexport(psDevInfo->psRGXFWDataMemDesc, &psDevInfo->sRGXFWDataExportCookie);
+failFWDataMemDescExport:
+
+	DevmemFwFree(psDevInfo->psRGXFWCodeMemDesc);
+failFWDataMemDescAlloc:
+
+	DevmemReleaseDevVirtAddr(psDevInfo->psRGXFWCodeMemDesc);
+failFWCodeMemDescAqDevVirt:
+
+	DevmemUnexport(psDevInfo->psRGXFWCodeMemDesc, &psDevInfo->sRGXFWCodeExportCookie);
+failFWCodeMemDescExport:
+
+	DevmemFwFree(psDevInfo->psRGXFWCodeMemDesc);
+failFWCodeMemDescAlloc:
+
+failed_to_find_heap:
+	DevmemDestroyContext(psDevInfo->psKernelDevmemCtx);
+failed_to_create_ctx:
+
+	return eError;
+}
 
 /*
  * PVRSRVRGXInitFirmwareKM
  */ 
 IMG_EXPORT
 PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode, 
-									 IMG_DEVMEM_SIZE_T			ui32FWMemAllocSize,
-									 DEVMEM_EXPORTCOOKIE		**ppsFWMemAllocServerExportCookie,
-									 IMG_DEV_VIRTADDR			*psFWMemDevVAddrBase,
-									 IMG_UINT64					*pui64FWHeapBase,
-									 RGXFWIF_DEV_VIRTADDR		*psRGXFwInit,
-									 IMG_BOOL					bEnableSignatureChecks,
-									 IMG_UINT32					ui32SignatureChecksBufSize,
-									 IMG_UINT32					ui32RGXFWAlignChecksSize,
-									 IMG_UINT32					*pui32RGXFWAlignChecks,
-									 IMG_UINT32					ui32ConfigFlags,
-									 IMG_UINT32					ui32LogType,
-									 RGXFWIF_COMPCHECKS_BVNC	*psClientBVNC)
+									    RGXFWIF_DEV_VIRTADDR		*psRGXFwInit,
+									    IMG_BOOL					bEnableSignatureChecks,
+									    IMG_UINT32					ui32SignatureChecksBufSize,
+									    IMG_UINT32					ui32HWPerfFWBufSizeKB,
+									    IMG_UINT32					ui32RGXFWAlignChecksSize,
+									    IMG_UINT32					*pui32RGXFWAlignChecks,
+									    IMG_UINT32					ui32ConfigFlags,
+									    IMG_UINT32					ui32LogType,
+									    RGXFWIF_COMPCHECKS_BVNC     *psClientBVNC)
 {
-	PVRSRV_RGXDEV_INFO			*psDevInfo = psDeviceNode->pvDevice;
 	PVRSRV_ERROR				eError = PVRSRV_OK;
 	RGXFWIF_COMPCHECKS_BVNC_DECLARE_AND_INIT(sBVNC);
 	IMG_BOOL bCompatibleAll, bCompatibleVersion, bCompatibleLenMax, bCompatibleBNC, bCompatibleV;
+	IMG_UINT32 ui32NumBIFTilingConfigs = 0, *pui32BIFTilingXStrides, i;
+
 
 	/* Check if BVNC numbers of client and driver are compatible */
-	rgx_bvnc_packed(&sBVNC.ui32BNC, sBVNC.aszV, sBVNC.ui32VLenMax, RGX_BVNC_B, RGX_BVNC_V_ST, RGX_BVNC_N, RGX_BVNC_C);
+	rgx_bvnc_packed(&sBVNC.ui32BNC, sBVNC.aszV, sBVNC.ui32VLenMax, RGX_BVNC_KM_B, RGX_BVNC_KM_V_ST, RGX_BVNC_KM_N, RGX_BVNC_KM_C);
 
 	RGX_BVNC_EQUAL(sBVNC, *psClientBVNC, bCompatibleAll, bCompatibleVersion, bCompatibleLenMax, bCompatibleBNC, bCompatibleV);
 	
@@ -434,43 +694,37 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 				RGX_BVNC_PACKED_EXTR_C(*psClientBVNC)));
 	}
 
-	*pui64FWHeapBase = RGX_FIRMWARE_HEAP_BASE;
+	GetNumBifTilingHeapConfigs(&ui32NumBIFTilingConfigs);
 
-	/* Register callbacks for creation of device memory contexts */
-	psDeviceNode->pfnRegisterMemoryContext = RGXRegisterMemoryContext;
-	psDeviceNode->pfnUnregisterMemoryContext = RGXUnregisterMemoryContext;
-
-	/* Create the memory context for the firmware. */
-	eError = DevmemCreateContext(IMG_NULL, psDeviceNode,
-								 DEVMEM_HEAPCFG_META,
-								 &psDevInfo->psKernelDevmemCtx);
-	if (eError != PVRSRV_OK)
+	pui32BIFTilingXStrides = OSAllocMem(sizeof(IMG_UINT32) * ui32NumBIFTilingConfigs);
+	if(pui32BIFTilingXStrides == IMG_NULL)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"DevInitRGXPart1: Failed DevmemCreateContext (%u)", eError));
-		goto failed_to_create_ctx;
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitFirmwareKM: OSAllocMem failed (%u)", eError));
+		goto failed_init_firmware;
 	}
-	
-	eError = DevmemFindHeapByName(psDevInfo->psKernelDevmemCtx,
-								  "Firmware", /* FIXME: We need to create an IDENT macro for this string.
-								                 Make sure the IDENT macro is not accessible to userland */
-								  &psDevInfo->psFirmwareHeap);
-	if (eError != PVRSRV_OK)
+	for(i = 0; i < ui32NumBIFTilingConfigs; i++)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"DevInitRGXPart1: Failed DevmemFindHeapByName (%u)", eError));
-		goto failed_to_find_heap;
+		eError = GetBIFTilingHeapXStride(i+1, &pui32BIFTilingXStrides[i]);
+		if(eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitFirmwareKM: GetBIFTilingHeapXStride for heap %u failed (%u)",
+			         i + 1, eError));
+			goto failed_init_firmware;
+		}
 	}
 
 	eError = RGXSetupFirmware(psDeviceNode, 
-							  ui32FWMemAllocSize,
-							  ppsFWMemAllocServerExportCookie,
-							  psFWMemDevVAddrBase,
-							  bEnableSignatureChecks, 
-							  ui32SignatureChecksBufSize,
-							  ui32RGXFWAlignChecksSize,
-							  pui32RGXFWAlignChecks,
-							  ui32ConfigFlags,
-							  ui32LogType,
-							  psRGXFwInit);
+							     bEnableSignatureChecks, 
+							     ui32SignatureChecksBufSize,
+							     ui32HWPerfFWBufSizeKB,
+							     ui32RGXFWAlignChecksSize,
+							     pui32RGXFWAlignChecks,
+							     ui32ConfigFlags,
+							     ui32LogType,
+							     ui32NumBIFTilingConfigs,
+							     pui32BIFTilingXStrides,
+							     psRGXFwInit);
+
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitFirmwareKM: RGXSetupFirmware failed (%u)", eError));
@@ -480,14 +734,14 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 	return eError;
 
 failed_init_firmware:
-failed_to_find_heap:
-	DevmemDestroyContext(psDevInfo->psKernelDevmemCtx);
-failed_to_create_ctx:
 
 failed_to_pass_compatibility_check:
 	PVR_ASSERT(eError != PVRSRV_OK);
 	return eError;
 }
+
+
+
 
 /* See device.h for function declaration */
 static PVRSRV_ERROR RGXAllocUFOBlock(PVRSRV_DEVICE_NODE *psDeviceNode,
@@ -498,18 +752,18 @@ static PVRSRV_ERROR RGXAllocUFOBlock(PVRSRV_DEVICE_NODE *psDeviceNode,
 	PVRSRV_RGXDEV_INFO *psDevInfo;
 	PVRSRV_ERROR eError;
 	RGXFWIF_DEV_VIRTADDR pFirmwareAddr;
-	IMG_DEVMEM_SIZE_T ui32UFOBlockSize = sizeof(IMG_UINT32);
+	IMG_DEVMEM_SIZE_T uiUFOBlockSize = sizeof(IMG_UINT32);
 	IMG_DEVMEM_ALIGN_T ui32UFOBlockAlign = sizeof(IMG_UINT32);
 
 	psDevInfo = psDeviceNode->pvDevice;
 
 	/* Size and align are 'expanded' because we request an Exportalign allocation */
 	DevmemExportalignAdjustSizeAndAlign(psDevInfo->psFirmwareHeap,
-										&ui32UFOBlockSize,
+										&uiUFOBlockSize,
 										&ui32UFOBlockAlign);
 
 	eError = DevmemFwAllocateExportable(psDeviceNode,
-										ui32UFOBlockSize,
+										uiUFOBlockSize,
 										PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
 										PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE |
 										PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC |
@@ -526,12 +780,12 @@ static PVRSRV_ERROR RGXAllocUFOBlock(PVRSRV_DEVICE_NODE *psDeviceNode,
 
 	DevmemPDumpLoadMem(*psMemDesc,
 					   0,
-					   ui32UFOBlockSize,
+					   uiUFOBlockSize,
 					   PDUMP_FLAGS_CONTINUOUS);
 
 	RGXSetFirmwareAddress(&pFirmwareAddr, *psMemDesc, 0, RFW_FWADDR_FLAG_NONE);
 	*puiSyncPrimVAddr = pFirmwareAddr.ui32Addr;
-	*puiSyncPrimBlockSize = ui32UFOBlockSize;
+	*puiSyncPrimBlockSize = TRUNCATE_64BITS_TO_32BITS(uiUFOBlockSize);
 
 	return PVRSRV_OK;
 
@@ -545,10 +799,11 @@ static IMG_VOID RGXFreeUFOBlock(PVRSRV_DEVICE_NODE *psDeviceNode,
 								DEVMEM_MEMDESC *psMemDesc)
 {
 	/*
-		We know that only if the system has cache snooping then
-		the UFO data might be cached
+		If the system has snooping of the device cache then the UFO block
+		might be in the cache so we need to flush it out before freeing
+		the memory
 	*/
-	if (PVRSRVSystemHasCacheSnooping())
+	if (PVRSRVSystemSnoopingOfDeviceCache())
 	{
 		RGXFWIF_KCCB_CMD sFlushInvalCmd;
 		PVRSRV_ERROR eError;
@@ -619,6 +874,7 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 #if !defined(NO_HARDWARE)
 		(IMG_VOID) OSUninstallDeviceLISR(psDevInfo->pvLISRData);
 		(IMG_VOID) OSUninstallMISR(psDevInfo->pvMISRData);
+		(IMG_VOID) OSUninstallMISR(psDevInfo->hProcessQueuesMISR);
 #endif /* !NO_HARDWARE */
 
 		/* Remove the device from the power manager */
@@ -669,13 +925,19 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 
 	RGX_DeInitHeaps(psDevMemoryInfo);
 
-	if (DevmemIsValidExportCookie(&psDevInfo->sRGXFWExportCookie))
+	if (DevmemIsValidExportCookie(&psDevInfo->sRGXFWCodeExportCookie))
 	{
 		/* if the export cookie is valid, the init sequence failed */
 		PVR_DPF((PVR_DBG_ERROR,"DevDeInitRGX: FW Export cookie still valid (should have been unexported at init time)"));
-		DevmemUnexport(psDevInfo->psRGXFWMemDesc, &psDevInfo->sRGXFWExportCookie);
+		DevmemUnexport(psDevInfo->psRGXFWCodeMemDesc, &psDevInfo->sRGXFWCodeExportCookie);
 	}
 
+	if (DevmemIsValidExportCookie(&psDevInfo->sRGXFWDataExportCookie))
+	{
+		/* if the export cookie is valid, the init sequence failed */
+		PVR_DPF((PVR_DBG_ERROR,"DevDeInitRGX: FW Export cookie still valid (should have been unexported at init time)"));
+		DevmemUnexport(psDevInfo->psRGXFWCodeMemDesc, &psDevInfo->sRGXFWDataExportCookie);
+	}
 	/*
 	   Free the firmware allocations.
 	 */
@@ -714,7 +976,12 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 static IMG_VOID RGXDebugRequestNotify(PVRSRV_DBGREQ_HANDLE hDbgReqestHandle, IMG_UINT32 ui32VerbLevel)
 {
 	PVRSRV_DEVICE_NODE *psDeviceNode = hDbgReqestHandle;
-	RGXDebugRequestProcess(psDeviceNode->pvDevice, IMG_TRUE, ui32VerbLevel);
+
+	/* Only action the request if we've fully init'ed */
+	if (g_bDevInit2Done)
+	{
+		RGXDebugRequestProcess(psDeviceNode->pvDevice, ui32VerbLevel);
+	}
 }
 
 #if defined(PDUMP)
@@ -765,14 +1032,6 @@ static PVRSRV_ERROR RGX_InitHeaps(DEVICE_MEMORY_INFO *psNewMemoryInfo)
 
 	psDeviceMemoryHeapCursor++;/* advance to the next heap */
 	
-	/************* 3D Parameters ***************/
-    psDeviceMemoryHeapCursor->pszName = RGX_3DPARAMETERS_HEAP_IDENT;
-    psDeviceMemoryHeapCursor->sHeapBaseAddr.uiAddr = RGX_3DPARAMETERS_HEAP_BASE;
-	psDeviceMemoryHeapCursor->uiHeapLength = RGX_3DPARAMETERS_HEAP_SIZE;
-	psDeviceMemoryHeapCursor->uiLog2DataPageSize = RGX_MMU_LOG2_PAGE_SIZE_4KB;
-
-	psDeviceMemoryHeapCursor++;/* advance to the next heap */
-
 	/************* USC code ***************/
     psDeviceMemoryHeapCursor->pszName = RGX_USCCODE_HEAP_IDENT;
     psDeviceMemoryHeapCursor->sHeapBaseAddr.uiAddr = RGX_USCCODE_HEAP_BASE;
@@ -792,22 +1051,16 @@ static PVRSRV_ERROR RGX_InitHeaps(DEVICE_MEMORY_INFO *psNewMemoryInfo)
 	/************ Tiling Heaps ************/
 	#define INIT_TILING_HEAP(N) \
 	do { \
-   		psDeviceMemoryHeapCursor->pszName = RGX_TILING_XSTRIDE ## N ## _HEAP_IDENT; \
-   		psDeviceMemoryHeapCursor->sHeapBaseAddr.uiAddr = RGX_TILING_XSTRIDE ## N ## _HEAP_BASE; \
-		psDeviceMemoryHeapCursor->uiHeapLength = RGX_TILING_XSTRIDE ## N ## _HEAP_SIZE; \
+   		psDeviceMemoryHeapCursor->pszName = RGX_BIF_TILING_HEAP_ ## N ## _IDENT; \
+   		psDeviceMemoryHeapCursor->sHeapBaseAddr.uiAddr = RGX_BIF_TILING_HEAP_ ## N ## _BASE; \
+		psDeviceMemoryHeapCursor->uiHeapLength = RGX_BIF_TILING_HEAP_SIZE; \
 		psDeviceMemoryHeapCursor->uiLog2DataPageSize = RGX_MMU_LOG2_PAGE_SIZE_4KB; \
 		psDeviceMemoryHeapCursor++; \
 	} while (0)
-
-	INIT_TILING_HEAP(0);
 	INIT_TILING_HEAP(1);
 	INIT_TILING_HEAP(2);
 	INIT_TILING_HEAP(3);
 	INIT_TILING_HEAP(4);
-	INIT_TILING_HEAP(5);
-	INIT_TILING_HEAP(6);
-	INIT_TILING_HEAP(7);
-
 	#undef INIT_TILING_HEAP
 
 	/************* HWBRN37200 ***************/
@@ -883,7 +1136,7 @@ PVRSRV_ERROR RGXRegisterDevice (PVRSRV_DEVICE_NODE *psDeviceNode)
 	PVRSRV_RGXDEV_INFO	*psDevInfo;
 
 	/* pdump info about the core */
-	PDUMPCOMMENT("RGX Version Information: %s", RGX_BVNC);
+	PDUMPCOMMENT("RGX Version Information (KM): %s", RGX_BVNC_KM);
 	
 	#if defined(RGX_FEATURE_SYSTEM_CACHE)
 	PDUMPCOMMENT("RGX System Level Cache is present");
@@ -945,6 +1198,12 @@ PVRSRV_ERROR RGXRegisterDevice (PVRSRV_DEVICE_NODE *psDeviceNode)
 	
 	/* Register callback for checking the device's health */
 	psDeviceNode->pfnUpdateHealthStatus = RGXUpdateHealthStatus;
+
+	/* Register method to service the FW HWPerf buffer */
+	psDeviceNode->pfnServiceHWPerf = RGXHWPerfDataStoreCB;
+
+	/* Register callback for getting the device version information string */
+	psDeviceNode->pfnDeviceVersionString = RGXDevVersionString;
 
 
 	/*********************
@@ -1276,7 +1535,7 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_FWAgainstDriver(PVRSRV_RGXDEV_INF
 	RGXFWIF_COMPCHECKS_BVNC_DECLARE_AND_INIT(sBVNC);
 	PVRSRV_ERROR				eError;
 	
-	rgx_bvnc_packed(&sBVNC.ui32BNC, sBVNC.aszV, sBVNC.ui32VLenMax, RGX_BVNC_B, RGX_BVNC_V_ST, RGX_BVNC_N, RGX_BVNC_C);
+	rgx_bvnc_packed(&sBVNC.ui32BNC, sBVNC.aszV, sBVNC.ui32VLenMax, RGX_BVNC_KM_B, RGX_BVNC_KM_V_ST, RGX_BVNC_KM_N, RGX_BVNC_KM_C);
 #endif
 
 #if defined(PDUMP)
@@ -1420,14 +1679,19 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_FWAgainstDriver(PVRSRV_RGXDEV_INF
  @Return   PVRSRV_ERROR - depending on mismatch found
 
 ******************************************************************************/
+#if ((!defined(NO_HARDWARE))&&(!defined(EMULATOR)))
+#define TARGET_SILICON  /* definition for everything that is not emu and not nohw configuration */
+#endif
+
+#if defined(FIX_HW_BRN_38835)
 #define COMPAT_BVNC_MASK_B
 #define COMPAT_BVNC_MASK_V
-#define COMPAT_BVNC_MASK_C
-#if !defined(EMULATOR)
+#endif
+
 static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_HWAgainstDriver(PVRSRV_RGXDEV_INFO *psDevInfo,
 																	RGXFWIF_INIT *psRGXFWInit)
 {
-#if defined(PDUMP) || (!defined(NO_HARDWARE))
+#if defined(PDUMP) || defined(TARGET_SILICON)
 	IMG_UINT32 ui32MaskBNC = RGX_BVNC_PACK_MASK_B |
 								RGX_BVNC_PACK_MASK_N |
 								RGX_BVNC_PACK_MASK_C;
@@ -1438,12 +1702,12 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_HWAgainstDriver(PVRSRV_RGXDEV_INF
 	RGXFWIF_COMPCHECKS_BVNC_DECLARE_AND_INIT(sSWBVNC);
 #endif
 
-#if !defined(NO_HARDWARE)
+#if defined(TARGET_SILICON)
 	RGXFWIF_COMPCHECKS_BVNC_DECLARE_AND_INIT(sHWBVNC);
 	IMG_BOOL bCompatibleAll, bCompatibleVersion, bCompatibleLenMax, bCompatibleBNC, bCompatibleV;
 #endif
 
-#if defined(PDUMP) || (!defined(NO_HARDWARE))
+#if defined(PDUMP) || defined(TARGET_SILICON)
 
 #if defined(COMPAT_BVNC_MASK_B)
 	ui32MaskBNC &= ~RGX_BVNC_PACK_MASK_B;
@@ -1458,8 +1722,27 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_HWAgainstDriver(PVRSRV_RGXDEV_INF
 	ui32MaskBNC &= ~RGX_BVNC_PACK_MASK_C;
 #endif
 	
-	rgx_bvnc_packed(&sSWBVNC.ui32BNC, sSWBVNC.aszV, sSWBVNC.ui32VLenMax, RGX_BVNC_B, RGX_BVNC_V_ST, RGX_BVNC_N, RGX_BVNC_C);
+	rgx_bvnc_packed(&sSWBVNC.ui32BNC, sSWBVNC.aszV, sSWBVNC.ui32VLenMax, RGX_BVNC_KM_B, RGX_BVNC_KM_V_ST, RGX_BVNC_KM_N, RGX_BVNC_KM_C);
 
+#if defined(FIX_HW_BRN_38344)
+	if (RGX_BVNC_KM_C >= 10)
+	{
+		ui32MaskBNC &= ~RGX_BVNC_PACK_MASK_C;
+	}
+#endif
+
+	if ((ui32MaskBNC != (RGX_BVNC_PACK_MASK_B | RGX_BVNC_PACK_MASK_N | RGX_BVNC_PACK_MASK_C)) || bMaskV)
+	{
+		PVR_LOG(("Compatibility checks: Ignoring fields: '%s%s%s%s' of HW BVNC.",
+				((!(ui32MaskBNC & RGX_BVNC_PACK_MASK_B))?("B"):("")), 
+				((bMaskV)?("V"):("")), 
+				((!(ui32MaskBNC & RGX_BVNC_PACK_MASK_N))?("N"):("")), 
+				((!(ui32MaskBNC & RGX_BVNC_PACK_MASK_C))?("C"):(""))));
+	}
+#endif
+
+#if defined(EMULATOR)
+	PVR_LOG(("Compatibility checks for emu target: Ignoring HW BVNC checks."));
 #endif
 
 #if defined(PDUMP)
@@ -1495,6 +1778,8 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_HWAgainstDriver(PVRSRV_RGXDEV_INF
 
 	if (ui32MaskBNC != 0)
 	{
+		PDUMPIF("DISABLE_HWBNC_CHECK");
+		PDUMPELSE("DISABLE_HWBNC_CHECK");
 		PDUMPCOMMENT("Compatibility check: HW BNC and FW BNC");
 		eError = DevmemPDumpDevmemPol32(psDevInfo->psRGXFWIfInitMemDesc,
 												offsetof(RGXFWIF_INIT, sRGXCompChecks) + 
@@ -1509,10 +1794,13 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_HWAgainstDriver(PVRSRV_RGXDEV_INF
 			PVR_DPF((PVR_DBG_ERROR, "RGXDevInitCompatCheck: problem pdumping POL for psRGXFWIfInitMemDesc (%d)", eError));
 			return eError;
 		}
+		PDUMPFI("DISABLE_HWBNC_CHECK");
 	}
 	if (!bMaskV)
 	{
 		IMG_UINT32 i;
+		PDUMPIF("DISABLE_HWV_CHECK");
+		PDUMPELSE("DISABLE_HWV_CHECK");
 		for (i = 0; i < sSWBVNC.ui32VLenMax; i += sizeof(IMG_UINT32))
 		{
 			PDUMPCOMMENT("Compatibility check: HW V and FW V");
@@ -1531,10 +1819,11 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_HWAgainstDriver(PVRSRV_RGXDEV_INF
 				return eError;
 			}
 		}
+		PDUMPFI("DISABLE_HWV_CHECK");
 	}
 #endif
 
-#if !defined(NO_HARDWARE)
+#if defined(TARGET_SILICON)
 	if (psRGXFWInit == IMG_NULL)
 	{
 		return PVRSRV_ERROR_INVALID_PARAMS;
@@ -1552,7 +1841,29 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_HWAgainstDriver(PVRSRV_RGXDEV_INF
 	}
 
 	RGX_BVNC_EQUAL(sSWBVNC, sHWBVNC, bCompatibleAll, bCompatibleVersion, bCompatibleLenMax, bCompatibleBNC, bCompatibleV);
-	
+
+#if defined(FIX_HW_BRN_42480)
+	if (!bCompatibleAll && bCompatibleVersion)
+	{
+		if ((RGX_BVNC_PACKED_EXTR_B(sSWBVNC) == 1) &&
+			!(OSStringCompare(RGX_BVNC_PACKED_EXTR_V(sSWBVNC),"76")) &&
+			(RGX_BVNC_PACKED_EXTR_N(sSWBVNC) == 4) &&
+			(RGX_BVNC_PACKED_EXTR_C(sSWBVNC) == 6))
+		{
+			if ((RGX_BVNC_PACKED_EXTR_B(sHWBVNC) == 1) &&
+				!(OSStringCompare(RGX_BVNC_PACKED_EXTR_V(sHWBVNC),"69")) &&
+				(RGX_BVNC_PACKED_EXTR_N(sHWBVNC) == 4) &&
+				(RGX_BVNC_PACKED_EXTR_C(sHWBVNC) == 4))
+			{
+				bCompatibleBNC = IMG_TRUE;
+				bCompatibleLenMax = IMG_TRUE;
+				bCompatibleV = IMG_TRUE;
+				bCompatibleAll = IMG_TRUE;
+			}
+		}
+	}
+#endif
+
 	if (!bCompatibleAll)
 	{
 		if (!bCompatibleVersion)
@@ -1619,7 +1930,6 @@ static PVRSRV_ERROR RGXDevInitCompatCheck_BVNC_HWAgainstDriver(PVRSRV_RGXDEV_INF
 
 	return PVRSRV_OK;
 }
-#endif
 
 /*!
 *******************************************************************************
@@ -1641,6 +1951,9 @@ static PVRSRV_ERROR RGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_
 	PVRSRV_ERROR		eError;
 	PVRSRV_RGXDEV_INFO 	*psDevInfo = psDeviceNode->pvDevice;
 	RGXFWIF_INIT		*psRGXFWInit = IMG_NULL;
+#if !defined(NO_HARDWARE)
+	IMG_UINT32			ui32RegValue;
+#endif
 
 	/* Ensure it's a RGX device */
 	if(psDeviceNode->sDevId.eDeviceType != PVRSRV_DEVICE_TYPE_RGX)
@@ -1666,7 +1979,7 @@ static PVRSRV_ERROR RGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_
 
 	LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
 	{
-		if(psRGXFWInit->sRGXCompChecks.bUpdated)
+		if(*((volatile IMG_BOOL *)&psRGXFWInit->sRGXCompChecks.bUpdated))
 		{
 			/* No need to wait if the FW has already updated the values */
 			break;
@@ -1674,12 +1987,32 @@ static PVRSRV_ERROR RGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_
 		OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
 	} END_LOOP_UNTIL_TIMEOUT();
 
-	if (!psRGXFWInit->sRGXCompChecks.bUpdated)
+	ui32RegValue = 0;
+	eError = RGXReadMETAReg(psDevInfo, META_CR_T0ENABLE_OFFSET, &ui32RegValue);
+
+	if (eError != PVRSRV_OK)
+	{
+		PVR_LOG(("%s: Reading RGX META register failed. Is the GPU correctly powered up? (%u)",
+				__FUNCTION__, eError));
+		PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
+		goto chk_exit;
+	}
+
+	if (!(ui32RegValue & META_CR_TXENABLE_ENABLE_BIT))
+	{
+		eError = PVRSRV_ERROR_META_THREAD0_NOT_ENABLED;
+		PVR_DPF((PVR_DBG_ERROR,"%s: RGX META is not running. Is the GPU correctly powered up? %d (%u)",
+				__FUNCTION__, psRGXFWInit->sRGXCompChecks.bUpdated, eError));
+		PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
+		goto chk_exit;
+	}
+	
+	if (!*((volatile IMG_BOOL *)&psRGXFWInit->sRGXCompChecks.bUpdated))
 	{
 		eError = PVRSRV_ERROR_TIMEOUT;
 		PVR_DPF((PVR_DBG_ERROR,"%s: Missing compatibility info from FW (%u)",
 				__FUNCTION__, eError));
-		RGXDumpDebugInfo(psDevInfo, IMG_FALSE);
+		PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
 		goto chk_exit;
 	}
 #endif
@@ -1714,13 +2047,11 @@ static PVRSRV_ERROR RGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_
 		goto chk_exit;
 	}
 
-#if !defined(EMULATOR)
 	eError = RGXDevInitCompatCheck_BVNC_HWAgainstDriver(psDevInfo, psRGXFWInit);
 	if (eError != PVRSRV_OK)
 	{
 		goto chk_exit;
 	}
-#endif
 
 	eError = PVRSRV_OK;
 chk_exit:
@@ -1730,6 +2061,262 @@ chk_exit:
 	return eError;
 }
 
+#define	MAKESTRING(x) #x
+#define TOSTRING(x) MAKESTRING(x)
+
+
+
+
+
+static PVRSRV_ERROR
+ValidateFWImage(
+	IMG_CHAR *pcFWImgDestAddr,
+	IMG_CHAR *pcFWImgSrcAddr,
+	IMG_SIZE_T uiFWImgLen,
+	IMG_CHAR *pcFWImgSigAddr,
+	IMG_UINT64 ui64FWSigLen)
+{
+#if defined(DEBUG)
+	if(OSMemCmp(pcFWImgDestAddr, pcFWImgSrcAddr, uiFWImgLen) != 0)
+	{
+		return PVRSRV_ERROR_INIT_TDMETACODE_PAGES_FAIL;
+	}
+
+	PVR_UNREFERENCED_PARAMETER(pcFWImgSigAddr);
+	PVR_UNREFERENCED_PARAMETER(ui64FWSigLen);
+#else
+	PVR_UNREFERENCED_PARAMETER(pcFWImgDestAddr);
+	PVR_UNREFERENCED_PARAMETER(uiFWImgLen);
+	PVR_UNREFERENCED_PARAMETER(pcFWImgSigAddr);
+	PVR_UNREFERENCED_PARAMETER(ui64FWSigLen);
+#endif
+
+	return PVRSRV_OK;
+}
+
+static PVRSRV_ERROR
+PMRCopy(PMR *psDstPMR, PMR *psSrcPMR, IMG_SIZE_T uiMaxCopyLen)
+{
+	IMG_CHAR acBuf[512];
+	IMG_UINT64 uiBytesCopied;
+	PVRSRV_ERROR eStatus;
+	
+	uiBytesCopied = 0;
+	while(uiBytesCopied < uiMaxCopyLen)
+	{
+		IMG_SIZE_T uiRead, uiWritten;
+		IMG_SIZE_T uiCopyAmt;
+		uiCopyAmt = sizeof(acBuf) > uiMaxCopyLen ? uiMaxCopyLen : sizeof(acBuf);
+		eStatus = PMR_ReadBytes(psSrcPMR,
+		                        uiBytesCopied,
+		                        acBuf,
+		                        uiCopyAmt,
+		                        &uiRead);
+		if(eStatus != PVRSRV_OK)
+		{
+			return eStatus;
+		}
+		eStatus = PMR_WriteBytes(psDstPMR,
+		                         uiBytesCopied,
+		                         acBuf,
+		                         uiCopyAmt,
+		                         &uiWritten);
+		if(eStatus != PVRSRV_OK)
+		{
+			return eStatus;
+		}
+		PVR_ASSERT(uiRead == uiWritten);
+		PVR_ASSERT(uiRead == uiCopyAmt);
+		uiBytesCopied += uiCopyAmt;
+	}
+
+	return PVRSRV_OK;
+}
+
+IMG_EXPORT PVRSRV_ERROR
+PVRSRVRGXInitLoadFWImageKM(
+	PMR *psFWImgDestPMR,
+	PMR *psFWImgSrcPMR,
+	IMG_UINT64 ui64FWImgLen,
+	PMR *psFWImgSigPMR,
+	IMG_UINT64 ui64FWSigLen)
+{
+	IMG_CHAR *pcFWImgSigAddr, *pcFWImgDestAddr, *pcFWImgSrcAddr;
+	IMG_HANDLE hFWImgSigHdl, hFWImgDestHdl, hFWImgSrcHdl;
+	IMG_SIZE_T uiLen;
+	PVRSRV_ERROR eStatus;
+
+	/* The purpose of this function is to do the following:
+	   - copy the data contained in psFWImgSrcPMR into psFWImgDestPMR
+	   - use the data contained in psFWImgSigPMR to validate the contents of psFWImgDestPMR
+
+	   This is a functional placeholder that is meant to be overridden when actually using
+	   the protected META code feature. As a result, normally, the memory backed by 
+	   psFWImgDestPMR will not be read/writeable from this layer. Thus the operation of
+	   actually doing the copy and verify must be handled in a mode with more privilege,
+	   typically a hypervisor.
+
+	   Because psFWImgSrcPMR and psFWImgSigPMR are normal OS-memory controlled PMR's, it
+	   should be sufficient to acquire their kernel mappings and pass the pointers to
+	   their mapped addressed into the hypervisor. However, since psFWImgDestPMR references
+	   a region of memory that would typically be allocated (and writeable) by a hypervisor,
+	   it will be necessary to pass the psFWImgDestPMR->pvFlavourData (or a field contained
+	   within it) to the hypervisor to identify the region of memory to copy to and validate.
+
+	   In the example function provided below, the following things happen:
+	   - kernel mappings are acquired for the destination and signature PMRs
+	   - a copy is done using the PMR_ReadBytes / PMR_WriteBytes callback functionality in
+	     the PMR layer
+	   - a validation is done by reading back the destination buffer and comparing it against
+	     the source buffer.
+
+	   c.f. a real implementation, where the following things would likely happen:
+	   - kernel mappings are acquired for the source and signature PMRs
+	   - the source/signature mapped addresses and lengths, and psFWImgDestPMR->pvFlavourData
+	     are passed into the hypervisor to do the copy/validate.
+	*/
+
+	eStatus = PMRAcquireKernelMappingData(psFWImgDestPMR,
+	                                      0,
+	                                      0,
+	                                      (IMG_VOID **) &pcFWImgDestAddr,
+	                                      &uiLen,
+                                          &hFWImgDestHdl);
+	if(eStatus != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: Acquire mapping for dest failed (%u)", eStatus));
+		goto error;
+	}
+	if(ui64FWImgLen > uiLen)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: PMR dst len (%llu) > mapped len (%llu)",
+		         ui64FWImgLen, (unsigned long long)uiLen));
+		goto error;
+	}
+
+	eStatus = PMRAcquireKernelMappingData(psFWImgSrcPMR,
+	                                      0,
+	                                      0,
+	                                      (IMG_VOID **) &pcFWImgSrcAddr,
+	                                      &uiLen,
+                                          &hFWImgSrcHdl);
+	if(eStatus != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: Acquire mapping for src failed (%u)", eStatus));
+		goto error;
+	}
+	if(ui64FWImgLen > uiLen)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: PMR dst len (%llu) > mapped len (%llu)",
+		         ui64FWImgLen, (unsigned long long)uiLen));
+		goto error;
+	}
+
+	eStatus = PMRAcquireKernelMappingData(psFWImgSigPMR,
+	                                      0,
+	                                      0,
+	                                      (IMG_VOID **) &pcFWImgSigAddr,
+	                                      &uiLen,
+                                          &hFWImgSigHdl);
+	if(eStatus != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: Acquire mapping for sig failed (%u)", eStatus));
+		goto error;
+	}
+	if(ui64FWSigLen > uiLen)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: sig len (%llu) > mapped len (%llu)",
+		         ui64FWSigLen, (unsigned long long)uiLen));
+		goto error;
+	}
+
+	/* Copy the firmware image from the intermediate buffer to the real firmware memory allocation. */
+	PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVDebugMiscInitFWImageKM: copying %llu bytes from PMR %p to PMR %p",
+	                        ui64FWImgLen, psFWImgSrcPMR, psFWImgDestPMR));
+	PMRCopy(psFWImgDestPMR, psFWImgSrcPMR, TRUNCATE_64BITS_TO_SIZE_T(ui64FWImgLen));
+
+	/* validate the firmware image after it has been copied into place */
+	eStatus = ValidateFWImage(pcFWImgDestAddr, pcFWImgSrcAddr, TRUNCATE_64BITS_TO_SIZE_T(ui64FWImgLen), pcFWImgSigAddr, ui64FWSigLen);
+	if(eStatus != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: Signature check failed"));
+		goto error;
+	}
+
+	eStatus = PMRReleaseKernelMappingData(psFWImgDestPMR,
+	                                      hFWImgDestHdl);
+	if(eStatus != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: Release mapping for dest failed (%u)", eStatus));
+		goto error;
+	}
+
+	eStatus = PMRReleaseKernelMappingData(psFWImgSrcPMR,
+	                                      hFWImgSrcHdl);
+	if(eStatus != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: Release mapping for src failed (%u)", eStatus));
+		goto error;
+	}
+
+	eStatus = PMRReleaseKernelMappingData(psFWImgSigPMR,
+	                                      hFWImgSigHdl);
+	if(eStatus != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscInitFWImageKM: Release mapping for sig failed (%u)", eStatus));
+		goto error;
+	}
+
+	return PVRSRV_OK;
+
+error:
+	return PVRSRV_ERROR_INIT_TDMETACODE_PAGES_FAIL;
+}
+
+
+
+/*************************************************************************/ /*!
+@Function       RGXDevVersionString
+@Description    Gets the version string for the given device node and returns 
+                a pointer to it in ppszVersionString. It is then the 
+                responsibility of the caller to free this memory.
+@Input          psDeviceNode            Device node from which to obtain the 
+                                        version string
+@Output	        ppszVersionString	Contains the version string upon return
+@Return         PVRSRV_ERROR
+*/ /**************************************************************************/
+static PVRSRV_ERROR RGXDevVersionString(PVRSRV_DEVICE_NODE *psDeviceNode, 
+					IMG_CHAR **ppszVersionString)
+{
+#if defined(COMPAT_BVNC_MASK_B) || defined(COMPAT_BVNC_MASK_V) || defined(COMPAT_BVNC_MASK_N) || defined(COMPAT_BVNC_MASK_C) || defined(NO_HARDWARE) || defined(EMULATOR)
+	IMG_CHAR pszFormatString[] = "Rogue Version: %d.%s.%d.%d (SW)";
+#else
+	IMG_CHAR pszFormatString[] = "Rogue Version: %d.%s.%d.%d (HW)";
+#endif
+	IMG_SIZE_T uiStringLength;
+
+	if (psDeviceNode == NULL || ppszVersionString == NULL)
+	{
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
+
+	uiStringLength = OSStringLength(pszFormatString);
+	uiStringLength += OSStringLength(TOSTRING(RGX_BVNC_KM_B));
+	uiStringLength += OSStringLength(TOSTRING(RGX_BVNC_KM_V));
+	uiStringLength += OSStringLength(TOSTRING(RGX_BVNC_KM_N));
+	uiStringLength += OSStringLength(TOSTRING(RGX_BVNC_KM_C));
+
+	*ppszVersionString = OSAllocZMem(uiStringLength * sizeof(IMG_CHAR));
+	if (*ppszVersionString == NULL)
+	{
+		return PVRSRV_ERROR_OUT_OF_MEMORY;
+	}
+
+	OSSNPrintf(*ppszVersionString, uiStringLength, pszFormatString, 
+		   RGX_BVNC_KM_B, TOSTRING(RGX_BVNC_KM_V), RGX_BVNC_KM_N, RGX_BVNC_KM_C);
+
+	return PVRSRV_OK;
+}
 
 /******************************************************************************
  End of file (rgxinit.c)

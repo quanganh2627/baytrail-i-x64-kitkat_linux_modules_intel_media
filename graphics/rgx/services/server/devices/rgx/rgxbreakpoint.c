@@ -74,7 +74,7 @@ PVRSRV_ERROR PVRSRVRGXSetBreakpointKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	RGXSetFirmwareAddress(&sBPCmd.uCmdData.sBPData.psFWMemContext, 
 				psFWMemContextMemDesc, 
 				0 , 
-				RFW_FWADDR_NOREF_FLAG);
+				RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
 		
 	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
 				eFWDataMaster,
@@ -118,7 +118,7 @@ PVRSRV_ERROR PVRSRVRGXClearBreakpointKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	RGXSetFirmwareAddress(&sBPCmd.uCmdData.sBPData.psFWMemContext, 
 				psFWMemContextMemDesc, 
 				0 , 
-				RFW_FWADDR_NOREF_FLAG);
+				RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
 
 	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
 				eDataMaster,
@@ -162,7 +162,7 @@ PVRSRV_ERROR PVRSRVRGXEnableBreakpointKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	RGXSetFirmwareAddress(&sBPCmd.uCmdData.sBPData.psFWMemContext, 
 				psFWMemContextMemDesc, 
 				0 , 
-				RFW_FWADDR_NOREF_FLAG);
+				RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
 
 	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
 				eDataMaster,
@@ -204,7 +204,7 @@ PVRSRV_ERROR PVRSRVRGXDisableBreakpointKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	RGXSetFirmwareAddress(&sBPCmd.uCmdData.sBPData.psFWMemContext, 
 				psFWMemContextMemDesc, 
 				0 , 
-				RFW_FWADDR_NOREF_FLAG);
+				RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
 	
 	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
 				eDataMaster,

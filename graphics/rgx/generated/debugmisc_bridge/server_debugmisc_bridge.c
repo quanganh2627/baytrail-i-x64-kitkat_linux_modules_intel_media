@@ -52,6 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_debugmisc_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -59,30 +60,45 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
 
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
+
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgeDebugMiscSLCSetBypassState(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_DEBUGMISCSLCSETBYPASSSTATE *psDebugMiscSLCSetBypassStateIN,
 					 PVRSRV_BRIDGE_OUT_DEBUGMISCSLCSETBYPASSSTATE *psDebugMiscSLCSetBypassStateOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_DEBUGMISC_DEBUGMISCSLCSETBYPASSSTATE);
 
 
-	/* Look up the address from the handle */
-	psDebugMiscSLCSetBypassStateOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psDebugMiscSLCSetBypassStateIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psDebugMiscSLCSetBypassStateOUT->eError != PVRSRV_OK)
-	{
-		goto DebugMiscSLCSetBypassState_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psDebugMiscSLCSetBypassStateOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDevNodeInt,
+							   psDebugMiscSLCSetBypassStateIN->hDevNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psDebugMiscSLCSetBypassStateOUT->eError != PVRSRV_OK)
+		{
+			goto DebugMiscSLCSetBypassState_exit;
+		}
 
 	psDebugMiscSLCSetBypassStateOUT->eError =
 		PVRSRVDebugMiscSLCSetBypassStateKM(
@@ -103,21 +119,23 @@ PVRSRVBridgeRGXDebugMiscSetFWLog(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_RGXDEBUGMISCSETFWLOG *psRGXDebugMiscSetFWLogOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_DEBUGMISC_RGXDEBUGMISCSETFWLOG);
 
 
-	/* Look up the address from the handle */
-	psRGXDebugMiscSetFWLogOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psRGXDebugMiscSetFWLogIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psRGXDebugMiscSetFWLogOUT->eError != PVRSRV_OK)
-	{
-		goto RGXDebugMiscSetFWLog_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psRGXDebugMiscSetFWLogOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDevNodeInt,
+							   psRGXDebugMiscSetFWLogIN->hDevNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psRGXDebugMiscSetFWLogOUT->eError != PVRSRV_OK)
+		{
+			goto RGXDebugMiscSetFWLog_exit;
+		}
 
 	psRGXDebugMiscSetFWLogOUT->eError =
 		PVRSRVRGXDebugMiscSetFWLogKM(
@@ -137,21 +155,23 @@ PVRSRVBridgeRGXDebugMiscDumpFreelistPageList(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_RGXDEBUGMISCDUMPFREELISTPAGELIST *psRGXDebugMiscDumpFreelistPageListOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_DEBUGMISC_RGXDEBUGMISCDUMPFREELISTPAGELIST);
 
 
-	/* Look up the address from the handle */
-	psRGXDebugMiscDumpFreelistPageListOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psRGXDebugMiscDumpFreelistPageListIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psRGXDebugMiscDumpFreelistPageListOUT->eError != PVRSRV_OK)
-	{
-		goto RGXDebugMiscDumpFreelistPageList_exit;
-	}
+
+
+		/* Look up the address from the handle */
+		psRGXDebugMiscDumpFreelistPageListOUT->eError =
+			PVRSRVLookupHandle(psConnection->psHandleBase,
+							   (IMG_HANDLE *) &hDevNodeInt,
+							   psRGXDebugMiscDumpFreelistPageListIN->hDevNode,
+							   PVRSRV_HANDLE_TYPE_DEV_NODE);
+		if(psRGXDebugMiscDumpFreelistPageListOUT->eError != PVRSRV_OK)
+		{
+			goto RGXDebugMiscDumpFreelistPageList_exit;
+		}
 
 	psRGXDebugMiscDumpFreelistPageListOUT->eError =
 		PVRSRVRGXDebugMiscDumpFreelistPageListKM(
@@ -165,6 +185,11 @@ RGXDebugMiscDumpFreelistPageList_exit:
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterDEBUGMISCFunctions(IMG_VOID);
 IMG_VOID UnregisterDEBUGMISCFunctions(IMG_VOID);
 

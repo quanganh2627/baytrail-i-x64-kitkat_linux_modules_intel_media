@@ -47,10 +47,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "debugmisc_server.h"
 #include "rgxfwutils.h"
 #include "rgxta3d.h"
-#include "mm.h"
 #include "pdump_km.h"
 #include "mmu_common.h"
 #include "devicemem_server.h"
+#include "osfunc.h"
 
 IMG_EXPORT PVRSRV_ERROR
 PVRSRVDebugMiscSLCSetBypassStateKM(
@@ -65,11 +65,12 @@ PVRSRVDebugMiscSLCSetBypassStateKM(
 	sSLCBPCtlCmd.uCmdData.sSLCBPCtlData.bSetBypassed = bSetBypassed;
 	sSLCBPCtlCmd.uCmdData.sSLCBPCtlData.uiFlags = uiFlags;
 
-	if((eError = RGXScheduleCommand(psDeviceNode->pvDevice,
-	                                RGXFWIF_DM_GP,
-	                                &sSLCBPCtlCmd,
-	                                sizeof(sSLCBPCtlCmd),
-	                                IMG_TRUE)))
+	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
+	                            RGXFWIF_DM_GP,
+	                            &sSLCBPCtlCmd,
+	                            sizeof(sSLCBPCtlCmd),
+	                            IMG_TRUE);
+	if(eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDebugMiscSLCSetEnableStateKM: RGXScheduleCommandfailed. Error:%u", eError));
 	}

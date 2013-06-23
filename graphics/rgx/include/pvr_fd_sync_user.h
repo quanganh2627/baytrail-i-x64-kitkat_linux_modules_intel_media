@@ -58,8 +58,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define PVR_SYNC_IOC_CREATE_FENCE \
 	_IOWR(PVR_SYNC_IOC_MAGIC, 0, struct PVR_SYNC_CREATE_FENCE_IOCTL_DATA)
 
+#define PVR_SYNC_IOC_SIZE_FENCE \
+	_IOWR(PVR_SYNC_IOC_MAGIC, 1, struct PVR_SYNC_SIZE_FENCE_IOCTL_DATA)
+
+#define PVR_SYNC_IOC_QUERY_FENCE \
+	_IOWR(PVR_SYNC_IOC_MAGIC, 2, struct PVR_SYNC_QUERY_FENCE_IOCTL_DATA)
+
 #define PVR_SYNC_IOC_DEBUG_FENCE \
-	_IOWR(PVR_SYNC_IOC_MAGIC, 1, struct PVR_SYNC_DEBUG_FENCE_IOCTL_DATA)
+	_IOWR(PVR_SYNC_IOC_MAGIC, 3, struct PVR_SYNC_DEBUG_FENCE_IOCTL_DATA)
+
+#define PVR_SYNC_IOC_NOHW_UPDATE_FENCE \
+	_IOWR(PVR_SYNC_IOC_MAGIC, 4, struct PVR_SYNC_NOHW_UPDATE_FENCE_IOCTL_DATA)
 
 #define PVRSYNC_MODNAME "pvr_sync"
 
@@ -72,6 +81,16 @@ struct PVR_SYNC_CREATE_FENCE_IOCTL_DATA
 	int                      iFenceFd;
 };
 
+struct PVR_SYNC_SIZE_FENCE_IOCTL_DATA
+{
+	/* Input */
+	int			             iFenceFd;
+	IMG_BOOL                 bUpdate;
+
+	/* Output */
+	IMG_UINT32	             ui32NumSyncs;
+};
+
 typedef struct
 {
 	IMG_UINT32               ui32FWAddr;
@@ -79,6 +98,17 @@ typedef struct
 	IMG_UINT32               ui32FenceValue;
 	IMG_UINT32               ui32UpdateValue;
 } PVR_SYNC_POINT_DATA;
+
+struct PVR_SYNC_QUERY_FENCE_IOCTL_DATA
+{
+	/* Input */
+	int			             iFenceFd;
+	IMG_BOOL                 bUpdate;
+
+	/* Output */
+	IMG_UINT32	             ui32NumSyncs;
+	PVR_SYNC_POINT_DATA      aPts[PVR_SYNC_MAX_QUERY_FENCE_POINTS];
+};
 
 typedef struct
 {
@@ -101,6 +131,15 @@ struct PVR_SYNC_DEBUG_FENCE_IOCTL_DATA
 	PVR_SYNC_DEBUG_SYNC_DATA aPts[PVR_SYNC_MAX_QUERY_FENCE_POINTS];
 };
 
+struct PVR_SYNC_NOHW_UPDATE_FENCE_IOCTL_DATA
+{
+	/* Input */
+	int			             iFenceFd;
+	IMG_UINT32               ui32UpdateValue;
+
+	/* Output: nothing */
+};
+
 PVRSRV_ERROR PVRFDSyncOpen(int *piSyncFd);
 PVRSRV_ERROR PVRFDSyncClose(int iSyncFd);
 
@@ -116,10 +155,37 @@ PVRSRV_ERROR PVRFDSyncCreateFence(int iSyncFd,
 								  const char *pcszName,
 								  int *piFenceFd);
 
+PVRSRV_ERROR PVRFDSyncSizeFence(int iSyncFd,
+								int iFenceFd,
+								IMG_BOOL bUpdate,
+								IMG_UINT32 *pui32NumSyncs);
+
+PVRSRV_ERROR PVRFDSyncQueryFence(int iSyncFd,
+								 int iFenceFd,
+								 IMG_BOOL bUpdate,
+								 IMG_UINT32 ui32MaxNumSyncs,
+								 IMG_UINT32 *aui32FWAddrs,
+								 IMG_UINT32 *aui32Flags,
+								 IMG_UINT32 *aui32FenceValues,
+								 IMG_UINT32 *aui32UpdateValues,
+								 IMG_UINT32 *pui32NumSyncs);
+
+PVRSRV_ERROR PVRFDSyncUnfoldSyncs(int iSyncFd,
+								  PVRSRV_CLIENT_SYNC_PRIM_OP *apsSyncOpsIn,
+								  IMG_UINT32 ui32NumSyncsIn,
+								  IMG_INT32 *ai32FenceFds,
+								  IMG_UINT32 ui32NumFenceFds,
+								  PVRSRV_CLIENT_SYNC_PRIM_OP **papsSyncOpsOut,
+								  IMG_UINT32 *pui32NumSyncsOut);
+
 PVRSRV_ERROR PVRFDSyncDumpFence(int iSyncFd,
 								int iFenceFd,
 								const char *pcszPrefix,
 								const char *pcszFile,
 								int iLine);
+
+PVRSRV_ERROR PVRFDSyncNoHwUpdateFence(int iSyncFd,
+									  int iFenceFd,
+									  IMG_UINT32 ui32UpdateValue);
 
 #endif /* _PVR_FD_SYNC_USER_H_ */

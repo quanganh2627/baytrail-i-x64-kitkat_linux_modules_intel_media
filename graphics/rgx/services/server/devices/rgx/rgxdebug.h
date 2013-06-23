@@ -76,14 +76,11 @@ IMG_VOID RGXPanic(PVRSRV_RGXDEV_INFO	*psDevInfo);
  Dump useful debugging info
 
  @Input psDevInfo	 - RGX device info
- @Input bDumpRGXRegs - Whether to dump RGX debug registers. Must not be done
- 						when RGX is not powered.
 
  @Return   IMG_VOID
 
 ******************************************************************************/
-IMG_VOID RGXDumpDebugInfo(PVRSRV_RGXDEV_INFO	*psDevInfo,
-						  IMG_BOOL				bDumpRGXRegs);
+IMG_VOID RGXDumpDebugInfo(PVRSRV_RGXDEV_INFO	*psDevInfo);
 
 /*!
 *******************************************************************************
@@ -96,15 +93,12 @@ IMG_VOID RGXDumpDebugInfo(PVRSRV_RGXDEV_INFO	*psDevInfo,
  verbosity
 
  @Input psDevInfo	 - RGX device info
- @Input bDumpRGXRegs - Whether to dump RGX debug registers. Must not be done
- 						when RGX is not powered.
  @Input ui32VerbLevel - Verbosity level
 
  @Return   IMG_VOID
 
 ******************************************************************************/
 IMG_VOID RGXDebugRequestProcess(PVRSRV_RGXDEV_INFO	*psDevInfo,
-							    IMG_BOOL			bDumpRGXRegs,
 							    IMG_UINT32			ui32VerbLevel);
 
 /*!
@@ -119,28 +113,22 @@ IMG_VOID RGXDebugRequestProcess(PVRSRV_RGXDEV_INFO	*psDevInfo,
  @Input  psDevInfo	 		- RGX device info
  @Input  eDM 				- DM number for which to return status
  @Output peState			- RGXFWIF_DM_STATE
- @Output ppCommonContext    - If DM is locked-up, points to Firmware Common Context, otherwise IMG_NULL
+ @Output psComCtxDevVAddr   - If DM is locked-up, Firmware address of Firmware Common Context, otherwise IMG_NULL
 
  @Return PVRSRV_ERROR
 ******************************************************************************/
-PVRSRV_ERROR RGXQueryDMState(PVRSRV_RGXDEV_INFO *psDevInfo, RGXFWIF_DM eDM, RGXFWIF_DM_STATE *peState, IMG_VOID **ppCommonContext);
+PVRSRV_ERROR RGXQueryDMState(PVRSRV_RGXDEV_INFO *psDevInfo, RGXFWIF_DM eDM, RGXFWIF_DM_STATE *peState, RGXFWIF_DEV_VIRTADDR *psComCtxDevVAddr);
 
 
-/*!
-*******************************************************************************
+/******************************************************************************
+ * RGX HW Performance Data Transport Routines
+ *****************************************************************************/
 
- @Function	RGXHWPerfDataStore
+IMG_VOID RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO* psDevInfo);
+PVRSRV_ERROR RGXHWPerfDataStoreCB(PVRSRV_DEVICE_NODE* psDevInfo);
 
- @Description
-
- Dump HW Perf Data from FW buffer to KM buffer
-
- @Input psDevInfo	 		- RGX device info
-
- @Return   IMG_VOID
-
-******************************************************************************/
-IMG_VOID RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo);
+PVRSRV_ERROR RGXHWPerfInit(PVRSRV_RGXDEV_INFO *psRgxDevInfo);
+IMG_VOID RGXHWPerfDeinit(PVRSRV_RGXDEV_INFO *psRgxDevInfo);
 
 
 /******************************************************************************
@@ -150,7 +138,7 @@ IMG_VOID RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo);
 PVRSRV_ERROR PVRSRVRGXCtrlHWPerfKM(
 		PVRSRV_DEVICE_NODE*	psDeviceNode,
 		IMG_BOOL			bEnable,
-		IMG_UINT32 			ui32Mask);
+		IMG_UINT64 			ui64Mask);
 
 
 PVRSRV_ERROR PVRSRVRGXConfigEnableHWPerfCountersKM(

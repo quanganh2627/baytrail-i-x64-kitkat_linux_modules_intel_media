@@ -85,10 +85,11 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVTLDisconnect(PVRSRV_CONNECTION* psConnection);
  	 	 	 	 	 	 	 	than PRVSRVTL_MAX_STREAM_NAME_SIZE.
  @Input			ui32Mode		Unused
  @Output		phSD			Address of a pointer to an stream object
- @Return 		PVRSRV_ERROR_NOT_FOUND:    when named stream not found
- @Return		PVRSRV_ERROR_ALREADY_OPEN: stream already open by another
- @Return		PVRSRV_ERROR_STREAM_ERROR: internal driver state error
- @Return		PVRSRV_ERROR:			   for other system codes
+ @Return 		PVRSRV_ERROR_NOT_FOUND:        when named stream not found
+ @Return		PVRSRV_ERROR_ALREADY_OPEN:     stream already open by another
+ @Return		PVRSRV_ERROR_STREAM_ERROR:     internal driver state error
+ @Return        PVRSRV_ERROR_TIMEOUT:          block timed out, stream not found
+ @Return		PVRSRV_ERROR:			       for other system codes
 */ /***************************************************************************/
 IMG_EXPORT
 PVRSRV_ERROR IMG_CALLCONV PVRSRVTLOpenStream(PVRSRV_CONNECTION* psConnection,
@@ -134,6 +135,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVTLCloseStream(PVRSRV_CONNECTION* psConnection,
  @Return		PVRSRV_ERROR_HANDLE_NOT_FOUND:     when SD handle not known
  @Return		PVRSRV_ERROR_STREAM_ERROR: 	       internal driver state error
  @Return		PVRSRV_ERROR_RETRY:				   release not called beforehand
+ @Return        PVRSRV_ERROR_TIMEOUT:              block timed out, no data
  @Return		PVRSRV_ERROR:					   for other system codes
 */ /***************************************************************************/
 IMG_EXPORT

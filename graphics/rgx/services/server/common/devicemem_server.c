@@ -163,6 +163,7 @@ DevmemIntCtxCreate(
         goto e0;
 	}
 
+	psDevmemCtx->ui32RefCount = 0;
     psDevmemCtx->psDevNode = psDeviceNode;
 
     /* FIXME:  take ref-count on devnode? how! */

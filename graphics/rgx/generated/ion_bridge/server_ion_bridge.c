@@ -52,6 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_ion_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -59,22 +60,35 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
 
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
+
+
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgePhysmemImportIon(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_PHYSMEMIMPORTION *psPhysmemImportIonIN,
 					 PVRSRV_BRIDGE_OUT_PHYSMEMIMPORTION *psPhysmemImportIonOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPMRPtrInt;
-	IMG_HANDLE hPMRPtrInt2;
+	PMR * psPMRPtrInt = IMG_NULL;
+	IMG_HANDLE hPMRPtrInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_ION_PHYSMEMIMPORTION);
 
 
-	NEW_HANDLE_BATCH_OR_ERROR(psPhysmemImportIonOUT->eError, psConnection, 1);
+
 
 
 	psPhysmemImportIonOUT->eError =
@@ -101,22 +115,45 @@ PVRSRVBridgePhysmemImportIon(IMG_UINT32 ui32BridgeID,
 		psPhysmemImportIonOUT->eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_RESOURCE;
 		goto PhysmemImportIon_exit;
 	}
-	PVRSRVAllocHandleNR(psConnection->psHandleBase,
-					  &psPhysmemImportIonOUT->hPMRPtr,
-					  (IMG_HANDLE) hPMRPtrInt2,
-					  PVRSRV_HANDLE_TYPE_PHYSMEM_PMR,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
-	COMMIT_HANDLE_BATCH_OR_ERROR(psPhysmemImportIonOUT->eError, psConnection);
-
+	psPhysmemImportIonOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
+							&psPhysmemImportIonOUT->hPMRPtr,
+							(IMG_HANDLE) hPMRPtrInt2,
+							PVRSRV_HANDLE_TYPE_PHYSMEM_PMR,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							);
+	if (psPhysmemImportIonOUT->eError != PVRSRV_OK)
+	{
+		goto PhysmemImportIon_exit;
+	}
 
 
 PhysmemImportIon_exit:
+	if (psPhysmemImportIonOUT->eError != PVRSRV_OK)
+	{
+		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
+		if (hPMRPtrInt2)
+		{
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hPMRPtrInt2);
+
+			/* Freeing a resource should never fail... */
+			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
+		}
+		else if (psPMRPtrInt)
+		{
+			PMRUnrefPMR(psPMRPtrInt);
+		}
+	}
+
 
 	return 0;
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterIONFunctions(IMG_VOID);
 IMG_VOID UnregisterIONFunctions(IMG_VOID);
 

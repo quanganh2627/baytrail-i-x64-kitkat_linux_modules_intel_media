@@ -53,6 +53,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sync.h"
 #include "sync_internal.h"
 #include "lock.h"
+#include "pvr_debug.h"
 /* FIXME */
 #if defined(__KERNEL__)
 #include "pvrsrv.h"
@@ -259,6 +260,12 @@ SyncPrimBlockImport(RA_PERARENA_HANDLE hArena,
 	*/
 	PVR_ASSERT(uiSpanSize == psSyncBlock->ui32SyncBlockSize);
 
+	/*
+		Add the block to the context so we can
+		PDump all the blocks on this context
+	*/
+	dllist_add_to_tail(&psContext->sBlockListHead, &psSyncBlock->sListNode);
+
 	*puiBase = psSyncBlock->uiSpanBase;
 	*puiActualSize = psSyncBlock->ui32SyncBlockSize;
 	*phImport = psSyncBlock;
@@ -287,6 +294,9 @@ SyncPrimBlockUnimport(RA_PERARENA_HANDLE hArena,
 
 	PVR_ASSERT(uiBase == psSyncBlock->uiSpanBase);
 
+	/* Remove ourself from the list */
+	dllist_remove_node(&psSyncBlock->sListNode);
+
 	/* Free the span this import is using */
 	RA_Free(psContext->psSpanRA, uiBase);
 
@@ -301,9 +311,17 @@ SyncPrimBlockUnimport(RA_PERARENA_HANDLE hArena,
 
 static INLINE IMG_UINT32 SyncPrimGetOffset(SYNC_PRIM *psSyncInt)
 {
+	IMG_UINT64 ui64Temp;
+	
 	PVR_ASSERT(psSyncInt->eType == SYNC_PRIM_TYPE_LOCAL);
 
-	return psSyncInt->u.sLocal.uiSpanAddr - psSyncInt->u.sLocal.psSyncBlock->uiSpanBase;
+	/* FIXME: Subtracting a 64-bit address from another and then implicit
+	 * cast to 32-bit number. Need to review all call sequences that use this
+	 * function, added explicit casting for now.
+	 */
+	ui64Temp =  psSyncInt->u.sLocal.uiSpanAddr - psSyncInt->u.sLocal.psSyncBlock->uiSpanBase;
+	PVR_ASSERT(ui64Temp<IMG_UINT32_MAX);
+	return (IMG_UINT32)ui64Temp;
 }
 
 static IMG_VOID SyncPrimGetCPULinAddr(SYNC_PRIM *psSyncInt)
@@ -350,32 +368,6 @@ static IMG_UINT32 SyncPrimGetFirmwareAddrLocal(SYNC_PRIM *psSyncInt)
 static IMG_UINT32 SyncPrimGetFirmwareAddrServer(SYNC_PRIM *psSyncInt)
 {
 	return psSyncInt->u.sServer.ui32FirmwareAddr;
-}
-
-IMG_INTERNAL IMG_UINT32 SyncPrimGetFirmwareAddr(PVRSRV_CLIENT_SYNC_PRIM *psSync)
-{
-	SYNC_PRIM *psSyncInt;
-	PVR_ASSERT(psSync != IMG_NULL);
-	psSyncInt = IMG_CONTAINER_OF(psSync, SYNC_PRIM, sCommon);
-
-	if (psSyncInt->eType == SYNC_PRIM_TYPE_LOCAL)
-	{
-		return SyncPrimGetFirmwareAddrLocal(psSyncInt);
-	}
-	else if (psSyncInt->eType == SYNC_PRIM_TYPE_SERVER)
-	{
-		return SyncPrimGetFirmwareAddrServer(psSyncInt);
-	}
-	else
-	{
-		PVR_DPF((PVR_DBG_ERROR, "SyncPrimGetFirmwareAddr: Invalid sync type"));
-		/*
-			Either the client has given us a bad pointer or there is an
-			error in this module
-		*/
-		PVR_ASSERT(IMG_FALSE);
-		return 0;
-	}
 }
 
 #if !defined(__KERNEL__)
@@ -569,6 +561,36 @@ static INLINE IMG_UINT32 _Log2(IMG_UINT32 ui32Align)
 	return ui32Log2Align;
 }
 
+#if defined(PDUMP)
+/*
+	Internal interfaces for management of PDump functions
+ */
+
+static IMG_BOOL _PDumpSyncBlock(PDLLIST_NODE psNode, IMG_PVOID pvData)
+{
+	SYNC_PRIM_BLOCK *psSyncBlock = IMG_CONTAINER_OF(psNode, SYNC_PRIM_BLOCK, sListNode);
+	PVR_UNREFERENCED_PARAMETER(pvData);
+
+	/*
+		We might be ask to PDump sync state outside of capture range
+		(e.g. texture uploads) so make this continuous.
+	*/
+	DevmemPDumpLoadMem(psSyncBlock->hMemDesc,
+					   0,
+					   psSyncBlock->ui32SyncBlockSize,
+					   PDUMP_FLAGS_CONTINUOUS);
+	return IMG_TRUE;
+}
+
+static IMG_BOOL _PDumpSyncContext(PDLLIST_NODE psNode, IMG_PVOID pvData)
+{
+	SYNC_PRIM_CONTEXT *psContext = IMG_CONTAINER_OF(psNode, SYNC_PRIM_CONTEXT, sListNode);
+	PVR_UNREFERENCED_PARAMETER(pvData);
+
+	dllist_foreach_node(&psContext->sBlockListHead, _PDumpSyncBlock, IMG_NULL);
+	return IMG_TRUE;
+}
+#endif
 /*
 	External interfaces
 */
@@ -576,6 +598,7 @@ static INLINE IMG_UINT32 _Log2(IMG_UINT32 ui32Align)
 IMG_INTERNAL PVRSRV_ERROR
 SyncPrimContextCreate(SYNC_BRIDGE_HANDLE hBridge,
 					  IMG_HANDLE hDeviceNode,
+					  PDLLIST_NODE psContextList,
 					  PSYNC_PRIM_CONTEXT *phSyncPrimContext)
 {
 	SYNC_PRIM_CONTEXT *psContext;
@@ -655,7 +678,19 @@ SyncPrimContextCreate(SYNC_BRIDGE_HANDLE hBridge,
 		goto fail_span;
 	}
 
+	dllist_init(&psContext->sBlockListHead);
 	psContext->ui32RefCount = 1;
+
+	if(psContextList != IMG_NULL)
+	{
+		/* Link new context to the list */
+		dllist_add_to_tail(psContextList, &psContext->sListNode);
+	}
+	else
+	{
+		/* initialise node as an empty list */
+		dllist_init(&psContext->sListNode);
+	}
 
 	*phSyncPrimContext = psContext;
 	return PVRSRV_OK;
@@ -702,6 +737,8 @@ IMG_INTERNAL IMG_VOID SyncPrimContextDestroy(PSYNC_PRIM_CONTEXT hSyncPrimContext
 	*/
 	OSLockRelease(psContext->hLock);
 
+	/* Link new context to the list */
+	dllist_remove_node(&psContext->sListNode);
 	RA_Delete(psContext->psSpanRA);
 	RA_Delete(psContext->psSubAllocRA);
 	OSLockDestroy(psContext->hLock);
@@ -848,6 +885,32 @@ SyncPrimSet(PVRSRV_CLIENT_SYNC_PRIM *psSync, IMG_UINT32 ui32Value)
 	SyncPrimPDump(psSync);
 #endif
 
+}
+
+IMG_INTERNAL IMG_UINT32 SyncPrimGetFirmwareAddr(PVRSRV_CLIENT_SYNC_PRIM *psSync)
+{
+	SYNC_PRIM *psSyncInt;
+	PVR_ASSERT(psSync != IMG_NULL);
+	psSyncInt = IMG_CONTAINER_OF(psSync, SYNC_PRIM, sCommon);
+
+	if (psSyncInt->eType == SYNC_PRIM_TYPE_LOCAL)
+	{
+		return SyncPrimGetFirmwareAddrLocal(psSyncInt);
+	}
+	else if (psSyncInt->eType == SYNC_PRIM_TYPE_SERVER)
+	{
+		return SyncPrimGetFirmwareAddrServer(psSyncInt);
+	}
+	else
+	{
+		PVR_DPF((PVR_DBG_ERROR, "SyncPrimGetFirmwareAddr: Invalid sync type"));
+		/*
+			Either the client has given us a bad pointer or there is an
+			error in this module
+		*/
+		PVR_ASSERT(IMG_FALSE);
+		return 0;
+	}
 }
 
 IMG_INTERNAL
@@ -1190,11 +1253,15 @@ IMG_VOID SyncPrimOpDestroy(PSYNC_OP_COOKIE psCookie)
 IMG_INTERNAL
 PVRSRV_ERROR SyncPrimServerAlloc(SYNC_BRIDGE_HANDLE hBridge,
 								 IMG_HANDLE hDeviceNode,
-								 PVRSRV_CLIENT_SYNC_PRIM **ppsSync)
+								 PVRSRV_CLIENT_SYNC_PRIM **ppsSync
+								PVR_DBG_FILELINE_PARAM)
 {
 	SYNC_PRIM *psNewSync;
 	PVRSRV_ERROR eError;
 
+#if !defined(PVR_SYNC_PRIM_ALLOC_TRACE)
+	PVR_DBG_FILELINE_UNREF();
+#endif
 	psNewSync = OSAllocMem(sizeof(SYNC_PRIM));
 	if (psNewSync == IMG_NULL)
 	{
@@ -1212,6 +1279,11 @@ PVRSRV_ERROR SyncPrimServerAlloc(SYNC_BRIDGE_HANDLE hBridge,
 	{
 		goto e1;
 	}
+
+#if defined(PVR_SYNC_PRIM_ALLOC_TRACE)
+	PVR_DPF((PVR_DBG_WARNING, "Allocated server sync prim [%p] fw=0x%08x" PVR_DBG_FILELINE_FMT,
+			 &psNewSync->sCommon, psNewSync->u.sServer.ui32FirmwareAddr PVR_DBG_FILELINE_ARG));
+#endif
 
 	psNewSync->eType = SYNC_PRIM_TYPE_SERVER;
 	psNewSync->u.sServer.hBridge = hBridge;
@@ -1481,9 +1553,9 @@ IMG_INTERNAL IMG_VOID SyncPrimOpPDumpPol(PSYNC_OP_COOKIE psCookie,
 }
 
 IMG_INTERNAL IMG_VOID SyncPrimPDumpCBP(PVRSRV_CLIENT_SYNC_PRIM *psSync,
-									   IMG_UINT32 uiWriteOffset,
-									   IMG_UINT32 uiPacketSize,
-									   IMG_UINT32 uiBufferSize)
+									   IMG_UINT64 uiWriteOffset,
+									   IMG_UINT64 uiPacketSize,
+									   IMG_UINT64 uiBufferSize)
 {
 	SYNC_PRIM *psSyncInt;
 	SYNC_PRIM_BLOCK *psSyncBlock;
@@ -1503,12 +1575,23 @@ IMG_INTERNAL IMG_VOID SyncPrimPDumpCBP(PVRSRV_CLIENT_SYNC_PRIM *psSync,
 	psSyncBlock = psSyncInt->u.sLocal.psSyncBlock;
 	psContext = psSyncBlock->psContext;
 
+	/* FIXME: uiWriteOffset, uiPacketSize, uiBufferSize were changed to
+	 * 64-bit quantities to resolve WDDM compiler warnings.
+	 * However the bridge is only 32-bit hence compiler warnings
+	 * of implicit cast and loss of data.
+	 * Added explicit cast and assert to remove warning.
+	 */
+#if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
+	PVR_ASSERT(uiWriteOffset<IMG_UINT32_MAX);
+	PVR_ASSERT(uiPacketSize<IMG_UINT32_MAX);
+	PVR_ASSERT(uiBufferSize<IMG_UINT32_MAX);
+#endif
 	eError = BridgeSyncPrimPDumpCBP(psContext->hBridge,
 									psSyncBlock->hServerSyncPrimBlock,
 									SyncPrimGetOffset(psSyncInt),
-									uiWriteOffset,
-									uiPacketSize,
-									uiBufferSize);
+									(IMG_UINT32)uiWriteOffset,
+									(IMG_UINT32)uiPacketSize,
+									(IMG_UINT32)uiBufferSize);
 
 	if (eError != PVRSRV_OK)
 	{
@@ -1519,4 +1602,9 @@ IMG_INTERNAL IMG_VOID SyncPrimPDumpCBP(PVRSRV_CLIENT_SYNC_PRIM *psSync,
     PVR_ASSERT(eError == PVRSRV_OK);
 }
 
+IMG_INTERNAL IMG_VOID SyncPrimPDumpClientContexts(PDLLIST_NODE psContextList)
+{
+	dllist_foreach_node(psContextList, _PDumpSyncContext, IMG_NULL);
+}
 #endif
+
