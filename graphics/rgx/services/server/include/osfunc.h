@@ -66,6 +66,7 @@ extern "C" {
 
 
 IMG_UINT32 OSClockus(IMG_VOID);
+IMG_UINT32 OSClockms(IMG_VOID);
 
 IMG_SIZE_T OSGetPageSize(IMG_VOID);
 IMG_SIZE_T OSGetPageShift(IMG_VOID);
@@ -140,6 +141,7 @@ IMG_VOID OSInvalidateCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 
 
 IMG_PID OSGetCurrentProcessIDKM(IMG_VOID);
+IMG_VOID OSGetCurrentProcessNameKM(IMG_CHAR *pszProcName, IMG_UINT32 ui32Size);
 IMG_UINTPTR_T OSGetCurrentThreadID( IMG_VOID );
 IMG_VOID OSMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T ui32Size);
 IMG_INT OSMemCmp(IMG_VOID *pvBufA, IMG_VOID *pvBufB, IMG_SIZE_T uiLen);

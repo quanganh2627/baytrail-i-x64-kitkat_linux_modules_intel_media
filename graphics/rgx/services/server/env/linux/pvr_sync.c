@@ -57,13 +57,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_debug.h"
 #include "pvrsrv.h"
 #include "sync_server.h"
-#include "rgxfwutils.h"
 
 #include "pvr_fd_sync_user.h"
-
-/* FIXME:
- * - fix the fence usage on all places in wsegl (DeleteBuffer and stuff)
- */
 
 /*#define DEBUG_OUTPUT 1*/
 
@@ -305,8 +300,6 @@ static void PVRSyncReleaseTimeline(struct sync_timeline *psObj)
     mutex_lock(&gTlListLock);
     list_del(&psPVRTl->sTlList);
     mutex_unlock(&gTlListLock);
-
-	/* FIXME: do we need to wait for all sync points to finish first? */
 }
 
 static void PVRSyncPrintTimeline(struct seq_file *s,
@@ -520,7 +513,7 @@ PVRSyncForeignSyncPtSignaled(struct sync_fence *fence,
 
 	/* Complete the SW operation and free the sync if we can. If we can't,
 	 * it will be checked by a later workqueue kick. */
-	ServerSyncCompleteOp(psWaiter->psSyncKernel->psSync, psWaiter->psSyncKernel->ui32SyncValue);
+	ServerSyncCompleteOp(psWaiter->psSyncKernel->psSync, IMG_TRUE, psWaiter->psSyncKernel->ui32SyncValue);
 
 	/* Can ignore retval because we queue_work anyway */
 	PVRSyncReleaseSyncPrim(psWaiter->psSyncKernel);
@@ -647,7 +640,7 @@ err_free_cleanup_sync:
 	}
 
 err_complete_sync:
-	ServerSyncCompleteOp(psSyncKernel->psSync, psSyncKernel->ui32SyncValue);
+	ServerSyncCompleteOp(psSyncKernel->psSync, IMG_TRUE, psSyncKernel->ui32SyncValue);
 
 err_free_sync:
 	eError = PVRSRVServerSyncFreeKM(psSyncKernel->psSync);
@@ -872,95 +865,6 @@ err_put_fd:
 }
 
 static long
-PVRSyncIOCTLSizeFence(struct PVR_SYNC_TIMELINE *psPVRTl, void __user *pvData)
-{
-	struct PVR_SYNC_SIZE_FENCE_IOCTL_DATA sData;
-	PVRSRV_ERROR eError;
-	IMG_UINT32 ui32NumFenceSyncs;
-	IMG_UINT32 ui32NumUpdateSyncs;
-	int err = -EFAULT;
-
-	if (!access_ok(VERIFY_READ, pvData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	if (copy_from_user(&sData, pvData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	eError = PVRFDSyncSizeFenceKM(sData.iFenceFd,
-								  sData.bUpdate,
-								  &ui32NumFenceSyncs,
-								  &ui32NumUpdateSyncs);
-	if (eError != PVRSRV_OK)
-	{
-		goto err_out;
-	}
-
-	sData.ui32NumSyncs = ui32NumFenceSyncs + ui32NumUpdateSyncs;
-
-	if (!access_ok(VERIFY_WRITE, pvData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	if (copy_to_user(pvData, &sData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	err = 0;
-
-err_out:
-	return err;
-}
-
-static long
-PVRSyncIOCTLQueryFence(struct PVR_SYNC_TIMELINE *psPVRTl, void __user *pvData)
-{
-	struct PVR_SYNC_QUERY_FENCE_IOCTL_DATA sData;
-	PVRSRV_ERROR eError;
-	int err = -EFAULT;
-
-	if (!access_ok(VERIFY_READ, pvData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	if (copy_from_user(&sData, pvData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	eError = PVRFDSyncQueryFenceKM(sData.iFenceFd,
-								   sData.bUpdate,
-								   PVR_SYNC_MAX_QUERY_FENCE_POINTS,
-								   &sData.ui32NumSyncs,
-								   sData.aPts);
-	if (eError != PVRSRV_OK)
-	{
-		goto err_out;
-	}
-
-	if (!access_ok(VERIFY_WRITE, pvData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	if (copy_to_user(pvData, &sData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	err = 0;
-
-err_out:
-	return err;
-}
-
-static long
 PVRSyncIOCTLDebugFence(struct PVR_SYNC_TIMELINE *psPVRTl, void __user *pvData)
 {
 	struct PVR_SYNC_DEBUG_FENCE_IOCTL_DATA sData;
@@ -1007,35 +911,6 @@ err_out:
 }
 
 static long
-PVRSyncIOCTLNoHwUpdateFence(struct PVR_SYNC_TIMELINE *psPVRTl, void __user *pvData)
-{
-	struct PVR_SYNC_NOHW_UPDATE_FENCE_IOCTL_DATA sData;
-	int err = -EFAULT;
-	PVRSRV_ERROR eError;
-
-	if (!access_ok(VERIFY_READ, pvData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	if (copy_from_user(&sData, pvData, sizeof(sData)))
-	{
-		goto err_out;
-	}
-
-	eError = PVRFDSyncNoHwUpdateFenceKM(sData.iFenceFd,
-										sData.ui32UpdateValue);
-
-	if (eError == PVRSRV_OK)
-	{
-		err = 0;
-	}
-
-err_out:
-	return err;
-}
-
-static long
 PVRSyncIOCTL(struct file *file, unsigned int cmd, unsigned long __user arg)
 {
 	struct PVR_SYNC_TIMELINE *psPVRTl = file->private_data;
@@ -1049,18 +924,9 @@ PVRSyncIOCTL(struct file *file, unsigned int cmd, unsigned long __user arg)
 		case PVR_SYNC_IOC_CREATE_FENCE:
             err = PVRSyncIOCTLCreateFence(psPVRTl, pvData);
 			break;
-		case PVR_SYNC_IOC_SIZE_FENCE:
-			err = PVRSyncIOCTLSizeFence(psPVRTl, pvData);
-			break;
-		case PVR_SYNC_IOC_QUERY_FENCE:
-			err = PVRSyncIOCTLQueryFence(psPVRTl, pvData);
-			break;
 		case PVR_SYNC_IOC_DEBUG_FENCE:
             err = PVRSyncIOCTLDebugFence(psPVRTl, pvData);
-			break;
-		case PVR_SYNC_IOC_NOHW_UPDATE_FENCE:
-			err = PVRSyncIOCTLNoHwUpdateFence(psPVRTl, pvData);
-			break;
+      			break;      
 		default:
 			break;
 	}
@@ -1261,7 +1127,10 @@ PVRSRV_ERROR PVRFDSyncDeviceInitKM(void)
 	
 	OSAcquireBridgeLock();
 
-	/* TODO: multiple devices support? */
+	/* 
+		note: if/when we support multiple concurrent devices, multiple GPUs or GPU plus
+		other services managed devices then we need to acquire more devices
+	*/
 	eError = PVRSRVAcquireDeviceDataKM(0, PVRSRV_DEVICE_TYPE_RGX, &gsPVRSync.hDevCookie);
 	if (eError != PVRSRV_OK)
 	{
@@ -1346,45 +1215,7 @@ void PVRFDSyncDeviceDeInitKM(void)
 	OSReleaseBridgeLock();
 }
 
-IMG_INTERNAL
-PVRSRV_ERROR PVRFDSyncSizeFenceKM(IMG_INT32 i32FDFence,
-								  IMG_BOOL bUpdate,
-								  IMG_UINT32 *pui32NumFenceSyncs,
-								  IMG_UINT32 *pui32NumUpdateSyncs)
-{
-	struct list_head *psEntry;
-    struct sync_fence *psFence = sync_fence_fdget(i32FDFence);
-	IMG_UINT ui32NumSyncs = 0;
-	PVRSRV_ERROR eError = PVRSRV_OK;
-
-	DPF("%s: fence %d ('%s')", __func__,
-		i32FDFence, psFence->name);
-
-	if (!psFence)
-		return PVRSRV_ERROR_HANDLE_NOT_FOUND;
-
-	*pui32NumFenceSyncs = 0;
-	*pui32NumUpdateSyncs = 0;
-
-	list_for_each(psEntry, &psFence->pt_list_head)
-		++ui32NumSyncs;
-
-	/* "Check" syncs get a cleanup sync attached. */
-	if (bUpdate)
-	{
-		*pui32NumUpdateSyncs = ui32NumSyncs;
-	}
-	else
-	{
-		*pui32NumFenceSyncs = ui32NumSyncs;
-		*pui32NumUpdateSyncs = ui32NumSyncs;
-	}
-
-	sync_fence_put(psFence);
-	return eError;
-}
-
-IMG_INTERNAL
+static
 PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 								   IMG_BOOL bUpdate,
 								   IMG_UINT32 ui32MaxNumSyncs,
@@ -1408,9 +1239,9 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 
 	*pui32NumSyncs = 0;
 
-	/* TODO: Optimization: If the fence itself or a single sync point is
-	 * already signaled, than don't return the entry. It makes no real sense to
-	 * send CHECK commands down to the firmware, when we already know they are
+	/* Optimization: If the fence itself or a single sync point is
+	 * already signaled, then don't return the entry. It makes no real sense to
+	 * send CHECK commands down to the firmware when we already know they are
 	 * fulfilled. */
 	list_for_each(psEntry, &psFence->pt_list_head)
 	{
@@ -1446,11 +1277,17 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 						 __func__));
 			}
 
+			/* If this is an request for CHECK and the sync point is already
+			 * signalled, don't return it to the caller. The operation is
+			 * already fullfiled in this case and needs no waiting on. */
+			if (   !bUpdate
+				&&  psPVRPt->bSignaled)
+				continue;
+
 			/* Save this within the sync point. */
 			aPts[*pui32NumSyncs].ui32FWAddr      = psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr;
 			aPts[*pui32NumSyncs].ui32Flags       = (bUpdate ? PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE :
-															  PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK) 
-												   | PVRSRV_CLIENT_SYNC_PRIM_OP_SYNC_FD;
+															  PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK);
 			aPts[*pui32NumSyncs].ui32FenceValue  = psPVRPt->psSyncData->psSyncKernel->ui32SyncValue;
 			aPts[*pui32NumSyncs].ui32UpdateValue = psPVRPt->psSyncData->psSyncKernel->ui32SyncValue;
 			++*pui32NumSyncs;
@@ -1494,7 +1331,7 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 				}
 				/* Save this within the sync point. */
 				aPts[*pui32NumSyncs].ui32FWAddr      = psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr;
-				aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE | PVRSRV_CLIENT_SYNC_PRIM_OP_SYNC_FD;
+				aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE;
 				aPts[*pui32NumSyncs].ui32FenceValue  = psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue;
 				aPts[*pui32NumSyncs].ui32UpdateValue = psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue;
 				++*pui32NumSyncs;
@@ -1526,13 +1363,13 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 			}
 
 			aPts[*pui32NumSyncs].ui32FWAddr      = psSyncKernel->ui32SyncPrimVAddr;
-			aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK | PVRSRV_CLIENT_SYNC_PRIM_OP_SYNC_FD;
+			aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK;
 			aPts[*pui32NumSyncs].ui32FenceValue  = psSyncKernel->ui32SyncValue;
 			aPts[*pui32NumSyncs].ui32UpdateValue = psSyncKernel->ui32SyncValue;
 			++*pui32NumSyncs;
 
 			aPts[*pui32NumSyncs].ui32FWAddr      = psSyncKernel->ui32CleanUpVAddr;
-			aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE | PVRSRV_CLIENT_SYNC_PRIM_OP_SYNC_FD;
+			aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE;
 			aPts[*pui32NumSyncs].ui32FenceValue  = psSyncKernel->ui32CleanUpValue;
 			aPts[*pui32NumSyncs].ui32UpdateValue = psSyncKernel->ui32CleanUpValue;
 			++*pui32NumSyncs;
@@ -1545,8 +1382,122 @@ err_put:
 }
 
 IMG_INTERNAL
-PVRSRV_ERROR PVRFDSyncNoHwUpdateFenceKM(IMG_INT32 i32FDFence,
-										IMG_UINT32 ui32UpdateValue)
+PVRSRV_ERROR PVRFDSyncQueryFencesKM(IMG_UINT32 ui32NumFDFences,
+									IMG_INT32 *ai32FDFences,
+									IMG_BOOL bUpdate,
+									IMG_UINT32 *pui32NumFenceSyncs,
+									PRGXFWIF_UFO_ADDR **ppuiFenceFWAddrs,
+									IMG_UINT32 **ppui32FenceValues,
+									IMG_UINT32 *pui32NumUpdateSyncs,
+									PRGXFWIF_UFO_ADDR **ppuiUpdateFWAddrs,
+									IMG_UINT32 **ppui32UpdateValues)
+{
+	PVR_SYNC_POINT_DATA aPts[PVR_SYNC_MAX_QUERY_FENCE_POINTS];
+	IMG_UINT32 ui32NumSyncs;
+	PRGXFWIF_UFO_ADDR auiFenceFWAddrsTmp[PVR_SYNC_MAX_QUERY_FENCE_POINTS * ui32NumFDFences];
+	IMG_UINT32 aui32FenceValuesTmp[PVR_SYNC_MAX_QUERY_FENCE_POINTS * ui32NumFDFences];
+	PRGXFWIF_UFO_ADDR auiUpdateFWAddrsTmp[PVR_SYNC_MAX_QUERY_FENCE_POINTS * ui32NumFDFences];
+	IMG_UINT32 aui32UpdateValuesTmp[PVR_SYNC_MAX_QUERY_FENCE_POINTS * ui32NumFDFences];
+	IMG_UINT32 i, a, f = 0, u = 0;
+	PVRSRV_ERROR eError = PVRSRV_OK;
+
+	*ppuiFenceFWAddrs = IMG_NULL;
+	*ppui32FenceValues = IMG_NULL;
+	*ppuiUpdateFWAddrs = IMG_NULL;
+	*ppui32UpdateValues = IMG_NULL;
+	*pui32NumFenceSyncs = 0;
+	*pui32NumUpdateSyncs = 0;
+
+	for (i = 0; i < ui32NumFDFences; i++)
+	{
+		eError = PVRFDSyncQueryFenceKM(ai32FDFences[i],
+									   bUpdate,
+									   PVR_SYNC_MAX_QUERY_FENCE_POINTS,
+									   &ui32NumSyncs,
+									   aPts);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: query fence %d failed (%s)", 
+					 __func__, ai32FDFences[i], PVRSRVGetErrorStringKM(eError)));
+			goto err_out;
+		}			
+		for (a = 0; a < ui32NumSyncs; a++)
+		{
+			if (aPts[a].ui32Flags & PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK)
+			{
+				auiFenceFWAddrsTmp[f].ui32Addr = aPts[a].ui32FWAddr;
+				aui32FenceValuesTmp[f] = aPts[a].ui32FenceValue;
+				if (++f == (PVR_SYNC_MAX_QUERY_FENCE_POINTS * ui32NumFDFences))
+				{
+					PVR_DPF((PVR_DBG_WARNING, "%s: To less space on fence query for all "
+							 "the sync points in this fence", __func__));
+					goto err_copy;
+				}
+			}
+			if (aPts[a].ui32Flags & PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE)
+			{
+				auiUpdateFWAddrsTmp[u].ui32Addr = aPts[a].ui32FWAddr;
+				aui32UpdateValuesTmp[u] = aPts[a].ui32UpdateValue;
+				if (++u == (PVR_SYNC_MAX_QUERY_FENCE_POINTS * ui32NumFDFences))
+				{
+					PVR_DPF((PVR_DBG_WARNING, "%s: To less space on fence query for all "
+							 "the sync points in this fence", __func__));
+					goto err_copy;
+				}
+			}
+		}
+	}
+
+err_copy:
+	if (f)
+	{
+		*ppuiFenceFWAddrs = OSAllocMem(sizeof(PRGXFWIF_UFO_ADDR) * f);
+		if (!*ppuiFenceFWAddrs)
+		{
+			eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+			goto err_out;
+		}
+		*ppui32FenceValues = OSAllocMem(sizeof(IMG_UINT32) * f);
+		if (!*ppui32FenceValues)
+		{
+			OSFreeMem(*ppuiFenceFWAddrs);
+			eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+			goto err_out;
+		}
+		OSMemCopy(*ppuiFenceFWAddrs, auiFenceFWAddrsTmp, sizeof(IMG_UINT32) * f);
+		OSMemCopy(*ppui32FenceValues, aui32FenceValuesTmp, sizeof(IMG_UINT32) * f);
+		*pui32NumFenceSyncs = f;
+	}
+	if (u)
+	{
+		*ppuiUpdateFWAddrs = OSAllocMem(sizeof(PRGXFWIF_UFO_ADDR) * u);
+		if (!*ppuiUpdateFWAddrs)
+		{
+			OSFreeMem(*ppuiFenceFWAddrs);
+			OSFreeMem(*ppui32FenceValues);
+			eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+			goto err_out;
+		}
+		*ppui32UpdateValues = OSAllocMem(sizeof(IMG_UINT32) * u);
+		if (!*ppui32UpdateValues)
+		{
+			OSFreeMem(*ppuiFenceFWAddrs);
+			OSFreeMem(*ppui32FenceValues);
+			OSFreeMem(*ppuiUpdateFWAddrs);
+			eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+			goto err_out;
+		}
+		OSMemCopy(*ppuiUpdateFWAddrs, auiUpdateFWAddrsTmp, sizeof(IMG_UINT32) * u);
+		OSMemCopy(*ppui32UpdateValues, aui32UpdateValuesTmp, sizeof(IMG_UINT32) * u);
+		*pui32NumUpdateSyncs = u;
+	}
+
+err_out:
+	return eError;
+}
+
+IMG_INTERNAL
+PVRSRV_ERROR PVRFDSyncNoHwUpdateFenceKM(IMG_INT32 i32FDFence)
 {
 	struct list_head *psEntry;
 	struct sync_fence *psFence = sync_fence_fdget(i32FDFence);
@@ -1554,7 +1505,8 @@ PVRSRV_ERROR PVRFDSyncNoHwUpdateFenceKM(IMG_INT32 i32FDFence,
 
 	if (!psFence)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: fence for fd=%d not found", __func__, i32FDFence));
+		PVR_DPF((PVR_DBG_ERROR, "%s: fence for fd=%d not found",
+				 __func__, i32FDFence));
 		return PVRSRV_ERROR_HANDLE_NOT_FOUND;
 	}
 
@@ -1566,17 +1518,17 @@ PVRSRV_ERROR PVRFDSyncNoHwUpdateFenceKM(IMG_INT32 i32FDFence,
 		if (psPt->parent->ops == &gsPVR_SYNC_TIMELINE_ops)
 		{
 			struct PVR_SYNC_PT *psPVRPt = (struct PVR_SYNC_PT *)psPt;
+			struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel =
+				psPVRPt->psSyncData->psSyncKernel;
 
-			if (PVRSRVServerSyncPrimSetKM(psPVRPt->psSyncData->psSyncKernel->psSync,
-										  ui32UpdateValue) == PVRSRV_OK)
-			{
-				sync_timeline_signal(psPt->parent);
-			}
-			else
-			{
+			eError = PVRSRVServerSyncPrimSetKM(psSyncKernel->psSync,
+											   psSyncKernel->ui32SyncValue);
+			if (eError != PVRSRV_OK)
 				PVR_DPF((PVR_DBG_ERROR, "%s: Failed to update backing sync prim. "
-						 "This might cause lockups", __func__));
-			}
+						 "This might cause lockups (%s)",
+						 __func__, PVRSRVGetErrorStringKM(eError)));
+			else
+				sync_timeline_signal(psPt->parent);
 		}
 	}
 

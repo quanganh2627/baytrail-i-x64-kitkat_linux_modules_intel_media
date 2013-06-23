@@ -61,7 +61,7 @@ typedef struct _SYS_DEVICE_ID_TAG
 
 } SYS_DEVICE_ID;
 
-/* FIXME: Anything that uses SYS_DEVICE_COUNT should be changed */
+
 typedef struct PVRSRV_DATA_TAG
 {
     IMG_UINT32                  ui32NumDevices;      	   	/*!< number of devices in system */

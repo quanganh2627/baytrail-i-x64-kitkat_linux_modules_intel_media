@@ -62,7 +62,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMem(IMG_HANDLE hBridge,
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
-
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -73,7 +72,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMem(IMG_HANDLE hBridge,
 					uiOffset,
 					uiSize,
 					ui32PDumpFlags);
-
 
 	return eError;
 }
@@ -86,7 +84,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMemValue32(IMG_HANDLE h
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
-
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -97,7 +94,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMemValue32(IMG_HANDLE h
 					uiOffset,
 					ui32Value,
 					ui32PDumpFlags);
-
 
 	return eError;
 }
@@ -110,7 +106,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMemValue64(IMG_HANDLE h
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
-
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -121,7 +116,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpLoadMemValue64(IMG_HANDLE h
 					uiOffset,
 					ui64Value,
 					ui32PDumpFlags);
-
 
 	return eError;
 }
@@ -135,7 +129,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpSaveToFile(IMG_HANDLE hBrid
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
-
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -147,7 +140,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpSaveToFile(IMG_HANDLE hBrid
 					uiSize,
 					ui32ArraySize,
 					puiFileName);
-
 
 	return eError;
 }
@@ -164,7 +156,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpSymbolicAddr(IMG_HANDLE hBr
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
-
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -180,7 +171,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpSymbolicAddr(IMG_HANDLE hBr
 					puiNewOffset,
 					puiNextSymName);
 
-
 	return eError;
 }
 
@@ -194,7 +184,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpPol32(IMG_HANDLE hBridge,
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
-
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -208,7 +197,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpPol32(IMG_HANDLE hBridge,
 					eOperator,
 					ui32PDumpFlags);
 
-
 	return eError;
 }
 
@@ -221,7 +209,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpCBP(IMG_HANDLE hBridge,
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
-
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psPMRInt = (PMR *) hPMR;
@@ -233,7 +220,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRPDumpCBP(IMG_HANDLE hBridge,
 					uiWriteOffset,
 					uiPacketSize,
 					uiBufferSize);
-
 
 	return eError;
 }
@@ -249,7 +235,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntPDumpSaveToFileVirtual(IMG
 {
 	PVRSRV_ERROR eError;
 	DEVMEMINT_CTX * psDevmemServerContextInt;
-
 	PVR_UNREFERENCED_PARAMETER(hBridge);
 
 	psDevmemServerContextInt = (DEVMEMINT_CTX *) hDevmemServerContext;
@@ -263,7 +248,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntPDumpSaveToFileVirtual(IMG
 					puiFileName,
 					ui32FileOffset,
 					ui32PDumpFlags);
-
 
 	return eError;
 }

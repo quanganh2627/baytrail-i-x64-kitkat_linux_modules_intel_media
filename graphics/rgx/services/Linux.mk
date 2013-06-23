@@ -103,7 +103,9 @@ services_tests_manual:  tlioctl_cmd
 services_tests_auto:	tlintern_test \
 						tlstream_test \
 						tlclient_test \
-						rgx_hwperf_test
+						rgx_hwperf_test \
+						services_apiperf_test \
+						ri_test
 
 # All 
 

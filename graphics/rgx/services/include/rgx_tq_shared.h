@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.77.4.5
+@File
+@Title          RGX transfer queue shared
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    Shared definations between client and server
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,33 +41,23 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_77_4_5_H_
-#define _RGXCORE_KM_1_77_4_5_H_
+#ifndef __RGX_TQ_SHARED_H__
+#define __RGX_TQ_SHARED_H__
 
-/***** Automatically generated file (5/13/2013 9:25:39 AM): Do not edit manually ********************/
-/***** Timestamp:  (5/13/2013 9:25:39 AM)************************************************************/
-/***** CS: @2319812 ******************************************************************/
+#define TQ_MAX_PREPARES_PER_SUBMIT		16
 
+#define TQ_PREP_FLAGS_COMMAND_3D		0x0
+#define TQ_PREP_FLAGS_COMMAND_2D		0x1
+#define TQ_PREP_FLAGS_COMMAND_MASK		(0xf)
+#define TQ_PREP_FLAGS_COMMAND_SHIFT		0
+#define TQ_PREP_FLAGS_PDUMPCONTINUOUS	(1 << 4)
+#define TQ_PREP_FLAGS_START				(1 << 5)
+#define TQ_PREP_FLAGS_END				(1 << 6)
 
-/******************************************************************************
- * BVNC = 1.77.4.5 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 77
-#define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 5
+#define TQ_PREP_FLAGS_COMMAND_SET(m) \
+	((TQ_PREP_FLAGS_COMMAND_##m << TQ_PREP_FLAGS_COMMAND_SHIFT) & TQ_PREP_FLAGS_COMMAND_MASK)
 
-/******************************************************************************
- * Errata 
- *****************************************************************************/
+#define TQ_PREP_FLAGS_COMMAND_IS(m,n) \
+	(((m & TQ_PREP_FLAGS_COMMAND_MASK) >> TQ_PREP_FLAGS_COMMAND_SHIFT)  == TQ_PREP_FLAGS_COMMAND_##n)
 
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-
-
-#endif /* _RGXCORE_KM_1_77_4_5_H_ */
+#endif /* __RGX_TQ_SHARED_H__ */

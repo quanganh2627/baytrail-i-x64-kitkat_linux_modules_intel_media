@@ -733,7 +733,6 @@ static int PVRSRVOpen(struct inode unref__ * pInode, struct file *pFile)
 		we can back reference the file structure from it's connection
 	*/
 	eError = PVRSRVConnectionConnect(&psPrivateData->pvConnectionData, (IMG_PVOID) pFile);
-
 	if (eError != PVRSRV_OK)
 	{
 		OSFreeMem(psPrivateData);
@@ -747,12 +746,8 @@ static int PVRSRVOpen(struct inode unref__ * pInode, struct file *pFile)
 	psPrivateData->uPID = OSGetCurrentProcessIDKM();
 	list_add_tail(&psPrivateData->sDRMAuthListItem, &sDRMAuthListHead);
 #endif
-#if defined(SUPPORT_DRM)
-	psPrivateData->bGEMSharedData = IMG_FALSE;
-#endif
 	PRIVATE_DATA(pFile) = psPrivateData;
 	LinuxUnLockMutex(&gPVRSRVLock);
-
 	return 0;
 
 err_unlock:	
@@ -1085,13 +1080,11 @@ static int __init PVRCore_Init(void)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "PVRCore_Init: unable to create sync (%d)", eError));
 		error = -EBUSY;
-
 #if !defined(SUPPORT_DRM)
 		goto destroy_class;
 #else
 		goto init_failed;
 #endif
-
 	}
 #endif
 
@@ -1247,7 +1240,7 @@ module_exit(PVRCore_Cleanup);
 #endif
 
 /*!
-******************************************************************************
+ ******************************************************************************
 
  @Function		PVRSRVRGXSetPowerState
 
@@ -1255,7 +1248,7 @@ module_exit(PVRCore_Cleanup);
 
  @Description
 
-*****************************************************************************/
+ *****************************************************************************/
 int PVRSRVRGXSetPowerState(struct drm_device *dev, int ePVRState)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;

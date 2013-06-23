@@ -47,7 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "img_types.h"
 #include "pdump_km.h"
-#include "pdump_osfunc.h" /* << ugly circular dependency! FIXME FIXME */
+#include "pdump_osfunc.h"
 #include "osfunc.h"
 #include "pdump.h"
 #include "pvr_debug.h"
@@ -56,15 +56,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define MAX_PDUMP_MMU_CONTEXTS	(10)
 static IMG_UINT32 guiPDumpMMUContextAvailabilityMask = (1<<MAX_PDUMP_MMU_CONTEXTS)-1;
 
-/* arbitrary buffer length here.  FIXME: store this data in the MD
-   rather than construct it on the fly on everyone's stacks */
+/* arbitrary buffer length here. */
 #define MAX_SYMBOLIC_ADDRESS_LENGTH 40
 
 #define MMUPT_FMT  "MMUPT_%016llX"   
 
-static PVRSRV_ERROR /* FIXME: I wanted this to be void,
-                       but I can't because of the
-                       PDUMP_GET_SCRIPT_AND_FILE_STRING macro */
+static PVRSRV_ERROR 
 _ContiguousPDumpBytes(const IMG_CHAR *pszSymbolicName,
                       IMG_UINT32 ui32SymAddrOffset,
                       IMG_BOOL bFlush,
@@ -72,12 +69,10 @@ _ContiguousPDumpBytes(const IMG_CHAR *pszSymbolicName,
                       IMG_VOID *pvBytes,
                       IMG_UINT32 ui32Flags)
 {
-    /* FIXME:  ought to have a notion of a "context" for this, perhaps */
     static const IMG_CHAR *pvBeyondLastPointer;
     static const IMG_CHAR *pvBasePointer;
     static IMG_UINT32 ui32BeyondLastOffset;
     static IMG_UINT32 ui32BaseOffset;
-    //FIXME//    static const IMG_CHAR *pszLastSymbolicName;
     static IMG_UINT32 uiAccumulatedBytes = 0;
 	IMG_UINT32 ui32ParamOutPos;
     PVRSRV_ERROR eErr = PVRSRV_OK;
@@ -101,10 +96,6 @@ _ContiguousPDumpBytes(const IMG_CHAR *pszSymbolicName,
     /* Flush if necessary */
     if (bFlush && uiAccumulatedBytes > 0)
     {        
-        /* This stuff hoiked from a high-level func pdump_common,
-           FIXME: put the common code in a more common place, where we
-           can use it here */
-
         PDumpOSCheckForSplitting(PDumpOSGetStream(PDUMP_STREAM_PARAM2), uiAccumulatedBytes, ui32Flags);
         ui32ParamOutPos = PDumpOSGetStreamOffset(PDUMP_STREAM_PARAM2);
 
@@ -464,7 +455,6 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
 	*/
 	ui64PCSymAddr = sPCDevPAddr.uiAddr;
 
-    /* FIXME: should this be in the PC MD, perhaps? */
     OSSNPrintf(aszPCSymbolicAddr,
                MAX_SYMBOLIC_ADDRESS_LENGTH,
                ":%s:" MMUPT_FMT,
@@ -485,11 +475,7 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
 		ui32SymAddrOffset = (uiPCEIdx*uiBytesPerEntry);
 		
 		/* Calc the symbolic address of the PCE value and HW protflags */
-#if 0//FIXME - use callback from mmu_common.c
-		sPCEValueDevPAddr = pfnGetPCEAddr(pvPCMem, uiPCEIdx);
-		uiPCEProtFlags = pfnGetPCEProtFlags(pvPCMem, uiPCEIdx);
-        bPCEValid = ?
-#else
+
 		/* just read it here */
 		switch(uiBytesPerEntry)
 		{
@@ -522,8 +508,6 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
         ui64Protflags64 = ui64PCE64 & uiPCEProtMask;
 
         bPCEValid = (ui64Protflags64 & 1) ? IMG_TRUE : IMG_FALSE;
-        /* FIXME: ought to pass _actual_ value in the case where it is invalid */
-#endif
 		
         if(bPCEValid)
         {
@@ -549,7 +533,7 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
                                     ui64PCEValueSymAddr);
             if (eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
             PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);		
             
@@ -562,9 +546,6 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
                amount to get it into the position of the field.
                This is optimised into a single shift right by the
                difference between the two. */
-            /* FIXME: find out whether SHR by 0 or -ve
-               amount is legal.  If so, we can get rid of this
-               shift */
             if (iShiftAmount > 0)
             {
                 /* Page Directory Address is specified in units larger
@@ -580,7 +561,7 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
                                         iShiftAmount);
                 if (eErr != PVRSRV_OK)
                 {
-                    goto ErrUnlock; /* FIXME: proper error handling */
+                    goto ErrUnlock;
                 }
                 PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
             }
@@ -599,7 +580,7 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
                                         -iShiftAmount);
                 if (eErr != PVRSRV_OK)
                 {
-                    goto ErrUnlock; /* FIXME: proper error handling */
+                    goto ErrUnlock;
                 }
                 PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
             }
@@ -616,7 +597,7 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
                                     ui64Protflags64);
             if (eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
             PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
 
@@ -633,7 +614,7 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
                                     pszPDumpDevName);
             if(eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
             PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
         }
@@ -646,7 +627,7 @@ PVRSRV_ERROR PDumpMMUDumpPCEntries(const IMG_CHAR *pszPDumpDevName,
                                          ui32Flags | PDUMP_FLAGS_CONTINUOUS);
             if (eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
         }
     }
@@ -726,7 +707,6 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
 	*/
 	ui64PDSymAddr = sPDDevPAddr.uiAddr;
 
-    /* FIXME: should this be in the PD MD, perhaps? */
     OSSNPrintf(aszPDSymbolicAddr,
                MAX_SYMBOLIC_ADDRESS_LENGTH,
                ":%s:" MMUPT_FMT,
@@ -746,11 +726,6 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
 		ui32SymAddrOffset = (uiPDEIdx*uiBytesPerEntry);
 		
 		/* Calc the symbolic address of the PDE value and HW protflags */
-#if 0//FIXME - use callback from mmu_common.c
-		sPDEValueDevPAddr = pfnGetPDEAddr(pvPDMem, uiPDEIdx);
-		uiPDEProtFlags = pfnGetPDEProtFlags(pvPDMem, uiPDEIdx);
-        bPDEValid = pfn???
-#else
 		/* just read it here */
 		switch(uiBytesPerEntry)
 		{
@@ -783,7 +758,6 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
         ui64Protflags64 = ui64PDE64 & uiPDEProtMask;
 
         bPDEValid = (ui64Protflags64 & 1) ? IMG_TRUE : IMG_FALSE;
-#endif
 
         if(bPDEValid)
         {
@@ -809,7 +783,7 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
                                     ui64PDEValueSymAddr);
             if (eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
             PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
             
@@ -822,9 +796,6 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
                amount to get it into the position of the field.
                This is optimised into a single shift right by the
                difference between the two. */
-            /* FIXME: find out whether SHR by 0 or -ve
-               amount is legal.  If so, we can get rid of this
-               shift */
             if (iShiftAmount > 0)
             {
                 /* Page Table Address is specified in units larger
@@ -840,7 +811,7 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
                                         iShiftAmount);
                 if (eErr != PVRSRV_OK)
                 {
-                    goto ErrUnlock; /* FIXME: proper error handling */
+                    goto ErrUnlock;
                 }
                 PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
             }
@@ -859,7 +830,7 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
                                         -iShiftAmount);
                 if (eErr != PVRSRV_OK)
                 {
-                    goto ErrUnlock; /* FIXME: proper error handling */
+                    goto ErrUnlock;
                 }
                 PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
             }
@@ -876,7 +847,7 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
                                     ui64Protflags64);
             if (eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
             PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
 
@@ -893,7 +864,7 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
                                     pszPDumpDevName);
             if(eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
             PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
         }
@@ -906,7 +877,7 @@ PVRSRV_ERROR PDumpMMUDumpPDEntries(const IMG_CHAR *pszPDumpDevName,
                                          ui32Flags | PDUMP_FLAGS_CONTINUOUS);
             if (eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
         }
 	}
@@ -935,8 +906,8 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
                                    IMG_DEV_PHYADDR sPTDevPAddr, 
                                    IMG_UINT32 uiFirstEntry, 
                                    IMG_UINT32 uiNumEntries, 
-                                   const IMG_CHAR *pszDPMemspaceName, // mustn't change - FIXME? perhaps valid for 1 entry only.
-                                   const IMG_CHAR *pszDPSymbolicAddr, // mustn't change - FIXME? perhaps valid for 1 entry only.
+                                   const IMG_CHAR *pszDPMemspaceName,
+                                   const IMG_CHAR *pszDPSymbolicAddr,
                                    IMG_UINT64 uiDPSymbolicAddrOffset,
                                    IMG_UINT32 uiBytesPerEntry,
                                    IMG_UINT32 uiDPLog2Align,
@@ -947,7 +918,7 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 {
 	PVRSRV_ERROR eErr;
     IMG_UINT64 ui64PTSymAddr;
-    IMG_UINT32 ui32PTESymAddrOffset = 0; // FIXME:  PT itself ought to be a PMR.  This ought to go away!
+    IMG_UINT32 ui32PTESymAddrOffset = 0;
     IMG_UINT32 *pui32PTMem;
     IMG_UINT64 *pui64PTMem;
     IMG_BOOL   bPTEValid;
@@ -961,9 +932,6 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 
 	PDUMP_GET_SCRIPT_STRING();
 
-    /* FIXME: we ought to change the API really.  These values are not
-       relevant for this new way of doing stuff - i.e. we should be
-       reading in the page table entry itself.  We should know it! */
     PVR_UNREFERENCED_PARAMETER(uiDPAddrShift);
     PVR_UNREFERENCED_PARAMETER(uiDPAddrMask);
 
@@ -994,7 +962,6 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 	*/
 	ui64PTSymAddr = sPTDevPAddr.uiAddr;
 
-    /* FIXME: should this be in the PT MD, perhaps? */
     OSSNPrintf(aszPTSymbolicAddr,
                MAX_SYMBOLIC_ADDRESS_LENGTH,
                ":%s:" MMUPT_FMT,
@@ -1014,11 +981,6 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 		ui32PTESymAddrOffset = (uiPTEIdx*uiBytesPerEntry);
 		
 		/* Calc the symbolic address of the PTE value and HW protflags */
-#if 0//FIXME - use callback from mmu_common.c
-		sPTEValueDevPAddr = pfnGetPTEAddr(pvPTMem, uiPTEIdx);
-		uiPTEProtFlags = pfnGetPTEProtFlags(pvPTMem, uiPTEIdx);
-        bPTEValid = ?
-#else
 		/* just read it here */
 		switch(uiBytesPerEntry)
 		{
@@ -1050,7 +1012,6 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
         ui64Protflags64 = ui64PTE64 & uiPTEProtMask;
 
         bPTEValid = (ui64Protflags64 & 1) ? IMG_TRUE : IMG_FALSE;
-#endif
 		
         if(bPTEValid)
         {
@@ -1089,7 +1050,7 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 						ui64Protflags64);
 				if(eErr != PVRSRV_OK)
 				{
-					goto ErrUnlock; /* FIXME: proper error handling */
+					goto ErrUnlock;
 				}
 				PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
 			}
@@ -1107,7 +1068,7 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 						uiDPSymbolicAddrOffset);
 				if (eErr != PVRSRV_OK)
 				{
-					goto ErrUnlock; /* FIXME: proper error handling */
+					goto ErrUnlock;
 				}
 				PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
 
@@ -1120,9 +1081,6 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 				   amount to get it into the position of the field.
 				   This is optimised into a single shift right by the
 				   difference between the two. */
-				/* FIXME: find out whether SHR by 0 or -ve
-				   amount is legal.  If so, we can get rid of this
-				   shift */
 				if (iShiftAmount > 0)
 				{
 					/* Data Page Address is specified in units larger
@@ -1138,7 +1096,7 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 							iShiftAmount);
 					if (eErr != PVRSRV_OK)
 					{
-						goto ErrUnlock; /* FIXME: proper error handling */
+						goto ErrUnlock;
 					}
 					PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
 				}
@@ -1157,7 +1115,7 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 							-iShiftAmount);
 					if (eErr != PVRSRV_OK)
 					{
-						goto ErrUnlock; /* FIXME: proper error handling */
+						goto ErrUnlock;
 					}
 					PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
 				}
@@ -1177,7 +1135,7 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
 						ui64Protflags64);
 				if(eErr != PVRSRV_OK)
 				{
-					goto ErrUnlock; /* FIXME: proper error handling */
+					goto ErrUnlock;
 				}
 				PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
 			}
@@ -1191,7 +1149,7 @@ PVRSRV_ERROR PDumpMMUDumpPTEntries(const IMG_CHAR *pszPDumpDevName,
                                          ui32Flags | PDUMP_FLAGS_CONTINUOUS);
             if (eErr != PVRSRV_OK)
             {
-                goto ErrUnlock; /* FIXME: proper error handling */
+                goto ErrUnlock;
             }
         }
 	}
@@ -1267,7 +1225,6 @@ static PVRSRV_ERROR _PdumpFreeMMUContext(IMG_UINT32 ui32MMUContextID)
  * Returns        : PVRSRV_ERROR
  * Description    : Set MMU Context
 **************************************************************************/
-/* FIXME: some device specific stuff here */
 PVRSRV_ERROR PDumpMMUAllocMMUContext(const IMG_CHAR *pszPDumpMemSpaceName,
                                      IMG_DEV_PHYADDR sPCDevPAddr,
                                      IMG_UINT32 *pui32MMUContextID)
@@ -1276,23 +1233,20 @@ PVRSRV_ERROR PDumpMMUAllocMMUContext(const IMG_CHAR *pszPDumpMemSpaceName,
 
 
 	IMG_UINT32 ui32MMUContextID;
-	PVRSRV_ERROR eErr; /* FIXME: PDump print function shouldn't return error */
+	PVRSRV_ERROR eErr;
 	PDUMP_GET_SCRIPT_STRING();
 
 	eErr = _PdumpAllocMMUContext(&ui32MMUContextID);
 	if(eErr != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "PDumpSetMMUContext: _PdumpAllocMMUContext failed: %d", eErr));
-        PVR_DBG_BREAK; // FIXME: removeme when caller can handle errors
+        PVR_DBG_BREAK;
 		goto ErrOut;
 	}
 
 	/*
 		create the symbolic address of the PC
     */
-    /*
-        FIXME:  this should be part of the PC's MD, surely?
-	*/
 	ui64PCSymAddr = sPCDevPAddr.uiAddr;
 
 	eErr = PDumpOSBufprintf(hScript,
@@ -1302,13 +1256,13 @@ PVRSRV_ERROR PDumpMMUAllocMMUContext(const IMG_CHAR *pszPDumpMemSpaceName,
                             pszPDumpMemSpaceName,
                             ui32MMUContextID,
                             /* mmu type */
-                            6, /* FIXME: Need to get this from devicenode somehow */
+                            6,
                             /* PC base address */
                             pszPDumpMemSpaceName,
                             ui64PCSymAddr);
 	if(eErr != PVRSRV_OK)
 	{
-        PVR_DBG_BREAK; // FIXME: removeme when caller can handle errors
+        PVR_DBG_BREAK;
 		goto ErrOut;
 	}
 
@@ -1337,9 +1291,6 @@ PVRSRV_ERROR PDumpMMUFreeMMUContext(const IMG_CHAR *pszPDumpMemSpaceName,
 	PVRSRV_ERROR eErr;
 	PDUMP_GET_SCRIPT_STRING();
 
-	/* FIXME: Propagate error from PDumpComment once it's supported on
-	 * all OSes and platforms
-	 */
 	eErr = PDumpOSBufprintf(hScript,
                             ui32MaxLen,
                             "-- Clear MMU Context for memory space %s", pszPDumpMemSpaceName);
@@ -1428,7 +1379,7 @@ PVRSRV_ERROR PDumpMMUActivateCatalog(const IMG_CHAR *pszPDumpRegSpaceName,
                             pszPDumpPCSymbolicName);
     if (eErr != PVRSRV_OK)
     {
-        goto ErrUnlock; /* FIXME: proper error handling */
+        goto ErrUnlock;
     }
     PDumpOSWriteString2(hScript, ui32Flags | PDUMP_FLAGS_CONTINUOUS);
 
@@ -1439,7 +1390,6 @@ ErrOut:
 }
 
 
-/* FIXME: split to separate file... (not really "MMU" specific... or... is it? */
 PVRSRV_ERROR
 PDumpMMUSAB(const IMG_CHAR *pszPDumpMemNamespace,
                IMG_UINT32 uiPDumpMMUCtx,

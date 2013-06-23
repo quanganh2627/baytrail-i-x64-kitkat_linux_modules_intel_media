@@ -119,7 +119,6 @@ PVRSRV_ERROR RegisterRGXINITFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXTA3DFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXTQFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXCMPFunctions(IMG_VOID);
-PVRSRV_ERROR RegisterRGXCCBFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterBREAKPOINTFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterDEBUGMISCFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXPDUMPFunctions(IMG_VOID);
@@ -138,11 +137,14 @@ PVRSRV_ERROR RegisterSMMFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterPMMIFFunctions(IMG_VOID);
 #endif
 PVRSRV_ERROR RegisterPVRTLFunctions(IMG_VOID);
+#if defined(PVR_RI_DEBUG)
+PVRSRV_ERROR RegisterRIFunctions(IMG_VOID);
+#endif
 #if defined(SUPPORT_ION)
 PVRSRV_ERROR RegisterIONFunctions(IMG_VOID);
 #endif
 
-/* FIXME: These and their friends above will go when full bridge gen comes in */
+/* These and their friends above will go when full bridge gen comes in */
 PVRSRV_ERROR
 LinuxBridgeInit(IMG_VOID);
 IMG_VOID
@@ -151,7 +153,6 @@ LinuxBridgeDeInit(IMG_VOID);
 PVRSRV_ERROR
 LinuxBridgeInit(IMG_VOID)
 {
-
 	PVRSRV_ERROR	eError;
 
 #if defined(DEBUG_BRIDGE_KM)
@@ -269,13 +270,16 @@ LinuxBridgeInit(IMG_VOID)
 		return eError;
 	}
 
-#if defined (SUPPORT_RGX)
-	eError = RegisterRGXTQFunctions();
+	#if defined(PVR_RI_DEBUG)
+	eError = RegisterRIFunctions();
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
 	}
-	eError = RegisterRGXCCBFunctions();
+	#endif
+
+	#if defined (SUPPORT_RGX)
+	eError = RegisterRGXTQFunctions();
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
@@ -527,6 +531,5 @@ PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int unref__ ioctlCmd, unsig
 unlock_and_return:
 #endif
 	LinuxUnLockMutex(&gPVRSRVLock);
-
 	return err;
 }

@@ -55,11 +55,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 typedef IMG_VOID *PMR_IMPL_PRIVDATA;
 
-/*
-  FIXME:
-  is it right that PMR flags takes the same type as memallocflags?
-  Strictly, it would only need to be a subset.
-*/
 typedef PVRSRV_MEMALLOCFLAGS_T PMR_FLAGS_T;
 
 typedef struct {

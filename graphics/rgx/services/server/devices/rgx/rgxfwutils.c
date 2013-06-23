@@ -58,6 +58,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgx_fwif.h"
 #include "rgx_fwif_alignchecks_km.h"
 #include "rgx_fwif_resetframework.h"
+#include "rgx_pdump_panics.h"
 #include "rgxheapconfig.h"
 #include "pvrsrv.h"
 #include "rgxdebug.h"
@@ -83,6 +84,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGXFWIF_KCCB_2D_NUMCMDS_LOG2	(6)
 #define RGXFWIF_KCCB_CDM_NUMCMDS_LOG2	(6)
 #define RGXFWIF_KCCB_GP_NUMCMDS_LOG2	(6)
+#define RGXFWIF_KCCB_RTU_NUMCMDS_LOG2	(6)
+#define RGXFWIF_KCCB_SHG_NUMCMDS_LOG2	(6)
 
 /* Firmware CCB length */
 #define RGXFWIF_FWCCB_TA_NUMCMDS_LOG2	(4)
@@ -90,6 +93,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGXFWIF_FWCCB_2D_NUMCMDS_LOG2	(4)
 #define RGXFWIF_FWCCB_CDM_NUMCMDS_LOG2	(4)
 #define RGXFWIF_FWCCB_GP_NUMCMDS_LOG2	(4)
+#define RGXFWIF_FWCCB_RTU_NUMCMDS_LOG2	(4)
+#define RGXFWIF_FWCCB_SHG_NUMCMDS_LOG2	(4)
 
 static IMG_VOID __MTSScheduleWrite(PVRSRV_RGXDEV_INFO *psDevInfo, IMG_UINT32 ui32Value)
 {
@@ -276,6 +281,219 @@ IMG_VOID RGXUnsetFirmwareAddress(DEVMEM_MEMDESC *psSrc)
 	DevmemReleaseDevVirtAddr(psSrc);
 }
 
+struct _RGX_SERVER_COMMON_CONTEXT_ {
+	DEVMEM_MEMDESC *psFWCommonContextMemDesc;
+	PRGXFWIF_FWCOMMONCONTEXT sFWCommonContextFWAddr;
+	DEVMEM_MEMDESC *psFWMemContextMemDesc;
+	DEVMEM_MEMDESC *psFWFrameworkMemDesc;
+	DEVMEM_MEMDESC *psContextStateMemDesc;
+	RGX_CLIENT_CCB *psClientCCB;
+	DEVMEM_MEMDESC *psClientCCBMemDesc;
+	DEVMEM_MEMDESC *psClientCCBCtrlMemDesc;
+	IMG_BOOL bCommonContextMemProvided;
+};
+
+PVRSRV_ERROR FWCommonContextAllocate(PVRSRV_DEVICE_NODE *psDeviceNode,
+									 const IMG_CHAR *pszContextName,
+									 DEVMEM_MEMDESC *psAllocatedMemDesc,
+									 IMG_UINT32 ui32AllocatedOffset,
+									 DEVMEM_MEMDESC *psFWMemContextMemDesc,
+									 DEVMEM_MEMDESC *psContextStateMemDesc,
+									 IMG_UINT32 ui32CCBAllocSize,
+									 IMG_UINT32 ui32Priority,
+									 RGX_COMMON_CONTEXT_INFO *psInfo,
+									 RGX_SERVER_COMMON_CONTEXT **ppsServerCommonContext)
+{
+	PVRSRV_RGXDEV_INFO *psDevInfo = psDeviceNode->pvDevice;
+	RGX_SERVER_COMMON_CONTEXT *psServerCommonContext;
+	RGXFWIF_FWCOMMONCONTEXT *psFWCommonContext;
+	IMG_UINT32 ui32FWCommonContextOffset;
+	IMG_UINT8 *pui8Ptr;
+	PVRSRV_ERROR eError;
+
+	/*
+		Allocate all the resources that are required
+	*/
+	psServerCommonContext = OSAllocMem(sizeof(*psServerCommonContext));
+	if (psServerCommonContext == IMG_NULL)
+	{
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto fail_alloc;
+	}
+
+	if (psAllocatedMemDesc)
+	{
+		PDUMPCOMMENT("Using existing MemDesc for RGX firmware %s context (offset = %d)",
+					 pszContextName,
+					 ui32AllocatedOffset);
+		ui32FWCommonContextOffset = ui32AllocatedOffset;
+		psServerCommonContext->psFWCommonContextMemDesc = psAllocatedMemDesc;
+		psServerCommonContext->bCommonContextMemProvided = IMG_TRUE;
+	}
+	else
+	{
+		/* Allocate device memory for the firmware context */
+		PDUMPCOMMENT("Allocate RGX firmware %s context", pszContextName);
+		eError = DevmemFwAllocate(psDevInfo,
+								sizeof(*psFWCommonContext),
+								RGX_FWCOMCTX_ALLOCFLAGS,
+								&psServerCommonContext->psFWCommonContextMemDesc);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR,"%s : Failed to allocate firmware %s context (%s)",
+									__FUNCTION__,
+									pszContextName,
+									PVRSRVGetErrorStringKM(eError)));
+			goto fail_contextalloc;
+		}
+		ui32FWCommonContextOffset = 0;
+		psServerCommonContext->bCommonContextMemProvided = IMG_FALSE;
+	}
+
+	/* Allocate the client CCB */
+	eError = RGXCreateCCB(psDeviceNode,
+						  ui32CCBAllocSize,
+						  &psServerCommonContext->psClientCCB,
+						  &psServerCommonContext->psClientCCBMemDesc,
+						  &psServerCommonContext->psClientCCBCtrlMemDesc);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: failed to create CCB for %s context(%s)",
+								__FUNCTION__,
+								pszContextName,
+								PVRSRVGetErrorStringKM(eError)));
+		goto fail_allocateccb;
+	}
+
+	/*
+		Temporarily map the firmware context to the kernel and init it
+	*/
+	eError = DevmemAcquireCpuVirtAddr(psServerCommonContext->psFWCommonContextMemDesc,
+                                      (IMG_VOID **)&pui8Ptr);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"%s: Failed to map firmware %s context (%s)to CPU",
+								__FUNCTION__,
+								pszContextName,
+								PVRSRVGetErrorStringKM(eError)));
+		goto fail_cpuvirtacquire;
+	}
+
+	psFWCommonContext = (RGXFWIF_FWCOMMONCONTEXT *) (pui8Ptr + ui32FWCommonContextOffset);
+
+	/* Set the firmware CCB device addresses in the firmware common context */
+	RGXSetFirmwareAddress(&psFWCommonContext->psCCB,
+						  psServerCommonContext->psClientCCBMemDesc,
+						  0, RFW_FWADDR_METACACHED_FLAG);
+	RGXSetFirmwareAddress(&psFWCommonContext->psCCBCtl,
+						  psServerCommonContext->psClientCCBCtrlMemDesc,
+						  0, RFW_FWADDR_FLAG_NONE);
+
+	/* Set the memory context device address */
+	psServerCommonContext->psFWMemContextMemDesc = psFWMemContextMemDesc;
+	RGXSetFirmwareAddress(&psFWCommonContext->psFWMemContext,
+						  psFWMemContextMemDesc,
+						  0, RFW_FWADDR_METACACHED_FLAG);
+
+	/* Set the framework register updates address */
+	psServerCommonContext->psFWFrameworkMemDesc = psInfo->psFWFrameworkMemDesc;
+	RGXSetFirmwareAddress(&psFWCommonContext->psRFCmd,
+						  psInfo->psFWFrameworkMemDesc,
+						  0, RFW_FWADDR_METACACHED_FLAG);
+
+	psFWCommonContext->ui32Priority = ui32Priority;
+
+	if(psInfo->psMCUFenceAddr != IMG_NULL)
+	{
+		psFWCommonContext->ui64MCUFenceAddr = psInfo->psMCUFenceAddr->uiAddr;
+	}
+
+	/* Set the firmware GPU context state buffer */
+	psServerCommonContext->psContextStateMemDesc = psContextStateMemDesc;
+	if (psContextStateMemDesc)
+	{
+		RGXSetFirmwareAddress(&psFWCommonContext->psContextState,
+							  psContextStateMemDesc,
+							  0,
+							  RFW_FWADDR_METACACHED_FLAG);
+	}
+
+	/*
+	 * Dump the created context
+	 */
+	PDUMPCOMMENT("Dump %s context", pszContextName);
+	DevmemPDumpLoadMem(psServerCommonContext->psFWCommonContextMemDesc,
+					   ui32FWCommonContextOffset,
+					   sizeof(*psFWCommonContext),
+					   PDUMP_FLAGS_CONTINUOUS);
+
+	/* We've finished the setup so release the CPU mapping */
+	DevmemReleaseCpuVirtAddr(psServerCommonContext->psFWCommonContextMemDesc);
+
+	/* Map this allocation into the FW */
+	RGXSetFirmwareAddress(&psServerCommonContext->sFWCommonContextFWAddr,
+						  psServerCommonContext->psFWCommonContextMemDesc,
+						  ui32FWCommonContextOffset,
+						  RFW_FWADDR_METACACHED_FLAG);
+
+	*ppsServerCommonContext = psServerCommonContext;
+	return PVRSRV_OK;
+
+fail_allocateccb:
+	DevmemReleaseCpuVirtAddr(psServerCommonContext->psFWCommonContextMemDesc);
+fail_cpuvirtacquire:
+	RGXUnsetFirmwareAddress(psServerCommonContext->psFWCommonContextMemDesc);
+	if (!psServerCommonContext->bCommonContextMemProvided)
+	{
+		DevmemFwFree(psServerCommonContext->psFWCommonContextMemDesc);
+	}
+fail_contextalloc:
+	OSFreeMem(psServerCommonContext);
+fail_alloc:
+	return eError;
+}
+
+IMG_VOID FWCommonContextFree(RGX_SERVER_COMMON_CONTEXT *psServerCommonContext)
+{
+	/*
+		Unmap the context itself and then all it's resources
+	*/
+
+	/* Unmap the FW common context */
+	RGXUnsetFirmwareAddress(psServerCommonContext->psFWCommonContextMemDesc);
+	/* Umap context state buffer (if there was one) */
+	if (psServerCommonContext->psContextStateMemDesc)
+	{
+		RGXUnsetFirmwareAddress(psServerCommonContext->psContextStateMemDesc);
+	}
+	/* Unmap the framework buffer */
+	RGXUnsetFirmwareAddress(psServerCommonContext->psFWFrameworkMemDesc);
+	/* Unmap client CCB and CCB control */
+	RGXUnsetFirmwareAddress(psServerCommonContext->psClientCCBCtrlMemDesc);
+	RGXUnsetFirmwareAddress(psServerCommonContext->psClientCCBMemDesc);
+	/* Unmap the memory context */
+	RGXUnsetFirmwareAddress(psServerCommonContext->psFWMemContextMemDesc);
+
+	/* Destroy the client CCB */
+	RGXDestroyCCB(psServerCommonContext->psClientCCB);
+	/* Free the FW common context (if there was one) */
+	if (!psServerCommonContext->bCommonContextMemProvided)
+	{
+		DevmemFwFree(psServerCommonContext->psFWCommonContextMemDesc);
+	}
+	/* Free the hosts representation of the common context */
+	OSFreeMem(psServerCommonContext);
+}
+
+PRGXFWIF_FWCOMMONCONTEXT FWCommonContextGetFWAddress(RGX_SERVER_COMMON_CONTEXT *psServerCommonContext)
+{
+	return psServerCommonContext->sFWCommonContextFWAddr;
+}
+
+RGX_CLIENT_CCB *FWCommonContextGetClientCCB(RGX_SERVER_COMMON_CONTEXT *psServerCommonContext)
+{
+	return psServerCommonContext->psClientCCB;
+}
 
 /*!
 *******************************************************************************
@@ -833,9 +1051,10 @@ failFWHWBRN37200FindHeapByName:
 
 ******************************************************************************/
 PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode, 
-							     IMG_BOOL				bEnableSignatureChecks,
+							     IMG_BOOL			bEnableSignatureChecks,
 							     IMG_UINT32			ui32SignatureChecksBufSize,
 							     IMG_UINT32			ui32HWPerfFWBufSizeKB,
+							     IMG_UINT64		 	ui64HWPerfFilter,
 							     IMG_UINT32			ui32RGXFWAlignChecksSize,
 							     IMG_UINT32			*pui32RGXFWAlignChecks,
 							     IMG_UINT32			ui32ConfigFlags,
@@ -847,14 +1066,13 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
  	PVRSRV_ERROR		eError;
 	DEVMEM_FLAGS_T		uiMemAllocFlags;
 	RGXFWIF_INIT		*psRGXFWInit;
-    PVRSRV_RGXDEV_INFO 	*psDevInfo = psDeviceNode->pvDevice;
+	PVRSRV_RGXDEV_INFO 	*psDevInfo = psDeviceNode->pvDevice;
 	IMG_UINT32			dm;
 
-    psDevInfo = psDeviceNode->pvDevice;
-    if (psDevInfo == 0) {
-	    PVR_DPF((PVR_DBG_ERROR,"DeviceInfo Pointer is null"));
-        goto failFWIfInitMemDescAlloc;
-    }
+	if (!psDevInfo) {
+		PVR_DPF((PVR_DBG_ERROR,"DeviceInfo Pointer is null"));
+		goto failFWIfInitMemDescAlloc;
+	}
 
 	/* Fw init data */
 	uiMemAllocFlags =	PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
@@ -881,10 +1099,8 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 		goto failFWIfInitMemDescAlloc;
 	}
 
-
 	eError = DevmemAcquireCpuVirtAddr(psDevInfo->psRGXFWIfInitMemDesc,
 									  (IMG_VOID **)&psRGXFWInit);
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to acquire kernel fw if ctl (%u)",
@@ -925,7 +1141,6 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 	eError = DevmemAcquireCpuVirtAddr(psDevInfo->psRGXFWIfTraceBufCtlMemDesc,
 									  (IMG_VOID **)&psDevInfo->psRGXFWIfTraceBuf);
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to acquire kernel tracebuf ctl (%u)",
@@ -960,7 +1175,7 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							  psDevInfo->ui32RGXFWIfHWPerfBufSize+RGXFW_HWPERF_L1_PADDING_DEFAULT,
 							  uiMemAllocFlags,
 							  &psDevInfo->psRGXFWIfHWPerfBufCtlMemDesc);
-
+	
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "RGXSetupFirmware: Failed to allocate kernel fw hwperf ctl (%u)",
@@ -974,7 +1189,6 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 	eError = DevmemAcquireCpuVirtAddr(psDevInfo->psRGXFWIfHWPerfBufCtlMemDesc,
 									  (IMG_VOID**)&psDevInfo->psRGXFWIfHWPerfBuf);
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "RGXSetupFirmware: Failed to acquire kernel hwperf ctl (%u)",
@@ -990,6 +1204,7 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 						PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE |
 						PVRSRV_MEMALLOCFLAG_UNCACHED |
 						PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC;
+	
 
 	/* init HW frame info */
 	PDUMPCOMMENT("Allocate rgxfw HW info buffer");
@@ -1012,14 +1227,12 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 	eError = DevmemAcquireCpuVirtAddr(psDevInfo->psRGXFWIfHWRInfoBufCtlMemDesc,
 									  (IMG_VOID **)&psDevInfo->psRGXFWIfHWRInfoBuf);
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to acquire kernel tracebuf ctl (%u)",
 				eError));
 		goto failFWIfHWRInfoBufCtlMemDescAqCpuVirt;
 	}
-
 	OSMemSet(psDevInfo->psRGXFWIfHWRInfoBuf, 0, sizeof(RGXFWIF_HWRINFOBUF));
 
 	/* init HWPERF data */
@@ -1027,7 +1240,7 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	psDevInfo->psRGXFWIfTraceBuf->ui32HWPerfWIdx = 0;
 	psDevInfo->psRGXFWIfTraceBuf->ui32HWPerfWrapCount = 0;
 	psDevInfo->psRGXFWIfTraceBuf->ui32HWPerfSize = psDevInfo->ui32RGXFWIfHWPerfBufSize;
-	psDevInfo->psRGXFWIfTraceBuf->ui32HWPerfOrdinal = IMG_UINT32_MAX;
+	psRGXFWInit->ui64HWPerfFilter = ui64HWPerfFilter;
 	
 	/* Allocate HWPERF buffer (user side) if HWPerf enabled, usually a developer
 	 * or test system would enable this. Should not be enabled on a production
@@ -1049,31 +1262,64 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	}
 	psDevInfo->psRGXFWIfTraceBuf->ui32LogType = ui32LogType;
 
+	/* Allocate FW CB for GPU utilization */
+	uiMemAllocFlags =	PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
+						PVRSRV_MEMALLOCFLAG_GPU_READABLE |
+						PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
+						PVRSRV_MEMALLOCFLAG_CPU_READABLE |
+						PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE |
+						PVRSRV_MEMALLOCFLAG_UNCACHED |
+						PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC;
+
+	PDUMPCOMMENT("Allocate rgxfw GPU utilization CB (FW)");
+	eError = DevmemFwAllocate(psDevInfo,
+							sizeof(RGXFWIF_GPU_UTIL_FWCB),
+							uiMemAllocFlags,
+							&psDevInfo->psRGXFWIfGpuUtilFWCbCtlMemDesc);
+
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate %u bytes for GPU utilization FW CB ctl (%u)",
+				(IMG_UINT32)sizeof(RGXFWIF_GPU_UTIL_FWCB),
+				eError));
+		goto failFWIfGpuUtilFWCbCtlMemDescAlloc;
+	}
+
+	RGXSetFirmwareAddress(&psRGXFWInit->psGpuUtilFWCbCtl,
+						psDevInfo->psRGXFWIfGpuUtilFWCbCtlMemDesc,
+						0, RFW_FWADDR_NOREF_FLAG);
+
+	eError = DevmemAcquireCpuVirtAddr(psDevInfo->psRGXFWIfGpuUtilFWCbCtlMemDesc,
+									  (IMG_VOID **)&psDevInfo->psRGXFWIfGpuUtilFWCb);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to acquire kernel GPU utilization FW CB ctl (%u)",
+				eError));
+		goto failFWIfGpuUtilFWCbCtlMemDescAqCpuVirt;
+	}
+
 	/* Allocate a sync for power management */
 	eError = SyncPrimContextCreate(IMG_NULL,
 									psDevInfo->psDeviceNode,
-						  			IMG_NULL,
 						  			&psDevInfo->hSyncPrimContext);
-
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitDevPart2KM: Failed to allocate sync primitive context with error (%u)", eError));
+		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate sync primitive context with error (%u)", eError));
 		goto failed_sync_ctx_alloc;
 	}
-    
-	eError = SyncPrimAlloc(psDevInfo->hSyncPrimContext, &psDevInfo->psPowSyncPrim);
 
+	eError = SyncPrimAlloc(psDevInfo->hSyncPrimContext, &psDevInfo->psPowSyncPrim);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitDevPart2KM: Failed to allocate sync primitive with error (%u)", eError));
+		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate sync primitive with error (%u)", eError));
 		goto failed_sync_alloc;
 	}
 
 	psRGXFWInit->uiPowerSync = SyncPrimGetFirmwareAddr(psDevInfo->psPowSyncPrim);
 
+
 	/* Setup BIF Fault read register */
 	eError = RGXSetupBIFFaultReadRegister(psDeviceNode, psRGXFWInit);
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to setup BIF fault read register"));
@@ -1147,13 +1393,11 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   psRGXFWInit,
 							   RGXFWIF_DM_2D, RGXFWIF_KCCB_2D_NUMCMDS_LOG2,
 							   sizeof(RGXFWIF_KCCB_CMD));
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate kernel 2D CCB"));
 		goto fail2DKCCB;
 	}
-
 	/*
 	 * Set up Firmware 2D CCB.
 	 */
@@ -1161,7 +1405,6 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   psRGXFWInit,
 							   RGXFWIF_DM_2D, RGXFWIF_FWCCB_2D_NUMCMDS_LOG2,
 							   sizeof(RGXFWIF_FWCCB_CMD));
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate Firmware 2D CCB"));
@@ -1175,7 +1418,6 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   psRGXFWInit,
 							   RGXFWIF_DM_CDM, RGXFWIF_KCCB_CDM_NUMCMDS_LOG2,
 							   sizeof(RGXFWIF_KCCB_CMD));
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate kernel Compute CCB"));
@@ -1189,7 +1431,6 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   psRGXFWInit,
 							   RGXFWIF_DM_CDM, RGXFWIF_FWCCB_CDM_NUMCMDS_LOG2,
 							   sizeof(RGXFWIF_FWCCB_CMD));
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate Firmware Compute CCB"));
@@ -1203,13 +1444,12 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   psRGXFWInit,
 							   RGXFWIF_DM_GP, RGXFWIF_KCCB_GP_NUMCMDS_LOG2,
 							   sizeof(RGXFWIF_KCCB_CMD));
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate kernel General Purpose CCB"));
 		goto failGPKCCB;
 	}
-
+	
 	/*
 	 * Set up Firmware general purpose CCB.
 	 */
@@ -1217,19 +1457,70 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   psRGXFWInit,
 							   RGXFWIF_DM_GP, RGXFWIF_FWCCB_GP_NUMCMDS_LOG2,
 							   sizeof(RGXFWIF_FWCCB_CMD));
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate Firmware General Purpose CCB"));
 		goto failGPFWCCB;
 	}
+#if defined(RGX_FEATURE_RAY_TRACING)	
+	/*
+	 * Set up kernel SHG CCB.
+	 */
+	eError = RGXSetupKernelCCB(psDevInfo,
+							   psRGXFWInit,
+							   RGXFWIF_DM_SHG, RGXFWIF_KCCB_SHG_NUMCMDS_LOG2,
+							   sizeof(RGXFWIF_KCCB_CMD));
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate kernel SHG CCB"));
+		goto failSHGCCB;
+	}
+
+	/*
+	 * Set up Firmware SHG CCB.
+	 */
+	eError = RGXSetupFirmwareCCB(psDevInfo,
+							   psRGXFWInit,
+							   RGXFWIF_DM_SHG, RGXFWIF_FWCCB_SHG_NUMCMDS_LOG2,
+							   sizeof(RGXFWIF_FWCCB_CMD));
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate Firmware SHG CCB"));
+		goto failSHGFWCCB;
+	}
+	
+	/*
+	 * Set up kernel RTU CCB.
+	 */
+	eError = RGXSetupKernelCCB(psDevInfo,
+							   psRGXFWInit,
+							   RGXFWIF_DM_RTU, RGXFWIF_KCCB_RTU_NUMCMDS_LOG2,
+							   sizeof(RGXFWIF_KCCB_CMD));
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate kernel RTU CCB"));
+		goto failRTUCCB;
+	}
+
+	/*
+	 * Set up Firmware RTU CCB.
+	 */
+	eError = RGXSetupFirmwareCCB(psDevInfo,
+							   psRGXFWInit,
+							   RGXFWIF_DM_RTU, RGXFWIF_FWCCB_RTU_NUMCMDS_LOG2,
+							   sizeof(RGXFWIF_FWCCB_CMD));
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to allocate Firmware SHG CCB"));
+		goto failRTUFWCCB;
+	}
+#endif
 
 	/* Setup Signature and Checksum Buffers for TA and 3D */
 	eError = RGXFWSetupSignatureChecks(psDevInfo,
 									   &psDevInfo->psRGXFWSigTAChecksMemDesc, 
 									   ui32SignatureChecksBufSize,
 									   &psRGXFWInit->asSigBufCtl[RGXFWIF_DM_TA]);
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to setup TA signature checks"));
@@ -1241,7 +1532,6 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 									   &psDevInfo->psRGXFWSig3DChecksMemDesc, 
 									   ui32SignatureChecksBufSize,
 									   &psRGXFWInit->asSigBufCtl[RGXFWIF_DM_3D]);
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXSetupFirmware: Failed to setup 3D signature checks"));
@@ -1264,6 +1554,11 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	/* Fill the remaining bits of fw the init data */
 	psRGXFWInit->sPDSExecBase.uiAddr = RGX_PDSCODEDATA_HEAP_BASE;
 	psRGXFWInit->sUSCExecBase.uiAddr = RGX_USCCODE_HEAP_BASE;
+	psRGXFWInit->sDPXControlStreamBase.uiAddr = RGX_DOPPLER_HEAP_BASE;
+	psRGXFWInit->sPrimIDBase.uiAddr = RGX_DOPPLER_HEAP_BASE;
+	psRGXFWInit->sRootIDBase.uiAddr = RGX_DOPPLER_HEAP_BASE;
+	psRGXFWInit->sResultDumpBase.uiAddr = RGX_DOPPLER_HEAP_BASE;
+	psRGXFWInit->sRTUHeapBase.uiAddr = RGX_DOPPLER_HEAP_BASE;
 
 	/* RD Power Island */
 	{
@@ -1274,8 +1569,11 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 	}
 
-	psRGXFWInit->ui32ConfigFlags = ui32ConfigFlags;
-	
+	psRGXFWInit->ui32ConfigFlags = ui32ConfigFlags & RGXFWIF_INICFG_ALL;
+
+	psDevInfo->bPDPEnabled = (ui32ConfigFlags & RGXFWIF_SRVCFG_DISABLE_PDP_EN)
+			? IMG_FALSE : IMG_TRUE;
+
 	/* Initialise the compatibility check data */
 	RGXFWIF_COMPCHECKS_BVNC_INIT(psRGXFWInit->sRGXCompChecks.sFWBVNC);
 	RGXFWIF_COMPCHECKS_BVNC_INIT(psRGXFWInit->sRGXCompChecks.sHWBVNC);
@@ -1315,15 +1613,12 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	psRGXFWInit->sBifTilingCfg[0].uiBase = RGX_BIF_TILING_HEAP_1_BASE;
 	psRGXFWInit->sBifTilingCfg[0].uiLen = RGX_BIF_TILING_HEAP_SIZE;
 	psRGXFWInit->sBifTilingCfg[0].uiXStride = pui32BIFTilingXStrides[0];
-
 	psRGXFWInit->sBifTilingCfg[1].uiBase = RGX_BIF_TILING_HEAP_2_BASE;
 	psRGXFWInit->sBifTilingCfg[1].uiLen = RGX_BIF_TILING_HEAP_SIZE;
 	psRGXFWInit->sBifTilingCfg[1].uiXStride = pui32BIFTilingXStrides[1];
-
 	psRGXFWInit->sBifTilingCfg[2].uiBase = RGX_BIF_TILING_HEAP_3_BASE;
 	psRGXFWInit->sBifTilingCfg[2].uiLen = RGX_BIF_TILING_HEAP_SIZE;
 	psRGXFWInit->sBifTilingCfg[2].uiXStride = pui32BIFTilingXStrides[2];
-
 	psRGXFWInit->sBifTilingCfg[3].uiBase = RGX_BIF_TILING_HEAP_4_BASE;
 	psRGXFWInit->sBifTilingCfg[3].uiLen = RGX_BIF_TILING_HEAP_SIZE;
 	psRGXFWInit->sBifTilingCfg[3].uiXStride = pui32BIFTilingXStrides[3];
@@ -1392,10 +1687,11 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							PDUMP_FLAGS_CONTINUOUS);
 #endif
 
+	/* Initialize FW started flag */
+	psRGXFWInit->bFirmwareStarted = IMG_FALSE;
 
 	/* We don't need access to the fw init data structure anymore */
 	DevmemReleaseCpuVirtAddr(psDevInfo->psRGXFWIfInitMemDesc);
-
 	psRGXFWInit = IMG_NULL;
 
 	psDevInfo->bFirmwareInitialised = IMG_TRUE;
@@ -1409,10 +1705,19 @@ failAlignCheck:
 fail3DSigCheck:
 	DevmemFwFree(psDevInfo->psRGXFWSigTAChecksMemDesc);
 failTASigCheck:
+#if defined(RGX_FEATURE_RAY_TRACING)
+	RGXFreeFirmwareCCB(psDevInfo, RGXFWIF_DM_RTU);
+failRTUFWCCB:
+	RGXFreeKernelCCB(psDevInfo, RGXFWIF_DM_RTU);
+failRTUCCB:
+	RGXFreeFirmwareCCB(psDevInfo, RGXFWIF_DM_SHG);
+failSHGFWCCB:
+	RGXFreeKernelCCB(psDevInfo, RGXFWIF_DM_SHG);
+failSHGCCB:
+#endif /* RGX_FEATURE_RAY_TRACING */
 	RGXFreeFirmwareCCB(psDevInfo, RGXFWIF_DM_GP);
 failGPFWCCB:
 	RGXFreeKernelCCB(psDevInfo, RGXFWIF_DM_GP);
-
 failGPKCCB:
 	RGXFreeFirmwareCCB(psDevInfo, RGXFWIF_DM_CDM);
 failCompFWCCB:
@@ -1447,6 +1752,12 @@ failed_sync_ctx_alloc:
 failInvalidLogType:
 	RGXHWPerfDeinit(psDevInfo);
 	
+failFWIfGpuUtilFWCbCtlMemDescAqCpuVirt:
+	DevmemFwFree(psDevInfo->psRGXFWIfGpuUtilFWCbCtlMemDesc);
+
+failFWIfGpuUtilFWCbCtlMemDescAlloc:
+	DevmemReleaseCpuVirtAddr(psDevInfo->psRGXFWIfGpuUtilFWCbCtlMemDesc);
+
 failHWPerfInit:
 	DevmemReleaseCpuVirtAddr(psDevInfo->psRGXFWIfHWRInfoBufCtlMemDesc);
 
@@ -1569,6 +1880,12 @@ IMG_VOID RGXFreeFirmware(PVRSRV_RGXDEV_INFO 	*psDevInfo)
 	{
 		SyncPrimContextDestroy(psDevInfo->hSyncPrimContext);
 		psDevInfo->hSyncPrimContext = 0;
+	}
+
+	if (psDevInfo->psRGXFWIfGpuUtilFWCbCtlMemDesc)
+	{
+		DevmemReleaseCpuVirtAddr(psDevInfo->psRGXFWIfGpuUtilFWCbCtlMemDesc);
+		DevmemFwFree(psDevInfo->psRGXFWIfGpuUtilFWCbCtlMemDesc);
 	}
 
 	if (psDevInfo->psRGXFWIfHWRInfoBufCtlMemDesc)
@@ -1696,8 +2013,9 @@ PVRSRV_ERROR RGXSendCommandWithPowLock(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 	PVRSRV_ERROR		eError;
 	PVRSRV_DEVICE_NODE *psDeviceNode = psDevInfo->psDeviceNode;
 
+	/* Ensure RGX is powered up before kicking MTS */
 	PVRSRVForcedPowerLock();
-	
+
 	PDUMPPOWCMDSTART();
 
 	eError = PVRSRVSetDevicePowerStateKM(psDeviceNode->sDevId.ui32DeviceIndex,
@@ -1909,7 +2227,7 @@ static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 	}
 
 	/* uncounted kick for all DMs */
-	for (eDM = RGXFWIF_DM_TA; eDM < RGXFWIF_HWDM_MAX; eDM++)
+	for (eDM = RGXFWIF_HWDM_MIN; eDM < RGXFWIF_HWDM_MAX; eDM++)
 	{
 		IMG_UINT32	ui32MTSRegVal = (eDM & ~RGX_CR_MTS_SCHEDULE_DM_CLRMSK) | RGX_CR_MTS_SCHEDULE_TASK_NON_COUNTED;
 
@@ -1994,6 +2312,10 @@ IMG_VOID RGXCheckFirmwareCCBs(PVRSRV_RGXDEV_INFO *psDevInfo)
 			{
 				case RGXFWIF_FWCCB_CMD_ZSBUFFER_BACKING:
 				{
+					if (psDevInfo->bPDPEnabled)
+					{
+						PDUMP_PANIC(RGX, ZSBUFFER_BACKING, "Request to add backing to ZSBuffer");
+					}
 					RGXProcessRequestZSBufferBacking(psDevInfo,
 													psFwCCBCmd->uCmdData.sCmdZSBufferBacking.ui32ZSBufferID);
 					break;
@@ -2001,6 +2323,10 @@ IMG_VOID RGXCheckFirmwareCCBs(PVRSRV_RGXDEV_INFO *psDevInfo)
 
 				case RGXFWIF_FWCCB_CMD_ZSBUFFER_UNBACKING:
 				{
+					if (psDevInfo->bPDPEnabled)
+					{
+						PDUMP_PANIC(RGX, ZSBUFFER_UNBACKING, "Request to remove backing from ZSBuffer");
+					}
 					RGXProcessRequestZSBufferUnbacking(psDevInfo,
 													psFwCCBCmd->uCmdData.sCmdZSBufferBacking.ui32ZSBufferID);
 					break;
@@ -2008,6 +2334,10 @@ IMG_VOID RGXCheckFirmwareCCBs(PVRSRV_RGXDEV_INFO *psDevInfo)
 
 				case RGXFWIF_FWCCB_CMD_FREELIST_GROW:
 				{
+					if (psDevInfo->bPDPEnabled)
+					{
+						PDUMP_PANIC(RGX, FREELIST_GROW, "Request to grow the free list");
+					}
 					RGXProcessRequestGrow(psDevInfo,
 										psFwCCBCmd->uCmdData.sCmdFreeListGS.ui32FreelistID);
 					break;
@@ -2015,6 +2345,10 @@ IMG_VOID RGXCheckFirmwareCCBs(PVRSRV_RGXDEV_INFO *psDevInfo)
 
 				case RGXFWIF_FWCCB_CMD_FREELISTS_RECONSTRUCTION:
 				{
+					if (psDevInfo->bPDPEnabled)
+					{
+						PDUMP_PANIC(RGX, FREELISTS_RECONSTRUCTION, "Request to reconstruct free lists");
+					}
 					RGXProcessRequestFreelistsReconstruction(psDevInfo, ui32DMCount,
 										psFwCCBCmd->uCmdData.sCmdFreeListsReconstruction.ui32FreelistsCount,
 										psFwCCBCmd->uCmdData.sCmdFreeListsReconstruction.aui32FreelistIDs);
@@ -2032,17 +2366,17 @@ IMG_VOID RGXCheckFirmwareCCBs(PVRSRV_RGXDEV_INFO *psDevInfo)
 }
 
 /*
- * PVRSRVRGXFrameworkCopyRegisters
+ * PVRSRVRGXFrameworkCopyCommand
  */ 
-PVRSRV_ERROR PVRSRVRGXFrameworkCopyRegisters(DEVMEM_MEMDESC * psFWFrameworkMemDesc,
-		IMG_PBYTE                                           pbyGPUFRegisterList,
-		IMG_UINT32                                          ui32FrameworkRegisterSize)
+PVRSRV_ERROR PVRSRVRGXFrameworkCopyCommand(DEVMEM_MEMDESC	*psFWFrameworkMemDesc,
+										   IMG_PBYTE		pbyGPUFRegisterList,
+										   IMG_UINT32		ui32FrameworkRegisterSize)
 {
-	PVRSRV_ERROR			eError;
-	RGXFWIF_RF_REGISTERS	*psRegUpdates;
+	PVRSRV_ERROR	eError;
+	RGXFWIF_RF_REGISTERS	*psRFReg;
 
 	eError = DevmemAcquireCpuVirtAddr(psFWFrameworkMemDesc,
-                                      (IMG_VOID **)&psRegUpdates);
+                                      (IMG_VOID **)&psRFReg);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateRenderContextKM: Failed to map firmware render context state (%u)",
@@ -2050,7 +2384,7 @@ PVRSRV_ERROR PVRSRVRGXFrameworkCopyRegisters(DEVMEM_MEMDESC * psFWFrameworkMemDe
 		return eError;
 	}
 
-	OSMemCopy(psRegUpdates, pbyGPUFRegisterList, ui32FrameworkRegisterSize);
+	OSMemCopy(psRFReg, pbyGPUFRegisterList, ui32FrameworkRegisterSize);
 	
 	/* Release the CPU mapping */
 	DevmemReleaseCpuVirtAddr(psFWFrameworkMemDesc);
@@ -2067,9 +2401,9 @@ PVRSRV_ERROR PVRSRVRGXFrameworkCopyRegisters(DEVMEM_MEMDESC * psFWFrameworkMemDe
 /*
  * PVRSRVRGXFrameworkCreateKM
  */
-PVRSRV_ERROR PVRSRVRGXFrameworkCreateKM(PVRSRV_DEVICE_NODE * psDeviceNode,
-		DEVMEM_MEMDESC                                     ** ppsFWFrameworkMemDesc,
-		IMG_UINT32                                         ui32FrameworkRegisterSize)
+PVRSRV_ERROR PVRSRVRGXFrameworkCreateKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
+										DEVMEM_MEMDESC		**ppsFWFrameworkMemDesc,
+										IMG_UINT32			ui32FrameworkCommandSize)
 {
 	PVRSRV_ERROR			eError;
 	PVRSRV_RGXDEV_INFO 		*psDevInfo = psDeviceNode->pvDevice;
@@ -2081,9 +2415,9 @@ PVRSRV_ERROR PVRSRVRGXFrameworkCreateKM(PVRSRV_DEVICE_NODE * psDeviceNode,
 	PDUMPCOMMENT("Allocate RGX firmware framework state");
 
 	eError = DevmemFwAllocate(psDevInfo,
-							ui32FrameworkRegisterSize,
-							RGX_FWCOMCTX_ALLOCFLAGS,
-							ppsFWFrameworkMemDesc);
+							  ui32FrameworkCommandSize,
+							  RGX_FWCOMCTX_ALLOCFLAGS,
+							  ppsFWFrameworkMemDesc);
 
 	if (eError != PVRSRV_OK)
 	{
@@ -2094,70 +2428,6 @@ PVRSRV_ERROR PVRSRVRGXFrameworkCreateKM(PVRSRV_DEVICE_NODE * psDeviceNode,
 
 	return PVRSRV_OK;
 }
-
-PVRSRV_ERROR RGXInitFWCommonContext(RGXFWIF_FWCOMMONCONTEXT		*psFWComContext,
-									  DEVMEM_MEMDESC 			*psCCBMemDesc,
-									  DEVMEM_MEMDESC 			*psCCBCtlMemDesc,
-									  DEVMEM_MEMDESC			*psFWMemContextMemDesc,
-									  DEVMEM_MEMDESC			*psFWFrameworkMemDesc,
-									  IMG_UINT32				ui32Priority,
-									  IMG_DEV_VIRTADDR			*psMCUFenceAddr,
-									  RGX_FWCOMCTX_CLEANUP		*psCleanupData)
-{
-	/* Save what we need for clean up */
-	psCleanupData->psCCBMemDesc = psCCBMemDesc;
-	psCleanupData->psCCBCtlMemDesc = psCCBCtlMemDesc;
-	psCleanupData->psFWMemContextMemDesc = psFWMemContextMemDesc;
-	psCleanupData->psFWFrameworkMemDesc = psFWFrameworkMemDesc;
-
-	/*
-	 * Set the firmware CCB device addresses in the firmware common context.
-	 */
-	RGXSetFirmwareAddress(&psFWComContext->psCCB, psCCBMemDesc, 0, RFW_FWADDR_FLAG_NONE | RFW_FWADDR_METACACHED_FLAG);
-	RGXSetFirmwareAddress(&psFWComContext->psCCBCtl, psCCBCtlMemDesc, 0, RFW_FWADDR_FLAG_NONE);
-
-	/*
-	 * And the memory context device address.
-	 */ 
-	RGXSetFirmwareAddress(&psFWComContext->psFWMemContext, psFWMemContextMemDesc, 0, RFW_FWADDR_METACACHED_FLAG);
-
-	/*
-	 * Set the framework register updates address 
-	 */
-	RGXSetFirmwareAddress(&psFWComContext->psRFCmd, psFWFrameworkMemDesc, 0, RFW_FWADDR_FLAG_NONE | RFW_FWADDR_METACACHED_FLAG);
-
-	psFWComContext->ui32Priority = ui32Priority;
-	if(psMCUFenceAddr != IMG_NULL)
-	{
-		psFWComContext->ui64MCUFenceAddr = psMCUFenceAddr->uiAddr;
-	}
-	
-	return PVRSRV_OK;
-}
-
-PVRSRV_ERROR RGXDeinitFWCommonContext(RGX_FWCOMCTX_CLEANUP *psCleanupData)
-{
-	PVRSRV_ERROR eError = PVRSRV_OK;
-
-	/*
-	 * Unset the firmware CCB device addr to release the virtual addresses.
-	 */
-	RGXUnsetFirmwareAddress(psCleanupData->psCCBMemDesc);
-	RGXUnsetFirmwareAddress(psCleanupData->psCCBCtlMemDesc);
-
-	/*
-	 * And the memory context device address.
-	 */ 
-	RGXUnsetFirmwareAddress(psCleanupData->psFWMemContextMemDesc);
-
-	/*
-	 * And the FW framework buffer address.
-	 */ 
-	RGXUnsetFirmwareAddress(psCleanupData->psFWFrameworkMemDesc);
-
-	return eError;
-}
-
 
 PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 							RGXFWIF_DM eDM,
@@ -2264,9 +2534,7 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 		{
 			PVR_DPF((PVR_DBG_ERROR,"RGXScheduleCommandAndWait: PVRSRVWaitForValueKM timed out. Dump debug information."));
 
-#if defined(DEBUG)
 			PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
-#endif
 			continue;
 		}
 		else
@@ -2422,17 +2690,17 @@ fail_command:
 	RGXRequestCommonContextCleanUp
 */
 PVRSRV_ERROR RGXFWRequestCommonContextCleanUp(PVRSRV_DEVICE_NODE *psDeviceNode,
-											  PRGXFWIF_FWCOMMONCONTEXT psFWComContextFWAddr,
+											  PRGXFWIF_FWCOMMONCONTEXT psFWCommonContextFWAddr,
 											  PVRSRV_CLIENT_SYNC_PRIM *psSyncPrim,
 											  RGXFWIF_DM eDM)
 {
 	RGXFWIF_KCCB_CMD			sRCCleanUpCmd = {0};
 	PVRSRV_ERROR				eError;
 
-	PDUMPCOMMENT("Common ctx cleanup Request DM%d [context = 0x%08x]", eDM, psFWComContextFWAddr.ui32Addr);
+	PDUMPCOMMENT("Common ctx cleanup Request DM%d [context = 0x%08x]", eDM, psFWCommonContextFWAddr.ui32Addr);
 
 	/* Setup our command data, the cleanup call will fill in the rest */
-	sRCCleanUpCmd.uCmdData.sCleanupData.uCleanupData.psContext = psFWComContextFWAddr;
+	sRCCleanUpCmd.uCmdData.sCleanupData.uCleanupData.psContext = psFWCommonContextFWAddr;
 
 	/* Request cleanup of the firmware resource */
 	eError = RGXScheduleCleanupCommand(psDeviceNode->pvDevice,
@@ -2551,6 +2819,113 @@ PVRSRV_ERROR RGXFWRequestZSBufferCleanUp(PVRSRV_RGXDEV_INFO *psDevInfo,
 	return eError;
 }
 
+
+PVRSRV_ERROR ContextSetPriority(RGX_SERVER_COMMON_CONTEXT *psContext,
+								CONNECTION_DATA *psConnection,
+								PVRSRV_RGXDEV_INFO *psDevInfo,
+								IMG_UINT32 ui32Priority,
+								RGXFWIF_DM eDM)
+{
+	IMG_UINT32				ui32CmdSize;
+	IMG_UINT8				*pui8CmdPtr;
+	RGXFWIF_KCCB_CMD		sPriorityCmd;
+	RGXFWIF_CCB_CMD_HEADER	*psCmdHeader;	
+	RGXFWIF_CMD_PRIORITY	*psCmd;
+	IMG_UINT32				ui32BeforeWOff = RGXGetHostWriteOffsetCCB(FWCommonContextGetClientCCB(psContext));
+	IMG_BOOL				bKickCMD = IMG_TRUE;
+	PVRSRV_ERROR			eError;
+
+	/*
+		Get space for command
+	*/
+	ui32CmdSize = RGX_CCB_FWALLOC_ALIGN(sizeof(RGXFWIF_CCB_CMD_HEADER) + sizeof(RGXFWIF_CMD_PRIORITY));
+
+	eError = RGXAcquireCCB(FWCommonContextGetClientCCB(psContext),
+						   ui32CmdSize,
+						   (IMG_PVOID *) &pui8CmdPtr,
+						   IMG_TRUE);
+	if (eError != PVRSRV_OK)
+	{
+		if (ui32BeforeWOff != RGXGetHostWriteOffsetCCB(FWCommonContextGetClientCCB(psContext)))
+		{
+			bKickCMD = IMG_FALSE;
+		}
+		else
+		{
+			goto fail_ccbacquire;
+		}
+	}
+
+	if (bKickCMD)
+	{
+		/*
+			Write the command header and command
+		*/
+		psCmdHeader = (RGXFWIF_CCB_CMD_HEADER *) pui8CmdPtr;
+		psCmdHeader->eCmdType = RGXFWIF_CCB_CMD_TYPE_PRIORITY;
+		psCmdHeader->ui32CmdSize = RGX_CCB_FWALLOC_ALIGN(sizeof(RGXFWIF_CMD_PRIORITY));
+		pui8CmdPtr += sizeof(*psCmdHeader);
+		
+		psCmd = (RGXFWIF_CMD_PRIORITY *) pui8CmdPtr;
+		psCmd->ui32Priority = ui32Priority;
+		pui8CmdPtr += sizeof(*psCmd);
+	}
+
+	/*
+		We should reserved space in the kerenl CCB here and fill in the command
+		directly.
+		This is so if there isn't space in the kernel CCB we can return with
+		retry back to services client before we take any operations
+	*/
+
+	if (bKickCMD)
+	{
+		/*
+			Submit the command
+		*/
+		RGXReleaseCCB(FWCommonContextGetClientCCB(psContext),
+					  ui32CmdSize,
+					  IMG_TRUE,
+					  psConnection->psSyncConnectionData);
+	
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: Failed to release space in client CCB", __FUNCTION__));
+			return eError;
+		}
+	}
+
+	/* Construct the priority command. */
+	sPriorityCmd.eCmdType = RGXFWIF_KCCB_CMD_KICK;
+	sPriorityCmd.uCmdData.sCmdKickData.psContext = FWCommonContextGetFWAddress(psContext);
+	sPriorityCmd.uCmdData.sCmdKickData.ui32CWoffUpdate = RGXGetHostWriteOffsetCCB(FWCommonContextGetClientCCB(psContext));
+
+	LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
+	{
+		eError = RGXScheduleCommand(psDevInfo,
+									eDM,
+									&sPriorityCmd,
+									sizeof(sPriorityCmd),
+									IMG_TRUE);
+		if (eError != PVRSRV_ERROR_RETRY)
+		{
+			break;
+		}
+		OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
+	} END_LOOP_UNTIL_TIMEOUT();
+
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXFlushComputeDataKM: Failed to schedule SLC flush command with error (%u)", eError));
+	}
+
+	return PVRSRV_OK;
+
+fail_ccbacquire:
+	PVR_ASSERT(eError != PVRSRV_OK);
+	return eError;
+}
+
 /*
 	RGXReadMETAReg
 */
@@ -2621,10 +2996,10 @@ PVRSRV_ERROR RGXUpdateHealthStatus(PVRSRV_DEVICE_NODE* psDevNode,
 	/* If RGX is not powered on, don't continue */
 	if (!PVRSRVIsDevicePowered(psDevNode->sDevId.ui32DeviceIndex)) {
 		PVR_DPF((PVR_DBG_WARNING,
-			"RGXGetDeviceHealthStatus: Device is powered off.\n"));
+					"RGXGetDeviceHealthStatus: Device is powered off.\n"));
 		return PVRSRV_OK;
 	}
-	
+
 	/* If this is a quick update, then include the last current value... */
 	if (!bCheckAfterTimePassed)
 	{

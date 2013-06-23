@@ -88,16 +88,20 @@ PVRSRVBridgePDumpTraceBuffer(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psPDumpTraceBufferOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceNodeInt,
-							   psPDumpTraceBufferIN->hDeviceNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psPDumpTraceBufferOUT->eError != PVRSRV_OK)
-		{
-			goto PDumpTraceBuffer_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psPDumpTraceBufferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceNodeInt,
+											psPDumpTraceBufferIN->hDeviceNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psPDumpTraceBufferOUT->eError != PVRSRV_OK)
+					{
+						goto PDumpTraceBuffer_exit;
+					}
+
+				}
 
 	psPDumpTraceBufferOUT->eError =
 		PVRSRVPDumpTraceBufferKM(
@@ -124,16 +128,20 @@ PVRSRVBridgePDumpSignatureBuffer(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psPDumpSignatureBufferOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceNodeInt,
-							   psPDumpSignatureBufferIN->hDeviceNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psPDumpSignatureBufferOUT->eError != PVRSRV_OK)
-		{
-			goto PDumpSignatureBuffer_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psPDumpSignatureBufferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceNodeInt,
+											psPDumpSignatureBufferIN->hDeviceNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psPDumpSignatureBufferOUT->eError != PVRSRV_OK)
+					{
+						goto PDumpSignatureBuffer_exit;
+					}
+
+				}
 
 	psPDumpSignatureBufferOUT->eError =
 		PVRSRVPDumpSignatureBufferKM(

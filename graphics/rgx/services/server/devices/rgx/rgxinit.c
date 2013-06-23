@@ -165,6 +165,108 @@ static IMG_VOID RGXCheckFWActivePowerState(PVRSRV_DEVICE_NODE *psDeviceNode)
 
 }
 
+static IMG_VOID RGXUpdateGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNode)
+{
+	PVRSRV_RGXDEV_INFO		*psDevInfo = psDeviceNode->pvDevice;
+	RGXFWIF_GPU_UTIL_FWCB	*psUtilFWCb = psDevInfo->psRGXFWIfGpuUtilFWCb;
+	IMG_UINT32				ui32StatActive = 0, ui32StatBlocked = 0, ui32StatIdle = 0;
+	IMG_UINT32				ui32StatCumulative = 0;
+	IMG_UINT32				ui32WOffSample;
+	IMG_UINT32				ui32WOffSampleSaved;
+	IMG_UINT64				ui64CurrentOSTime = (IMG_UINT64)OSClockms() * 1000; /* mul by 1000 to scale from ms to us */
+	IMG_UINT32				ui32CheckedSamples = 0;
+	IMG_UINT32				ui32Remainder;
+
+	/* write offset is incremented after writing to FWCB, so subtract 1 */
+	ui32WOffSample = (psUtilFWCb->ui32WriteOffset - 1) & RGXFWIF_GPU_UTIL_FWCB_MASK;
+	ui32WOffSampleSaved = ui32WOffSample;
+
+	do
+	{
+		IMG_UINT64	ui64FWCbEntryCurrent = psUtilFWCb->aui64CB[ui32WOffSample];
+		if (RGXFWIF_GPU_UTIL_FWCB_ENTRY_STATE(ui64FWCbEntryCurrent) != RGXFWIF_GPU_UTIL_FWCB_STATE_RESERVED)
+		{
+			/* current sample is valid - let's calculate when it was sampled in host timeline */
+
+			RGXFWIF_GPU_DVFS_HIST_ENTRY *psDVFSHistEntry = 
+							&psDevInfo->psGpuDVFSHistory->asCB[RGXFWIF_GPU_UTIL_FWCB_ENTRY_ID(ui64FWCbEntryCurrent)];
+			IMG_UINT64 ui64OSTimeOfCurrentEntry;
+			IMG_UINT32 ui32Period;
+
+			if (psDVFSHistEntry->ui32DVFSClock < 256)
+			{
+				/* DVFS frequency is 0 in DVFS history entry. Is ui32CoreClockSpeed in PVRSRV_RGXDEV_INFO being updated? */
+				ui32StatCumulative = 0;
+				break;
+			}
+
+			/* Calculate the difference between CR timer at state transition and CR timer at DVFS transition */
+			ui64OSTimeOfCurrentEntry = ((RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(ui64FWCbEntryCurrent) - psDVFSHistEntry->ui64CRTimerStamp) 
+										* 1000000); /* mul by 1000000 to get result in us after dividing by FREQ in the next line */
+			/* Divide CR Timer cycles by number of cycles per 1s to get OS time period from DVFS transition */
+			ui64OSTimeOfCurrentEntry = OSDivide64(ui64OSTimeOfCurrentEntry, (psDVFSHistEntry->ui32DVFSClock / 256), &ui32Remainder);
+			/* Add OS Time stamp when DVFS transition has changed */
+			ui64OSTimeOfCurrentEntry += (IMG_UINT64)psDVFSHistEntry->ui32OSTimeStamp 
+										* 1000; /* mul by 1000 to scale from ms to us, because OS time stamps are stored in history as ms */
+
+			/* Calculate OS Time period between "now" and current state transition */
+			if (ui64CurrentOSTime >= ui64OSTimeOfCurrentEntry)
+			{
+				ui32Period = (IMG_UINT32)(ui64CurrentOSTime - ui64OSTimeOfCurrentEntry);
+			}
+			else
+			{
+				ui32Period = (IMG_UINT32)(ui64OSTimeOfCurrentEntry - ui64CurrentOSTime);
+			}
+			/* Update "now" to calculated OS Time of current state transition */
+			ui64CurrentOSTime = ui64OSTimeOfCurrentEntry;
+		
+			/* If calculated period goes beyond the time window that we want to look at to calculate stats,
+				cut it down to this window */
+			if ((ui32StatCumulative + ui32Period) > RGXFWIF_GPU_STATS_WINDOW_SIZE_US)
+			{
+				ui32Period = RGXFWIF_GPU_STATS_WINDOW_SIZE_US - ui32StatCumulative;
+			}
+			
+			/* Update cumulative time of state transition */
+			ui32StatCumulative += ui32Period;
+
+			/* Update per-state cumulative times */
+			switch (RGXFWIF_GPU_UTIL_FWCB_ENTRY_STATE(ui64FWCbEntryCurrent))
+			{
+				case RGXFWIF_GPU_UTIL_FWCB_STATE_IDLE:
+					ui32StatIdle += ui32Period;
+					break;
+				case RGXFWIF_GPU_UTIL_FWCB_STATE_ACTIVE:
+					ui32StatActive += ui32Period;
+					break;
+				case RGXFWIF_GPU_UTIL_FWCB_STATE_BLOCKED:
+					ui32StatBlocked += ui32Period;
+					break;
+			}
+		}
+		else
+		{
+			/* current sample is reserved */
+			break;
+		}
+
+		/* Move to next-previous state transition */
+		ui32WOffSample = (ui32WOffSample - 1) & RGXFWIF_GPU_UTIL_FWCB_MASK;
+		ui32CheckedSamples++;
+	}
+	/* break if we wrapped up the CB or we have already calculated the whole window */
+	while ((ui32WOffSample != ui32WOffSampleSaved) && (ui32StatCumulative < RGXFWIF_GPU_STATS_WINDOW_SIZE_US));
+
+	if (ui32StatCumulative)
+	{
+		/* Update stats */
+		psDevInfo->ui32GpuStatActive	= OSDivide64(((IMG_UINT64)ui32StatActive * RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE), ui32StatCumulative, &ui32Remainder);
+		psDevInfo->ui32GpuStatBlocked	= OSDivide64(((IMG_UINT64)ui32StatBlocked * RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE), ui32StatCumulative, &ui32Remainder);
+		psDevInfo->ui32GpuStatIdle		= OSDivide64(((IMG_UINT64)ui32StatIdle * RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE), ui32StatCumulative, &ui32Remainder);
+	}
+}
+
 /*
 	RGX MISR Handler
 */
@@ -172,6 +274,10 @@ static IMG_VOID RGX_MISRHandler (IMG_VOID *pvData)
 {
 	PVRSRV_DEVICE_NODE	*psDeviceNode = pvData;
 	PVRSRV_RGXDEV_INFO  *psDevInfo = psDeviceNode->pvDevice;
+	IMG_UINT32			ui32GPUTransitionsCountSample;
+	IMG_BOOL			bGpuStateTransitionHappened;
+	IMG_BOOL			bGpuNotFullyActive;
+	IMG_BOOL			bForceRecalculation;
 
 	g_ui32HostSampleIRQCount = psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount;
 
@@ -192,6 +298,18 @@ static IMG_VOID RGX_MISRHandler (IMG_VOID *pvData)
 		psDevInfo->pfnActivePowerCheck(psDeviceNode);
 	}
 
+	ui32GPUTransitionsCountSample = psDevInfo->psRGXFWIfGpuUtilFWCb->ui32GpuUtilTransitionsCount;
+
+	bGpuStateTransitionHappened = psDevInfo->ui32GpuUtilTransitionsCountSample != ui32GPUTransitionsCountSample;
+	bGpuNotFullyActive = psDevInfo->ui32GpuStatActive != RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE;
+	bForceRecalculation = ((psDevInfo->psRGXFWIfGpuUtilFWCb->ui32GpuUtilRendersCount % RGXFWIF_GPU_STATS_NUMBER_OF_RENDERS_BETWEEN_RECALC) == 0) && 
+							(psDevInfo->psRGXFWIfGpuUtilFWCb->ui32GpuUtilRendersCount != 0);
+
+	if ((bGpuStateTransitionHappened || (bGpuNotFullyActive && bForceRecalculation)) && psDevInfo->pfnUpdateGpuUtilStats)
+	{
+		psDevInfo->ui32GpuUtilTransitionsCountSample = ui32GPUTransitionsCountSample;
+		psDevInfo->pfnUpdateGpuUtilStats(psDeviceNode);
+	}
 }
 #endif
 
@@ -278,6 +396,19 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 	PVR_ASSERT(eError == PVRSRV_OK);
 	dllist_init(&psDevInfo->sFreeListHead);
 	psDevInfo->ui32FreelistCurrID = 1;
+
+	/* Allocate DVFS History */
+	psDevInfo->psGpuDVFSHistory = OSAllocZMem(sizeof(RGXFWIF_GPU_DVFS_HIST));
+	/* Setup GPU Utilization stat update callback */
+#if !defined(NO_HARDWARE)
+	psDevInfo->pfnUpdateGpuUtilStats = RGXUpdateGpuUtilStats;
+#endif
+	/* Initialize Transitions Counter Sample */
+	psDevInfo->ui32GpuUtilTransitionsCountSample = 0;
+	/* Initialize GPU Stats */
+	psDevInfo->ui32GpuStatActive = 0;
+	psDevInfo->ui32GpuStatBlocked = 0;
+	psDevInfo->ui32GpuStatIdle = RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE;
 
 	eDefaultPowerState = PVRSRV_DEV_POWER_STATE_ON;
 
@@ -607,6 +738,7 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 									    IMG_BOOL					bEnableSignatureChecks,
 									    IMG_UINT32					ui32SignatureChecksBufSize,
 									    IMG_UINT32					ui32HWPerfFWBufSizeKB,
+									    IMG_UINT64					ui64HWPerfFilter,
 									    IMG_UINT32					ui32RGXFWAlignChecksSize,
 									    IMG_UINT32					*pui32RGXFWAlignChecks,
 									    IMG_UINT32					ui32ConfigFlags,
@@ -695,7 +827,6 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 	}
 
 	GetNumBifTilingHeapConfigs(&ui32NumBIFTilingConfigs);
-
 	pui32BIFTilingXStrides = OSAllocMem(sizeof(IMG_UINT32) * ui32NumBIFTilingConfigs);
 	if(pui32BIFTilingXStrides == IMG_NULL)
 	{
@@ -717,6 +848,7 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 							     bEnableSignatureChecks, 
 							     ui32SignatureChecksBufSize,
 							     ui32HWPerfFWBufSizeKB,
+							     ui64HWPerfFilter,
 							     ui32RGXFWAlignChecksSize,
 							     pui32RGXFWAlignChecks,
 							     ui32ConfigFlags,
@@ -724,7 +856,6 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 							     ui32NumBIFTilingConfigs,
 							     pui32BIFTilingXStrides,
 							     psRGXFwInit);
-
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitFirmwareKM: RGXSetupFirmware failed (%u)", eError));
@@ -884,6 +1015,13 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 			return eError;
 		}
 
+		/* Free DVFS History */
+		if (psDevInfo->psGpuDVFSHistory != IMG_NULL)
+		{
+			OSFreeMem(psDevInfo->psGpuDVFSHistory);
+			psDevInfo->psGpuDVFSHistory = IMG_NULL;
+		}
+
 		/* De-init Freelists/ZBuffers... */
 		OSLockDestroy(psDevInfo->hLockFreeList);
 		OSLockDestroy(psDevInfo->hLockZSBuffer);
@@ -908,7 +1046,7 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 		}
 	}
 
-#if 0 // FIXME
+#if 0 /* not required at this time */
 	if (psDevInfo->hTimer)
 	{
 		eError = OSRemoveTimer(psDevInfo->hTimer);
@@ -919,7 +1057,7 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 		}
 		psDevInfo->hTimer = IMG_NULL;
 	}
-#endif /* FIXME */
+#endif
 
     psDevMemoryInfo = &psDeviceNode->sDevMemoryInfo;
 
@@ -1062,6 +1200,14 @@ static PVRSRV_ERROR RGX_InitHeaps(DEVICE_MEMORY_INFO *psNewMemoryInfo)
 	INIT_TILING_HEAP(3);
 	INIT_TILING_HEAP(4);
 	#undef INIT_TILING_HEAP
+
+	/************* Doppler ***************/
+    psDeviceMemoryHeapCursor->pszName = "Doppler";
+    psDeviceMemoryHeapCursor->sHeapBaseAddr.uiAddr = RGX_DOPPLER_HEAP_BASE;
+	psDeviceMemoryHeapCursor->uiHeapLength = RGX_DOPPLER_HEAP_SIZE;
+	psDeviceMemoryHeapCursor->uiLog2DataPageSize = RGX_MMU_LOG2_PAGE_SIZE_4KB;
+
+	psDeviceMemoryHeapCursor++;/* advance to the next heap */
 
 	/************* HWBRN37200 ***************/
 #if defined(FIX_HW_BRN_37200)

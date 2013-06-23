@@ -740,11 +740,13 @@ IMG_VOID SCPCommandComplete(SCP_CONTEXT *psContext)
 			for (i=0;i<psCommand->ui32SyncCount;i++)
 			{
 				SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
+				IMG_BOOL bUpdate = (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_UPDATE);
 	
-				if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_UPDATE)
+				ServerSyncCompleteOp(psSCPSyncData->psSync, bUpdate, psSCPSyncData->ui32Update);
+
+				if (bUpdate)
 				{
 					psSCPSyncData->ui32Flags = 0; /* Stop future interaction with this sync prim. */
-					ServerSyncCompleteOp(psSCPSyncData->psSync, psSCPSyncData->ui32Update);
 					psSCPSyncData->psSync = NULL; /* Clear psSync as it is no longer referenced. */
 				}
 			}

@@ -123,8 +123,10 @@ typedef struct _PVR_TL_TEST_CMD_STREAM_NAME_IN_
 #define PVR_TL_TEST_CMD_STREAM_OPEN 17
 
 #define PVR_TL_TEST_CMD_DUMP_HWPERF_STATE 18
-/* No typedef, uses integer uiIn1 in union */
 
+#define PVR_TL_TEST_CMD_FLUSH_HWPERF_FWBUF 19
+
+#define PVR_TL_TEST_CMD_SIGNAL_PE 20
 
 typedef union _PVR_TL_TEST_CMD_IN_
 {
@@ -134,6 +136,7 @@ typedef union _PVR_TL_TEST_CMD_IN_
 	IMG_UINT32	uiIn1;						 /* Used by #13, #14 */
 	PVR_TL_TEST_CMD_STREAM_CREATE_IN  sCreate;
 	PVR_TL_TEST_CMD_STREAM_NAME_IN sName;
+	IMG_UINT32 uiParams[6];
 } PVR_TL_TEST_CMD_IN;
 
 /* Has to be the largest test IN structure */

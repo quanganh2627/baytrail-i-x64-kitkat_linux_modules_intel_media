@@ -50,7 +50,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrsrv_error.h"
 
 #include "mmu_common.h"
-#include "pdump_km.h" /* FIXME: check hierarchy... */
+#include "pdump_km.h"
 #include "pmr.h"
 
 #include "allocmem.h"
@@ -165,8 +165,6 @@ DevmemIntCtxCreate(
 
 	psDevmemCtx->ui32RefCount = 0;
     psDevmemCtx->psDevNode = psDeviceNode;
-
-    /* FIXME:  take ref-count on devnode? how! */
 
     /* Call down to MMU context creation */
 
@@ -287,13 +285,10 @@ DevmemIntMapPMR(DEVMEMINT_HEAP *psDevmemHeap,
 
     uiAllocationSize = psReservation->uiLength;
 
-    /* FIXME: Get page size (which? host, device, or lowest common denominator) */
     uiLog2DevPageSize = 12;
     ui32NumDevPages = 0xffffffffU & (((uiAllocationSize - 1)
                                       >> uiLog2DevPageSize) + 1);
     PVR_ASSERT(ui32NumDevPages << uiLog2DevPageSize == uiAllocationSize);
-
-    /* FIXME: perhaps MapPMR ought to be the one calling LockSysPhysAddresses()? */
 
     eError = PMRLockSysPhysAddresses(psPMR,
                                      uiLog2DevPageSize);
@@ -305,15 +300,12 @@ DevmemIntMapPMR(DEVMEMINT_HEAP *psDevmemHeap,
     sAllocationDevVAddr = psReservation->sBase;
 
     /*  N.B.  We pass mapping permission flags to MMU_MapPMR and let
-       it reject the mapping if the permissions on the PMR are not compatible.
-       FIXME: we ought to validate the permissions here and just have the
-       MMU_MapPMR be a dumb function that does as it's told. */
+       it reject the mapping if the permissions on the PMR are not compatible. */
 
     eError = MMU_MapPMR (psDevmemHeap->psDevmemCtx->psMMUContext,
                          sAllocationDevVAddr,
                          psPMR,
                          ui32NumDevPages << uiLog2DevPageSize,
-                         /* FIXME: where page size? */
                          uiMapFlags);
     PVR_ASSERT(eError == PVRSRV_OK);
 
@@ -354,12 +346,10 @@ DevmemIntUnmapPMR(DEVMEMINT_MAPPING *psMapping)
     ui32NumDevPages = psMapping->uiNumPages;
     sAllocationDevVAddr = psMapping->psReservation->sBase;
 
-    /* FIXME: Do we want an error code */
     MMU_UnmapPages (psDevmemHeap->psDevmemCtx->psMMUContext,
                     sAllocationDevVAddr,
                     ui32NumDevPages);
 
-    /* FIXME: shouldn't UnmapPMR call this? */
     eError = PMRUnlockSysPhysAddresses(psMapping->psPMR);
     PVR_ASSERT(eError == PVRSRV_OK);
 
@@ -395,8 +385,6 @@ DevmemIntReserveRange(DEVMEMINT_HEAP *psDevmemHeap,
     psReservation->sBase = sAllocationDevVAddr;
     psReservation->uiLength = uiAllocationSize;
 
-    /* FIXME: what about protection flags on the range reservation?
-       These could affect Catalogue and Directory entries... */
     eError = MMU_Alloc (psDevmemHeap->psDevmemCtx->psMMUContext,
                         uiAllocationSize,
                         &uiAllocationSize,
@@ -432,7 +420,6 @@ DevmemIntReserveRange(DEVMEMINT_HEAP *psDevmemHeap,
 PVRSRV_ERROR
 DevmemIntUnreserveRange(DEVMEMINT_RESERVATION *psReservation)
 {
-    /* FIXME: No error from mmu_free? */
     MMU_Free (psReservation->psDevmemHeap->psDevmemCtx->psMMUContext,
               psReservation->sBase,
               psReservation->uiLength);
@@ -488,8 +475,6 @@ DevmemIntCtxDestroy(
 		psDevNode->pfnUnregisterMemoryContext(psDevmemCtx->hPrivData);
 	}
     MMU_ContextDestroy(psDevmemCtx->psMMUContext);
-
-    /* FIXME:  relinquish ref-count on devnode? how! */
 
 	OSFreeMem(psDevmemCtx);
 	return PVRSRV_OK;

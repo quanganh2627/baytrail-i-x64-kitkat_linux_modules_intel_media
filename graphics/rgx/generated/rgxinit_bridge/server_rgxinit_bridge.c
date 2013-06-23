@@ -90,16 +90,20 @@ PVRSRVBridgeRGXInitAllocFWImgMem(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXInitAllocFWImgMemOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXInitAllocFWImgMemIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXInitAllocFWImgMemOUT->eError != PVRSRV_OK)
-		{
-			goto RGXInitAllocFWImgMem_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXInitAllocFWImgMemOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXInitAllocFWImgMemIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXInitAllocFWImgMemOUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitAllocFWImgMem_exit;
+					}
+
+				}
 
 	psRGXInitAllocFWImgMemOUT->eError =
 		PVRSRVRGXInitAllocFWImgMemKM(
@@ -161,34 +165,40 @@ PVRSRVBridgeRGXInitFirmware(IMG_UINT32 ui32BridgeID,
 
 
 
-	ui32RGXFWAlignChecksInt = OSAllocMem(psRGXInitFirmwareIN->ui32RGXFWAlignChecksSize * sizeof(IMG_UINT32));
-	if (!ui32RGXFWAlignChecksInt)
+	if (psRGXInitFirmwareIN->ui32RGXFWAlignChecksSize != 0)
 	{
-		psRGXInitFirmwareOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXInitFirmware_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitFirmwareIN->pui32RGXFWAlignChecks, psRGXInitFirmwareIN->ui32RGXFWAlignChecksSize * sizeof(IMG_UINT32)) 
-		|| (OSCopyFromUser(NULL, ui32RGXFWAlignChecksInt, psRGXInitFirmwareIN->pui32RGXFWAlignChecks,
-		psRGXInitFirmwareIN->ui32RGXFWAlignChecksSize * sizeof(IMG_UINT32)) != PVRSRV_OK) )
-	{
-		psRGXInitFirmwareOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto RGXInitFirmware_exit;
-	}
-
-		/* Look up the address from the handle */
-		psRGXInitFirmwareOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXInitFirmwareIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXInitFirmwareOUT->eError != PVRSRV_OK)
+		ui32RGXFWAlignChecksInt = OSAllocMem(psRGXInitFirmwareIN->ui32RGXFWAlignChecksSize * sizeof(IMG_UINT32));
+		if (!ui32RGXFWAlignChecksInt)
 		{
+			psRGXInitFirmwareOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto RGXInitFirmware_exit;
 		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitFirmwareIN->pui32RGXFWAlignChecks, psRGXInitFirmwareIN->ui32RGXFWAlignChecksSize * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32RGXFWAlignChecksInt, psRGXInitFirmwareIN->pui32RGXFWAlignChecks,
+				psRGXInitFirmwareIN->ui32RGXFWAlignChecksSize * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXInitFirmwareOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXInitFirmware_exit;
+			}
+
+				{
+					/* Look up the address from the handle */
+					psRGXInitFirmwareOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXInitFirmwareIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXInitFirmwareOUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitFirmware_exit;
+					}
+
+				}
 
 	psRGXInitFirmwareOUT->eError =
 		PVRSRVRGXInitFirmwareKM(
@@ -197,6 +207,7 @@ PVRSRVBridgeRGXInitFirmware(IMG_UINT32 ui32BridgeID,
 					psRGXInitFirmwareIN->bEnableSignatureChecks,
 					psRGXInitFirmwareIN->ui32SignatureChecksBufSize,
 					psRGXInitFirmwareIN->ui32HWPerfFWBufSizeKB,
+					psRGXInitFirmwareIN->ui64HWPerfFilter,
 					psRGXInitFirmwareIN->ui32RGXFWAlignChecksSize,
 					ui32RGXFWAlignChecksInt,
 					psRGXInitFirmwareIN->ui32ConfigFlags,
@@ -230,57 +241,69 @@ PVRSRVBridgeRGXInitLoadFWImage(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXInitLoadFWImageOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hImgDestImportInt2,
-							   psRGXInitLoadFWImageIN->hImgDestImport,
-							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
-		{
-			goto RGXInitLoadFWImage_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psRGXInitLoadFWImageOUT->eError = ResManFindPrivateDataByPtr(hImgDestImportInt2, (IMG_VOID **) &psImgDestImportInt);
-		if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
-		{
-			goto RGXInitLoadFWImage_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXInitLoadFWImageOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hImgSrcImportInt2,
-							   psRGXInitLoadFWImageIN->hImgSrcImport,
-							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
-		{
-			goto RGXInitLoadFWImage_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psRGXInitLoadFWImageOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hImgDestImportInt2,
+											psRGXInitLoadFWImageIN->hImgDestImport,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitLoadFWImage_exit;
+					}
 
-		/* Look up the data from the resman address */
-		psRGXInitLoadFWImageOUT->eError = ResManFindPrivateDataByPtr(hImgSrcImportInt2, (IMG_VOID **) &psImgSrcImportInt);
-		if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
-		{
-			goto RGXInitLoadFWImage_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXInitLoadFWImageOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hSigImportInt2,
-							   psRGXInitLoadFWImageIN->hSigImport,
-							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
-		{
-			goto RGXInitLoadFWImage_exit;
-		}
+					/* Look up the data from the resman address */
+					psRGXInitLoadFWImageOUT->eError = ResManFindPrivateDataByPtr(hImgDestImportInt2, (IMG_VOID **) &psImgDestImportInt);
 
-		/* Look up the data from the resman address */
-		psRGXInitLoadFWImageOUT->eError = ResManFindPrivateDataByPtr(hSigImportInt2, (IMG_VOID **) &psSigImportInt);
-		if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
-		{
-			goto RGXInitLoadFWImage_exit;
-		}
+					if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitLoadFWImage_exit;
+					}
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXInitLoadFWImageOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hImgSrcImportInt2,
+											psRGXInitLoadFWImageIN->hImgSrcImport,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitLoadFWImage_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXInitLoadFWImageOUT->eError = ResManFindPrivateDataByPtr(hImgSrcImportInt2, (IMG_VOID **) &psImgSrcImportInt);
+
+					if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitLoadFWImage_exit;
+					}
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXInitLoadFWImageOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hSigImportInt2,
+											psRGXInitLoadFWImageIN->hSigImport,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitLoadFWImage_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXInitLoadFWImageOUT->eError = ResManFindPrivateDataByPtr(hSigImportInt2, (IMG_VOID **) &psSigImportInt);
+
+					if(psRGXInitLoadFWImageOUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitLoadFWImage_exit;
+					}
+				}
 
 	psRGXInitLoadFWImageOUT->eError =
 		PVRSRVRGXInitLoadFWImageKM(
@@ -313,70 +336,80 @@ PVRSRVBridgeRGXInitDevPart2(IMG_UINT32 ui32BridgeID,
 
 
 
-	psInitScriptInt = OSAllocMem(RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND));
-	if (!psInitScriptInt)
+	
 	{
-		psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXInitDevPart2_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitDevPart2IN->psInitScript, RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) 
-		|| (OSCopyFromUser(NULL, psInitScriptInt, psRGXInitDevPart2IN->psInitScript,
-		RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) != PVRSRV_OK) )
-	{
-		psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto RGXInitDevPart2_exit;
-	}
-
-	psDbgScriptInt = OSAllocMem(RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND));
-	if (!psDbgScriptInt)
-	{
-		psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXInitDevPart2_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitDevPart2IN->psDbgScript, RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) 
-		|| (OSCopyFromUser(NULL, psDbgScriptInt, psRGXInitDevPart2IN->psDbgScript,
-		RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) != PVRSRV_OK) )
-	{
-		psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto RGXInitDevPart2_exit;
-	}
-
-	psDeinitScriptInt = OSAllocMem(RGX_MAX_DEINIT_COMMANDS * sizeof(RGX_INIT_COMMAND));
-	if (!psDeinitScriptInt)
-	{
-		psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXInitDevPart2_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitDevPart2IN->psDeinitScript, RGX_MAX_DEINIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) 
-		|| (OSCopyFromUser(NULL, psDeinitScriptInt, psRGXInitDevPart2IN->psDeinitScript,
-		RGX_MAX_DEINIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) != PVRSRV_OK) )
-	{
-		psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto RGXInitDevPart2_exit;
-	}
-
-		/* Look up the address from the handle */
-		psRGXInitDevPart2OUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXInitDevPart2IN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXInitDevPart2OUT->eError != PVRSRV_OK)
+		psInitScriptInt = OSAllocMem(RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND));
+		if (!psInitScriptInt)
 		{
+			psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto RGXInitDevPart2_exit;
 		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitDevPart2IN->psInitScript, RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND))
+				|| (OSCopyFromUser(NULL, psInitScriptInt, psRGXInitDevPart2IN->psInitScript,
+				RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) != PVRSRV_OK) )
+			{
+				psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXInitDevPart2_exit;
+			}
+	
+	{
+		psDbgScriptInt = OSAllocMem(RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND));
+		if (!psDbgScriptInt)
+		{
+			psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXInitDevPart2_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitDevPart2IN->psDbgScript, RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND))
+				|| (OSCopyFromUser(NULL, psDbgScriptInt, psRGXInitDevPart2IN->psDbgScript,
+				RGX_MAX_INIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) != PVRSRV_OK) )
+			{
+				psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXInitDevPart2_exit;
+			}
+	
+	{
+		psDeinitScriptInt = OSAllocMem(RGX_MAX_DEINIT_COMMANDS * sizeof(RGX_INIT_COMMAND));
+		if (!psDeinitScriptInt)
+		{
+			psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXInitDevPart2_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitDevPart2IN->psDeinitScript, RGX_MAX_DEINIT_COMMANDS * sizeof(RGX_INIT_COMMAND))
+				|| (OSCopyFromUser(NULL, psDeinitScriptInt, psRGXInitDevPart2IN->psDeinitScript,
+				RGX_MAX_DEINIT_COMMANDS * sizeof(RGX_INIT_COMMAND)) != PVRSRV_OK) )
+			{
+				psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXInitDevPart2_exit;
+			}
+
+				{
+					/* Look up the address from the handle */
+					psRGXInitDevPart2OUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXInitDevPart2IN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXInitDevPart2OUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitDevPart2_exit;
+					}
+
+				}
 
 	psRGXInitDevPart2OUT->eError =
 		PVRSRVRGXInitDevPart2KM(

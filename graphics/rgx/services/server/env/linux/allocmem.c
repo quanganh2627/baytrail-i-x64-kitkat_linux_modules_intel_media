@@ -49,12 +49,21 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 IMG_INTERNAL IMG_PVOID OSAllocMem(IMG_UINT32 ui32Size)
 {
     IMG_PVOID pvRet = kmalloc(ui32Size, GFP_KERNEL);
+
+    VG_MARK_INITIALIZED(pvRet,ui32Size);
+	return pvRet;
+}
+
+IMG_INTERNAL IMG_PVOID OSReAllocMem(IMG_PVOID pvPrev, IMG_UINT32 ui32Size)
+{
+    IMG_PVOID pvRet = krealloc(pvPrev, ui32Size, GFP_KERNEL);
 	return pvRet;
 }
 
 IMG_INTERNAL IMG_PVOID OSAllocZMem(IMG_UINT32 ui32Size)
 {
 	IMG_PVOID pvRet = kzalloc(ui32Size, GFP_KERNEL);
+	VG_MARK_INITIALIZED(pvRet,ui32Size);
 	return pvRet;
 }
 

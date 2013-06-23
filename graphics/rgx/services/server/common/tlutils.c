@@ -71,6 +71,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "pvrsrv.h"
 #include "rgxdevice.h"
+#include "lists.h"
+#include "rgxdefs_km.h"
 
 #include "tlintern.h"
 #include "tlstream.h"
@@ -676,8 +678,8 @@ static PVRSRV_ERROR TLTestCMD_DumpHWPerfState (IMG_VOID)
 	psTB = psRD->psRGXFWIfTraceBuf;
 	PVR_TRACE(("-------- RGXFWIF_TRACEBUF: %p",	psTB));
 
-	PVR_TRACE(("-------- RGXFWIF_TRACEBUF: HWPerSize( %d )  HWPerfOrdinal( %d )",
-			psRD->ui32RGXFWIfHWPerfBufSize, psTB->ui32HWPerfOrdinal));
+	PVR_TRACE(("-------- RGXFWIF_TRACEBUF: HWPerSize( %d )",
+			psRD->ui32RGXFWIfHWPerfBufSize));
 
 	PVR_TRACE(("-------- RGXFWIF_TRACEBUF: HWPerfRIdx( %d )  HWPerfWIdx( %d )  HWPerfWrapCount( %d )",
 			psTB->ui32HWPerfRIdx, psTB->ui32HWPerfWIdx,
@@ -685,6 +687,84 @@ static PVRSRV_ERROR TLTestCMD_DumpHWPerfState (IMG_VOID)
 
 	PVR_DPF_RETURN_OK;
 }
+
+static IMG_PVOID  TLTestCMD_FindRGXDevNode(PVRSRV_DEVICE_NODE *psDeviceNode)
+{
+	if (psDeviceNode->sDevId.eDeviceType == PVRSRV_DEVICE_TYPE_RGX)
+	{
+		return psDeviceNode;
+	}
+	return NULL;
+}
+
+static PVRSRV_ERROR TLTestCMD_FlushHWPerfFWBuf (IMG_VOID)
+{
+	PVRSRV_ERROR        rc = PVRSRV_OK;
+	PVRSRV_DEVICE_NODE* psDevNode = 0;
+	PVRSRV_DATA*        psGlobalSrvData = PVRSRVGetPVRSRVData();
+
+	PVR_DPF_ENTERED;
+
+	PVR_DPF((PVR_DBG_WARNING, "TLTestCMD_FlushHWPerfFWBuf: ..."));
+
+	/* Search for the RGX device node */
+	psDevNode = List_PVRSRV_DEVICE_NODE_Any(psGlobalSrvData->psDeviceNodeList, TLTestCMD_FindRGXDevNode);
+	if (psDevNode == 0)
+	{
+		/* Device node was not found */
+		PVR_DPF((PVR_DBG_ERROR, "Failed to fin the RGX device node"));
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_NOT_FOUND);
+	}
+
+	rc = psDevNode->pfnServiceHWPerf(psDevNode);
+
+#if defined(NO_HARDWARE)
+	PVR_DPF((PVR_DBG_WARNING, "TLTestCMD_FlushHWPerfFWBuf is a no-op on NO_HARDWARE!"));
+#endif
+
+	PVR_DPF_RETURN_RC(rc);
+}
+
+static PVRSRV_ERROR TLTestCMD_SignalPE (IMG_UINT32* psIn1)
+{
+	PVRSRV_DEVICE_NODE* psDevNode = 0;
+	PVRSRV_RGXDEV_INFO* psDevInfo = 0;
+	PVRSRV_DATA*        psGlobalSrvData = PVRSRVGetPVRSRVData();
+	IMG_UINT32          ui32Tmp;
+
+	PVR_DPF_ENTERED;
+
+	PVR_DPF((PVR_DBG_WARNING, "TLTestCMD_SignalPE: ( %d ) ( %d )",
+			psIn1[1], psIn1[3]));
+
+	/* Search for the RGX device node */
+	psDevNode = List_PVRSRV_DEVICE_NODE_Any(psGlobalSrvData->psDeviceNodeList, TLTestCMD_FindRGXDevNode);
+	if (psDevNode == 0)
+	{
+		/* Device node was not found */
+		PVR_DPF((PVR_DBG_ERROR, "Failed to fin the RGX device node"));
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_NOT_FOUND);
+	}
+	psDevInfo = psDevNode->pvDevice;
+
+	OSWriteHWReg32(psDevInfo->pvRegsBaseKM, psIn1[0], psIn1[1]);
+	OSWriteHWReg32(psDevInfo->pvRegsBaseKM, psIn1[2], psIn1[3]);
+
+	/* kick GPIO */
+	ui32Tmp = OSReadHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_EVENT_STATUS);
+	OSWriteHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_EVENT_STATUS, ui32Tmp|RGX_CR_EVENT_STATUS_GPIO_REQ_EN);
+
+	/* ensure the registers goes through before continuing */
+	OSMemoryBarrier();
+
+#if defined(NO_HARDWARE)
+	PVR_DPF((PVR_DBG_WARNING, "TLTestCMD_SignalPwrEst is a no-op on NO_HARDWARE!"));
+#endif
+
+	PVR_DPF_RETURN_OK;
+}
+
+
 
 static PVRSRV_ERROR RegisterCleanupAction(TLT_OP eOp, IMG_VOID *pvParam1)
 {
@@ -1057,6 +1137,16 @@ TLServerTestIoctlKM(IMG_UINT32 	uiCmd,
 	case PVR_TL_TEST_CMD_DUMP_HWPERF_STATE:
 		eError = TLTestCMD_DumpHWPerfState();
 		PVR_LOG_IF_ERROR(eError, "TLTestCMD_DumpHWPerfState");
+		break;
+
+	case PVR_TL_TEST_CMD_FLUSH_HWPERF_FWBUF:
+		eError = TLTestCMD_FlushHWPerfFWBuf();
+		PVR_LOG_IF_ERROR(eError, "TLTestCMD_FlushHWPerfFWBuf");
+		break;
+
+	case PVR_TL_TEST_CMD_SIGNAL_PE:
+		eError = TLTestCMD_SignalPE((IMG_UINT32*)uiIn1);
+		PVR_LOG_IF_ERROR(eError, "TLTestCMD_SignalPE");
 		break;
 
 	default:

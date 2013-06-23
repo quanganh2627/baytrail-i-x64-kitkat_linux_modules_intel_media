@@ -202,6 +202,10 @@ struct _DEVMEM_MEMDESC_ {
 
 	DEVMEM_DEVICE_MEMDESC sDeviceMemDesc;	/*!< Device specifics of the memdesc */
 	DEVMEM_CPU_MEMDESC sCPUMemDesc;		/*!< CPU specifics of the memdesc */
+
+#if defined(PVR_RI_DEBUG)
+    IMG_HANDLE hRIHandle;					/*!< Handle to RI information */
+#endif
 };
 
 PVRSRV_ERROR _DevmemValidateParams(IMG_DEVMEM_SIZE_T uiSize,

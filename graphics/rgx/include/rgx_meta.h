@@ -76,7 +76,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define META_CR_PERF_ICORE0						(0x0480FFD0)
 #define META_CR_PERF_ICORE1						(0x0480FFD8)
-#define META_CR_PERF_ICORE_DCACHEMISS			(0x0)
+#define META_CR_PERF_ICORE_DCACHEMISS			(0x8)
 
 typedef enum
 {
@@ -265,7 +265,7 @@ typedef struct
 * 2nd thread
 ************************************************************************/
 #define RGXFW_THR1_PC		(0x18930000)
-#define RGXFW_THR1_SP		(0x7888E000)
+#define RGXFW_THR1_SP		(0x78890000)
 
 #endif /*  __RGX_META_H__ */
 

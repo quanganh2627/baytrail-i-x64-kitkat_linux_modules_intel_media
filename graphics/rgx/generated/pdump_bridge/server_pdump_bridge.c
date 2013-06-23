@@ -114,24 +114,26 @@ PVRSRVBridgePVRSRVPDumpComment(IMG_UINT32 ui32BridgeID,
 
 
 
-	uiCommentInt = OSAllocMem(PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR));
-	if (!uiCommentInt)
+	
 	{
-		psPVRSRVPDumpCommentOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto PVRSRVPDumpComment_exit;
+		uiCommentInt = OSAllocMem(PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR));
+		if (!uiCommentInt)
+		{
+			psPVRSRVPDumpCommentOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto PVRSRVPDumpComment_exit;
+		}
 	}
 
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPVRSRVPDumpCommentIN->puiComment, PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR))
+				|| (OSCopyFromUser(NULL, uiCommentInt, psPVRSRVPDumpCommentIN->puiComment,
+				PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR)) != PVRSRV_OK) )
+			{
+				psPVRSRVPDumpCommentOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPVRSRVPDumpCommentIN->puiComment, PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR)) 
-		|| (OSCopyFromUser(NULL, uiCommentInt, psPVRSRVPDumpCommentIN->puiComment,
-		PVRSRV_PDUMP_MAX_COMMENT_SIZE * sizeof(IMG_CHAR)) != PVRSRV_OK) )
-	{
-		psPVRSRVPDumpCommentOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto PVRSRVPDumpComment_exit;
-	}
-
+				goto PVRSRVPDumpComment_exit;
+			}
 
 	psPVRSRVPDumpCommentOUT->eError =
 		PDumpCommentKM(

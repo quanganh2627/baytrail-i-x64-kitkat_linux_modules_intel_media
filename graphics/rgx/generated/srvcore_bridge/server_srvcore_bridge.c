@@ -170,14 +170,16 @@ PVRSRVBridgeEnumerateDevices(IMG_UINT32 ui32BridgeID,
 	psEnumerateDevicesOUT->psDeviceIdentifier = psEnumerateDevicesIN->psDeviceIdentifier;
 
 
-	psDeviceIdentifierInt = OSAllocMem(PVRSRV_MAX_DEVICES * sizeof(PVRSRV_DEVICE_IDENTIFIER));
-	if (!psDeviceIdentifierInt)
+	
 	{
-		psEnumerateDevicesOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto EnumerateDevices_exit;
+		psDeviceIdentifierInt = OSAllocMem(PVRSRV_MAX_DEVICES * sizeof(PVRSRV_DEVICE_IDENTIFIER));
+		if (!psDeviceIdentifierInt)
+		{
+			psEnumerateDevicesOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto EnumerateDevices_exit;
+		}
 	}
-
 
 
 	psEnumerateDevicesOUT->eError =
@@ -379,16 +381,20 @@ PVRSRVBridgeReleaseGlobalEventObject(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psReleaseGlobalEventObjectOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hGlobalEventObjectInt2,
-							   psReleaseGlobalEventObjectIN->hGlobalEventObject,
-							   PVRSRV_HANDLE_TYPE_SHARED_EVENT_OBJECT);
-		if(psReleaseGlobalEventObjectOUT->eError != PVRSRV_OK)
-		{
-			goto ReleaseGlobalEventObject_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psReleaseGlobalEventObjectOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hGlobalEventObjectInt2,
+											psReleaseGlobalEventObjectIN->hGlobalEventObject,
+											PVRSRV_HANDLE_TYPE_SHARED_EVENT_OBJECT);
+					if(psReleaseGlobalEventObjectOUT->eError != PVRSRV_OK)
+					{
+						goto ReleaseGlobalEventObject_exit;
+					}
+
+				}
 
 	psReleaseGlobalEventObjectOUT->eError = ReleaseGlobalEventObjectResManProxy(hGlobalEventObjectInt2);
 	/* Exit early if bridged call fails */
@@ -424,23 +430,27 @@ PVRSRVBridgeEventObjectOpen(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psEventObjectOpenOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hEventObjectInt2,
-							   psEventObjectOpenIN->hEventObject,
-							   PVRSRV_HANDLE_TYPE_SHARED_EVENT_OBJECT);
-		if(psEventObjectOpenOUT->eError != PVRSRV_OK)
-		{
-			goto EventObjectOpen_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psEventObjectOpenOUT->eError = ResManFindPrivateDataByPtr(hEventObjectInt2, (IMG_VOID **) &hEventObjectInt);
-		if(psEventObjectOpenOUT->eError != PVRSRV_OK)
-		{
-			goto EventObjectOpen_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psEventObjectOpenOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hEventObjectInt2,
+											psEventObjectOpenIN->hEventObject,
+											PVRSRV_HANDLE_TYPE_SHARED_EVENT_OBJECT);
+					if(psEventObjectOpenOUT->eError != PVRSRV_OK)
+					{
+						goto EventObjectOpen_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psEventObjectOpenOUT->eError = ResManFindPrivateDataByPtr(hEventObjectInt2, (IMG_VOID **) &hEventObjectInt);
+
+					if(psEventObjectOpenOUT->eError != PVRSRV_OK)
+					{
+						goto EventObjectOpen_exit;
+					}
+				}
 
 	psEventObjectOpenOUT->eError =
 		OSEventObjectOpen(
@@ -510,23 +520,27 @@ PVRSRVBridgeEventObjectWait(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psEventObjectWaitOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hOSEventKMInt2,
-							   psEventObjectWaitIN->hOSEventKM,
-							   PVRSRV_HANDLE_TYPE_EVENT_OBJECT_CONNECT);
-		if(psEventObjectWaitOUT->eError != PVRSRV_OK)
-		{
-			goto EventObjectWait_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psEventObjectWaitOUT->eError = ResManFindPrivateDataByPtr(hOSEventKMInt2, (IMG_VOID **) &hOSEventKMInt);
-		if(psEventObjectWaitOUT->eError != PVRSRV_OK)
-		{
-			goto EventObjectWait_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psEventObjectWaitOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hOSEventKMInt2,
+											psEventObjectWaitIN->hOSEventKM,
+											PVRSRV_HANDLE_TYPE_EVENT_OBJECT_CONNECT);
+					if(psEventObjectWaitOUT->eError != PVRSRV_OK)
+					{
+						goto EventObjectWait_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psEventObjectWaitOUT->eError = ResManFindPrivateDataByPtr(hOSEventKMInt2, (IMG_VOID **) &hOSEventKMInt);
+
+					if(psEventObjectWaitOUT->eError != PVRSRV_OK)
+					{
+						goto EventObjectWait_exit;
+					}
+				}
 
 	psEventObjectWaitOUT->eError =
 		OSEventObjectWait(
@@ -552,16 +566,20 @@ PVRSRVBridgeEventObjectClose(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psEventObjectCloseOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hOSEventKMInt2,
-							   psEventObjectCloseIN->hOSEventKM,
-							   PVRSRV_HANDLE_TYPE_EVENT_OBJECT_CONNECT);
-		if(psEventObjectCloseOUT->eError != PVRSRV_OK)
-		{
-			goto EventObjectClose_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psEventObjectCloseOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hOSEventKMInt2,
+											psEventObjectCloseIN->hOSEventKM,
+											PVRSRV_HANDLE_TYPE_EVENT_OBJECT_CONNECT);
+					if(psEventObjectCloseOUT->eError != PVRSRV_OK)
+					{
+						goto EventObjectClose_exit;
+					}
+
+				}
 
 	psEventObjectCloseOUT->eError = EventObjectCloseResManProxy(hOSEventKMInt2);
 	/* Exit early if bridged call fails */

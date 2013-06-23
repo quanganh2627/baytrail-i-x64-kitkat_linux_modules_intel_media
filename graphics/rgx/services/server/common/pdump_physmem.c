@@ -52,7 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pdump.h"
 
 #include "pdump_km.h"
-#include "pdump_osfunc.h" // << ugly circular dependency! FIXME FIXME
+#include "pdump_osfunc.h"
 
 #include "allocmem.h"
 #include "osfunc.h"
@@ -61,8 +61,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* static IMG_UINT32 guiPDumpMMUContextAvailabilityMask = (1<<MAX_PDUMP_MMU_CONTEXTS)-1; */
 
 
-/* arbitrary buffer length here.  FIXME: store this data in the MD
-   rather than construct it on the fly on everyone's stacks */
+/* arbitrary buffer length here. */
 #define MAX_SYMBOLIC_ADDRESS_LENGTH 40
 
 struct _PDUMP_PHYSMEM_INFO_T_
@@ -84,11 +83,6 @@ struct _PDUMP_PHYSMEM_INFO_T_
 PVRSRV_ERROR PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
                             const IMG_CHAR *pszSymbolicAddress,
                             IMG_UINT64 ui64Size,
-                            /* alignment is alignment of start
-                               of buffer _and_ minimum
-                               contiguity - i.e. smallest
-                               allowable page-size.  FIXME:
-                               review this decision. */
                             IMG_DEVMEM_ALIGN_T uiAlign,
                             IMG_BOOL bForcePersistent,
                             IMG_HANDLE *phHandlePtr)
@@ -101,7 +95,7 @@ PVRSRV_ERROR PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
 	PDUMP_GET_SCRIPT_STRING()
 
     psPDumpAllocationInfo = OSAllocMem(sizeof*psPDumpAllocationInfo);
-    PVR_ASSERT(psPDumpAllocationInfo != IMG_NULL); /* FIXME: handle error */
+    PVR_ASSERT(psPDumpAllocationInfo != IMG_NULL);
 
 	if (bForcePersistent)
 	{
@@ -408,12 +402,7 @@ PDumpPMRCBP(const IMG_CHAR *pszMemspaceName,
 }
 
 PVRSRV_ERROR
-PDumpWriteBuffer(/* const */ IMG_UINT8 *pcBuffer,
-                 /* FIXME:
-                    pcBuffer above ought to be :
-                    const IMG_UINT8 *pcBuffer
-                    but, PDumpOSWriteString takes pointer to non-const data.
-                 */
+PDumpWriteBuffer(IMG_UINT8 *pcBuffer,
                  IMG_SIZE_T uiNumBytes,
                  PDUMP_FLAGS_T uiPDumpFlags,
                  IMG_CHAR *pszFilenameOut,

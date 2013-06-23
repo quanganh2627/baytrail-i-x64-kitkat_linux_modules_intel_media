@@ -235,8 +235,6 @@ void* ProcSeq1ElementHeaderOff2Element(struct seq_file *sfile, loff_t off)
  File opening function passed to proc_dir_entry->proc_fops for /proc entries
  created by CreateProcReadEntrySeq.
 
-FIXME
-
  @Input  inode : inode entry of opened /proc file
 
  @Input  file : file entry of opened /proc file

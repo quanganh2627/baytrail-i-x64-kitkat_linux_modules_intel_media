@@ -41,7 +41,6 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /***************************************************************************/
 
-
 #include "devicemem_server_utils.h"
 
 /* Our own interface */
@@ -367,9 +366,6 @@ static IMG_BOOL _MMU_PhysMem_RAImportAlloc(RA_PERARENA_HANDLE hArenaHandle,
 	MMU_MEMORY_MAPPING *psMapping;
 	PVRSRV_ERROR eError;
 
-	/* FIXME?: Might we want to pass in the MMU level this way so we
-			   don't mix PC/PD/PT in the same allocation. Might make
-			   cache managament easier */
 	PVR_UNREFERENCED_PARAMETER(uiFlags);
 
 	psMapping = OSAllocMem(sizeof(MMU_MEMORY_MAPPING));
@@ -536,7 +532,7 @@ static IMG_VOID _MMU_PhysMemFree(MMU_PHYSMEM_CONTEXT *psCtx,
 	psMemDesc->pvCpuVAddr = IMG_NULL;
 #endif
 
-	uiPhysAddr = psMemDesc->sDevPAddr.uiAddr; /* FIXME:  translate addr if necessary */
+	uiPhysAddr = psMemDesc->sDevPAddr.uiAddr;
 	RA_Free(psCtx->psPhysMemRA, uiPhysAddr);
 
 	psMemDesc->bValid = IMG_FALSE;
@@ -564,7 +560,6 @@ static PVRSRV_ERROR _MMU_MapCPUVAddr(MMU_MEMORY_DESC *psMMUMemDesc)
 	/* There should only be one call to map */
 	PVR_ASSERT(psMMUMemDesc->pvCpuVAddr == IMG_NULL);
 
-	/* FIXME: Lock */
 	if (psMapping->uiCpuVAddrRefCount == 0)
 	{
 		
@@ -575,7 +570,6 @@ static PVRSRV_ERROR _MMU_MapCPUVAddr(MMU_MEMORY_DESC *psMMUMemDesc)
 										&psMapping->pvCpuVAddr);
 	}
 	psMapping->uiCpuVAddrRefCount++;
-	/* FIXME: Unlock */
 
 	PVR_ASSERT(psMapping->pvCpuVAddr != IMG_NULL);
 
@@ -608,13 +602,11 @@ static PVRSRV_ERROR _MMU_UnmapCPUVAddr(MMU_MEMORY_DESC *psMMUMemDesc)
 	MMU_PHYSMEM_CONTEXT *psCtx = psMapping->psContext;
 	PVRSRV_DEVICE_NODE *psDevNode = psCtx->psDevNode;
 
-	/* FIXME: Lock */
 	if (--psMapping->uiCpuVAddrRefCount == 0)
 	{
 		psDevNode->pfnMMUPxUnmap(psDevNode, &psMapping->sMemHandle,
 									psMMUMemDesc->pvCpuVAddr);
 	}
-	/* FIXME: Unlock */
 
 	psMMUMemDesc->pvCpuVAddr = IMG_NULL;
 #endif
@@ -695,8 +687,6 @@ static PVRSRV_ERROR _PxMemAlloc(MMU_CONTEXT *psMMUContext,
 	PDUMPCOMMENT("Alloc MMU object");
 	
 	/* new pdump API */
-	/* FIXME: I'd rather not have this switch statment. Review this and
-	          see if we can rework pdump to not require it */
 	switch (eMMULevel)
 	{
 		case MMU_LEVEL_3:
@@ -729,7 +719,6 @@ static PVRSRV_ERROR _PxMemAlloc(MMU_CONTEXT *psMMUContext,
 											psMemDesc->sDevPAddr,
 											0,
 											uiNumEntries,
-											/* FIXME: should it be psMMUHeap->sPDumpAttrib.sHeap...? */
 											psConfig->uiBytesPerEntry,
 											psConfig->uiLog2Align,
 											psConfig->uiAddrShift,
@@ -830,9 +819,6 @@ static IMG_VOID _PxMemFree(MMU_CONTEXT *psMMUContext,
 	PDUMPCOMMENT("Free MMU object");
 
 	/* new pdump API */
-	/* FIXME: I'd rather not have this switch statment. Review this and
-	          see if we can rework pdump to not require it */
-
 	switch (eMMULevel)
 	{
 		case MMU_LEVEL_3:
@@ -953,8 +939,6 @@ static PVRSRV_ERROR _SetupPxE(MMU_CONTEXT *psMMUContext,
 	}
 
 	/* Map the Page Catalogue into CPU virtual memory */
-	/* FIXME: consider making this the caller's
-	   responsibility... */
 	eError = _MMU_MapCPUVAddr(psMemDesc);
 	if(eError != PVRSRV_OK)
 	{
@@ -1707,7 +1691,7 @@ _AllocPageTables(MMU_CONTEXT *psMMUContext,
 	IMG_HANDLE hPriv;
 	IMG_UINT32 ui32CurrentLevel = 0;
 
-	/* FIXME: To support variable page size this needs to be passed in from above */
+	/* To support variable page size this needs to be passed in from above */
 	IMG_UINT32 uiLog2PageSize = 12;
 
 
@@ -1767,7 +1751,7 @@ static IMG_VOID _FreePageTables(MMU_CONTEXT *psMMUContext,
 	IMG_UINT32 ui32CurrentLevel = 0;
 	IMG_HANDLE hPriv;
 
-	/* FIXME: To support variable page size this needs to be passed in from above */
+	/* To support variable page size this needs to be passed in from above */
 	IMG_UINT32 uiLog2PageSize = 12;
 
 	PVR_DPF((PVR_DBG_ALLOC,
@@ -1827,7 +1811,6 @@ static IMG_VOID _MMU_GetPTEInfo(MMU_CONTEXT *psMMUContext,
 	MMU_DEVICEATTRIBS *psDevAttrs = psMMUContext->psDevAttrs;
 	MMU_Levelx_INFO *psLocalLevel = IMG_NULL;
 
-	/* FIXME: I don't want all of these, but the API assumes I do */
 	const MMU_DEVVADDR_CONFIG *psDevVAddrConfig;
 	const MMU_PxE_CONFIG *psPDEConfig;
 	const MMU_PxE_CONFIG *psPTEConfig;
@@ -1952,7 +1935,7 @@ _MMU_MapPage (MMU_CONTEXT *psMMUContext,
 	IMG_UINT32 uiPTEIndex;
 	IMG_HANDLE hPriv;
 
-	/* FIXME: This should be passed in */
+	/* This should be passed in */
 	IMG_UINT32 uiLog2DataPageSize = 12;
 
 	_MMU_GetPTEInfo(psMMUContext, sDevVAddr,
@@ -2001,7 +1984,7 @@ _MMU_UnmapPage (MMU_CONTEXT *psMMUContext,
 	IMG_UINT32 uiPTEIndex;
 	IMG_HANDLE hPriv;
 
-	/* FIXME: This should be passed in */
+	/* This should be passed in */
 	IMG_UINT32 uiLog2DataPageSize = 12;
 
 
@@ -2230,10 +2213,9 @@ MMU_Alloc (MMU_CONTEXT *psMMUContext,
     PVRSRV_ERROR eError;
     IMG_DEV_VIRTADDR sDevVAddrEnd;
 
-	/* FIXME: This should be passed in */
+	/* This should be passed in */
 	IMG_UINT32 uiLog2DataPageSize = 12;
 
-	/* FIXME: I don't want all of these, but the current API assumes I do */
 	const MMU_PxE_CONFIG *psPDEConfig;
 	const MMU_PxE_CONFIG *psPTEConfig;
 	const MMU_DEVVADDR_CONFIG *psDevVAddrConfig;
@@ -2322,7 +2304,7 @@ MMU_UnmapPages (MMU_CONTEXT *psMMUContext,
 				IMG_DEV_VIRTADDR sDevVAddr,
 				IMG_UINT32 ui32PageCount)
 {
-	/* FIXME: This should be passed in */
+	/* This should be passed in */
 	IMG_UINT32 uiLog2DataPageSize = 12;
 	IMG_UINT32 uiPageSize = 1 << uiLog2DataPageSize;
 
@@ -2366,7 +2348,7 @@ MMU_MapPMR (MMU_CONTEXT *psMMUContext,
 	PVRSRV_MEMALLOCFLAGS_T uiMMUProtFlags = 0;
 	IMG_UINT32 ui32GPUCacheFlags;
 
-	/* FIXME: This should be passed in */
+	/* This should be passed in */
 	IMG_UINT32 uiLog2DataPageSize = 12;
 	IMG_UINT32 uiPageSize = 1 << uiLog2DataPageSize;
 
@@ -2401,9 +2383,7 @@ MMU_MapPMR (MMU_CONTEXT *psMMUContext,
        applying the permissions */
     if (uiProtFlags != (uiMapFlags & MMU_PROTFLAGS_MASK))
     {
-        /* FIXME: perhaps ought to catch this one level higher
-           (devicemem2.c) and simply ASSERT it here. */
-        eError = PVRSRV_ERROR_INVALID_PARAMS; // perhaps prefer: NEWDEVMEM_BAD_MAPPING_MODE?
+        eError = PVRSRV_ERROR_INVALID_PARAMS;
         goto e0;
     }
 #endif
@@ -2441,7 +2421,7 @@ MMU_MapPMR (MMU_CONTEXT *psMMUContext,
 		uiMMUProtFlags |= MMU_PROTFLAGS_CACHE_COHERENT;
 	}
 
-    /* FIXME: should we verify the size and contiguity (i.e. page size)? */
+    /* should we verify the size and contiguity when supporting variable page size */
 
 #if defined(PDUMP)
     PDUMPCOMMENT("Wire up Page Table entries to point to the Data Pages (%lld bytes)", uiSizeBytes);
@@ -2526,8 +2506,6 @@ MMU_AcquireBaseAddr(MMU_CONTEXT *psMMUContext, IMG_DEV_PHYADDR *psPhysAddr)
 	if (!psMMUContext)
 		return PVRSRV_ERROR_INVALID_PARAMS;
 
-	/* FIXME: Do we want to add refcount here? */
-
 	*psPhysAddr = psMMUContext->sBaseLevelInfo.sMemDesc.sDevPAddr;
 	return PVRSRV_OK;
 }
@@ -2538,7 +2516,6 @@ MMU_AcquireBaseAddr(MMU_CONTEXT *psMMUContext, IMG_DEV_PHYADDR *psPhysAddr)
 IMG_VOID
 MMU_ReleaseBaseAddr(MMU_CONTEXT *psMMUContext)
 {
-	/* FIXME: Do we want to add refcount here? */
 	PVR_UNREFERENCED_PARAMETER(psMMUContext);
 }
 
@@ -2567,9 +2544,6 @@ PVRSRV_ERROR MMU_ContextDerivePCPDumpSymAddr(MMU_CONTEXT *psMMUContext,
         /* We don't have any allocations.  You're not allowed to ask
            for the page catalogue base address until you've made at
            least one allocation */
-        /* FIXME! Perhaps it may be better to have a "zero" page, or a
-           pretend page catalogue that would always result in a page
-           fault, and return that instead? */
         return PVRSRV_ERROR_MMU_API_PROTOCOL_ERROR;
     }
 
@@ -2578,7 +2552,7 @@ PVRSRV_ERROR MMU_ContextDerivePCPDumpSymAddr(MMU_CONTEXT *psMMUContext,
     PVR_ASSERT(uiPDumpSymbolicNameBufferSize >= (IMG_UINT32)(21 + OSStringLength(psDevId->pszPDumpDevName)));
 
     /* Page table Symbolic Name is formed from page table phys addr
-       prefixed with MMUPT_.  FIXME: should this really be a PMR? */
+       prefixed with MMUPT_. */
 
     uiCount = OSSNPrintf(pszPDumpSymbolicNameBuffer,
                          uiPDumpSymbolicNameBufferSize,
@@ -2615,7 +2589,7 @@ MMU_PDumpWritePageCatBase(MMU_CONTEXT *psMMUContext,
     eError = PDumpWriteSymbAddress(pszSpaceName,
                                    uiOffset,
                                    aszPageCatBaseSymbolicAddr,
-                                   0, /* offset -- FIXME: could be non-zero for var. pgsz */
+                                   0, /* offset -- Could be non-zero for var. pgsz */
                                    8, /* word size (bytes) i.e. is a 64-bit reg */
 								   uiPdumpFlags | PDUMP_FLAGS_CONTINUOUS);
     PVR_ASSERT(eError == PVRSRV_OK);

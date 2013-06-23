@@ -57,6 +57,7 @@ typedef struct _CONNECTION_DATA_
 {
 	PRESMAN_CONTEXT 	hResManContext;
 	PVRSRV_HANDLE_BASE 	*psHandleBase;
+	struct _SYNC_CONNECTION_DATA_ *psSyncConnectionData;
 
 	/* True if the process is the initialisation server. */
 	IMG_BOOL		bInitProcess;

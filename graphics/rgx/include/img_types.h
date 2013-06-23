@@ -89,6 +89,9 @@ typedef unsigned __int64	IMG_UINT64, *IMG_PUINT64;
 typedef __int64			IMG_INT64,  *IMG_PINT64;
 #define IMG_INT64_C(c)	c ## LL
 #define IMG_UINT64_C(c)	c ## ULL
+#if defined(_MSC_VER)
+#define strtoll         _strtoi64
+#endif
 
 #else
 	#if defined(LINUX) || defined(__METAG)

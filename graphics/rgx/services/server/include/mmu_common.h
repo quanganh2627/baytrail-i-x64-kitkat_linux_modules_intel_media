@@ -213,15 +213,8 @@ typedef struct _MMU_PxE_CONFIG_
 
 /* The following flags are for internal use only, and should not
    traverse the API */
-/* FIXME: should they even be exposed in this file
-   then? */
 #define MMU_PROTFLAGS_INVALID 0x80000000U
 
-
-/* 
-   FIXME: distinguish between "MMU_MAPFLAGS_T" -- specified by caller
-   to MMU_MapPMR -- and "MMU_PROTFLAGS_T" used internally in
-   mmu_common?  I think it's fine to have just one type here... */
 typedef IMG_UINT32 MMU_PROTFLAGS_T;
 
 /* The following flags should be supplied by the caller: */

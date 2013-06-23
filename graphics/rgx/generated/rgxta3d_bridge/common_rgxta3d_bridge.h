@@ -46,6 +46,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define COMMON_RGXTA3D_BRIDGE_H
 
 #include "rgx_bridge.h"
+#include "sync_external.h"
+#include "rgx_fwif_shared.h"
 
 
 /* FIXME: need to create pvrbridge_common.h" */
@@ -67,7 +69,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define PVRSRV_BRIDGE_RGXTA3D_RGXCREATERENDERCONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTA3D_CMD_FIRST+12)
 #define PVRSRV_BRIDGE_RGXTA3D_RGXDESTROYRENDERCONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTA3D_CMD_FIRST+13)
 #define PVRSRV_BRIDGE_RGXTA3D_RGXKICKTA3D			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTA3D_CMD_FIRST+14)
-#define PVRSRV_BRIDGE_RGXTA3D_CMD_LAST			(PVRSRV_BRIDGE_RGXTA3D_CMD_FIRST+14)
+#define PVRSRV_BRIDGE_RGXTA3D_RGXSETRENDERCONTEXTPRIORITY			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTA3D_CMD_FIRST+15)
+#define PVRSRV_BRIDGE_RGXTA3D_CMD_LAST			(PVRSRV_BRIDGE_RGXTA3D_CMD_FIRST+15)
 
 
 /*******************************************
@@ -320,10 +323,6 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXREMOVEBLOCKFROMFREELIST_TAG
 typedef struct PVRSRV_BRIDGE_IN_RGXCREATERENDERCONTEXT_TAG
 {
 	IMG_HANDLE hDevNode;
-	IMG_HANDLE hTACCBMemDesc;
-	IMG_HANDLE hTACCBCtlMemDesc;
-	IMG_HANDLE h3DCCBMemDesc;
-	IMG_HANDLE h3DCCBCtlMemDesc;
 	IMG_UINT32 ui32Priority;
 	IMG_DEV_VIRTADDR sMCUFenceAddr;
 	IMG_DEV_VIRTADDR sVDMCallStackAddr;
@@ -336,9 +335,7 @@ typedef struct PVRSRV_BRIDGE_IN_RGXCREATERENDERCONTEXT_TAG
 /* Bridge out structure for RGXCreateRenderContext */
 typedef struct PVRSRV_BRIDGE_OUT_RGXCREATERENDERCONTEXT_TAG
 {
-	IMG_HANDLE hCleanupCookie;
-	IMG_HANDLE hFWRenderContext;
-	IMG_HANDLE hFW3DContextState;
+	IMG_HANDLE hRenderContext;
 	PVRSRV_ERROR eError;
 } PVRSRV_BRIDGE_OUT_RGXCREATERENDERCONTEXT;
 
@@ -366,14 +363,40 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXDESTROYRENDERCONTEXT_TAG
 /* Bridge in structure for RGXKickTA3D */
 typedef struct PVRSRV_BRIDGE_IN_RGXKICKTA3D_TAG
 {
-	IMG_HANDLE hDevNode;
-	IMG_HANDLE hFWRenderContext;
+	IMG_HANDLE hRenderContext;
+	IMG_UINT32 ui32ClientTAFenceCount;
+	PRGXFWIF_UFO_ADDR * psClientTAFenceUFOAddress;
+	IMG_UINT32 * pui32ClientTAFenceValue;
+	IMG_UINT32 ui32ClientTAUpdateCount;
+	PRGXFWIF_UFO_ADDR * psClientTAUpdateUFOAddress;
+	IMG_UINT32 * pui32ClientTAUpdateValue;
+	IMG_UINT32 ui32ServerTASyncPrims;
+	IMG_UINT32 * pui32ServerTASyncFlags;
+	IMG_HANDLE * phServerTASyncs;
+	IMG_UINT32 ui32Client3DFenceCount;
+	PRGXFWIF_UFO_ADDR * psClient3DFenceUFOAddress;
+	IMG_UINT32 * pui32Client3DFenceValue;
+	IMG_UINT32 ui32Client3DUpdateCount;
+	PRGXFWIF_UFO_ADDR * psClient3DUpdateUFOAddress;
+	IMG_UINT32 * pui32Client3DUpdateValue;
+	IMG_UINT32 ui32Server3DSyncPrims;
+	IMG_UINT32 * pui32Server3DSyncFlags;
+	IMG_HANDLE * phServer3DSyncs;
+	PRGXFWIF_UFO_ADDR sPRFenceUFOAddress;
+	IMG_UINT32 ui32FRFenceValue;
+	IMG_UINT32 ui32NumFenceFds;
+	IMG_INT32 * pi32FenceFds;
+	IMG_UINT32 ui32TACmdSize;
+	IMG_BYTE * psTACmd;
+	IMG_UINT32 ui323DPRCmdSize;
+	IMG_BYTE * ps3DPRCmd;
+	IMG_UINT32 ui323DCmdSize;
+	IMG_BYTE * ps3DCmd;
 	IMG_BOOL bbLastTAInScene;
 	IMG_BOOL bbKickTA;
 	IMG_BOOL bbKickPR;
 	IMG_BOOL bbKick3D;
-	IMG_UINT32 ui32TAcCCBWoffUpdate;
-	IMG_UINT32 ui323DcCCBWoffUpdate;
+	IMG_BOOL bbAbort;
 	IMG_BOOL bbPDumpContinuous;
 	IMG_HANDLE hRTDataCleanup;
 	IMG_HANDLE hZBuffer;
@@ -386,5 +409,23 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXKICKTA3D_TAG
 {
 	PVRSRV_ERROR eError;
 } PVRSRV_BRIDGE_OUT_RGXKICKTA3D;
+
+/*******************************************
+            RGXSetRenderContextPriority          
+ *******************************************/
+
+/* Bridge in structure for RGXSetRenderContextPriority */
+typedef struct PVRSRV_BRIDGE_IN_RGXSETRENDERCONTEXTPRIORITY_TAG
+{
+	IMG_HANDLE hRenderContext;
+	IMG_UINT32 ui32Priority;
+} PVRSRV_BRIDGE_IN_RGXSETRENDERCONTEXTPRIORITY;
+
+
+/* Bridge out structure for RGXSetRenderContextPriority */
+typedef struct PVRSRV_BRIDGE_OUT_RGXSETRENDERCONTEXTPRIORITY_TAG
+{
+	PVRSRV_ERROR eError;
+} PVRSRV_BRIDGE_OUT_RGXSETRENDERCONTEXTPRIORITY;
 
 #endif /* COMMON_RGXTA3D_BRIDGE_H */

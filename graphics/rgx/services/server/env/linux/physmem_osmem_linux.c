@@ -302,9 +302,7 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
          uiPageIndex < psPageArrayData->uiNumPages;
          uiPageIndex++)
     {
-        /* FIXME: Compound page stuff hasn't had a
-           great deal of testing.  Remove this check once we know it
-           works, or if you're feeling brave */
+        /* For now we don't support compound pages */
         PVR_ASSERT(uiOrder == 0);
 
         DisableOOMKiller();
@@ -856,9 +854,6 @@ _NewOSAllocPagesPMR(PVRSRV_DEVICE_NODE *psDevNode,
 
     PDumpPMRMallocPMR(psPMR,
                     uiChunkSize * ui32NumPhysChunks,
-                    /* alignment is alignment of start of buffer _and_
-                       minimum contiguity - i.e. smallest allowable
-                       page-size.  FIXME: review this decision. */
                     1U<<uiLog2PageSize,
 	                IMG_FALSE,
                     &hPDumpAllocInfo);

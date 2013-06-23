@@ -61,7 +61,7 @@ extern "C" {
 #include "km/rgxdefs_km.h"
 
 /*! Defines the number of performance counter blocks that are directly
- * addressable in the RGX register map. 
+ * addressable in the RGX register map.
  */
 #define RGX_HWPERF_DIRECT_ADDR_BLKS 2
 
@@ -118,11 +118,13 @@ BLD_ASSERT((RGX_BVNC_KM_N<=8), rgx_hwperf_h)
  */
 
 /*! Type used to encode the event that generated the HW performance packet.
+ * NOTE: When this type is updated the corresponding hwperfbin2json tool source
+ * needs to be updated as well.
  */
 typedef enum
 {
 	RGX_HWPERF_INVALID				= 0x00,
-	/* fw types 0x01..0x07 */
+	/* FW types 0x01..0x07 */
 	RGX_HWPERF_FW_BGSTART			= 0x01,
 	RGX_HWPERF_FW_BGEND				= 0x02,
 
@@ -132,11 +134,12 @@ typedef enum
 	RGX_HWPERF_FW_DBGSTART			= 0x05,
 	RGX_HWPERF_FW_DBGEND			= 0x06,
 
-	/* hw types 0x08..0x17 */
+	/* HW types 0x08..0x17 */
 	RGX_HWPERF_HW_TAKICK			= 0x08,
 	RGX_HWPERF_HW_TAFINISHED		= 0x09,
 
 	RGX_HWPERF_HW_3DTQKICK			= 0x0A,
+	RGX_HWPERF_HW_3DSPMKICK			= 0x11,
 	RGX_HWPERF_HW_3DKICK			= 0x0B,
 	RGX_HWPERF_HW_3DFINISHED		= 0x0C,
 
@@ -145,9 +148,17 @@ typedef enum
 
 	RGX_HWPERF_HW_TLAKICK			= 0x0F,
 	RGX_HWPERF_HW_TLAFINISHED		= 0x10,
+	/* in use, see above			= 0x11 */
+	RGX_HWPERF_HW_PERIODIC			= 0x12,
 
-    /* other types 0x18..0x1F */
+	/* other types 0x1A..0x1F */
 	RGX_HWPERF_CLKS_CHG				= 0x1A,
+
+	/* power types 0x20..0x27 */
+	RGX_HWPERF_PWR_EST_REQUEST		= 0x20,
+	RGX_HWPERF_PWR_EST_READY		= 0x21,
+	RGX_HWPERF_PWR_EST_RESULT		= 0x22,
+	RGX_HWPERF_PWR_CHG				= 0x23,
 
 	/* last */
 	RGX_HWPERF_LAST_TYPE,
@@ -168,34 +179,37 @@ BLD_ASSERT((RGX_HWPERF_LAST_TYPE<RGX_HWPERF_MAX_TYPE), rgx_hwperf_h)
  * The DM in a V1 HWPerf packet uses this definition. */
 typedef enum _RGXFWIF_DM_
 {
-	RGXFWIF_DM_TA			= 0,
-	RGXFWIF_DM_3D			= 1,
-	RGXFWIF_DM_CDM			= 2,
-	RGXFWIF_DM_2D			= 3,
-	RGXFWIF_DM_GP			= 4,
-	RGXFWIF_DM_UNUSED		= 5,
+	RGXFWIF_DM_GP			= 0,
+	RGXFWIF_DM_2D			= 1,
+	RGXFWIF_DM_TA			= 2,
+	RGXFWIF_DM_3D			= 3,
+	RGXFWIF_DM_CDM			= 4,
+	RGXFWIF_DM_RTU			= 5,
+	RGXFWIF_DM_SHG			= 6,
 
 	RGXFWIF_DM_LAST,
 
-	RGXFWIF_DM_FORCE_I32  = -1
+	RGXFWIF_DM_FORCE_I32  = -1,
+
 } RGXFWIF_DM;
 
-#define RGXFWIF_DM_MAX_MTS (RGXFWIF_DM_LAST)
+#if defined(RGX_FEATURE_RAY_TRACING)
+#define RGXFWIF_DM_MAX_MTS 8
+#else
+#define RGXFWIF_DM_MAX_MTS 6
+#endif
 
-/*! This type records in the packet which RGX data master the HW event
- * relates to. The DM fields in V2 HWPerf packets uses this definition. */
-typedef enum _RGX_HWPERF_DM_
-{
-	RGX_HWPERF_DM_GP		= 0,
-	RGX_HWPERF_DM_2D		= 1,
-	RGX_HWPERF_DM_TA		= 2,
-	RGX_HWPERF_DM_3D		= 3,
-	RGX_HWPERF_DM_CDM		= 4,
-	RGX_HWPERF_DM_RESERVED1 = 5,
-	RGX_HWPERF_DM_RESERVED2 = 6,
+/*! Type obsolete and will be removed in a later release, use RGXFWIF_DM */
+typedef RGXFWIF_DM RGX_HWPERF_DM;
+#define RGX_HWPERF_DM_GP	RGXFWIF_DM_GP
+#define RGX_HWPERF_DM_2D	RGXFWIF_DM_2D
+#define RGX_HWPERF_DM_TA	RGXFWIF_DM_TA
+#define RGX_HWPERF_DM_3D	RGXFWIF_DM_3D
+#define RGX_HWPERF_DM_CDM	RGXFWIF_DM_CDM
+#define RGX_HWPERF_DM_RTU	RGXFWIF_DM_CDM
+#define RGX_HWPERF_DM_SHG   RGXFWIF_DM_SHG
+#define RGX_HWPERF_DM_LAST	RGXFWIF_DM_LAST
 
-	RGX_HWPERF_DM_LAST
-} RGX_HWPERF_DM;
 
 /*! This structure holds the data of a FirmWare packet. */
 typedef struct
@@ -221,21 +235,22 @@ RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_FW_DATA)
  * payload. */
 typedef struct
 {
-	IMG_UINT32	ui32DMCyc;		/*!< DataMaster cycle count register, 0 if none */
-	IMG_UINT32	ui32FrameNum;	/*!< Frame number */
-	IMG_UINT32	ui32PID;		/*!< Process identifier */
-	IMG_UINT32	ui32DMContext;	/*!< RenderContext for a TA,3D, Compute context for CDM, etc. */
-	IMG_UINT32	ui32RenderTarget; /*!< RenderTarget for a TA,3D, 0x0 otherwise */
-	IMG_UINT32  ui32NumBlocks;	/*!< Number of counter blocks in the
+	IMG_UINT32 ui32DMCyc;        /*!< DataMaster cycle count register, 0 if none */
+	IMG_UINT32 ui32FrameNum;     /*!< Frame number */
+	IMG_UINT32 ui32PID;          /*!< Process identifier */
+	IMG_UINT32 ui32DMContext;    /*!< RenderContext for a TA,3D, Compute context for CDM, etc. */
+	IMG_UINT32 ui32RenderTarget; /*!< RenderTarget for a TA,3D, 0x0 otherwise */
+	IMG_UINT32 ui32NumBlocks;    /*!< Number of counter blocks in the
 	                                 aui32CountBlksStream member, there may be
 	                                 0 or more blocks present */
-	/*! Counter stream data containing just the counters that are enabled.
-     *
+	IMG_UINT32 aui32CountBlksStream[RGX_HWPERF_MAX_STREAM+(RGX_HWPERF_MAX_STREAM%2)];
+	/*!< Counter stream data containing just the counters that are enabled.
+	 *
 	 * The counter stream contains a counter block for each block that is
 	 * enabled in the hardware. Each counter block has an ID to identify the
 	 * HW block and counter bits which describe which counters are present
 	 * in the stream. The format of the stream is:
-	 * 	[<counter_block> ...]
+	 * 	[<counter block> ...]
 	 *
 	 * The format of the counter block encoding is (maintaining dword alignment):
 	 * 	<16bit> :		 The block ID, see RGX_HWPERF_CNTBLK_ID
@@ -253,12 +268,11 @@ typedef struct
 	 * for a given BVNC_KM_N value the driver is built for to maintain a fixed
 	 * packet size. Size handles odd stream lengths to get correct alignment.
 	 */
-	IMG_UINT32	aui32CountBlksStream[RGX_HWPERF_MAX_STREAM+(RGX_HWPERF_MAX_STREAM%2)];
 } RGX_HWPERF_HW_DATA;
 
 RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_HW_DATA)
 
-/*! Mask for use with the aui32CountBlksStream field when decoding the 
+/*! Mask for use with the aui32CountBlksStream field when decoding the
  * counter block ID and mask word. */
 #define RGX_HWPERF_CNTBLK_ID_MASK	0xFFFF0000U
 #define RGX_HWPERF_CNTBLK_ID_SHIFT	16U
@@ -275,8 +289,8 @@ RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_HW_DATA)
 #define RGX_HWPERF_GET_CNT_MASK(_data_addr, _idx) ((IMG_UINT16)((_data_addr)->aui32CountBlksStream[(_idx)]&((1<<RGX_HWPERF_CNTRS_IN_BLK)-1)))
 #define RGX_HWPERF_GET_CNT_MASKW(_word)           ((IMG_UINT16)((_word)&((1<<RGX_HWPERF_CNTRS_IN_BLK)-1)))
 
-
-typedef enum _RGX_HWPERF_CLKS_CHG_NAME_
+/*! Enumeration of clocks supporting this event  */
+typedef enum
 {
 	RGX_HWPERF_CLKS_CHG_INVALID = 0,
 
@@ -295,6 +309,114 @@ typedef struct
 
 RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_CLKS_CHG_DATA)
 
+
+/*! Signature pattern 'HPE1' found in the first word of a PWR_EST packet data */
+#define HWPERF_PWR_EST_V1_SIG	0x48504531
+
+/*! Maximum counters per group */
+#define RGX_HWPERF_PWR_EST_CLUSTER_COUNTERS     10
+#define RGX_HWPERF_PWR_EST_DUST_COUNTERS        1
+#define RGX_HWPERF_PWR_EST_DIRECT_COUNTERS      10
+
+/*! The maximum number of power profiling counters in the device + one for
+ * the ready status value */
+#define RGX_HWPERF_PWR_EST_MAX_COUNTERS \
+			((RGX_HWPERF_PWR_EST_CLUSTER_COUNTERS * RGX_HWPERF_INDIRECT_BY_CLUSTER) + \
+			 (RGX_HWPERF_PWR_EST_DUST_COUNTERS * RGX_HWPERF_INDIRECT_BY_DUST) + \
+			 (RGX_HWPERF_PWR_EST_DIRECT_COUNTERS) + 1)
+#define RGX_HWPERF_PWR_EST_MAX_COUNTER_STREAM (RGX_HWPERF_PWR_EST_MAX_COUNTERS<<1)
+
+/*! Macros to obtain a component field from a counter ID word */
+#define RGX_HWPERF_GET_PWR_EST_HIGH_FLAG(_word) (((_word)&0x80000000)>>31)
+#define RGX_HWPERF_GET_PWR_EST_UNIT(_word)      (((_word)&0x0F000000)>>24)
+#define RGX_HWPERF_GET_PWR_EST_NUMBER(_word)    ((_word)&0x0000FFFF)
+
+/*! This macro constructs a counter ID for a power estimate data stream from
+ * the component parts of: high word flag, unit id, counter number */
+#define RGX_HWPERF_MAKE_PWR_EST_COUNTERID(_high, _unit, _number)           \
+			((IMG_UINT32)((((_high)&0x1)<<31) | (((_unit)&0xF)<<24) | \
+			              ((_number)&0x0000FFFF)))
+
+/*! This structure holds the data for a power estimate packet. */
+typedef struct
+{
+	IMG_UINT32  ui32StreamVersion;  /*!< HWPERF_PWR_EST_V1_SIG */
+	IMG_UINT32  ui32StreamSize;     /*!< Size of array in bytes of stream data
+	                                     held in the aui32StreamData member */
+
+	IMG_UINT32  aui32StreamData[RGX_HWPERF_PWR_EST_MAX_COUNTER_STREAM];
+	/*!< The stream data member holds an encoding of power profiling counters
+	 * that is dependent on the power estimate event type. Different event types
+	 * supply different values. The stream contains a series of
+	 * name/value tuples where each tuple contains a counter ID and the actual
+	 * value. A counter ID has the format:
+	 *
+	 *  bit offset | field size | Description of value
+	 *  ----------------------------------------------------------------------
+	 *     31      |     1      | High word counter when set, low word when 0
+	 *  30-28      |     3      | Reserved, must be 0
+	 *  27-24      |     4      | HW Unit number starting at 0
+	 *  23-16      |     8      | Reserved, must be 0
+	 *  15-00      |    16      | Counter number
+	 *
+	 * The format of the data stream encoding follows an array of unsigned
+	 * 4-byte words:
+	 *
+	 *  offset : bytes :  Description of value
+	 *  --------------------------------------
+	 *  +0     : 4b    :  Counter 1 ID
+	 *  +4     : 4b    :  Counter 1 value
+	 *  +8     : 4b    :  Counter 2 ID
+	 *  +12    : 4b    :  Counter 2 value
+	 *  +16    : ...   :  ...
+	 *
+	 * Example stream for RGX_HWPERF_PWR_EST_REQUEST:
+	 * | RGX_CR_POWER_ESTIMATE_SAMPLE_COUNT, <value> |
+	 * Example counter stream for RGX_HWPERF_PWR_EST_READY:
+	 * | (0x0<<24) | RGX_CR_USC_PWR_INSTR, <value>, ..., ...,
+	 *   ...
+	 *   (0x3<<24) | RGX_CR_USC_PWR_NUM, <value>, ..., ...,
+	 *   (0x0<<24) | RGX_CR_ISP_PWR_NUM, <value>, ..., ...,
+	 *   ... |
+	 * Example stream for RGX_HWPERF_PWR_EST_RESULT:
+	 * | (0x0<<24) | RGX_CR_POWER_ESTIMATE_GAIN_COEFF, <value>,
+	 *	 (0x0<<24) | RGX_CR_POWER_ESTIMATE_RESULT, <value> |
+	 *
+	 * The array is large enough for all counters that are present
+	 * for a given BVNC_KM_N value the driver is built for to maintain a fixed
+	 * data size. Size handles odd stream lengths to get correct alignment.
+	 */
+} RGX_HWPERF_PWR_EST_DATA;
+
+RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_PWR_EST_DATA)
+
+/*! Enumeration of the kinds of power change events that can occur */
+typedef enum
+{
+	RGX_HWPERF_PWR_UNDEFINED = 0,
+	RGX_HWPERF_PWR_ON        = 1, /*!< Whole device powered on */
+	RGX_HWPERF_PWR_OFF       = 2, /*!< Whole device powered off */
+	RGX_HWPERF_PWR_UP        = 3, /*!< Power turned on to a HW domain */
+	RGX_HWPERF_PWR_DOWN      = 4, /*!< Power turned off to a HW domain */
+
+	RGX_HWPERF_PWR_LAST,
+} RGX_HWPERF_PWR;
+
+/*! This structure holds the data of a power packet. */
+typedef struct
+{
+	RGX_HWPERF_PWR eChange;     /*!< Defines the type of power change */
+	IMG_UINT32     ui32Domains; /*!< When change is PWR_UP or DOWN these flags
+	                             * indicate which HW domains are affected,
+	                             * see RGX_CR_POWER_EVENT_DOMAINSPLIT_TYPE_*
+	                             * for values. For other change types it
+	                             * is always 0 */
+} RGX_HWPERF_PWR_CHG_DATA;
+
+RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_PWR_CHG_DATA)
+
+
+
 /******************************************************************************
  * 	Packet Format Version 1 Types
  *****************************************************************************/
@@ -303,16 +425,18 @@ RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_CLKS_CHG_DATA)
 /*! The structure for a HWPerf packet with header info and data pay load. */
 typedef struct
 {
-	IMG_UINT16	eType;			/*!< See RGX_HWPERF_EVENT_TYPE */
-	IMG_UINT16	ui16MetaThread;	/*!< META Core thread number */
+	IMG_UINT16	eType;          /*!< See RGX_HWPERF_EVENT_TYPE */
+	IMG_UINT16	ui16MetaThread; /*!< META Core thread number */
 	IMG_UINT32	ui32Ordinal;    /*!< Sequential number of the packet */
-	IMG_UINT64	ui64RGXTimer; 	/*!< Value of RGX_CR_TIMER at event */
+	IMG_UINT64	ui64RGXTimer;   /*!< Value of RGX_CR_TIMER at event */
 	union
 	{
-		RGX_HWPERF_FW_DATA sFW; 			/*!< FirmWare event packet data */
-		RGX_HWPERF_HW_DATA sHW; 			/*!< HardWare event packet data */
-		RGX_HWPERF_CLKS_CHG_DATA sCLKSCHG;	/*!< Clock change event packet data */
-	} data;						/*!< Packet pay load */
+		RGX_HWPERF_FW_DATA       sFW;       /*!< FirmWare event packet data */
+		RGX_HWPERF_HW_DATA       sHW;       /*!< HardWare event packet data */
+		RGX_HWPERF_CLKS_CHG_DATA sCLKSCHG;  /*!< Clock change event packet data */
+		RGX_HWPERF_PWR_EST_DATA  sPWREST;   /*!< Power estimate event packet data */
+		RGX_HWPERF_PWR_CHG_DATA  sPWR;      /*!< Power event packet data */
+	} data;                                 /*!< Packet pay load */
 } RGX_HWPERF_PACKET;
 
 RGX_FW_STRUCT_OFFSET_ASSERT(RGX_HWPERF_PACKET, ui64RGXTimer)
@@ -341,19 +465,19 @@ typedef struct
 	/* HEADER - packet header fields common to all packet types */
 	IMG_UINT32  ui32Sig;        /*!< Always the value HWPERF_PACKET_SIG */
 
-	IMG_UINT32  ui32Size;		/*!< Overall packet size in bytes, includes
+	IMG_UINT32  ui32Size;       /*!< Overall packet size in bytes, includes
 	                             * header and payload. Size is a 16-bit field
 	                             * stored in the 16 LSb. 16 MSb reserved.
 	                             * Use RGX_HWPERF_MAKE_SIZE_* and RGX_HWPERF_GET_SIZE
 	                             * macros to set/get, never write directly. */
 
-	IMG_UINT32	eTypeId;		/*!< Includes event type and META thread ID in
+	IMG_UINT32  eTypeId;        /*!< Includes event type and META thread ID in
 	                             * the 16 LSb. 16 MSb reserved.
 	                             * Use RGX_HWPERF_MAKE_TYPEID and RGX_HWPERF_GET_*
 	                             * macros to set/get, never write directly. */
 
-	IMG_UINT32	ui32Ordinal;    /*!< Sequential number of the packet */
-	IMG_UINT64	ui64RGXTimer; 	/*!< Value of RGX_CR_TIMER at event */
+	IMG_UINT32  ui32Ordinal;    /*!< Sequential number of the packet */
+	IMG_UINT64  ui64RGXTimer;   /*!< Value of RGX_CR_TIMER at event */
 
 	/* PAYLOAD - bytes from this point on in the buffer are from the
 	 * RGX_HWPERF_PACKET_DATA union which encodes the payload data specific to
@@ -413,14 +537,14 @@ RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_V2_PACKET_HDR)
 
 /*! This union holds a union of data structures defining the data payload
  * for a given packet type. Each structure may be used by one or more
- * types of event as defined in RGX_HWPERF_EVENT_TYPE. 
+ * types of event as defined in RGX_HWPERF_EVENT_TYPE.
  * Where the payload structure contains 'number of' or length fields enabling
  * a variable length data payloads the payload C structure defined must
  * contain arrays that define the maximum size of the payload data
  * that may be encountered for that build/core configuration.
  * This is required to ensure this union is always the largest buffer
  * needed for any one data payload element of a HWPerf packet for that
- * build/core configuration even though when written to a buffer it is 
+ * build/core configuration even though when written to a buffer it is
  * truncated to the variable length needed and the size in the header set
  * appropriately.
  */
@@ -429,9 +553,11 @@ typedef union
 	/* All structures used here must be a sizeof() multiple of 8
 	 * bytes to ensure the variable length packets remain dword aligned.
 	 */
-	RGX_HWPERF_FW_DATA sFW; 			/*!< FirmWare event packet data */
-	RGX_HWPERF_HW_DATA sHW; 			/*!< HardWare event packet data */
-	RGX_HWPERF_CLKS_CHG_DATA sCLKSCHG;	/*!< Clock change event packet data */
+	RGX_HWPERF_FW_DATA       sFW;       /*!< FirmWare event packet data */
+	RGX_HWPERF_HW_DATA       sHW;       /*!< HardWare event packet data */
+	RGX_HWPERF_CLKS_CHG_DATA sCLKSCHG;  /*!< Clock change event packet data */
+	RGX_HWPERF_PWR_EST_DATA  sPWREST;   /*!< Power estimate event packet data */
+	RGX_HWPERF_PWR_CHG_DATA  sPWR;      /*!< Power event packet data */
 } RGX_HWPERF_V2_PACKET_DATA, *RGX_PHWPERF_V2_PACKET_DATA;
 
 RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_V2_PACKET_DATA)
@@ -451,6 +577,7 @@ RGX_FW_STRUCT_SIZE_ASSERT(RGX_HWPERF_V2_PACKET_DATA)
 #define RGX_HWPERF_EVENT_MASK_ALL_FW        (IMG_UINT64_C(0x000000000000007E))
 #define RGX_HWPERF_EVENT_MASK_ALL_HW        (IMG_UINT64_C(0x000000000003FF00))
 #define RGX_HWPERF_EVENT_MASK_ALL_PWR_EST   (IMG_UINT64_C(0X0000000700000000))
+#define RGX_HWPERF_EVENT_MASK_ALL_PWR       (IMG_UINT64_C(0X0000000800000000))
 #define RGX_HWPERF_EVENT_MASK_VALUE(e)      (((IMG_UINT64)1)<<(e))
 
 /*! Current count block IDs for all the hardware blocks with a performance
@@ -479,11 +606,11 @@ typedef enum
 	RGX_CNTBLK_ID_USC6			= 0x26,
 	RGX_CNTBLK_ID_USC7			= 0x27,
 	RGX_CNTBLK_ID_USC_ALL		= 0x2F,
-	
+
 	RGX_CNTBLK_ID_TEXAS0		= 0x30, /* Addressable by Phantom */
 	RGX_CNTBLK_ID_TEXAS1		= 0x31,
 	RGX_CNTBLK_ID_TEXAS_ALL	 	= 0x3F,
-	
+
 	RGX_CNTBLK_ID_RASTER0		= 0x40, /* Addressable by Phantom on Rogue2 cores */
 	RGX_CNTBLK_ID_RASTER1		= 0x41,
 	RGX_CNTBLK_ID_RASTER_ALL	= 0x4F,
@@ -533,22 +660,22 @@ typedef struct _RGX_HWPERF_CONFIG_CNTBLK_
 	/*! 4 or 6 LSBs 0 for counting 1's in the group, 1 for treating the group
 	 * signals as a number for unsigned addition. Bit 0 is counter 0, bit 1 is
 	 * counter 1 on so on. This member relates to the MODE field
-	 * in the RGX_CR_<n>_PERF_SELECTm register for each counter */
+	 * in the RGX_CR_<N>_PERF_SELECTm register for each counter */
 	IMG_UINT8	ui8Mode;
 
-	/*! 5 or 6 LSBs used as the GROUP_SELECT field in the RGX_CR_<n>_PERF_SELECTm
+	/*! 5 or 6 LSBs used as the GROUP_SELECT field in the RGX_CR_<N>_PERF_SELECTm
 	 * register. Array index 0 is counter 0, index 1 is counter 1 and so on. */
 	IMG_UINT8	aui8GroupSelect[RGX_HWPERF_CNTRS_IN_BLK];
 
-	/*! 16 LSBs used as the BIT_SELECT field in the RGX_CR_<n>_PERF_SELECTm
+	/*! 16 LSBs used as the BIT_SELECT field in the RGX_CR_<N>_PERF_SELECTm
 	 * register. Array indexes relate to counters as above. */
 	IMG_UINT16  aui16BitSelect[RGX_HWPERF_CNTRS_IN_BLK];
-	
-	/*! 14 LSBs used as the BATCH_MAX field in the RGX_CR_<n>_PERF_SELECTm
+
+	/*! 14 LSBs used as the BATCH_MAX field in the RGX_CR_<N>_PERF_SELECTm
 	 * register. Array indexes relate to counters as above. */
 	IMG_UINT32  aui32BatchMax[RGX_HWPERF_CNTRS_IN_BLK];
-	
-	/*! 14 LSBs used as the BATCH_MIN field in the RGX_CR_<n>_PERF_SELECTm
+
+	/*! 14 LSBs used as the BATCH_MIN field in the RGX_CR_<N>_PERF_SELECTm
 	 * register. Array indexes relate to counters as above. */
 	IMG_UINT32  aui32BatchMin[RGX_HWPERF_CNTRS_IN_BLK];
 } RGX_HWPERF_CONFIG_CNTBLK;

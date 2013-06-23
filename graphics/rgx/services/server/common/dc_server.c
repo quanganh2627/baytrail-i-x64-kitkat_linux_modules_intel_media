@@ -597,7 +597,6 @@ static PVRSRV_ERROR _DCPMRDevPhysAddr(PMR_IMPL_PRIVDATA pvPriv,
     PVR_ASSERT(uiPageIndex < uiNumPages);
     PVR_ASSERT(uiInPageOffset < uiPageSize);
 
-	/* FIXME: Remove sysaddr */
     sDevAddr.uiAddr = psPMRPriv->pasDevPAddr[uiPageIndex].uiAddr;
 	PVR_ASSERT((sDevAddr.uiAddr & (uiPageSize - 1)) == 0);
 
@@ -941,7 +940,6 @@ PVRSRV_ERROR DCDimQuery(DC_DEVICE *psDevice,
 }
 
 /*
-	FIXME:
 	The system buffer breaks the rule of only calling DC callbacks on first
 	ref and last deref. For the pfnBufferSystemAcquire this is expected
 	as each call could get back a different buffer, but calls to
@@ -1968,7 +1966,6 @@ PVRSRV_ERROR DCDeInit()
 
 	if (psPVRSRVData->eServicesState == PVRSRV_SERVICES_STATE_OK)
 	{
-		/* FIXME: Should this be a blocking call? */
 		PVR_ASSERT(g_psDCDeviceList == IMG_NULL);
 	}
 

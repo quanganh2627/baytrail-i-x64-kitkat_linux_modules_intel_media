@@ -260,12 +260,6 @@ SyncPrimBlockImport(RA_PERARENA_HANDLE hArena,
 	*/
 	PVR_ASSERT(uiSpanSize == psSyncBlock->ui32SyncBlockSize);
 
-	/*
-		Add the block to the context so we can
-		PDump all the blocks on this context
-	*/
-	dllist_add_to_tail(&psContext->sBlockListHead, &psSyncBlock->sListNode);
-
 	*puiBase = psSyncBlock->uiSpanBase;
 	*puiActualSize = psSyncBlock->ui32SyncBlockSize;
 	*phImport = psSyncBlock;
@@ -293,9 +287,6 @@ SyncPrimBlockUnimport(RA_PERARENA_HANDLE hArena,
 	PVR_ASSERT(psSyncBlock != IMG_NULL);
 
 	PVR_ASSERT(uiBase == psSyncBlock->uiSpanBase);
-
-	/* Remove ourself from the list */
-	dllist_remove_node(&psSyncBlock->sListNode);
 
 	/* Free the span this import is using */
 	RA_Free(psContext->psSpanRA, uiBase);
@@ -561,36 +552,6 @@ static INLINE IMG_UINT32 _Log2(IMG_UINT32 ui32Align)
 	return ui32Log2Align;
 }
 
-#if defined(PDUMP)
-/*
-	Internal interfaces for management of PDump functions
- */
-
-static IMG_BOOL _PDumpSyncBlock(PDLLIST_NODE psNode, IMG_PVOID pvData)
-{
-	SYNC_PRIM_BLOCK *psSyncBlock = IMG_CONTAINER_OF(psNode, SYNC_PRIM_BLOCK, sListNode);
-	PVR_UNREFERENCED_PARAMETER(pvData);
-
-	/*
-		We might be ask to PDump sync state outside of capture range
-		(e.g. texture uploads) so make this continuous.
-	*/
-	DevmemPDumpLoadMem(psSyncBlock->hMemDesc,
-					   0,
-					   psSyncBlock->ui32SyncBlockSize,
-					   PDUMP_FLAGS_CONTINUOUS);
-	return IMG_TRUE;
-}
-
-static IMG_BOOL _PDumpSyncContext(PDLLIST_NODE psNode, IMG_PVOID pvData)
-{
-	SYNC_PRIM_CONTEXT *psContext = IMG_CONTAINER_OF(psNode, SYNC_PRIM_CONTEXT, sListNode);
-	PVR_UNREFERENCED_PARAMETER(pvData);
-
-	dllist_foreach_node(&psContext->sBlockListHead, _PDumpSyncBlock, IMG_NULL);
-	return IMG_TRUE;
-}
-#endif
 /*
 	External interfaces
 */
@@ -598,7 +559,6 @@ static IMG_BOOL _PDumpSyncContext(PDLLIST_NODE psNode, IMG_PVOID pvData)
 IMG_INTERNAL PVRSRV_ERROR
 SyncPrimContextCreate(SYNC_BRIDGE_HANDLE hBridge,
 					  IMG_HANDLE hDeviceNode,
-					  PDLLIST_NODE psContextList,
 					  PSYNC_PRIM_CONTEXT *phSyncPrimContext)
 {
 	SYNC_PRIM_CONTEXT *psContext;
@@ -678,19 +638,7 @@ SyncPrimContextCreate(SYNC_BRIDGE_HANDLE hBridge,
 		goto fail_span;
 	}
 
-	dllist_init(&psContext->sBlockListHead);
 	psContext->ui32RefCount = 1;
-
-	if(psContextList != IMG_NULL)
-	{
-		/* Link new context to the list */
-		dllist_add_to_tail(psContextList, &psContext->sListNode);
-	}
-	else
-	{
-		/* initialise node as an empty list */
-		dllist_init(&psContext->sListNode);
-	}
 
 	*phSyncPrimContext = psContext;
 	return PVRSRV_OK;
@@ -737,8 +685,6 @@ IMG_INTERNAL IMG_VOID SyncPrimContextDestroy(PSYNC_PRIM_CONTEXT hSyncPrimContext
 	*/
 	OSLockRelease(psContext->hLock);
 
-	/* Link new context to the list */
-	dllist_remove_node(&psContext->sListNode);
 	RA_Delete(psContext->psSpanRA);
 	RA_Delete(psContext->psSubAllocRA);
 	OSLockDestroy(psContext->hLock);
@@ -1602,9 +1548,5 @@ IMG_INTERNAL IMG_VOID SyncPrimPDumpCBP(PVRSRV_CLIENT_SYNC_PRIM *psSync,
     PVR_ASSERT(eError == PVRSRV_OK);
 }
 
-IMG_INTERNAL IMG_VOID SyncPrimPDumpClientContexts(PDLLIST_NODE psContextList)
-{
-	dllist_foreach_node(psContextList, _PDumpSyncContext, IMG_NULL);
-}
 #endif
 

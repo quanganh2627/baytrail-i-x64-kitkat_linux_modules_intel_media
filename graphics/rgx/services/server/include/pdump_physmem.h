@@ -54,15 +54,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 typedef struct _PDUMP_PHYSMEM_INFO_T_ PDUMP_PHYSMEM_INFO_T;
 
 #if defined(PDUMP)
-/* FIXME: this isn't really PMR specific any more
-   - perhaps this should go to a more common place? */
 extern PVRSRV_ERROR
 PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
                const IMG_CHAR *pszSymbolicAddress,
                IMG_UINT64 ui64Size,
                /* alignment is alignment of start of buffer _and_
                   minimum contiguity - i.e. smallest allowable
-                  page-size.  FIXME: review this decision. */
+                  page-size. */
                IMG_DEVMEM_ALIGN_T uiAlign,
                IMG_BOOL bForcePersistent,
                IMG_HANDLE *phHandlePtr);
@@ -175,7 +173,6 @@ PDumpPMRSAB(const IMG_CHAR *pszDevSpace,
 
   emits a POL to the PDUMP.
 */
-/* FIXME: move to pdump_common, no longer PMR specific */
 extern PVRSRV_ERROR
 PDumpPMRPOL(const IMG_CHAR *pszMempaceName,
             const IMG_CHAR *pszSymbolicName,
@@ -207,12 +204,7 @@ PDumpPMRCBP(const IMG_CHAR *pszMemspaceName,
  * of that buffer
  */
 extern PVRSRV_ERROR
-PDumpWriteBuffer(/* const */ IMG_UINT8 *pcBuffer,
-                 /* FIXME:
-                    pcBuffer above ought to be :
-                    const IMG_UINT8 *pcBuffer
-                    but, PDumpOSWriteString takes pointer to non-const data.
-                 */
+PDumpWriteBuffer(IMG_UINT8 *pcBuffer,
                  IMG_SIZE_T uiNumBytes,
                  PDUMP_FLAGS_T uiPDumpFlags,
                  IMG_CHAR *pszFilenameOut,

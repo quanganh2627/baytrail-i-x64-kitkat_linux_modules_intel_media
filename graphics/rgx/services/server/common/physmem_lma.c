@@ -901,7 +901,7 @@ PhysmemNewLocalRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
 					  uiChunkSize * ui32NumPhysChunks,
 					  /* alignment is alignment of start of buffer _and_
 					     minimum contiguity - i.e. smallest allowable
-					     page-size.  FIXME: review this decision. */
+					     page-size. */
 					  1ULL<<uiLog2PageSize,
 	                  IMG_FALSE,
 					  &hPDumpAllocInfo);

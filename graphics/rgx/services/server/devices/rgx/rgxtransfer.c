@@ -43,9 +43,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "pdump_km.h"
 #include "rgxdevice.h"
+#include "rgxccb.h"
 #include "rgxutils.h"
 #include "rgxfwutils.h"
 #include "rgxtransfer.h"
+#include "rgx_tq_shared.h"
 #include "allocmem.h"
 #include "devicemem.h"
 #include "devicemem_pdump.h"
@@ -54,262 +56,47 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrsrv.h"
 #include "rgx_fwif_resetframework.h"
 #include "rgx_memallocflags.h"
+#include "rgxccb.h"
 
+#include "sync_server.h"
+#include "sync_internal.h"
 
-IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateTQ2DContextKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
-										  DEVMEM_MEMDESC 			*psTQ2DCCBMemDesc,
-										  DEVMEM_MEMDESC 			*psTQ2DCCBCtlMemDesc,
-										  RGX_TQ2D_CLEANUP_DATA		**ppsCleanupData,
-										  DEVMEM_MEMDESC 			**ppsFWTQ2DContextMemDesc,
-										  IMG_UINT32				ui32Priority,
-										  IMG_UINT32				ui32FrameworkRegisterSize,
-										  IMG_PBYTE					pbyFrameworkRegisters,
-										  IMG_HANDLE				hMemCtxPrivData)
-{
-	PVRSRV_ERROR			eError = PVRSRV_OK;
-	PVRSRV_RGXDEV_INFO 		*psDevInfo = psDeviceNode->pvDevice;	
-	RGXFWIF_FWCOMMONCONTEXT	*psFWTQ2DContext;
-	RGX_TQ2D_CLEANUP_DATA	*psTmpCleanup;
-	DEVMEM_MEMDESC 			*psFWFrameworkMemDesc;
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+#include "pvr_sync.h"
+#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 
-	/* Prepare cleanup struct */
-	psTmpCleanup = OSAllocMem(sizeof(*psTmpCleanup));
-	if (psTmpCleanup == IMG_NULL)
-	{
-		return PVRSRV_ERROR_OUT_OF_MEMORY;
-	}
+typedef struct {
+	DEVMEM_MEMDESC				*psFWContextStateMemDesc;
+	RGX_SERVER_COMMON_CONTEXT	*psServerCommonContext;
+} RGX_SERVER_TQ_3D_DATA;
 
-	OSMemSet(psTmpCleanup, 0, sizeof(*psTmpCleanup));
-	*ppsCleanupData = psTmpCleanup;
+typedef struct {
+	RGX_SERVER_COMMON_CONTEXT	*psServerCommonContext;
+} RGX_SERVER_TQ_2D_DATA;
 
-	/* Allocate cleanup sync */
-	eError = SyncPrimAlloc(psDeviceNode->hSyncPrimContext,
-						   &psTmpCleanup->psCleanupSync);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateComputeContextKM: Failed to allocate cleanup sync (0x%x)",
-				eError));
-		goto fail_syncalloc;
-	}
-
-	/*
-		Allocate device memory for the firmware TQ 2D context.
-	*/
-	PDUMPCOMMENT("Allocate RGX firmware TQ 2D context");
-	
-	eError = DevmemFwAllocate(psDevInfo,
-							sizeof(*psFWTQ2DContext),
-							RGX_FWCOMCTX_ALLOCFLAGS,
-							ppsFWTQ2DContextMemDesc);
-
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ2DContextKM: Failed to allocate firmware TQ 2D context (%u)",
-				eError));
-		goto fail_contextalloc;
-	}
-	psTmpCleanup->psFWTQ2DContextMemDesc = *ppsFWTQ2DContextMemDesc;
-	psTmpCleanup->psDeviceNode = psDeviceNode;
-
-	/*
-		Temporarily map the firmware TQ 2D context to the kernel.
-	*/
-	eError = DevmemAcquireCpuVirtAddr(*ppsFWTQ2DContextMemDesc,
-                                      (IMG_VOID **)&psFWTQ2DContext);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ2DContextKM: Failed to map firmware TQ 2D context (%u)",
-				eError));
-		goto fail_cpuvirtacquire;
-	}
-
-	/* 
-	 * Create the FW framework buffer
-	 */
-	eError = PVRSRVRGXFrameworkCreateKM(psDeviceNode, & psFWFrameworkMemDesc, ui32FrameworkRegisterSize);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ2DContextKM: Failed to allocate firmware GPU framework state (%u)",
-				eError));
-		goto fail_frameworkcreate;
-	}
-	
-	psTmpCleanup->psFWFrameworkMemDesc = psFWFrameworkMemDesc;
-
-	/* Copy the Framework client data into the framework buffer */
-	eError = PVRSRVRGXFrameworkCopyRegisters(psFWFrameworkMemDesc, pbyFrameworkRegisters, ui32FrameworkRegisterSize);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ2DContextKM: Failed to populate the framework buffer (%u)",
-				eError));
-		goto fail_frameworkcopy;
-	}
-
-	eError = RGXInitFWCommonContext(psFWTQ2DContext,
-									psTQ2DCCBMemDesc,
-									psTQ2DCCBCtlMemDesc,
-									hMemCtxPrivData,
-									psFWFrameworkMemDesc,
-									ui32Priority,
-									IMG_NULL,
-									& psTmpCleanup->sFWComContextCleanup);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ2DContextKM: Failed to init firmware common context (%u)",
-				eError));
-		goto fail_contextinit;
-	}
-
-	/*
-	 * Dump the TQ2D and the memory contexts
-	 */
-	PDUMPCOMMENT("Dump FWTQ2DContext");
-	DevmemPDumpLoadMem(*ppsFWTQ2DContextMemDesc, 0, sizeof(*psFWTQ2DContext), PDUMP_FLAGS_CONTINUOUS);
-
-	/* Release address acquired above. */
-	DevmemReleaseCpuVirtAddr(*ppsFWTQ2DContextMemDesc);
-
-	return PVRSRV_OK;
-fail_contextinit:
-fail_frameworkcopy:
-	DevmemFwFree(psFWFrameworkMemDesc);
-fail_frameworkcreate:
-	DevmemReleaseCpuVirtAddr(*ppsFWTQ2DContextMemDesc);
-fail_cpuvirtacquire:
-	DevmemFwFree(*ppsFWTQ2DContextMemDesc);
-fail_contextalloc:
-	SyncPrimFree(psTmpCleanup->psCleanupSync);
-fail_syncalloc:
-	OSFreeMem(psTmpCleanup);
-	return eError;
-}
-
+struct _RGX_SERVER_TQ_CONTEXT_ {
+	PVRSRV_DEVICE_NODE			*psDeviceNode;
+	DEVMEM_MEMDESC				*psFWFrameworkMemDesc;
+	IMG_UINT32					ui32Flags;
+#define RGX_SERVER_TQ_CONTEXT_FLAGS_2D		(1<<0)
+#define RGX_SERVER_TQ_CONTEXT_FLAGS_3D		(1<<1)
+	RGX_SERVER_TQ_3D_DATA		s3DData;
+	RGX_SERVER_TQ_2D_DATA		s2DData;
+	PVRSRV_CLIENT_SYNC_PRIM		*psCleanupSync;
+};
 
 /*
- * PVRSRVRGXDestroyTQ2DContextKM
- */
-IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXDestroyTQ2DContextKM(RGX_TQ2D_CLEANUP_DATA *psCleanupData)
+	Static functions used by tranfser context code
+*/
+
+static PVRSRV_ERROR _Create3DTransferContext(PVRSRV_DEVICE_NODE *psDeviceNode,
+											 DEVMEM_MEMDESC *psFWMemContextMemDesc,
+											 IMG_UINT32 ui32Priority,
+											 RGX_COMMON_CONTEXT_INFO *psInfo,
+											 RGX_SERVER_TQ_3D_DATA *ps3DData)
 {
-	PVRSRV_ERROR				eError = PVRSRV_OK;
-	PRGXFWIF_FWCOMMONCONTEXT	psFWComContextFWAddr;
-
-	RGXSetFirmwareAddress(&psFWComContextFWAddr,
-							psCleanupData->psFWTQ2DContextMemDesc,
-							0,
-							RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
-
-	eError = RGXFWRequestCommonContextCleanUp(psCleanupData->psDeviceNode,
-											  psFWComContextFWAddr,
-											  psCleanupData->psCleanupSync,
-											  RGXFWIF_DM_2D);
-
-	/*
-		If we get retry error then we can't free this resource
-		as it's still in use and we will be called again
-	*/
-	if (eError != PVRSRV_ERROR_RETRY)
-	{
-		eError = RGXDeinitFWCommonContext(&psCleanupData->sFWComContextCleanup);
-	
-		if (eError != PVRSRV_OK)
-		{
-			PVR_DPF((PVR_DBG_ERROR, "PVRSRVRGXDestroyTQ2DContextKM : failed to deinit fw common ctx. Error:%u", eError));
-			goto e0;
-		}
-	
-		/* Free the framework buffer */
-		DevmemFwFree(psCleanupData->psFWFrameworkMemDesc);
-		
-		/*
-		 * Free the firmware common context.
-		 */
-		DevmemFwFree(psCleanupData->psFWTQ2DContextMemDesc);
-
-		/* Free the cleanup sync */
-		SyncPrimFree(psCleanupData->psCleanupSync);
-
-		OSFreeMem(psCleanupData);
-	}
-
-e0:
-	return eError;
-}
-
-/*
- * PVRSRVRGXCreateTQ3DContextKM
- */
-IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateTQ3DContextKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
-										  DEVMEM_MEMDESC 			*psTQ3DCCBMemDesc,
-										  DEVMEM_MEMDESC 			*psTQ3DCCBCtlMemDesc,
-										  RGX_TQ3D_CLEANUP_DATA		**ppsCleanupData,
-										  DEVMEM_MEMDESC 			**ppsFWTQ3DContextMemDesc,
-										  DEVMEM_MEMDESC 			**ppsFWTQ3DContextStateMemDesc,
-										  IMG_UINT32				ui32Priority,
-										  IMG_DEV_VIRTADDR			sMCUFenceAddr,
-										  IMG_UINT32				ui32FrameworkRegisterSize,
-										  IMG_PBYTE					pbyFrameworkRegisters,
-										  IMG_HANDLE				hMemCtxPrivData)
-{
-	PVRSRV_ERROR			eError = PVRSRV_OK;
-	PVRSRV_RGXDEV_INFO 		*psDevInfo = psDeviceNode->pvDevice;	
-	RGXFWIF_FWCOMMONCONTEXT	*psFWTQ3DContext;
-	RGX_TQ3D_CLEANUP_DATA	*psTmpCleanup;
-	DEVMEM_MEMDESC 			*psFWFrameworkMemDesc;
-
-	/* Prepare cleanup struct */
-	psTmpCleanup = OSAllocMem(sizeof(*psTmpCleanup));
-	if (psTmpCleanup == IMG_NULL)
-	{
-		return PVRSRV_ERROR_OUT_OF_MEMORY;
-	}
-
-
-	OSMemSet(psTmpCleanup, 0, sizeof(*psTmpCleanup));
-	*ppsCleanupData = psTmpCleanup;
-
-	/* Allocate cleanup sync */
-	eError = SyncPrimAlloc(psDeviceNode->hSyncPrimContext,
-						   &psTmpCleanup->psCleanupSync);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateComputeContextKM: Failed to allocate cleanup sync (0x%x)",
-				eError));
-		goto fail_syncalloc;
-	}
-
-	/*
-		Allocate device memory for the firmware TQ 3D context.
-	*/
-	PDUMPCOMMENT("Allocate RGX firmware TQ 3D context");
-	
-	eError = DevmemFwAllocate(psDevInfo,
-							sizeof(*psFWTQ3DContext),
-							RGX_FWCOMCTX_ALLOCFLAGS,
-							ppsFWTQ3DContextMemDesc);
-
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ3DContextKM: Failed to allocate firmware TQ 3D context (%u)",
-				eError));
-		goto fail_contextalloc;
-	}
-	psTmpCleanup->psFWTQ3DContextMemDesc = *ppsFWTQ3DContextMemDesc;
-	psTmpCleanup->psDeviceNode = psDeviceNode;
-
-	/*
-		Temporarily map the firmware TQ 3D context to the kernel.
-	*/
-	eError = DevmemAcquireCpuVirtAddr(*ppsFWTQ3DContextMemDesc,
-                                      (IMG_VOID **)&psFWTQ3DContext);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ3DContextKM: Failed to map firmware TQ 3D context (%u)",
-				eError));
-		goto fail_cpuvirtacquire;
-	}
+	PVRSRV_RGXDEV_INFO *psDevInfo = psDeviceNode->pvDevice;
+	PVRSRV_ERROR eError;
 
 	/*
 		Allocate device memory for the firmware GPU context suspend state.
@@ -320,252 +107,809 @@ PVRSRV_ERROR PVRSRVRGXCreateTQ3DContextKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
 	eError = DevmemFwAllocate(psDevInfo,
 							sizeof(RGXFWIF_3DCTX_STATE),
 							RGX_FWCOMCTX_ALLOCFLAGS,
-							ppsFWTQ3DContextStateMemDesc);
-
+							&ps3DData->psFWContextStateMemDesc);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ3DContextKM: Failed to allocate firmware GPU context suspend state (%u)",
-				eError));
-		goto fail_contextsuspendalloc;
+		goto fail_contextswitchstate;
 	}
-	psTmpCleanup->psFWTQ3DContextStateMemDesc = *ppsFWTQ3DContextStateMemDesc;
+
+	eError = FWCommonContextAllocate(psDeviceNode,
+									 "TQ 3D",
+									 IMG_NULL,
+									 0,
+									 psFWMemContextMemDesc,
+									 ps3DData->psFWContextStateMemDesc,
+									 RGX_CCB_SIZE_LOG2,
+									 ui32Priority,
+									 psInfo,
+									 &ps3DData->psServerCommonContext);
+	if (eError != PVRSRV_OK)
+	{
+		goto fail_contextalloc;
+	}
+
+
+	PDUMPCOMMENT("Dump 3D context suspend state buffer");
+	DevmemPDumpLoadMem(ps3DData->psFWContextStateMemDesc, 0, sizeof(RGXFWIF_3DCTX_STATE), PDUMP_FLAGS_CONTINUOUS);
+
+	return PVRSRV_OK;
+
+fail_contextalloc:
+	DevmemFwFree(ps3DData->psFWContextStateMemDesc);
+fail_contextswitchstate:
+	PVR_ASSERT(eError != PVRSRV_OK);
+	return eError;
+}
+
+static PVRSRV_ERROR _Create2DTransferContext(PVRSRV_DEVICE_NODE *psDeviceNode,
+											 DEVMEM_MEMDESC *psFWMemContextMemDesc,
+											 IMG_UINT32 ui32Priority,
+											 RGX_COMMON_CONTEXT_INFO *psInfo,
+											 RGX_SERVER_TQ_2D_DATA *ps2DData)
+{
+	PVRSRV_ERROR eError;
+
+	eError = FWCommonContextAllocate(psDeviceNode,
+									 "TQ 2D",
+									 IMG_NULL,
+									 0,
+									 psFWMemContextMemDesc,
+									 IMG_NULL,
+									 RGX_CCB_SIZE_LOG2,
+									 ui32Priority,
+									 psInfo,
+									 &ps2DData->psServerCommonContext);
+	if (eError != PVRSRV_OK)
+	{
+		goto fail_contextalloc;
+	}
+
+	return PVRSRV_OK;
+
+fail_contextalloc:
+	PVR_ASSERT(eError != PVRSRV_OK);
+	return eError;
+}
+
+
+static PVRSRV_ERROR _Destroy2DTransferContext(RGX_SERVER_TQ_2D_DATA *ps2DData,
+											  PVRSRV_DEVICE_NODE *psDeviceNode,
+											  PVRSRV_CLIENT_SYNC_PRIM *psCleanupSync)
+{
+	PVRSRV_ERROR eError;
+
+	/* Check if the FW has finished with this resource ... */
+	eError = RGXFWRequestCommonContextCleanUp(psDeviceNode,
+											  FWCommonContextGetFWAddress(ps2DData->psServerCommonContext),
+											  psCleanupSync,
+											  RGXFWIF_DM_2D);
+	if (eError == PVRSRV_ERROR_RETRY)
+	{
+		return eError;
+	}
+	else if (eError != PVRSRV_OK)
+	{
+		PVR_LOG(("%s: Unexpected error from RGXFWRequestCommonContextCleanUp (%s)",
+				 __FUNCTION__,
+				 PVRSRVGetErrorStringKM(eError)));
+	}
+
+	/* ... it has so we can free it's resources */
+	FWCommonContextFree(ps2DData->psServerCommonContext);
+	return PVRSRV_OK;
+}
+
+static PVRSRV_ERROR _Destroy3DTransferContext(RGX_SERVER_TQ_3D_DATA *ps3DData,
+											  PVRSRV_DEVICE_NODE *psDeviceNode,
+											  PVRSRV_CLIENT_SYNC_PRIM *psCleanupSync)
+{
+	PVRSRV_ERROR eError;
+
+	/* Check if the FW has finished with this resource ... */
+	eError = RGXFWRequestCommonContextCleanUp(psDeviceNode,
+											  FWCommonContextGetFWAddress(ps3DData->psServerCommonContext),
+											  psCleanupSync,
+											  RGXFWIF_DM_3D);
+	if (eError == PVRSRV_ERROR_RETRY)
+	{
+		return eError;
+	}
+	else if (eError != PVRSRV_OK)
+	{
+		PVR_LOG(("%s: Unexpected error from RGXFWRequestCommonContextCleanUp (%s)",
+				 __FUNCTION__,
+				 PVRSRVGetErrorStringKM(eError)));
+	}
+
+	/* ... it has so we can free it's resources */
+	DevmemFwFree(ps3DData->psFWContextStateMemDesc);
+	FWCommonContextFree(ps3DData->psServerCommonContext);
+
+	return PVRSRV_OK;
+}
+
+/*
+ * PVRSRVCreateTransferContextKM
+ */
+IMG_EXPORT
+PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
+										   IMG_UINT32				ui32Priority,
+										   IMG_DEV_VIRTADDR			sMCUFenceAddr,
+										   IMG_UINT32				ui32FrameworkCommandSize,
+										   IMG_PBYTE				pabyFrameworkCommand,
+										   IMG_HANDLE				hMemCtxPrivData,
+										   RGX_SERVER_TQ_CONTEXT	**ppsTransferContext)
+{
+	RGX_SERVER_TQ_CONTEXT	*psTransferContext;
+	DEVMEM_MEMDESC			*psFWMemContextMemDesc = hMemCtxPrivData;
+	RGX_COMMON_CONTEXT_INFO	sInfo;
+	PVRSRV_ERROR			eError = PVRSRV_OK;
+
+	/* Allocate the server side structure */
+	psTransferContext = OSAllocMem(sizeof(*psTransferContext));
+	if (psTransferContext == IMG_NULL)
+	{
+		return PVRSRV_ERROR_OUT_OF_MEMORY;
+	}
+
+	OSMemSet(psTransferContext, 0, sizeof(*psTransferContext));
+	*ppsTransferContext = psTransferContext;
+
+	psTransferContext->psDeviceNode = psDeviceNode;
+
+	/* Allocate cleanup sync */
+	eError = SyncPrimAlloc(psDeviceNode->hSyncPrimContext,
+						   &psTransferContext->psCleanupSync);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVCreateTransferContextKM: Failed to allocate cleanup sync (0x%x)",
+				eError));
+		goto fail_syncalloc;
+	}
 
 	/* 
 	 * Create the FW framework buffer
 	 */
-	eError = PVRSRVRGXFrameworkCreateKM(psDeviceNode, & psFWFrameworkMemDesc, ui32FrameworkRegisterSize);
+	eError = PVRSRVRGXFrameworkCreateKM(psDeviceNode,
+										&psTransferContext->psFWFrameworkMemDesc,
+										ui32FrameworkCommandSize);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ3DContextKM: Failed to allocate firmware GPU framework state (%u)",
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVCreateTransferContextKM: Failed to allocate firmware GPU framework state (%u)",
 				eError));
 		goto fail_frameworkcreate;
 	}
-	
-	psTmpCleanup->psFWFrameworkMemDesc = psFWFrameworkMemDesc;
 
 	/* Copy the Framework client data into the framework buffer */
-	eError = PVRSRVRGXFrameworkCopyRegisters(psFWFrameworkMemDesc, pbyFrameworkRegisters, ui32FrameworkRegisterSize);
+	eError = PVRSRVRGXFrameworkCopyCommand(psTransferContext->psFWFrameworkMemDesc,
+										   pabyFrameworkCommand,
+										   ui32FrameworkCommandSize);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ3DContextKM: Failed to populate the framework buffer (%u)",
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVCreateTransferContextKM: Failed to populate the framework buffer (%u)",
 				eError));
 		goto fail_frameworkcopy;
 	}
 
-	/* Init TQ/3D FW common context */
-	eError = RGXInitFWCommonContext(psFWTQ3DContext,
-									psTQ3DCCBMemDesc,
-									psTQ3DCCBCtlMemDesc,
-									hMemCtxPrivData,
-									psFWFrameworkMemDesc,
-									ui32Priority,
-									&sMCUFenceAddr,
-									&psTmpCleanup->sFWComContextCleanup);
+	sInfo.psFWFrameworkMemDesc = psTransferContext->psFWFrameworkMemDesc;
+	sInfo.psMCUFenceAddr = &sMCUFenceAddr;
+
+	eError = _Create3DTransferContext(psDeviceNode,
+									  psFWMemContextMemDesc,
+									  ui32Priority,
+									  &sInfo,
+									  &psTransferContext->s3DData);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateTQ3DContextKM: Failed to init firmware common context (%u)",
-				eError));
-		goto fail_contextinit;
+		goto fail_3dtranfsercontext;
 	}
+	psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_3D;
 
-	/*
-	 * Set the firmware GPU context state buffer.
-	 * 
-	 * The common context stores a dword pointer (FW) so we can cast the generic buffer to
-	 * the correct 3D (3D/TQ = normal 3D) state structure type in the FW.
-	 */
-	RGXSetFirmwareAddress(&psFWTQ3DContext->psContextState,
-								   *ppsFWTQ3DContextStateMemDesc,
-								   0,
-								   RFW_FWADDR_METACACHED_FLAG);
-
-	/*
-	 * Dump the TQ3D and the memory contexts
-	 */
-	PDUMPCOMMENT("Dump FWTQ3DContext");
-	DevmemPDumpLoadMem(*ppsFWTQ3DContextMemDesc, 0, sizeof(*psFWTQ3DContext), PDUMP_FLAGS_CONTINUOUS);
-
-	/*
-	 * Dump the FW TQ/3D context suspend state buffer
-	 */
-	PDUMPCOMMENT("Dump FWTQ3DContextState");
-	DevmemPDumpLoadMem(*ppsFWTQ3DContextStateMemDesc, 0, sizeof(RGXFWIF_3DCTX_STATE), PDUMP_FLAGS_CONTINUOUS);
-
-	/* Release address acquired above. */
-	DevmemReleaseCpuVirtAddr(*ppsFWTQ3DContextMemDesc);
+	eError = _Create2DTransferContext(psDeviceNode,
+									  psFWMemContextMemDesc,
+									  ui32Priority,
+									  &sInfo,
+									  &psTransferContext->s2DData);
+	if (eError != PVRSRV_OK)
+	{
+		goto fail_2dtranfsercontext;
+	}
+	psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_2D;
 
 	return PVRSRV_OK;
 
-fail_contextinit:
+fail_2dtranfsercontext:
+	_Destroy3DTransferContext(&psTransferContext->s3DData,
+							  psTransferContext->psDeviceNode,
+							  psTransferContext->psCleanupSync);
+fail_3dtranfsercontext:
 fail_frameworkcopy:
-	DevmemFwFree(psFWFrameworkMemDesc);
+	DevmemFwFree(psTransferContext->psFWFrameworkMemDesc);
 fail_frameworkcreate:
-	DevmemFwFree(*ppsFWTQ3DContextStateMemDesc);
-fail_contextsuspendalloc:
-	DevmemReleaseCpuVirtAddr(*ppsFWTQ3DContextMemDesc);
-fail_cpuvirtacquire:
-	DevmemFwFree(*ppsFWTQ3DContextMemDesc);
-fail_contextalloc:
-	SyncPrimFree(psTmpCleanup->psCleanupSync);
+	SyncPrimFree(psTransferContext->psCleanupSync);
 fail_syncalloc:
-	OSFreeMem(psTmpCleanup);
+	OSFreeMem(psTransferContext);
+	PVR_ASSERT(eError != PVRSRV_OK);
 	return eError;
 }
 
-
-/*
- * PVRSRVRGXDestroyTQ3DContextKM
- */
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXDestroyTQ3DContextKM(RGX_TQ3D_CLEANUP_DATA *psCleanupData)
+PVRSRV_ERROR PVRSRVRGXDestroyTransferContextKM(RGX_SERVER_TQ_CONTEXT *psTransferContext)
 {
-	PVRSRV_ERROR				eError = PVRSRV_OK;
-	PRGXFWIF_FWCOMMONCONTEXT	psFWComContextFWAddr;
+	PVRSRV_ERROR eError;
 
-	RGXSetFirmwareAddress(&psFWComContextFWAddr,
-							psCleanupData->psFWTQ3DContextMemDesc,
-							0,
-							RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
-
-	eError = RGXFWRequestCommonContextCleanUp(psCleanupData->psDeviceNode,
-											  psFWComContextFWAddr,
-											  psCleanupData->psCleanupSync,
-											  RGXFWIF_DM_3D);
-
-	/*
-		If we get retry error then we can't free this resource
-		as it's still in use and we will be called again
-	*/
-	if (eError != PVRSRV_ERROR_RETRY)
+	if (psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_2D)
 	{
-		eError = RGXDeinitFWCommonContext(&psCleanupData->sFWComContextCleanup);
-	
+		eError = _Destroy2DTransferContext(&psTransferContext->s2DData,
+										   psTransferContext->psDeviceNode,
+										   psTransferContext->psCleanupSync);
 		if (eError != PVRSRV_OK)
 		{
-			PVR_DPF((PVR_DBG_ERROR, "PVRSRVRGXDestroyTQ3DContextKM : failed to deinit fw common ctx. Error:%u", eError));
-			goto e0;
+			goto fail_destory2d;
 		}
-	
-	#if defined(DEBUG)
-		/* Log the number of TQ3D context stores which occurred */
-		{
-			RGXFWIF_3DCTX_STATE	*psFWState;
-
-			eError = DevmemAcquireCpuVirtAddr(psCleanupData->psFWTQ3DContextStateMemDesc,
-											  (IMG_VOID**)&psFWState);
-			if (eError != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateRenderContextKM: Failed to map firmware render context state (%u)",
-						eError));
-			}
-			else
-			{
-	
-				PVR_DPF((PVR_DBG_WARNING,"Number of context stores on FW TQ3D context 0x%010x: %u",
-						psFWComContextFWAddr.ui32Addr,
-						psFWState->ui32NumStores));
-
-				/* Release the CPU virt addr */
-				DevmemReleaseCpuVirtAddr(psCleanupData->psFWTQ3DContextStateMemDesc);
-			}
-		}
-	#endif
-	
-		/*
-		 * Unmap the TA/3D context state buffer pointers
-		 */
-		RGXUnsetFirmwareAddress(psCleanupData->psFWTQ3DContextStateMemDesc);
-
-		/*
-		 * Free the firmware TQ/3D context state buffer
-		 */
-		DevmemFwFree(psCleanupData->psFWTQ3DContextStateMemDesc);
-
-		/* Free the framework buffer */
-		DevmemFwFree(psCleanupData->psFWFrameworkMemDesc);
-
-		/*
-		 * Free the firmware common context.
-		 */
-		DevmemFwFree(psCleanupData->psFWTQ3DContextMemDesc);
-
-		/* Free the cleanup sync */
-		SyncPrimFree(psCleanupData->psCleanupSync);
-
-		OSFreeMem(psCleanupData);
+		/* We've freed the 2D context, don't try to free it again */
+		psTransferContext->ui32Flags &= ~RGX_SERVER_TQ_CONTEXT_FLAGS_2D;
 	}
-e0:
+
+	if (psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_3D)
+	{
+		eError = _Destroy3DTransferContext(&psTransferContext->s3DData,
+										   psTransferContext->psDeviceNode,
+										   psTransferContext->psCleanupSync);
+		if (eError != PVRSRV_OK)
+		{
+			goto fail_destory3d;
+		}
+		/* We've freed the 3D context, don't try to free it again */
+		psTransferContext->ui32Flags &= ~RGX_SERVER_TQ_CONTEXT_FLAGS_3D;
+	}
+	DevmemFwFree(psTransferContext->psFWFrameworkMemDesc);
+	SyncPrimFree(psTransferContext->psCleanupSync);
+
+	OSFreeMem(psTransferContext);
+
+	return PVRSRV_OK;
+
+fail_destory2d:
+fail_destory3d:
+	PVR_ASSERT(eError != PVRSRV_OK);
 	return eError;
 }
-
-/*
- * PVRSRVSubmit2DKickKM
- */
-IMG_EXPORT
-PVRSRV_ERROR PVRSRVSubmitTQ2DKickKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
-									DEVMEM_MEMDESC 		*psFWTQ2DContextMemDesc,
-									IMG_UINT32			ui32TQ2DcCCBWoffUpdate,
-									IMG_BOOL			bPDumpContinuous)
-{
-	RGXFWIF_KCCB_CMD		s2DCCBCmd;
-	PVRSRV_ERROR			eError;
-
-	/*
-	 * Construct the kernel 2D CCB command.
-	 */
-	s2DCCBCmd.eCmdType = RGXFWIF_KCCB_CMD_KICK;
-	RGXSetFirmwareAddress(&s2DCCBCmd.uCmdData.sCmdKickData.psContext, psFWTQ2DContextMemDesc,
-						  0,
-						  RFW_FWADDR_METACACHED_FLAG | RFW_FWADDR_NOREF_FLAG);
-	s2DCCBCmd.uCmdData.sCmdKickData.ui32CWoffUpdate = ui32TQ2DcCCBWoffUpdate;
-
-	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
-								RGXFWIF_DM_2D,
-								&s2DCCBCmd,
-								sizeof(s2DCCBCmd),
-								bPDumpContinuous);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR, "PVRSRVSubmitTQ2DKickKM : failed to schedule kernel 2D command. Error:%u", eError));
-		return eError;
-	}
-	return PVRSRV_OK;
-}
-
 
 /*
  * PVRSRVSubmitTQ3DKickKM
  */
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVSubmitTQ3DKickKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
-									DEVMEM_MEMDESC 		*psFWTQ3DContextMemDesc,
-									IMG_UINT32			ui32TQ3DcCCBWoffUpdate,
-									IMG_BOOL			bPDumpContinuous)
+PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(CONNECTION_DATA			*psConnection,
+									   RGX_SERVER_TQ_CONTEXT	*psTransferContext,
+									   IMG_UINT32				ui32PrepareCount,
+									   IMG_UINT32				*paui32ClientFenceCount,
+									   PRGXFWIF_UFO_ADDR		**papauiClientFenceUFOAddress,
+									   IMG_UINT32				**papaui32ClientFenceValue,
+									   IMG_UINT32				*paui32ClientUpdateCount,
+									   PRGXFWIF_UFO_ADDR		**papauiClientUpdateUFOAddress,
+									   IMG_UINT32				**papaui32ClientUpdateValue,
+									   IMG_UINT32				*paui32ServerSyncCount,
+									   IMG_UINT32				**papaui32ServerSyncFlags,
+									   SERVER_SYNC_PRIMITIVE	***papapsServerSyncs,
+									   IMG_UINT32				ui32NumFenceFDs,
+									   IMG_INT32				*paui32FenceFDs,
+									   IMG_UINT32				*paui32FWCommandSize,
+									   IMG_UINT8				**papaui8FWCommand,
+									   IMG_UINT32				*pui32TQPrepareFlags)
 {
-	RGXFWIF_KCCB_CMD		s3DCCBCmd;
-	PVRSRV_ERROR			eError;
+	PVRSRV_DEVICE_NODE *psDeviceNode = psTransferContext->psDeviceNode;
+#if defined(WDDM)
+	RGX_CCB_CMD_HELPER_DATA as3DCmdHelper[TQ_MAX_PREPARES_PER_SUBMIT];
+	RGX_CCB_CMD_HELPER_DATA as2DCmdHelper[TQ_MAX_PREPARES_PER_SUBMIT];
+#endif
+	RGX_CCB_CMD_HELPER_DATA *pas3DCmdHelper;
+	RGX_CCB_CMD_HELPER_DATA *pas2DCmdHelper;
+	IMG_UINT32 ui323DCmdCount = 0;
+	IMG_UINT32 ui322DCmdCount = 0;
+	IMG_BOOL bKick2D = IMG_FALSE;
+	IMG_BOOL bKick3D = IMG_FALSE;
+	IMG_BOOL bPDumpContinuous = IMG_FALSE;
+	IMG_UINT32 i;
+	IMG_UINT32 ui32IntClientFenceCount = 0;
+	PRGXFWIF_UFO_ADDR *pauiIntFenceUFOAddress = IMG_NULL;
+	IMG_UINT32 *paui32IntFenceValue = IMG_NULL;
+	IMG_UINT32 ui32IntClientUpdateCount = 0;
+	PRGXFWIF_UFO_ADDR *pauiIntUpdateUFOAddress = IMG_NULL;
+	IMG_UINT32 *paui32IntUpdateValue = IMG_NULL;
+	PVRSRV_ERROR eError;
+
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+	IMG_BOOL bSyncsMerged = IMG_FALSE;
+#endif
+
+	if (ui32PrepareCount == 0)
+	{
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
+
+	if (ui32NumFenceFDs != 0)
+	{
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+		/* Fence FD's are only valid in the 3D case with no batching */
+		if ((ui32PrepareCount !=1) && (!TQ_PREP_FLAGS_COMMAND_IS(pui32TQPrepareFlags[0], 3D)))
+		{
+			return PVRSRV_ERROR_INVALID_PARAMS;
+		}
+
+#else
+		/* We only support Fence FD's if built with PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC */
+		return PVRSRV_ERROR_INVALID_PARAMS;
+#endif
+	}
+#if defined(WDDM)
+	pas3DCmdHelper = &as3DCmdHelper;
+	pas2DCmdHelper = &as2DCmdHelper;
+#else
+	/* We can't allocate the required amount of stack space on all consumer architectures */
+	pas3DCmdHelper = OSAllocMem(sizeof(*pas3DCmdHelper) * ui32PrepareCount);
+	if (pas3DCmdHelper == IMG_NULL)
+	{
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto fail_alloc3dhelper;
+	}
+	pas2DCmdHelper = OSAllocMem(sizeof(*pas2DCmdHelper) * ui32PrepareCount);
+	if (pas2DCmdHelper == IMG_NULL)
+	{
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto fail_alloc2dhelper;
+	}
+#endif
+	/*
+		Ensure we do the right thing for server syncs which cross call bounderies
+	*/
+	for (i=0;i<ui32PrepareCount;i++)
+	{
+		IMG_BOOL bHaveStartPrepare = pui32TQPrepareFlags[i] & TQ_PREP_FLAGS_START;
+		IMG_BOOL bHaveEndPrepare = IMG_FALSE;
+
+		if (bHaveStartPrepare)
+		{
+			IMG_UINT32 k;
+			/*
+				We've at the start of a transfer operation (which might be made
+				up of multiplue HW operations) so check if we also have then
+				end of the transfer operation in the batch
+			*/
+			for (k=i;k<ui32PrepareCount;k++)
+			{
+				if (pui32TQPrepareFlags[k] & TQ_PREP_FLAGS_END)
+				{
+					bHaveEndPrepare = IMG_TRUE;
+					break;
+				}
+			}
+
+			if (!bHaveEndPrepare)
+			{
+				/*
+					We don't have the complete command passed in this call
+					so drop the update request. When we get called again with
+					the last HW command in this transfer operation we'll do
+					the update at that point.
+				*/
+				for (k=0;k<paui32ServerSyncCount[i];k++)
+				{
+					papaui32ServerSyncFlags[i][k] &= ~PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE;
+				}
+			}
+		}
+	}
+
 
 	/*
-	 * Construct the kernel 3D CCB command.
-	 */
-	s3DCCBCmd.eCmdType = RGXFWIF_KCCB_CMD_KICK;
-	RGXSetFirmwareAddress(&s3DCCBCmd.uCmdData.sCmdKickData.psContext,
-						  psFWTQ3DContextMemDesc,
-						  0,
-						  RFW_FWADDR_METACACHED_FLAG | RFW_FWADDR_NOREF_FLAG);
-	s3DCCBCmd.uCmdData.sCmdKickData.ui32CWoffUpdate = ui32TQ3DcCCBWoffUpdate;
+		Init the command helper commands for all the prepares
+	*/
+	for (i=0;i<ui32PrepareCount;i++)
+	{
+		RGX_CLIENT_CCB *psClientCCB;
+		IMG_CHAR *pszCommandName;
+		RGX_CCB_CMD_HELPER_DATA *psCmdHelper;
+		RGXFWIF_CCB_CMD_TYPE eType;
 
-	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
-								RGXFWIF_DM_3D,
-								&s3DCCBCmd, 
-								sizeof(s3DCCBCmd),
-								bPDumpContinuous);
+		if (TQ_PREP_FLAGS_COMMAND_IS(pui32TQPrepareFlags[i], 3D))
+		{
+			psClientCCB = FWCommonContextGetClientCCB(psTransferContext->s3DData.psServerCommonContext);
+			pszCommandName = "TQ-3D";
+			psCmdHelper = &pas3DCmdHelper[ui323DCmdCount++];
+			eType = RGXFWIF_CCB_CMD_TYPE_TQ_3D;
+		}
+		else if (TQ_PREP_FLAGS_COMMAND_IS(pui32TQPrepareFlags[i], 2D))
+		{
+			psClientCCB = FWCommonContextGetClientCCB(psTransferContext->s2DData.psServerCommonContext);
+			pszCommandName = "TQ-2D";
+			psCmdHelper = &pas2DCmdHelper[ui322DCmdCount++];
+			eType = RGXFWIF_CCB_CMD_TYPE_TQ_2D;
+		}
+		else
+		{
+			eError = PVRSRV_ERROR_INVALID_PARAMS;
+			goto fail_cmdtype;
+		}
+
+		if (i == 0)
+		{
+			bPDumpContinuous = ((pui32TQPrepareFlags[i] & TQ_PREP_FLAGS_PDUMPCONTINUOUS) == TQ_PREP_FLAGS_PDUMPCONTINUOUS);
+		}
+		else
+		{
+			IMG_BOOL bNewPDumpContinuous = ((pui32TQPrepareFlags[i] & TQ_PREP_FLAGS_PDUMPCONTINUOUS) == TQ_PREP_FLAGS_PDUMPCONTINUOUS);
+
+			if (bNewPDumpContinuous != bPDumpContinuous)
+			{
+				eError = PVRSRV_ERROR_INVALID_PARAMS;
+				PVR_DPF((PVR_DBG_ERROR, "%s: Mixing of continuous and non-continuous command in a batch is not permitted", __FUNCTION__));
+				goto fail_pdumpcheck;
+			}
+		}
+
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+		if (ui32NumFenceFDs)
+		{
+			IMG_UINT32 ui32NumFenceSyncs;
+			PRGXFWIF_UFO_ADDR *puiFenceFWAddrs;
+			IMG_UINT32 *pui32FenceValues;
+			IMG_UINT32 ui32NumUpdateSyncs;
+			PRGXFWIF_UFO_ADDR *puiUpdateFWAddrs;
+			IMG_UINT32 *pui32UpdateValues;
+
+			/*
+				FIXME:
+				We can't be taking the server sync operations here as we
+				have no way to undo them should the acquire fail.
+				If client/local syncs where used here would that remove the
+				issue?
+			*/
+			eError = PVRFDSyncQueryFencesKM(ui32NumFenceFDs,
+											paui32FenceFDs,
+											IMG_TRUE,
+											&ui32NumFenceSyncs,
+											&puiFenceFWAddrs,
+											&pui32FenceValues,
+											&ui32NumUpdateSyncs,
+											&puiUpdateFWAddrs,
+											&pui32UpdateValues);
+			if (eError != PVRSRV_OK)
+			{
+				goto fail_fdsync;
+			}
+
+			/*
+				Merge the Android syncs and the client syncs together
+			*/
+			ui32IntClientFenceCount = paui32ClientFenceCount[i] + ui32NumFenceSyncs;
+			pauiIntFenceUFOAddress = OSAllocMem(sizeof(*pauiIntFenceUFOAddress)* ui32IntClientFenceCount);
+			if (pauiIntFenceUFOAddress == IMG_NULL)
+			{
+				/* Free memory created by PVRFDSyncQueryFencesKM */
+				OSFreeMem(puiFenceFWAddrs);
+				OSFreeMem(pui32FenceValues);
+				OSFreeMem(puiUpdateFWAddrs);
+				OSFreeMem(pui32UpdateValues);
+
+				goto fail_fenceUFOarray;
+			}	
+			paui32IntFenceValue = OSAllocMem(sizeof(*paui32IntFenceValue)* ui32IntClientFenceCount);
+			if (paui32IntFenceValue == IMG_NULL)
+			{
+				/* Free memory created by PVRFDSyncQueryFencesKM */
+				OSFreeMem(puiFenceFWAddrs);
+				OSFreeMem(pui32FenceValues);
+				OSFreeMem(puiUpdateFWAddrs);
+				OSFreeMem(pui32UpdateValues);
+
+				OSFreeMem(pauiIntFenceUFOAddress);
+				goto fail_fencevaluearray;
+			}
+			ui32IntClientUpdateCount = paui32ClientUpdateCount[i] + ui32NumUpdateSyncs;
+			pauiIntUpdateUFOAddress = OSAllocMem(sizeof(*pauiIntUpdateUFOAddress)* ui32IntClientUpdateCount);
+			if (pauiIntUpdateUFOAddress == IMG_NULL)
+			{
+				/* Free memory created by PVRFDSyncQueryFencesKM */
+				OSFreeMem(puiFenceFWAddrs);
+				OSFreeMem(pui32FenceValues);
+				OSFreeMem(puiUpdateFWAddrs);
+				OSFreeMem(pui32UpdateValues);
+
+				OSFreeMem(pauiIntFenceUFOAddress);
+				OSFreeMem(paui32IntFenceValue);
+				goto fail_updateUFOarray;
+			}
+			paui32IntUpdateValue = OSAllocMem(sizeof(*paui32IntUpdateValue)* ui32IntClientUpdateCount);
+			if (paui32IntUpdateValue == IMG_NULL)
+			{
+				/* Free memory created by PVRFDSyncQueryFencesKM */
+				OSFreeMem(puiFenceFWAddrs);
+				OSFreeMem(pui32FenceValues);
+				OSFreeMem(puiUpdateFWAddrs);
+				OSFreeMem(pui32UpdateValues);
+
+				OSFreeMem(pauiIntFenceUFOAddress);
+				OSFreeMem(paui32IntFenceValue);
+				OSFreeMem(pauiIntUpdateUFOAddress);
+				goto fail_updatevaluearray;
+			}
+
+			SYNC_MERGE_CLIENT_FENCES(ui32IntClientFenceCount, pauiIntFenceUFOAddress, paui32IntFenceValue,
+									 ui32NumFenceSyncs, puiFenceFWAddrs, pui32FenceValues,
+									 paui32ClientFenceCount[i], papauiClientFenceUFOAddress[i], papaui32ClientFenceValue[i]);
+
+			SYNC_MERGE_CLIENT_UPDATES(ui32IntClientUpdateCount, pauiIntUpdateUFOAddress, paui32IntUpdateValue,
+									 ui32NumUpdateSyncs, puiUpdateFWAddrs, pui32UpdateValues,
+									 paui32ClientUpdateCount[i], papauiClientUpdateUFOAddress[i], papaui32ClientUpdateValue[i]);
+
+			if (ui32NumFenceSyncs || ui32NumUpdateSyncs)
+			{
+				PDUMPCOMMENT("(TQ) Android native fences in use: %u fence syncs, %u update syncs",
+							 ui32NumFenceSyncs, ui32NumUpdateSyncs);
+			}		
+
+			/*
+				Free the data created by PVRFDSyncQueryFencesKM as it has now
+				been merged into *IntClient*
+			*/
+			OSFreeMem(puiFenceFWAddrs);
+			OSFreeMem(pui32FenceValues);
+			OSFreeMem(puiUpdateFWAddrs);
+			OSFreeMem(pui32UpdateValues);
+			bSyncsMerged = IMG_TRUE;
+		}
+		else
+#endif /* PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC */
+		{
+			/* No client sync merging so just copy across the pointers */
+			ui32IntClientFenceCount = paui32ClientFenceCount[i];
+			pauiIntFenceUFOAddress = papauiClientFenceUFOAddress[i];
+			paui32IntFenceValue = papaui32ClientFenceValue[i];
+			ui32IntClientUpdateCount = paui32ClientUpdateCount[i];
+			pauiIntUpdateUFOAddress = papauiClientUpdateUFOAddress[i];
+			paui32IntUpdateValue = papaui32ClientUpdateValue[i];
+		}
+
+
+		/*
+			Create the command helper data for this command
+		*/
+		eError = RGXCmdHelperInitCmdCCB(psClientCCB,
+										psConnection,
+										ui32IntClientFenceCount,
+										pauiIntFenceUFOAddress,
+										paui32IntFenceValue,
+										ui32IntClientUpdateCount,
+										pauiIntUpdateUFOAddress,
+										paui32IntUpdateValue,
+										paui32ServerSyncCount[i],
+										papaui32ServerSyncFlags[i],
+										papapsServerSyncs[i],
+										paui32FWCommandSize[i],
+										papaui8FWCommand[i],
+										eType,
+										bPDumpContinuous,
+										pszCommandName,
+										psCmdHelper);
+		if (eError != PVRSRV_OK)
+		{
+			goto fail_initcmd;
+		}
+	}
+
+	/*
+		Acquire space for all the commands in one go
+	*/
+	if (ui323DCmdCount)
+	{
+		
+		eError = RGXCmdHelperAcquireCmdCCB(ui323DCmdCount,
+										   &pas3DCmdHelper[0],
+										   &bKick3D);
+		if (eError != PVRSRV_OK)
+		{
+			if (bKick3D)
+			{
+				ui323DCmdCount = 0;
+				ui322DCmdCount = 0;
+			}
+			else
+			{
+				goto fail_3dcmdacquire;
+			}
+		}
+	}
+
+	if (ui322DCmdCount)
+	{
+		eError = RGXCmdHelperAcquireCmdCCB(ui322DCmdCount,
+										   &pas2DCmdHelper[0],
+										   &bKick2D);
+	
+		if (eError != PVRSRV_OK)
+		{
+			if (bKick2D || bKick3D)
+			{
+				ui323DCmdCount = 0;
+				ui322DCmdCount = 0;
+			}
+			else
+			{
+				goto fail_2dcmdacquire;
+			}
+		}
+	}
+
+	/*
+		We should acquire the kernel CCB(s) space here as the schudle could fail
+		and we would have to roll back all the syncs
+	*/
+
+	/*
+		Only do the command helper release (which takes the server sync
+		operations if the acquire succeded
+	*/
+	if (ui323DCmdCount)
+	{
+		RGXCmdHelperReleaseCmdCCB(ui323DCmdCount,
+								  &pas3DCmdHelper[0]);
+		
+	}
+
+	if (ui322DCmdCount)
+	{
+		RGXCmdHelperReleaseCmdCCB(ui322DCmdCount,
+								  &pas2DCmdHelper[0]);
+	}
+
+	/*
+		Even if we failed to acquire the client CCB space we might still need
+		to kick the HW to process a padding packet to release space for us next
+		time round
+	*/
+	if (bKick3D)
+	{
+		RGXFWIF_KCCB_CMD s3DKCCBCmd;
+
+		/* Construct the kernel 3D CCB command. */
+		s3DKCCBCmd.eCmdType = RGXFWIF_KCCB_CMD_KICK;
+		s3DKCCBCmd.uCmdData.sCmdKickData.psContext = FWCommonContextGetFWAddress(psTransferContext->s3DData.psServerCommonContext);
+		s3DKCCBCmd.uCmdData.sCmdKickData.ui32CWoffUpdate = RGXGetHostWriteOffsetCCB(FWCommonContextGetClientCCB(psTransferContext->s3DData.psServerCommonContext));
+
+		LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
+		{
+			eError = RGXScheduleCommand(psDeviceNode->pvDevice,
+										RGXFWIF_DM_3D,
+										&s3DKCCBCmd,
+										sizeof(s3DKCCBCmd),
+										bPDumpContinuous);
+			if (eError != PVRSRV_ERROR_RETRY)
+			{
+				break;
+			}
+			OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
+		} END_LOOP_UNTIL_TIMEOUT();
+	}
+
+	if (bKick2D)
+	{
+		RGXFWIF_KCCB_CMD s2DKCCBCmd;
+
+		/* Construct the kernel 3D CCB command. */
+		s2DKCCBCmd.eCmdType = RGXFWIF_KCCB_CMD_KICK;
+		s2DKCCBCmd.uCmdData.sCmdKickData.psContext = FWCommonContextGetFWAddress(psTransferContext->s2DData.psServerCommonContext);
+		s2DKCCBCmd.uCmdData.sCmdKickData.ui32CWoffUpdate = RGXGetHostWriteOffsetCCB(FWCommonContextGetClientCCB(psTransferContext->s2DData.psServerCommonContext));
+
+		LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
+		{
+			eError = RGXScheduleCommand(psDeviceNode->pvDevice,
+										RGXFWIF_DM_2D,
+										&s2DKCCBCmd,
+										sizeof(s2DKCCBCmd),
+										bPDumpContinuous);
+			if (eError != PVRSRV_ERROR_RETRY)
+			{
+				break;
+			}
+			OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
+		} END_LOOP_UNTIL_TIMEOUT();
+	}
+
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+	/*
+		Free the merged sync memory if required
+	*/
+	if (bSyncsMerged)
+	{
+		OSFreeMem(pauiIntFenceUFOAddress);
+		OSFreeMem(paui32IntFenceValue);
+		OSFreeMem(pauiIntUpdateUFOAddress);
+		OSFreeMem(paui32IntUpdateValue);
+	}
+#if defined(NO_HARDWARE)
+    for (i = 0; i < ui32NumFenceFDs; i++) 
+    {    
+		eError = PVRFDSyncNoHwUpdateFenceKM(paui32FenceFDs[i]);
+        if (eError != PVRSRV_OK)
+        {    
+            PVR_DPF((PVR_DBG_ERROR, "%s: Failed nohw update on fence fd=%d (%s)",
+                     __func__, paui32FenceFDs[i], PVRSRVGetErrorStringKM(eError)));
+        }    
+    }    
+#endif
+#endif
+
+	return PVRSRV_OK;
+
+/*
+	No resources are created in this function so there is nothing to free
+	unless we had to merge syncs.
+	If we fail after the client CCB acquire there is still nothing to do
+	as only the client CCB release will modify the client CCB
+*/
+fail_2dcmdacquire:
+fail_3dcmdacquire:
+fail_initcmd:
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+	if (bSyncsMerged)
+	{
+		OSFreeMem(pauiIntFenceUFOAddress);
+		OSFreeMem(paui32IntFenceValue);
+		OSFreeMem(pauiIntUpdateUFOAddress);
+		OSFreeMem(paui32IntUpdateValue);
+	}
+fail_updatevaluearray:
+fail_updateUFOarray:
+fail_fencevaluearray:
+fail_fenceUFOarray:
+fail_fdsync:
+#endif
+fail_pdumpcheck:
+fail_cmdtype:
+	PVR_ASSERT(eError != PVRSRV_OK);
+#if !defined(WDDM)
+	OSFreeMem(pas2DCmdHelper);
+fail_alloc2dhelper:
+	OSFreeMem(pas3DCmdHelper);
+fail_alloc3dhelper:
+#endif
+	return eError;
+}
+
+PVRSRV_ERROR PVRSRVRGXSetTransferContextPriorityKM(CONNECTION_DATA *psConnection,
+												   RGX_SERVER_TQ_CONTEXT *psTranfserContext,
+												   IMG_UINT32 ui32Priority)
+{
+	PVRSRV_ERROR eError;
+
+	eError = ContextSetPriority(psTranfserContext->s2DData.psServerCommonContext,
+								psConnection,
+								psTranfserContext->psDeviceNode->pvDevice,
+								ui32Priority,
+								RGXFWIF_DM_2D);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "PVRSRVSubmitTQ3DKickKM : failed to schedule kernel TQ command. Error:%u", eError));
-		return eError;
+		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the 2D part of the transfercontext", __FUNCTION__));
+		goto fail_2dcontext;
+	}
+
+	eError = ContextSetPriority(psTranfserContext->s3DData.psServerCommonContext,
+								psConnection,
+								psTranfserContext->psDeviceNode->pvDevice,
+								ui32Priority,
+								RGXFWIF_DM_3D);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the 3D part of the transfercontext", __FUNCTION__));
+		goto fail_3dcontext;
 	}
 	return PVRSRV_OK;
+
+fail_3dcontext:
+fail_2dcontext:
+	PVR_ASSERT(eError != PVRSRV_OK);
+	return eError;
 }
 
 /**************************************************************************//**

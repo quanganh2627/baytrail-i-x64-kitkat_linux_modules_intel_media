@@ -180,8 +180,6 @@ typedef struct PVRSRV_RESOURCE_TAG
 	volatile IMG_UINT32 ui32Lock;   /*!< the lock around the resource */
 	IMG_UINT32 			ui32ID;     /*!< the ID of the resource */
 }PVRSRV_RESOURCE;
-typedef PVRSRV_RESOURCE PVRSRV_RES_HANDLE; /*!< Typedef: PVRSRV_RES_HANDLE is a PVRSRV_RESOURCE */
-
 
 /*!
  *****************************************************************************

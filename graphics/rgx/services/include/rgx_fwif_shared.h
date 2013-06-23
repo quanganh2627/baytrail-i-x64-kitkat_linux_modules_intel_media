@@ -47,6 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "img_types.h"
 #include "rgx_hwperf.h"
+#include "devicemem_typedefs.h"
 
 
 /*!
@@ -300,6 +301,53 @@ typedef struct _RGXFWIF_COMPCHECKS_
 	IMG_BOOL					bUpdated;			/*!< Information is valid */
 } RGXFWIF_COMPCHECKS;
 
+
+#define GET_CCB_SPACE(WOff, ROff, CCBSize) \
+	((((ROff) - (WOff)) + ((CCBSize) - 1)) & ((CCBSize) - 1))
+
+#define UPDATE_CCB_OFFSET(Off, PacketSize, CCBSize) \
+	(Off) = (((Off) + (PacketSize)) & ((CCBSize) - 1))
+
+#define RESERVED_CCB_SPACE 		(sizeof(IMG_UINT32))
+
+
+/* Defines relating to the per-context CCBs */
+#define RGX_CCB_SIZE_LOG2			(16) /* 64kB */
+#define RGX_CCB_ALLOCGRAN			(64)
+#define RGX_CCB_TYPE_TASK			(1 << 31)
+#define RGX_CCB_FWALLOC_ALIGN(size)	(((size) + (RGXFWIF_FWALLOC_ALIGN-1)) & ~(RGXFWIF_FWALLOC_ALIGN - 1))
+
+/*!
+ ******************************************************************************
+ * Client CCB commands for RGX
+ *****************************************************************************/
+typedef enum _RGXFWIF_CCB_CMD_TYPE_
+{
+	RGXFWIF_CCB_CMD_TYPE_TA			= 201 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_3D			= 202 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_CDM		= 203 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_TQ_3D		= 204 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_TQ_2D		= 205 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_3D_PR		= 206 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_NULL		= 207 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_SHG		= 208 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_RTU		= 209 | RGX_CCB_TYPE_TASK,
+
+/* Leave a gap between CCB specific commands and generic commands */
+	RGXFWIF_CCB_CMD_TYPE_FENCE		= 211,
+	RGXFWIF_CCB_CMD_TYPE_UPDATE		= 212,
+	RGXFWIF_CCB_CMD_TYPE_FENCE_PR		= 213,
+	RGXFWIF_CCB_CMD_TYPE_PRIORITY		= 214,
+	
+	RGXFWIF_CCB_CMD_TYPE_PADDING	= 220,
+} RGXFWIF_CCB_CMD_TYPE;
+
+typedef struct _RGXFWIF_CCB_CMD_HEADER_
+{
+	RGXFWIF_CCB_CMD_TYPE	eCmdType;
+	IMG_UINT32				ui32CmdSize;
+} RGXFWIF_CCB_CMD_HEADER;
+
 /*!
  *****************************************************************************
  * Data master selection
@@ -309,11 +357,16 @@ typedef struct _RGXFWIF_COMPCHECKS_
  * the master definition.
  */
 
-/* Maximum number of DM in use: TA, 3D, 2D, CDM, GP */
+#if defined(RGX_FEATURE_RAY_TRACING)
+/* Maximum number of DM in use: GP, 2D, TA, 3D, CDM, SHG, RTU */
+#define RGXFWIF_DM_MAX			(7)
+#else
 #define RGXFWIF_DM_MAX			(5)
+#endif
 
-/* Maximum number of HW DMs (all but GP) : TA, 3D, 2D, CDM */
-#define RGXFWIF_HWDM_MAX		(RGXFWIF_DM_2D+1)
+/* Min/Max number of HW DMs (all but GP) */
+#define RGXFWIF_HWDM_MIN		(1)
+#define RGXFWIF_HWDM_MAX		(RGXFWIF_DM_MAX)
 
 
 #endif /*  __RGX_FWIF_SHARED_H__ */

@@ -206,14 +206,16 @@ PVRSRVBridgeDCDevicesEnumerate(IMG_UINT32 ui32BridgeID,
 	psDCDevicesEnumerateOUT->pui32DeviceIndex = psDCDevicesEnumerateIN->pui32DeviceIndex;
 
 
-	pui32DeviceIndexInt = OSAllocMem(psDCDevicesEnumerateIN->ui32DeviceArraySize * sizeof(IMG_UINT32));
-	if (!pui32DeviceIndexInt)
+	if (psDCDevicesEnumerateIN->ui32DeviceArraySize != 0)
 	{
-		psDCDevicesEnumerateOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDevicesEnumerate_exit;
+		pui32DeviceIndexInt = OSAllocMem(psDCDevicesEnumerateIN->ui32DeviceArraySize * sizeof(IMG_UINT32));
+		if (!pui32DeviceIndexInt)
+		{
+			psDCDevicesEnumerateOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto DCDevicesEnumerate_exit;
+		}
 	}
-
 
 
 	psDCDevicesEnumerateOUT->eError =
@@ -322,16 +324,20 @@ PVRSRVBridgeDCDeviceRelease(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCDeviceReleaseOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceInt2,
-							   psDCDeviceReleaseIN->hDevice,
-							   PVRSRV_HANDLE_TYPE_DC_DEVICE);
-		if(psDCDeviceReleaseOUT->eError != PVRSRV_OK)
-		{
-			goto DCDeviceRelease_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psDCDeviceReleaseOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCDeviceReleaseIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCDeviceReleaseOUT->eError != PVRSRV_OK)
+					{
+						goto DCDeviceRelease_exit;
+					}
+
+				}
 
 	psDCDeviceReleaseOUT->eError = DCDeviceReleaseResManProxy(hDeviceInt2);
 	/* Exit early if bridged call fails */
@@ -365,23 +371,27 @@ PVRSRVBridgeDCGetInfo(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCGetInfoOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceInt2,
-							   psDCGetInfoIN->hDevice,
-							   PVRSRV_HANDLE_TYPE_DC_DEVICE);
-		if(psDCGetInfoOUT->eError != PVRSRV_OK)
-		{
-			goto DCGetInfo_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psDCGetInfoOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
-		if(psDCGetInfoOUT->eError != PVRSRV_OK)
-		{
-			goto DCGetInfo_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDCGetInfoOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCGetInfoIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCGetInfoOUT->eError != PVRSRV_OK)
+					{
+						goto DCGetInfo_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCGetInfoOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCGetInfoOUT->eError != PVRSRV_OK)
+					{
+						goto DCGetInfo_exit;
+					}
+				}
 
 	psDCGetInfoOUT->eError =
 		DCGetInfo(
@@ -409,23 +419,27 @@ PVRSRVBridgeDCPanelQueryCount(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCPanelQueryCountOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceInt2,
-							   psDCPanelQueryCountIN->hDevice,
-							   PVRSRV_HANDLE_TYPE_DC_DEVICE);
-		if(psDCPanelQueryCountOUT->eError != PVRSRV_OK)
-		{
-			goto DCPanelQueryCount_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psDCPanelQueryCountOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
-		if(psDCPanelQueryCountOUT->eError != PVRSRV_OK)
-		{
-			goto DCPanelQueryCount_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDCPanelQueryCountOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCPanelQueryCountIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCPanelQueryCountOUT->eError != PVRSRV_OK)
+					{
+						goto DCPanelQueryCount_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCPanelQueryCountOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCPanelQueryCountOUT->eError != PVRSRV_OK)
+					{
+						goto DCPanelQueryCount_exit;
+					}
+				}
 
 	psDCPanelQueryCountOUT->eError =
 		DCPanelQueryCount(
@@ -455,32 +469,38 @@ PVRSRVBridgeDCPanelQuery(IMG_UINT32 ui32BridgeID,
 	psDCPanelQueryOUT->psPanelInfo = psDCPanelQueryIN->psPanelInfo;
 
 
-	psPanelInfoInt = OSAllocMem(psDCPanelQueryIN->ui32PanelsArraySize * sizeof(PVRSRV_PANEL_INFO));
-	if (!psPanelInfoInt)
+	if (psDCPanelQueryIN->ui32PanelsArraySize != 0)
 	{
-		psDCPanelQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCPanelQuery_exit;
+		psPanelInfoInt = OSAllocMem(psDCPanelQueryIN->ui32PanelsArraySize * sizeof(PVRSRV_PANEL_INFO));
+		if (!psPanelInfoInt)
+		{
+			psDCPanelQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto DCPanelQuery_exit;
+		}
 	}
 
 
-		/* Look up the address from the handle */
-		psDCPanelQueryOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceInt2,
-							   psDCPanelQueryIN->hDevice,
-							   PVRSRV_HANDLE_TYPE_DC_DEVICE);
-		if(psDCPanelQueryOUT->eError != PVRSRV_OK)
-		{
-			goto DCPanelQuery_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDCPanelQueryOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCPanelQueryIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCPanelQueryOUT->eError != PVRSRV_OK)
+					{
+						goto DCPanelQuery_exit;
+					}
 
-		/* Look up the data from the resman address */
-		psDCPanelQueryOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
-		if(psDCPanelQueryOUT->eError != PVRSRV_OK)
-		{
-			goto DCPanelQuery_exit;
-		}
+					/* Look up the data from the resman address */
+					psDCPanelQueryOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCPanelQueryOUT->eError != PVRSRV_OK)
+					{
+						goto DCPanelQuery_exit;
+					}
+				}
 
 	psDCPanelQueryOUT->eError =
 		DCPanelQuery(
@@ -524,50 +544,58 @@ PVRSRVBridgeDCFormatQuery(IMG_UINT32 ui32BridgeID,
 	psDCFormatQueryOUT->pui32Supported = psDCFormatQueryIN->pui32Supported;
 
 
-	psFormatInt = OSAllocMem(psDCFormatQueryIN->ui32NumFormats * sizeof(PVRSRV_SURFACE_FORMAT));
-	if (!psFormatInt)
+	if (psDCFormatQueryIN->ui32NumFormats != 0)
 	{
-		psDCFormatQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCFormatQuery_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCFormatQueryIN->psFormat, psDCFormatQueryIN->ui32NumFormats * sizeof(PVRSRV_SURFACE_FORMAT)) 
-		|| (OSCopyFromUser(NULL, psFormatInt, psDCFormatQueryIN->psFormat,
-		psDCFormatQueryIN->ui32NumFormats * sizeof(PVRSRV_SURFACE_FORMAT)) != PVRSRV_OK) )
-	{
-		psDCFormatQueryOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCFormatQuery_exit;
-	}
-
-	pui32SupportedInt = OSAllocMem(psDCFormatQueryIN->ui32NumFormats * sizeof(IMG_UINT32));
-	if (!pui32SupportedInt)
-	{
-		psDCFormatQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCFormatQuery_exit;
-	}
-
-
-		/* Look up the address from the handle */
-		psDCFormatQueryOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceInt2,
-							   psDCFormatQueryIN->hDevice,
-							   PVRSRV_HANDLE_TYPE_DC_DEVICE);
-		if(psDCFormatQueryOUT->eError != PVRSRV_OK)
+		psFormatInt = OSAllocMem(psDCFormatQueryIN->ui32NumFormats * sizeof(PVRSRV_SURFACE_FORMAT));
+		if (!psFormatInt)
 		{
+			psDCFormatQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCFormatQuery_exit;
 		}
+	}
 
-		/* Look up the data from the resman address */
-		psDCFormatQueryOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
-		if(psDCFormatQueryOUT->eError != PVRSRV_OK)
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCFormatQueryIN->psFormat, psDCFormatQueryIN->ui32NumFormats * sizeof(PVRSRV_SURFACE_FORMAT))
+				|| (OSCopyFromUser(NULL, psFormatInt, psDCFormatQueryIN->psFormat,
+				psDCFormatQueryIN->ui32NumFormats * sizeof(PVRSRV_SURFACE_FORMAT)) != PVRSRV_OK) )
+			{
+				psDCFormatQueryOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCFormatQuery_exit;
+			}
+	if (psDCFormatQueryIN->ui32NumFormats != 0)
+	{
+		pui32SupportedInt = OSAllocMem(psDCFormatQueryIN->ui32NumFormats * sizeof(IMG_UINT32));
+		if (!pui32SupportedInt)
 		{
+			psDCFormatQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCFormatQuery_exit;
 		}
+	}
+
+
+				{
+					/* Look up the address from the handle */
+					psDCFormatQueryOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCFormatQueryIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCFormatQueryOUT->eError != PVRSRV_OK)
+					{
+						goto DCFormatQuery_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCFormatQueryOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCFormatQueryOUT->eError != PVRSRV_OK)
+					{
+						goto DCFormatQuery_exit;
+					}
+				}
 
 	psDCFormatQueryOUT->eError =
 		DCFormatQuery(
@@ -613,50 +641,58 @@ PVRSRVBridgeDCDimQuery(IMG_UINT32 ui32BridgeID,
 	psDCDimQueryOUT->pui32Supported = psDCDimQueryIN->pui32Supported;
 
 
-	psDimInt = OSAllocMem(psDCDimQueryIN->ui32NumDims * sizeof(PVRSRV_SURFACE_DIMS));
-	if (!psDimInt)
+	if (psDCDimQueryIN->ui32NumDims != 0)
 	{
-		psDCDimQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDimQuery_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDimQueryIN->psDim, psDCDimQueryIN->ui32NumDims * sizeof(PVRSRV_SURFACE_DIMS)) 
-		|| (OSCopyFromUser(NULL, psDimInt, psDCDimQueryIN->psDim,
-		psDCDimQueryIN->ui32NumDims * sizeof(PVRSRV_SURFACE_DIMS)) != PVRSRV_OK) )
-	{
-		psDCDimQueryOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCDimQuery_exit;
-	}
-
-	pui32SupportedInt = OSAllocMem(psDCDimQueryIN->ui32NumDims * sizeof(IMG_UINT32));
-	if (!pui32SupportedInt)
-	{
-		psDCDimQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDimQuery_exit;
-	}
-
-
-		/* Look up the address from the handle */
-		psDCDimQueryOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceInt2,
-							   psDCDimQueryIN->hDevice,
-							   PVRSRV_HANDLE_TYPE_DC_DEVICE);
-		if(psDCDimQueryOUT->eError != PVRSRV_OK)
+		psDimInt = OSAllocMem(psDCDimQueryIN->ui32NumDims * sizeof(PVRSRV_SURFACE_DIMS));
+		if (!psDimInt)
 		{
+			psDCDimQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCDimQuery_exit;
 		}
+	}
 
-		/* Look up the data from the resman address */
-		psDCDimQueryOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
-		if(psDCDimQueryOUT->eError != PVRSRV_OK)
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDimQueryIN->psDim, psDCDimQueryIN->ui32NumDims * sizeof(PVRSRV_SURFACE_DIMS))
+				|| (OSCopyFromUser(NULL, psDimInt, psDCDimQueryIN->psDim,
+				psDCDimQueryIN->ui32NumDims * sizeof(PVRSRV_SURFACE_DIMS)) != PVRSRV_OK) )
+			{
+				psDCDimQueryOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCDimQuery_exit;
+			}
+	if (psDCDimQueryIN->ui32NumDims != 0)
+	{
+		pui32SupportedInt = OSAllocMem(psDCDimQueryIN->ui32NumDims * sizeof(IMG_UINT32));
+		if (!pui32SupportedInt)
 		{
+			psDCDimQueryOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCDimQuery_exit;
 		}
+	}
+
+
+				{
+					/* Look up the address from the handle */
+					psDCDimQueryOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCDimQueryIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCDimQueryOUT->eError != PVRSRV_OK)
+					{
+						goto DCDimQuery_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCDimQueryOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCDimQueryOUT->eError != PVRSRV_OK)
+					{
+						goto DCDimQuery_exit;
+					}
+				}
 
 	psDCDimQueryOUT->eError =
 		DCDimQuery(
@@ -701,23 +737,27 @@ PVRSRVBridgeDCSystemBufferAcquire(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCSystemBufferAcquireOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceInt2,
-							   psDCSystemBufferAcquireIN->hDevice,
-							   PVRSRV_HANDLE_TYPE_DC_DEVICE);
-		if(psDCSystemBufferAcquireOUT->eError != PVRSRV_OK)
-		{
-			goto DCSystemBufferAcquire_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psDCSystemBufferAcquireOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
-		if(psDCSystemBufferAcquireOUT->eError != PVRSRV_OK)
-		{
-			goto DCSystemBufferAcquire_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDCSystemBufferAcquireOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCSystemBufferAcquireIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCSystemBufferAcquireOUT->eError != PVRSRV_OK)
+					{
+						goto DCSystemBufferAcquire_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCSystemBufferAcquireOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCSystemBufferAcquireOUT->eError != PVRSRV_OK)
+					{
+						goto DCSystemBufferAcquire_exit;
+					}
+				}
 
 	psDCSystemBufferAcquireOUT->eError =
 		DCSystemBufferAcquire(
@@ -787,16 +827,20 @@ PVRSRVBridgeDCSystemBufferRelease(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCSystemBufferReleaseOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hBufferInt2,
-							   psDCSystemBufferReleaseIN->hBuffer,
-							   PVRSRV_HANDLE_TYPE_DC_BUFFER);
-		if(psDCSystemBufferReleaseOUT->eError != PVRSRV_OK)
-		{
-			goto DCSystemBufferRelease_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psDCSystemBufferReleaseOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hBufferInt2,
+											psDCSystemBufferReleaseIN->hBuffer,
+											PVRSRV_HANDLE_TYPE_DC_BUFFER);
+					if(psDCSystemBufferReleaseOUT->eError != PVRSRV_OK)
+					{
+						goto DCSystemBufferRelease_exit;
+					}
+
+				}
 
 	psDCSystemBufferReleaseOUT->eError = DCSystemBufferReleaseResManProxy(hBufferInt2);
 	/* Exit early if bridged call fails */
@@ -832,23 +876,27 @@ PVRSRVBridgeDCDisplayContextCreate(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCDisplayContextCreateOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceInt2,
-							   psDCDisplayContextCreateIN->hDevice,
-							   PVRSRV_HANDLE_TYPE_DC_DEVICE);
-		if(psDCDisplayContextCreateOUT->eError != PVRSRV_OK)
-		{
-			goto DCDisplayContextCreate_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psDCDisplayContextCreateOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
-		if(psDCDisplayContextCreateOUT->eError != PVRSRV_OK)
-		{
-			goto DCDisplayContextCreate_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDCDisplayContextCreateOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCDisplayContextCreateIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCDisplayContextCreateOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextCreate_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCDisplayContextCreateOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCDisplayContextCreateOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextCreate_exit;
+					}
+				}
 
 	psDCDisplayContextCreateOUT->eError =
 		DCDisplayContextCreate(
@@ -921,89 +969,101 @@ PVRSRVBridgeDCDisplayContextConfigureCheck(IMG_UINT32 ui32BridgeID,
 
 
 
-	psSurfInfoInt = OSAllocMem(psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO));
-	if (!psSurfInfoInt)
+	if (psDCDisplayContextConfigureCheckIN->ui32PipeCount != 0)
 	{
-		psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigureCheck_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureCheckIN->psSurfInfo, psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO)) 
-		|| (OSCopyFromUser(NULL, psSurfInfoInt, psDCDisplayContextConfigureCheckIN->psSurfInfo,
-		psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO)) != PVRSRV_OK) )
-	{
-		psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCDisplayContextConfigureCheck_exit;
-	}
-
-	psBuffersInt = OSAllocMem(psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(DC_BUFFER *));
-	if (!psBuffersInt)
-	{
-		psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigureCheck_exit;
-	}
-
-	hBuffersInt2 = OSAllocMem(psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(IMG_HANDLE));
-	if (!hBuffersInt2)
-	{
-		psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigureCheck_exit;
-	}
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureCheckIN->phBuffers, psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(IMG_HANDLE)) 
-		|| (OSCopyFromUser(NULL, hBuffersInt2, psDCDisplayContextConfigureCheckIN->phBuffers,
-		psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
-	{
-		psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCDisplayContextConfigureCheck_exit;
-	}
-
-		/* Look up the address from the handle */
-		psDCDisplayContextConfigureCheckOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDisplayContextInt2,
-							   psDCDisplayContextConfigureCheckIN->hDisplayContext,
-							   PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
-		if(psDCDisplayContextConfigureCheckOUT->eError != PVRSRV_OK)
+		psSurfInfoInt = OSAllocMem(psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO));
+		if (!psSurfInfoInt)
 		{
-			goto DCDisplayContextConfigureCheck_exit;
-		}
-
-		/* Look up the data from the resman address */
-		psDCDisplayContextConfigureCheckOUT->eError = ResManFindPrivateDataByPtr(hDisplayContextInt2, (IMG_VOID **) &psDisplayContextInt);
-		if(psDCDisplayContextConfigureCheckOUT->eError != PVRSRV_OK)
-		{
-			goto DCDisplayContextConfigureCheck_exit;
-		}
-	{
-	IMG_UINT32 i;
-
-	for (i=0;i<psDCDisplayContextConfigureCheckIN->ui32PipeCount;i++)
-	{
-		/* Look up the address from the handle */
-		psDCDisplayContextConfigureCheckOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hBuffersInt2[i],
-							   hBuffersInt2[i],
-							   PVRSRV_HANDLE_TYPE_DC_BUFFER);
-		if(psDCDisplayContextConfigureCheckOUT->eError != PVRSRV_OK)
-		{
-			goto DCDisplayContextConfigureCheck_exit;
-		}
-
-		/* Look up the data from the resman address */
-		psDCDisplayContextConfigureCheckOUT->eError = ResManFindPrivateDataByPtr(hBuffersInt2[i], (IMG_VOID **) &psBuffersInt[i]);
-		if(psDCDisplayContextConfigureCheckOUT->eError != PVRSRV_OK)
-		{
+			psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCDisplayContextConfigureCheck_exit;
 		}
 	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureCheckIN->psSurfInfo, psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO))
+				|| (OSCopyFromUser(NULL, psSurfInfoInt, psDCDisplayContextConfigureCheckIN->psSurfInfo,
+				psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO)) != PVRSRV_OK) )
+			{
+				psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCDisplayContextConfigureCheck_exit;
+			}
+	if (psDCDisplayContextConfigureCheckIN->ui32PipeCount != 0)
+	{
+		psBuffersInt = OSAllocMem(psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(DC_BUFFER *));
+		if (!psBuffersInt)
+		{
+			psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto DCDisplayContextConfigureCheck_exit;
+		}
+		hBuffersInt2 = OSAllocMem(psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(IMG_HANDLE));
+		if (!hBuffersInt2)
+		{
+			psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto DCDisplayContextConfigureCheck_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureCheckIN->phBuffers, psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hBuffersInt2, psDCDisplayContextConfigureCheckIN->phBuffers,
+				psDCDisplayContextConfigureCheckIN->ui32PipeCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psDCDisplayContextConfigureCheckOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCDisplayContextConfigureCheck_exit;
+			}
+
+				{
+					/* Look up the address from the handle */
+					psDCDisplayContextConfigureCheckOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDisplayContextInt2,
+											psDCDisplayContextConfigureCheckIN->hDisplayContext,
+											PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
+					if(psDCDisplayContextConfigureCheckOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigureCheck_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCDisplayContextConfigureCheckOUT->eError = ResManFindPrivateDataByPtr(hDisplayContextInt2, (IMG_VOID **) &psDisplayContextInt);
+
+					if(psDCDisplayContextConfigureCheckOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigureCheck_exit;
+					}
+				}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psDCDisplayContextConfigureCheckIN->ui32PipeCount;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psDCDisplayContextConfigureCheckOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hBuffersInt2[i],
+											psDCDisplayContextConfigureCheckIN->phBuffers[i],
+											PVRSRV_HANDLE_TYPE_DC_BUFFER);
+					if(psDCDisplayContextConfigureCheckOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigureCheck_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCDisplayContextConfigureCheckOUT->eError = ResManFindPrivateDataByPtr(hBuffersInt2[i], (IMG_VOID **) &psBuffersInt[i]);
+
+					if(psDCDisplayContextConfigureCheckOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigureCheck_exit;
+					}
+				}
+		}
 	}
 
 	psDCDisplayContextConfigureCheckOUT->eError =
@@ -1046,156 +1106,176 @@ PVRSRVBridgeDCDisplayContextConfigure(IMG_UINT32 ui32BridgeID,
 
 
 
-	psSurfInfoInt = OSAllocMem(psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO));
-	if (!psSurfInfoInt)
+	if (psDCDisplayContextConfigureIN->ui32PipeCount != 0)
 	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureIN->psSurfInfo, psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO)) 
-		|| (OSCopyFromUser(NULL, psSurfInfoInt, psDCDisplayContextConfigureIN->psSurfInfo,
-		psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO)) != PVRSRV_OK) )
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-	psBuffersInt = OSAllocMem(psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(DC_BUFFER *));
-	if (!psBuffersInt)
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-	hBuffersInt2 = OSAllocMem(psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(IMG_HANDLE));
-	if (!hBuffersInt2)
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureIN->phBuffers, psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(IMG_HANDLE)) 
-		|| (OSCopyFromUser(NULL, hBuffersInt2, psDCDisplayContextConfigureIN->phBuffers,
-		psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-	psSyncInt = OSAllocMem(psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(SERVER_SYNC_PRIMITIVE *));
-	if (!psSyncInt)
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-	hSyncInt2 = OSAllocMem(psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_HANDLE));
-	if (!hSyncInt2)
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureIN->phSync, psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_HANDLE)) 
-		|| (OSCopyFromUser(NULL, hSyncInt2, psDCDisplayContextConfigureIN->phSync,
-		psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-	bUpdateInt = OSAllocMem(psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_BOOL));
-	if (!bUpdateInt)
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureIN->pbUpdate, psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_BOOL)) 
-		|| (OSCopyFromUser(NULL, bUpdateInt, psDCDisplayContextConfigureIN->pbUpdate,
-		psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_BOOL)) != PVRSRV_OK) )
-	{
-		psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCDisplayContextConfigure_exit;
-	}
-
-		/* Look up the address from the handle */
-		psDCDisplayContextConfigureOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDisplayContextInt2,
-							   psDCDisplayContextConfigureIN->hDisplayContext,
-							   PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
-		if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+		psSurfInfoInt = OSAllocMem(psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO));
+		if (!psSurfInfoInt)
 		{
-			goto DCDisplayContextConfigure_exit;
-		}
-
-		/* Look up the data from the resman address */
-		psDCDisplayContextConfigureOUT->eError = ResManFindPrivateDataByPtr(hDisplayContextInt2, (IMG_VOID **) &psDisplayContextInt);
-		if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
-		{
-			goto DCDisplayContextConfigure_exit;
-		}
-	{
-	IMG_UINT32 i;
-
-	for (i=0;i<psDCDisplayContextConfigureIN->ui32PipeCount;i++)
-	{
-		/* Look up the address from the handle */
-		psDCDisplayContextConfigureOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hBuffersInt2[i],
-							   hBuffersInt2[i],
-							   PVRSRV_HANDLE_TYPE_DC_BUFFER);
-		if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
-		{
-			goto DCDisplayContextConfigure_exit;
-		}
-
-		/* Look up the data from the resman address */
-		psDCDisplayContextConfigureOUT->eError = ResManFindPrivateDataByPtr(hBuffersInt2[i], (IMG_VOID **) &psBuffersInt[i]);
-		if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
-		{
+			psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCDisplayContextConfigure_exit;
 		}
 	}
-	}
-	{
-	IMG_UINT32 i;
 
-	for (i=0;i<psDCDisplayContextConfigureIN->ui32SyncCount;i++)
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureIN->psSurfInfo, psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO))
+				|| (OSCopyFromUser(NULL, psSurfInfoInt, psDCDisplayContextConfigureIN->psSurfInfo,
+				psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(PVRSRV_SURFACE_CONFIG_INFO)) != PVRSRV_OK) )
+			{
+				psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCDisplayContextConfigure_exit;
+			}
+	if (psDCDisplayContextConfigureIN->ui32PipeCount != 0)
 	{
-		/* Look up the address from the handle */
-		psDCDisplayContextConfigureOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hSyncInt2[i],
-							   hSyncInt2[i],
-							   PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
-		if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+		psBuffersInt = OSAllocMem(psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(DC_BUFFER *));
+		if (!psBuffersInt)
 		{
+			psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCDisplayContextConfigure_exit;
 		}
-
-		/* Look up the data from the resman address */
-		psDCDisplayContextConfigureOUT->eError = ResManFindPrivateDataByPtr(hSyncInt2[i], (IMG_VOID **) &psSyncInt[i]);
-		if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+		hBuffersInt2 = OSAllocMem(psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(IMG_HANDLE));
+		if (!hBuffersInt2)
 		{
+			psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCDisplayContextConfigure_exit;
 		}
 	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureIN->phBuffers, psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hBuffersInt2, psDCDisplayContextConfigureIN->phBuffers,
+				psDCDisplayContextConfigureIN->ui32PipeCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCDisplayContextConfigure_exit;
+			}
+	if (psDCDisplayContextConfigureIN->ui32SyncCount != 0)
+	{
+		psSyncInt = OSAllocMem(psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(SERVER_SYNC_PRIMITIVE *));
+		if (!psSyncInt)
+		{
+			psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto DCDisplayContextConfigure_exit;
+		}
+		hSyncInt2 = OSAllocMem(psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_HANDLE));
+		if (!hSyncInt2)
+		{
+			psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto DCDisplayContextConfigure_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureIN->phSync, psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hSyncInt2, psDCDisplayContextConfigureIN->phSync,
+				psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCDisplayContextConfigure_exit;
+			}
+	if (psDCDisplayContextConfigureIN->ui32SyncCount != 0)
+	{
+		bUpdateInt = OSAllocMem(psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_BOOL));
+		if (!bUpdateInt)
+		{
+			psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto DCDisplayContextConfigure_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCDisplayContextConfigureIN->pbUpdate, psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_BOOL))
+				|| (OSCopyFromUser(NULL, bUpdateInt, psDCDisplayContextConfigureIN->pbUpdate,
+				psDCDisplayContextConfigureIN->ui32SyncCount * sizeof(IMG_BOOL)) != PVRSRV_OK) )
+			{
+				psDCDisplayContextConfigureOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCDisplayContextConfigure_exit;
+			}
+
+				{
+					/* Look up the address from the handle */
+					psDCDisplayContextConfigureOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDisplayContextInt2,
+											psDCDisplayContextConfigureIN->hDisplayContext,
+											PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
+					if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigure_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCDisplayContextConfigureOUT->eError = ResManFindPrivateDataByPtr(hDisplayContextInt2, (IMG_VOID **) &psDisplayContextInt);
+
+					if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigure_exit;
+					}
+				}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psDCDisplayContextConfigureIN->ui32PipeCount;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psDCDisplayContextConfigureOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hBuffersInt2[i],
+											psDCDisplayContextConfigureIN->phBuffers[i],
+											PVRSRV_HANDLE_TYPE_DC_BUFFER);
+					if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigure_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCDisplayContextConfigureOUT->eError = ResManFindPrivateDataByPtr(hBuffersInt2[i], (IMG_VOID **) &psBuffersInt[i]);
+
+					if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigure_exit;
+					}
+				}
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psDCDisplayContextConfigureIN->ui32SyncCount;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psDCDisplayContextConfigureOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hSyncInt2[i],
+											psDCDisplayContextConfigureIN->phSync[i],
+											PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
+					if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigure_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCDisplayContextConfigureOUT->eError = ResManFindPrivateDataByPtr(hSyncInt2[i], (IMG_VOID **) &psSyncInt[i]);
+
+					if(psDCDisplayContextConfigureOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextConfigure_exit;
+					}
+				}
+		}
 	}
 
 	psDCDisplayContextConfigureOUT->eError =
@@ -1244,16 +1324,20 @@ PVRSRVBridgeDCDisplayContextDestroy(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCDisplayContextDestroyOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDisplayContextInt2,
-							   psDCDisplayContextDestroyIN->hDisplayContext,
-							   PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
-		if(psDCDisplayContextDestroyOUT->eError != PVRSRV_OK)
-		{
-			goto DCDisplayContextDestroy_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psDCDisplayContextDestroyOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDisplayContextInt2,
+											psDCDisplayContextDestroyIN->hDisplayContext,
+											PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
+					if(psDCDisplayContextDestroyOUT->eError != PVRSRV_OK)
+					{
+						goto DCDisplayContextDestroy_exit;
+					}
+
+				}
 
 	psDCDisplayContextDestroyOUT->eError = DCDisplayContextDestroyResManProxy(hDisplayContextInt2);
 	/* Exit early if bridged call fails */
@@ -1289,23 +1373,27 @@ PVRSRVBridgeDCBufferAlloc(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCBufferAllocOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDisplayContextInt2,
-							   psDCBufferAllocIN->hDisplayContext,
-							   PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
-		if(psDCBufferAllocOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferAlloc_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psDCBufferAllocOUT->eError = ResManFindPrivateDataByPtr(hDisplayContextInt2, (IMG_VOID **) &psDisplayContextInt);
-		if(psDCBufferAllocOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferAlloc_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDCBufferAllocOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDisplayContextInt2,
+											psDCBufferAllocIN->hDisplayContext,
+											PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
+					if(psDCBufferAllocOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferAlloc_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCBufferAllocOUT->eError = ResManFindPrivateDataByPtr(hDisplayContextInt2, (IMG_VOID **) &psDisplayContextInt);
+
+					if(psDCBufferAllocOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferAlloc_exit;
+					}
+				}
 
 	psDCBufferAllocOUT->eError =
 		DCBufferAlloc(
@@ -1381,71 +1469,81 @@ PVRSRVBridgeDCBufferImport(IMG_UINT32 ui32BridgeID,
 
 
 
-	psImportInt = OSAllocMem(psDCBufferImportIN->ui32NumPlanes * sizeof(PMR *));
-	if (!psImportInt)
+	if (psDCBufferImportIN->ui32NumPlanes != 0)
 	{
-		psDCBufferImportOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCBufferImport_exit;
-	}
-
-	hImportInt2 = OSAllocMem(psDCBufferImportIN->ui32NumPlanes * sizeof(IMG_HANDLE));
-	if (!hImportInt2)
-	{
-		psDCBufferImportOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DCBufferImport_exit;
-	}
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCBufferImportIN->phImport, psDCBufferImportIN->ui32NumPlanes * sizeof(IMG_HANDLE)) 
-		|| (OSCopyFromUser(NULL, hImportInt2, psDCBufferImportIN->phImport,
-		psDCBufferImportIN->ui32NumPlanes * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
-	{
-		psDCBufferImportOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto DCBufferImport_exit;
-	}
-
-		/* Look up the address from the handle */
-		psDCBufferImportOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDisplayContextInt2,
-							   psDCBufferImportIN->hDisplayContext,
-							   PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
-		if(psDCBufferImportOUT->eError != PVRSRV_OK)
+		psImportInt = OSAllocMem(psDCBufferImportIN->ui32NumPlanes * sizeof(PMR *));
+		if (!psImportInt)
 		{
+			psDCBufferImportOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCBufferImport_exit;
 		}
-
-		/* Look up the data from the resman address */
-		psDCBufferImportOUT->eError = ResManFindPrivateDataByPtr(hDisplayContextInt2, (IMG_VOID **) &psDisplayContextInt);
-		if(psDCBufferImportOUT->eError != PVRSRV_OK)
+		hImportInt2 = OSAllocMem(psDCBufferImportIN->ui32NumPlanes * sizeof(IMG_HANDLE));
+		if (!hImportInt2)
 		{
-			goto DCBufferImport_exit;
-		}
-	{
-	IMG_UINT32 i;
-
-	for (i=0;i<psDCBufferImportIN->ui32NumPlanes;i++)
-	{
-		/* Look up the address from the handle */
-		psDCBufferImportOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hImportInt2[i],
-							   hImportInt2[i],
-							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if(psDCBufferImportOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferImport_exit;
-		}
-
-		/* Look up the data from the resman address */
-		psDCBufferImportOUT->eError = ResManFindPrivateDataByPtr(hImportInt2[i], (IMG_VOID **) &psImportInt[i]);
-		if(psDCBufferImportOUT->eError != PVRSRV_OK)
-		{
+			psDCBufferImportOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto DCBufferImport_exit;
 		}
 	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDCBufferImportIN->phImport, psDCBufferImportIN->ui32NumPlanes * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hImportInt2, psDCBufferImportIN->phImport,
+				psDCBufferImportIN->ui32NumPlanes * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psDCBufferImportOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto DCBufferImport_exit;
+			}
+
+				{
+					/* Look up the address from the handle */
+					psDCBufferImportOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDisplayContextInt2,
+											psDCBufferImportIN->hDisplayContext,
+											PVRSRV_HANDLE_TYPE_DC_DISPLAY_CONTEXT);
+					if(psDCBufferImportOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferImport_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCBufferImportOUT->eError = ResManFindPrivateDataByPtr(hDisplayContextInt2, (IMG_VOID **) &psDisplayContextInt);
+
+					if(psDCBufferImportOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferImport_exit;
+					}
+				}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psDCBufferImportIN->ui32NumPlanes;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psDCBufferImportOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hImportInt2[i],
+											psDCBufferImportIN->phImport[i],
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psDCBufferImportOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferImport_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCBufferImportOUT->eError = ResManFindPrivateDataByPtr(hImportInt2[i], (IMG_VOID **) &psImportInt[i]);
+
+					if(psDCBufferImportOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferImport_exit;
+					}
+				}
+		}
 	}
 
 	psDCBufferImportOUT->eError =
@@ -1522,16 +1620,20 @@ PVRSRVBridgeDCBufferFree(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCBufferFreeOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hBufferInt2,
-							   psDCBufferFreeIN->hBuffer,
-							   PVRSRV_HANDLE_TYPE_DC_BUFFER);
-		if(psDCBufferFreeOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferFree_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psDCBufferFreeOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hBufferInt2,
+											psDCBufferFreeIN->hBuffer,
+											PVRSRV_HANDLE_TYPE_DC_BUFFER);
+					if(psDCBufferFreeOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferFree_exit;
+					}
+
+				}
 
 	psDCBufferFreeOUT->eError = DCBufferFreeResManProxy(hBufferInt2);
 	/* Exit early if bridged call fails */
@@ -1564,16 +1666,20 @@ PVRSRVBridgeDCBufferUnimport(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCBufferUnimportOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hBufferInt2,
-							   psDCBufferUnimportIN->hBuffer,
-							   PVRSRV_HANDLE_TYPE_DC_BUFFER);
-		if(psDCBufferUnimportOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferUnimport_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psDCBufferUnimportOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hBufferInt2,
+											psDCBufferUnimportIN->hBuffer,
+											PVRSRV_HANDLE_TYPE_DC_BUFFER);
+					if(psDCBufferUnimportOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferUnimport_exit;
+					}
+
+				}
 
 	psDCBufferUnimportOUT->eError = DCBufferUnimportResManProxy(hBufferInt2);
 	/* Exit early if bridged call fails */
@@ -1609,23 +1715,27 @@ PVRSRVBridgeDCBufferPin(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCBufferPinOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hBufferInt2,
-							   psDCBufferPinIN->hBuffer,
-							   PVRSRV_HANDLE_TYPE_DC_BUFFER);
-		if(psDCBufferPinOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferPin_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psDCBufferPinOUT->eError = ResManFindPrivateDataByPtr(hBufferInt2, (IMG_VOID **) &psBufferInt);
-		if(psDCBufferPinOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferPin_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDCBufferPinOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hBufferInt2,
+											psDCBufferPinIN->hBuffer,
+											PVRSRV_HANDLE_TYPE_DC_BUFFER);
+					if(psDCBufferPinOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferPin_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCBufferPinOUT->eError = ResManFindPrivateDataByPtr(hBufferInt2, (IMG_VOID **) &psBufferInt);
+
+					if(psDCBufferPinOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferPin_exit;
+					}
+				}
 
 	psDCBufferPinOUT->eError =
 		DCBufferPin(
@@ -1694,16 +1804,20 @@ PVRSRVBridgeDCBufferUnpin(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCBufferUnpinOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPinHandleInt2,
-							   psDCBufferUnpinIN->hPinHandle,
-							   PVRSRV_HANDLE_TYPE_DC_PIN_HANDLE);
-		if(psDCBufferUnpinOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferUnpin_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psDCBufferUnpinOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPinHandleInt2,
+											psDCBufferUnpinIN->hPinHandle,
+											PVRSRV_HANDLE_TYPE_DC_PIN_HANDLE);
+					if(psDCBufferUnpinOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferUnpin_exit;
+					}
+
+				}
 
 	psDCBufferUnpinOUT->eError = DCBufferUnpinResManProxy(hPinHandleInt2);
 	/* Exit early if bridged call fails */
@@ -1739,23 +1853,27 @@ PVRSRVBridgeDCBufferAcquire(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCBufferAcquireOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hBufferInt2,
-							   psDCBufferAcquireIN->hBuffer,
-							   PVRSRV_HANDLE_TYPE_DC_BUFFER);
-		if(psDCBufferAcquireOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferAcquire_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psDCBufferAcquireOUT->eError = ResManFindPrivateDataByPtr(hBufferInt2, (IMG_VOID **) &psBufferInt);
-		if(psDCBufferAcquireOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferAcquire_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDCBufferAcquireOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hBufferInt2,
+											psDCBufferAcquireIN->hBuffer,
+											PVRSRV_HANDLE_TYPE_DC_BUFFER);
+					if(psDCBufferAcquireOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferAcquire_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCBufferAcquireOUT->eError = ResManFindPrivateDataByPtr(hBufferInt2, (IMG_VOID **) &psBufferInt);
+
+					if(psDCBufferAcquireOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferAcquire_exit;
+					}
+				}
 
 	psDCBufferAcquireOUT->eError =
 		DCBufferAcquire(
@@ -1824,16 +1942,20 @@ PVRSRVBridgeDCBufferRelease(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDCBufferReleaseOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hExtMemInt2,
-							   psDCBufferReleaseIN->hExtMem,
-							   PVRSRV_HANDLE_TYPE_DEVMEM_MEM_IMPORT);
-		if(psDCBufferReleaseOUT->eError != PVRSRV_OK)
-		{
-			goto DCBufferRelease_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psDCBufferReleaseOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hExtMemInt2,
+											psDCBufferReleaseIN->hExtMem,
+											PVRSRV_HANDLE_TYPE_DEVMEM_MEM_IMPORT);
+					if(psDCBufferReleaseOUT->eError != PVRSRV_OK)
+					{
+						goto DCBufferRelease_exit;
+					}
+
+				}
 
 	psDCBufferReleaseOUT->eError = DCBufferReleaseResManProxy(hExtMemInt2);
 	/* Exit early if bridged call fails */

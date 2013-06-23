@@ -601,7 +601,6 @@ PVRSRV_ERROR OSPCIClearResourceMTRRs(PVRSRV_PCI_DEV_HANDLE hPVRPCI, IMG_UINT32 u
 		return PVRSRV_ERROR_PCI_CALL_FAILED;
 	}
 
-#if 1
 	/* Workaround for overlapping MTRRs. */
 	{
 		IMG_BOOL bGotMTRR0 = IMG_FALSE;
@@ -652,7 +651,6 @@ PVRSRV_ERROR OSPCIClearResourceMTRRs(PVRSRV_PCI_DEV_HANDLE hPVRPCI, IMG_UINT32 u
 			}
 		}
 	}
-#endif
 
 	return PVRSRV_OK;
 }

@@ -64,6 +64,7 @@ extern "C" {
  *	Pull in pdump flags from services include
  */
 #include "pdump.h"
+#include "pdumpdefs.h"
 
 #define PDUMP_PD_UNIQUETAG			(IMG_HANDLE)0
 #define PDUMP_PT_UNIQUETAG			(IMG_HANDLE)0
@@ -80,6 +81,14 @@ extern "C" {
 /* counter increments each time debug write is called */
 extern IMG_UINT32 g_ui32EveryLineCounter;
 #endif
+
+/*! Macro used to record a panic in the PDump script stream */
+#define PDUMP_PANIC(_type, _id, _msg) do \
+		{ PVRSRV_ERROR _eE;\
+			_eE = PDumpPanic((PVRSRV_DEVICE_TYPE_ ## _type)<<16 | ((_type ## _PDUMP_PANIC_ ## _id)&0xFFFF), _msg, __FUNCTION__, __LINE__);\
+			PVR_LOG_IF_ERROR(_eE, "PDumpPanic");\
+		MSC_SUPPRESS_4127\
+		} while (0)
 
 #ifdef PDUMP
 	/* Shared across pdump_x files */
@@ -150,6 +159,11 @@ extern IMG_UINT32 g_ui32EveryLineCounter;
 	PVRSRV_ERROR PDumpCommentWithFlags(IMG_UINT32	ui32Flags,
 									   IMG_CHAR*	pszFormat,
 									   ...) IMG_FORMAT_PRINTF(2, 3);
+
+	PVRSRV_ERROR PDumpPanic(IMG_UINT32      ui32PanicNo,
+							IMG_CHAR*       pszPanicMsg,
+							const IMG_CHAR* pszPPFunc,
+							IMG_UINT32      ui32PPline);
 
 	PVRSRV_ERROR PDumpPDReg(PDUMP_MMU_ATTRIB *psMMUAttrib,
 							IMG_UINT32	ui32Reg,
@@ -403,6 +417,22 @@ PDumpCommentKM(IMG_CHAR *pszComment, IMG_UINT32 ui32Flags)
 {
 	PVR_UNREFERENCED_PARAMETER(pszComment);
 	PVR_UNREFERENCED_PARAMETER(ui32Flags);
+	return PVRSRV_OK;
+}
+
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpPanic)
+#endif
+static INLINE PVRSRV_ERROR
+PDumpPanic(IMG_UINT32      ui32PanicNo,
+		   IMG_CHAR*       pszPanicMsg,
+		   const IMG_CHAR* pszPPFunc,
+		   IMG_UINT32      ui32PPline)
+{
+	PVR_UNREFERENCED_PARAMETER(ui32PanicNo);
+	PVR_UNREFERENCED_PARAMETER(pszPanicMsg);
+	PVR_UNREFERENCED_PARAMETER(pszPPFunc);
+	PVR_UNREFERENCED_PARAMETER(ui32PPline);
 	return PVRSRV_OK;
 }
 

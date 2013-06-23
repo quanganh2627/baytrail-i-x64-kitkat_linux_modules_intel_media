@@ -105,23 +105,27 @@ PVRSRVBridgeSyncPrimServerSecureExport(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psSyncPrimServerSecureExportOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hSyncHandleInt2,
-							   psSyncPrimServerSecureExportIN->hSyncHandle,
-							   PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
-		if(psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
-		{
-			goto SyncPrimServerSecureExport_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psSyncPrimServerSecureExportOUT->eError = ResManFindPrivateDataByPtr(hSyncHandleInt2, (IMG_VOID **) &psSyncHandleInt);
-		if(psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
-		{
-			goto SyncPrimServerSecureExport_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psSyncPrimServerSecureExportOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hSyncHandleInt2,
+											psSyncPrimServerSecureExportIN->hSyncHandle,
+											PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
+					if(psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
+					{
+						goto SyncPrimServerSecureExport_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psSyncPrimServerSecureExportOUT->eError = ResManFindPrivateDataByPtr(hSyncHandleInt2, (IMG_VOID **) &psSyncHandleInt);
+
+					if(psSyncPrimServerSecureExportOUT->eError != PVRSRV_OK)
+					{
+						goto SyncPrimServerSecureExport_exit;
+					}
+				}
 
 	psSyncPrimServerSecureExportOUT->eError =
 		PVRSRVSyncPrimServerSecureExportKM(psConnection,
@@ -181,16 +185,20 @@ PVRSRVBridgeSyncPrimServerSecureUnexport(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psSyncPrimServerSecureUnexportOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hExportInt2,
-							   psSyncPrimServerSecureUnexportIN->hExport,
-							   PVRSRV_HANDLE_TYPE_SERVER_SYNC_EXPORT);
-		if(psSyncPrimServerSecureUnexportOUT->eError != PVRSRV_OK)
-		{
-			goto SyncPrimServerSecureUnexport_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psSyncPrimServerSecureUnexportOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hExportInt2,
+											psSyncPrimServerSecureUnexportIN->hExport,
+											PVRSRV_HANDLE_TYPE_SERVER_SYNC_EXPORT);
+					if(psSyncPrimServerSecureUnexportOUT->eError != PVRSRV_OK)
+					{
+						goto SyncPrimServerSecureUnexport_exit;
+					}
+
+				}
 
 	psSyncPrimServerSecureUnexportOUT->eError = SyncPrimServerSecureUnexportResManProxy(hExportInt2);
 	/* Exit early if bridged call fails */

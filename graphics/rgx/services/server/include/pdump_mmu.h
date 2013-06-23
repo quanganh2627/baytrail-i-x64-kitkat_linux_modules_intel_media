@@ -74,16 +74,6 @@ typedef struct _PDUMP_MMU_ATTRIB_HEAP_
 {
 	/* data page info */
 	IMG_UINT32 ui32DataPageMask;
-#if 0
- 	/* page table info */
- 	IMG_UINT32 ui32PTEValid;
- 	IMG_UINT32 ui32PTSize;
- 	IMG_UINT32 ui32PTEAlignShift;
-
- 	/* page directory info */
- 	IMG_UINT32 ui32PDEMask;
- 	IMG_UINT32 ui32PDEAlignShift;
-#endif
 } PDUMP_MMU_ATTRIB_HEAP;
 
 typedef struct _PDUMP_MMU_ATTRIB_

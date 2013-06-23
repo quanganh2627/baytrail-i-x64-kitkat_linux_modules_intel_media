@@ -467,16 +467,13 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVInit(IMG_VOID)
 #endif
 
 	eError = PhysHeapInit();
-
 	if (eError != PVRSRV_OK)
 	{
-			PVR_DPF((PVR_DBG_ERROR, "PVRSRVInit Error"));
 		goto Error;
 	}
 
 	/* Get the system config */
 	eError = SysCreateConfigData(&psSysConfig);
-
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
@@ -1201,9 +1198,6 @@ static PVRSRV_ERROR PVRSRVFinaliseSystem_SetPowerState_AnyCb(PVRSRV_DEVICE_NODE 
 
 	ePowState = va_arg(va, PVRSRV_DEV_POWER_STATE);
 
-	/* We don't want to free the lock while waiting */
-	OSSetKeepPVRLock();
-
 	eError = PVRSRVPowerLock();
 	if (eError != PVRSRV_OK)
 	{
@@ -1273,7 +1267,6 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVFinaliseSystem(IMG_BOOL bInitSuccessful, IMG_UIN
 
 			SyncPrimContextCreate(IMG_NULL,
 								  psDeviceNode,
-								  IMG_NULL,
 								  &psDeviceNode->hSyncPrimContext);
 
 			/* Allocate general purpose sync primitive */
@@ -1462,9 +1455,6 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 {
 	PVRSRV_DATA			*psPVRSRVData = PVRSRVGetPVRSRVData();
 	PVRSRV_ERROR		eError;
-
-	/* We don't want to free the lock while waiting */
-	OSSetKeepPVRLock();
 
 	eError = PVRSRVPowerLock();
 	if (eError != PVRSRV_OK)
@@ -2163,7 +2153,6 @@ PVRSRV_ERROR GetBIFTilingHeapXStride(IMG_UINT32 uiHeapNum, IMG_UINT32 *puiXStrid
 	if(uiHeapNum < 1 || uiHeapNum > uiMaxHeaps) {
 		return PVRSRV_ERROR_INVALID_PARAMS;
 	}
-
 
 	*puiXStride = gpsSysConfig->pui32BIFTilingHeapConfigs[uiHeapNum - 1];
 

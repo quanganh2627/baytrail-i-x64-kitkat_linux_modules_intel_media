@@ -91,51 +91,61 @@ PVRSRVBridgeDevmemPDumpBitmap(IMG_UINT32 ui32BridgeID,
 
 
 
-	uiFileNameInt = OSAllocMem(PVRSRV_PDUMP_MAX_FILENAME_SIZE * sizeof(IMG_CHAR));
-	if (!uiFileNameInt)
+	
 	{
-		psDevmemPDumpBitmapOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto DevmemPDumpBitmap_exit;
+		uiFileNameInt = OSAllocMem(PVRSRV_PDUMP_MAX_FILENAME_SIZE * sizeof(IMG_CHAR));
+		if (!uiFileNameInt)
+		{
+			psDevmemPDumpBitmapOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto DevmemPDumpBitmap_exit;
+		}
 	}
 
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDevmemPDumpBitmapIN->puiFileName, PVRSRV_PDUMP_MAX_FILENAME_SIZE * sizeof(IMG_CHAR))
+				|| (OSCopyFromUser(NULL, uiFileNameInt, psDevmemPDumpBitmapIN->puiFileName,
+				PVRSRV_PDUMP_MAX_FILENAME_SIZE * sizeof(IMG_CHAR)) != PVRSRV_OK) )
+			{
+				psDevmemPDumpBitmapOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psDevmemPDumpBitmapIN->puiFileName, PVRSRV_PDUMP_MAX_FILENAME_SIZE * sizeof(IMG_CHAR)) 
-		|| (OSCopyFromUser(NULL, uiFileNameInt, psDevmemPDumpBitmapIN->puiFileName,
-		PVRSRV_PDUMP_MAX_FILENAME_SIZE * sizeof(IMG_CHAR)) != PVRSRV_OK) )
-	{
-		psDevmemPDumpBitmapOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+				goto DevmemPDumpBitmap_exit;
+			}
 
-		goto DevmemPDumpBitmap_exit;
-	}
+				{
+					/* Look up the address from the handle */
+					psDevmemPDumpBitmapOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceNodeInt,
+											psDevmemPDumpBitmapIN->hDeviceNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psDevmemPDumpBitmapOUT->eError != PVRSRV_OK)
+					{
+						goto DevmemPDumpBitmap_exit;
+					}
 
-		/* Look up the address from the handle */
-		psDevmemPDumpBitmapOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDeviceNodeInt,
-							   psDevmemPDumpBitmapIN->hDeviceNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psDevmemPDumpBitmapOUT->eError != PVRSRV_OK)
-		{
-			goto DevmemPDumpBitmap_exit;
-		}
-		/* Look up the address from the handle */
-		psDevmemPDumpBitmapOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevmemCtxInt2,
-							   psDevmemPDumpBitmapIN->hDevmemCtx,
-							   PVRSRV_HANDLE_TYPE_DEVMEMINT_CTX);
-		if(psDevmemPDumpBitmapOUT->eError != PVRSRV_OK)
-		{
-			goto DevmemPDumpBitmap_exit;
-		}
+				}
 
-		/* Look up the data from the resman address */
-		psDevmemPDumpBitmapOUT->eError = ResManFindPrivateDataByPtr(hDevmemCtxInt2, (IMG_VOID **) &psDevmemCtxInt);
-		if(psDevmemPDumpBitmapOUT->eError != PVRSRV_OK)
-		{
-			goto DevmemPDumpBitmap_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psDevmemPDumpBitmapOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevmemCtxInt2,
+											psDevmemPDumpBitmapIN->hDevmemCtx,
+											PVRSRV_HANDLE_TYPE_DEVMEMINT_CTX);
+					if(psDevmemPDumpBitmapOUT->eError != PVRSRV_OK)
+					{
+						goto DevmemPDumpBitmap_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDevmemPDumpBitmapOUT->eError = ResManFindPrivateDataByPtr(hDevmemCtxInt2, (IMG_VOID **) &psDevmemCtxInt);
+
+					if(psDevmemPDumpBitmapOUT->eError != PVRSRV_OK)
+					{
+						goto DevmemPDumpBitmap_exit;
+					}
+				}
 
 	psDevmemPDumpBitmapOUT->eError =
 		DevmemIntPDumpBitmap(

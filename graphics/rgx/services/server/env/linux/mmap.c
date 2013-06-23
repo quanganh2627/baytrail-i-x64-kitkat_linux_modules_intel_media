@@ -83,14 +83,8 @@ static PVRSRV_LINUX_MUTEX g_sMMapMutex;
 
 static void MMapPMROpen(struct vm_area_struct* ps_vma)
 {
-	/* FIXME
-    PMR *psPMR;
-
-    psPMR = ps_vma->vm_private_data;
-    */
-
-    /* FIXME: up refcount */
-    PVR_ASSERT(0);
+	/* Our VM flags should ensure this function never gets called */
+	PVR_ASSERT(0);
 }
 
 static void MMapPMRClose(struct vm_area_struct *ps_vma)
@@ -211,24 +205,23 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
     IMG_UINT32 ui32CPUCacheFlags;
     unsigned long ulNewFlags = 0;
     pgprot_t sPageProt;
-
 #if defined(SUPPORT_DRM)
-	// INTEL_TEMP
-	// SINCE PVR_DRM_FILE_FROM_FILE is NOT found
-	//struct drm_file *pDRMFile = PVR_DRM_FILE_FROM_FILE(pFile);
-    //PVRSRV_FILE_PRIVATE_DATA *psPrivateData = DRM_PRIVATE_DATA(pDRMFile);
+    // INTEL_TEMP
+    // SINCE PVR_DRM_FILE_FROM_FILE is NOT found
     CONNECTION_DATA *psConnection = LinuxConnectionFromFile(pFile->private_data);
 
-	// INTEL_TEMP
-	// SINCE PVR_DRM_FILE_FROM_FILE is NOT found
-	//if (psPrivateData->bGEMSharedData)
+    // INTEL_TEMP
+    // SINCE PVR_DRM_FILE_FROM_FILE is NOT found
+	//if (ps_vma->vm_pgoff > INT_MAX)
 	//{
+	//	ps_vma->vm_pgoff -= ((unsigned int)INT_MAX + 1);
+
 	//	return MMapGEM(pFile, ps_vma);
 	//}
 #else
     CONNECTION_DATA *psConnection = LinuxConnectionFromFile(pFile);
 #endif
-	/* FIXME:
+	/*
 	 * Take the bridge mutex to make this code thread/multiprocess safe.
 	 * This is not a permanent solution (see comment regarding the
 	 * bridge mutex at the top of this file), but is needed to
@@ -242,7 +235,6 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 
 	hSecurePMRHandle=(IMG_HANDLE)((IMG_UINTPTR_T)ps_vma->vm_pgoff);
 
-	/* FIXME: Only auto generated code should be doing handle lookup */
 	eError = PVRSRVLookupHandle(psConnection->psHandleBase,
                                 (IMG_HANDLE *) &hPMRResmanHandle,
                                 hSecurePMRHandle,
@@ -279,8 +271,6 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
     }
 
     /*
-      FIXME:
-
       we ought to call PMR_Flags() here to check the permissions
       against the requested mode, and possibly to set up the cache
       control protflags
@@ -305,7 +295,6 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 		ulNewFlags |= VM_WRITE;
 	}
 #endif
-	/* FIXME: We should check if this is IO memory and mark it as such if so */
 
 	ps_vma->vm_flags = ulNewFlags;
 
@@ -347,15 +336,14 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
         IMG_INT32 iStatus;
         IMG_CPU_PHYADDR sCpuPAddr;
         IMG_BOOL bValid;
-		struct page *psPage = NULL;
-
+	struct page *psPage = NULL;
 
         uiNumContiguousBytes = 1ULL<<PAGE_SHIFT;
         eError = PMR_CpuPhysAddr(psPMR,
                                  uiOffset,
                                  &sCpuPAddr,
                                  &bValid);
-        PVR_ASSERT(eError == PVRSRV_OK); // FIXME: how handle error part way through?
+        PVR_ASSERT(eError == PVRSRV_OK);
         if (eError)
         {
             goto e2;
@@ -367,14 +355,14 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 		*/
 		if (bValid)
 		{
-		uiPFN = sCpuPAddr.uiAddr >> PAGE_SHIFT;
-		PVR_ASSERT(uiPFN << PAGE_SHIFT == sCpuPAddr.uiAddr);
+	        uiPFN = sCpuPAddr.uiAddr >> PAGE_SHIFT;
+	        PVR_ASSERT(((IMG_UINT64)uiPFN << PAGE_SHIFT) == sCpuPAddr.uiAddr);
 
 		PVR_ASSERT(pfn_valid(uiPFN));
 		psPage = pfn_to_page(uiPFN);
 		iStatus = vm_insert_page(ps_vma,
-					ps_vma->vm_start + uiOffset,
-					psPage);
+				ps_vma->vm_start + uiOffset,
+				psPage);
 
 	        PVR_ASSERT(iStatus == 0);
 	        if(iStatus)

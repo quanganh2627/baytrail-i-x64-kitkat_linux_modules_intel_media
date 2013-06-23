@@ -44,7 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* our exported API */
 #include "devicemem_heapcfg.h"
 
-#include "device.h" /*FIXME: - circular */
+#include "device.h"
 #include "img_types.h"
 #include "pvr_debug.h"
 #include "pvrsrv_error.h"

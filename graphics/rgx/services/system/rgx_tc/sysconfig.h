@@ -50,7 +50,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 static RGX_TIMING_INFORMATION gsRGXTimingInfo =
 {
 	/* ui32CoreClockSpeed */
-	RGX_TC_CORE_CLOCK_SPEED,
+	0,	/* Initialize to 0, real value will be set in PCIInitDev() */
 	/* bEnableActivePM */ 
 	IMG_FALSE,
 	/* bEnableRDPowIsland */ 
@@ -96,7 +96,6 @@ static PVRSRV_DEVICE_CONFIG gsDevices[] =
 		/* ui32PhysHeapID */
 		0,
 
-		/* FIXME */
 		/* pfnPrePowerState */
 		IMG_NULL,
 		/* pfnPostPowerState */

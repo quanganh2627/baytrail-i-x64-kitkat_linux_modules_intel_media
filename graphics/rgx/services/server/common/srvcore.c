@@ -401,6 +401,7 @@ PVRSRVInitSrvDisconnectKM(CONNECTION_DATA *psConnection,
 IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 					  PVRSRV_BRIDGE_PACKAGE   * psBridgePackageKM)
 {
+
 	IMG_VOID   * psBridgeIn;
 	IMG_VOID   * psBridgeOut;
 	BridgeWrapperFunction pfBridgeHandler;
@@ -528,7 +529,6 @@ IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 						  psBridgeIn,
 						  psBridgeOut,
 						  psConnection);
-
 	if(err < 0)
 	{
 		goto return_fault;

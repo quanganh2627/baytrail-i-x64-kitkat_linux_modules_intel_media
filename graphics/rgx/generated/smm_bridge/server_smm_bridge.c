@@ -106,23 +106,27 @@ PVRSRVBridgePMRSecureExportPMR(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psPMRSecureExportPMROUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPMRInt2,
-							   psPMRSecureExportPMRIN->hPMR,
-							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if(psPMRSecureExportPMROUT->eError != PVRSRV_OK)
-		{
-			goto PMRSecureExportPMR_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psPMRSecureExportPMROUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-		if(psPMRSecureExportPMROUT->eError != PVRSRV_OK)
-		{
-			goto PMRSecureExportPMR_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psPMRSecureExportPMROUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPMRInt2,
+											psPMRSecureExportPMRIN->hPMR,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psPMRSecureExportPMROUT->eError != PVRSRV_OK)
+					{
+						goto PMRSecureExportPMR_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psPMRSecureExportPMROUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+
+					if(psPMRSecureExportPMROUT->eError != PVRSRV_OK)
+					{
+						goto PMRSecureExportPMR_exit;
+					}
+				}
 
 	psPMRSecureExportPMROUT->eError =
 		PMRSecureExportPMR(psConnection,
@@ -182,16 +186,20 @@ PVRSRVBridgePMRSecureUnexportPMR(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psPMRSecureUnexportPMROUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPMRInt2,
-							   psPMRSecureUnexportPMRIN->hPMR,
-							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if(psPMRSecureUnexportPMROUT->eError != PVRSRV_OK)
-		{
-			goto PMRSecureUnexportPMR_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psPMRSecureUnexportPMROUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPMRInt2,
+											psPMRSecureUnexportPMRIN->hPMR,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psPMRSecureUnexportPMROUT->eError != PVRSRV_OK)
+					{
+						goto PMRSecureUnexportPMR_exit;
+					}
+
+				}
 
 	psPMRSecureUnexportPMROUT->eError = PMRSecureUnexportPMRResManProxy(hPMRInt2);
 	/* Exit early if bridged call fails */

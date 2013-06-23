@@ -89,16 +89,20 @@ PVRSRVBridgeDebugMiscSLCSetBypassState(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psDebugMiscSLCSetBypassStateOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psDebugMiscSLCSetBypassStateIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psDebugMiscSLCSetBypassStateOUT->eError != PVRSRV_OK)
-		{
-			goto DebugMiscSLCSetBypassState_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psDebugMiscSLCSetBypassStateOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psDebugMiscSLCSetBypassStateIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psDebugMiscSLCSetBypassStateOUT->eError != PVRSRV_OK)
+					{
+						goto DebugMiscSLCSetBypassState_exit;
+					}
+
+				}
 
 	psDebugMiscSLCSetBypassStateOUT->eError =
 		PVRSRVDebugMiscSLCSetBypassStateKM(
@@ -126,16 +130,20 @@ PVRSRVBridgeRGXDebugMiscSetFWLog(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXDebugMiscSetFWLogOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXDebugMiscSetFWLogIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXDebugMiscSetFWLogOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDebugMiscSetFWLog_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDebugMiscSetFWLogOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXDebugMiscSetFWLogIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXDebugMiscSetFWLogOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDebugMiscSetFWLog_exit;
+					}
+
+				}
 
 	psRGXDebugMiscSetFWLogOUT->eError =
 		PVRSRVRGXDebugMiscSetFWLogKM(
@@ -162,16 +170,20 @@ PVRSRVBridgeRGXDebugMiscDumpFreelistPageList(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXDebugMiscDumpFreelistPageListOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXDebugMiscDumpFreelistPageListIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXDebugMiscDumpFreelistPageListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDebugMiscDumpFreelistPageList_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDebugMiscDumpFreelistPageListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXDebugMiscDumpFreelistPageListIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXDebugMiscDumpFreelistPageListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDebugMiscDumpFreelistPageList_exit;
+					}
+
+				}
 
 	psRGXDebugMiscDumpFreelistPageListOUT->eError =
 		PVRSRVRGXDebugMiscDumpFreelistPageListKM(

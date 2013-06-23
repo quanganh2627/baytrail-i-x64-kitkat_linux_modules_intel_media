@@ -89,26 +89,34 @@ PVRSRVBridgeRGXSetBreakpoint(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXSetBreakpointOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXSetBreakpointIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXSetBreakpointOUT->eError != PVRSRV_OK)
-		{
-			goto RGXSetBreakpoint_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXSetBreakpointOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPrivDataInt,
-							   psRGXSetBreakpointIN->hPrivData,
-							   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
-		if(psRGXSetBreakpointOUT->eError != PVRSRV_OK)
-		{
-			goto RGXSetBreakpoint_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXSetBreakpointOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXSetBreakpointIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXSetBreakpointOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSetBreakpoint_exit;
+					}
+
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXSetBreakpointOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPrivDataInt,
+											psRGXSetBreakpointIN->hPrivData,
+											PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
+					if(psRGXSetBreakpointOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSetBreakpoint_exit;
+					}
+
+				}
 
 	psRGXSetBreakpointOUT->eError =
 		PVRSRVRGXSetBreakpointKM(
@@ -140,26 +148,34 @@ PVRSRVBridgeRGXClearBreakpoint(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXClearBreakpointOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXClearBreakpointIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXClearBreakpointOUT->eError != PVRSRV_OK)
-		{
-			goto RGXClearBreakpoint_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXClearBreakpointOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPrivDataInt,
-							   psRGXClearBreakpointIN->hPrivData,
-							   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
-		if(psRGXClearBreakpointOUT->eError != PVRSRV_OK)
-		{
-			goto RGXClearBreakpoint_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXClearBreakpointOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXClearBreakpointIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXClearBreakpointOUT->eError != PVRSRV_OK)
+					{
+						goto RGXClearBreakpoint_exit;
+					}
+
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXClearBreakpointOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPrivDataInt,
+											psRGXClearBreakpointIN->hPrivData,
+											PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
+					if(psRGXClearBreakpointOUT->eError != PVRSRV_OK)
+					{
+						goto RGXClearBreakpoint_exit;
+					}
+
+				}
 
 	psRGXClearBreakpointOUT->eError =
 		PVRSRVRGXClearBreakpointKM(
@@ -187,26 +203,34 @@ PVRSRVBridgeRGXEnableBreakpoint(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXEnableBreakpointOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXEnableBreakpointIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXEnableBreakpointOUT->eError != PVRSRV_OK)
-		{
-			goto RGXEnableBreakpoint_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXEnableBreakpointOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPrivDataInt,
-							   psRGXEnableBreakpointIN->hPrivData,
-							   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
-		if(psRGXEnableBreakpointOUT->eError != PVRSRV_OK)
-		{
-			goto RGXEnableBreakpoint_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXEnableBreakpointOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXEnableBreakpointIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXEnableBreakpointOUT->eError != PVRSRV_OK)
+					{
+						goto RGXEnableBreakpoint_exit;
+					}
+
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXEnableBreakpointOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPrivDataInt,
+											psRGXEnableBreakpointIN->hPrivData,
+											PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
+					if(psRGXEnableBreakpointOUT->eError != PVRSRV_OK)
+					{
+						goto RGXEnableBreakpoint_exit;
+					}
+
+				}
 
 	psRGXEnableBreakpointOUT->eError =
 		PVRSRVRGXEnableBreakpointKM(
@@ -234,26 +258,34 @@ PVRSRVBridgeRGXDisableBreakpoint(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXDisableBreakpointOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXDisableBreakpointIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXDisableBreakpointOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDisableBreakpoint_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXDisableBreakpointOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPrivDataInt,
-							   psRGXDisableBreakpointIN->hPrivData,
-							   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
-		if(psRGXDisableBreakpointOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDisableBreakpoint_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDisableBreakpointOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXDisableBreakpointIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXDisableBreakpointOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDisableBreakpoint_exit;
+					}
+
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDisableBreakpointOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPrivDataInt,
+											psRGXDisableBreakpointIN->hPrivData,
+											PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
+					if(psRGXDisableBreakpointOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDisableBreakpoint_exit;
+					}
+
+				}
 
 	psRGXDisableBreakpointOUT->eError =
 		PVRSRVRGXDisableBreakpointKM(
@@ -280,16 +312,20 @@ PVRSRVBridgeRGXOverallocateBPRegisters(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXOverallocateBPRegistersOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXOverallocateBPRegistersIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXOverallocateBPRegistersOUT->eError != PVRSRV_OK)
-		{
-			goto RGXOverallocateBPRegisters_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXOverallocateBPRegistersOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXOverallocateBPRegistersIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXOverallocateBPRegistersOUT->eError != PVRSRV_OK)
+					{
+						goto RGXOverallocateBPRegisters_exit;
+					}
+
+				}
 
 	psRGXOverallocateBPRegistersOUT->eError =
 		PVRSRVRGXOverallocateBPRegistersKM(

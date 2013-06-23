@@ -173,64 +173,74 @@ PVRSRVBridgeRGXCreateHWRTData(IMG_UINT32 ui32BridgeID,
 
 	psRGXCreateHWRTDataOUT->hCleanupCookie = IMG_NULL;
 
-	psapsFreeListsInt = OSAllocMem(RGXFW_MAX_FREELISTS * sizeof(RGX_FREELIST *));
-	if (!psapsFreeListsInt)
+	
 	{
-		psRGXCreateHWRTDataOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXCreateHWRTData_exit;
-	}
-
-	hapsFreeListsInt2 = OSAllocMem(RGXFW_MAX_FREELISTS * sizeof(IMG_HANDLE));
-	if (!hapsFreeListsInt2)
-	{
-		psRGXCreateHWRTDataOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXCreateHWRTData_exit;
-	}
-
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXCreateHWRTDataIN->phapsFreeLists, RGXFW_MAX_FREELISTS * sizeof(IMG_HANDLE)) 
-		|| (OSCopyFromUser(NULL, hapsFreeListsInt2, psRGXCreateHWRTDataIN->phapsFreeLists,
-		RGXFW_MAX_FREELISTS * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
-	{
-		psRGXCreateHWRTDataOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto RGXCreateHWRTData_exit;
-	}
-
-		/* Look up the address from the handle */
-		psRGXCreateHWRTDataOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXCreateHWRTDataIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXCreateHWRTDataOUT->eError != PVRSRV_OK)
+		psapsFreeListsInt = OSAllocMem(RGXFW_MAX_FREELISTS * sizeof(RGX_FREELIST *));
+		if (!psapsFreeListsInt)
 		{
+			psRGXCreateHWRTDataOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto RGXCreateHWRTData_exit;
 		}
-	{
-	IMG_UINT32 i;
-
-	for (i=0;i<RGXFW_MAX_FREELISTS;i++)
-	{
-		/* Look up the address from the handle */
-		psRGXCreateHWRTDataOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hapsFreeListsInt2[i],
-							   hapsFreeListsInt2[i],
-							   PVRSRV_HANDLE_TYPE_RGX_FREELIST);
-		if(psRGXCreateHWRTDataOUT->eError != PVRSRV_OK)
+		hapsFreeListsInt2 = OSAllocMem(RGXFW_MAX_FREELISTS * sizeof(IMG_HANDLE));
+		if (!hapsFreeListsInt2)
 		{
-			goto RGXCreateHWRTData_exit;
-		}
-
-		/* Look up the data from the resman address */
-		psRGXCreateHWRTDataOUT->eError = ResManFindPrivateDataByPtr(hapsFreeListsInt2[i], (IMG_VOID **) &psapsFreeListsInt[i]);
-		if(psRGXCreateHWRTDataOUT->eError != PVRSRV_OK)
-		{
+			psRGXCreateHWRTDataOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto RGXCreateHWRTData_exit;
 		}
 	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXCreateHWRTDataIN->phapsFreeLists, RGXFW_MAX_FREELISTS * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hapsFreeListsInt2, psRGXCreateHWRTDataIN->phapsFreeLists,
+				RGXFW_MAX_FREELISTS * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psRGXCreateHWRTDataOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXCreateHWRTData_exit;
+			}
+
+				{
+					/* Look up the address from the handle */
+					psRGXCreateHWRTDataOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXCreateHWRTDataIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXCreateHWRTDataOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateHWRTData_exit;
+					}
+
+				}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<RGXFW_MAX_FREELISTS;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psRGXCreateHWRTDataOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hapsFreeListsInt2[i],
+											psRGXCreateHWRTDataIN->phapsFreeLists[i],
+											PVRSRV_HANDLE_TYPE_RGX_FREELIST);
+					if(psRGXCreateHWRTDataOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateHWRTData_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXCreateHWRTDataOUT->eError = ResManFindPrivateDataByPtr(hapsFreeListsInt2[i], (IMG_VOID **) &psapsFreeListsInt[i]);
+
+					if(psRGXCreateHWRTDataOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateHWRTData_exit;
+					}
+				}
+		}
 	}
 
 	psRGXCreateHWRTDataOUT->eError =
@@ -350,16 +360,20 @@ PVRSRVBridgeRGXDestroyHWRTData(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXDestroyHWRTDataOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hCleanupCookieInt2,
-							   psRGXDestroyHWRTDataIN->hCleanupCookie,
-							   PVRSRV_HANDLE_TYPE_RGX_RTDATA_CLEANUP);
-		if(psRGXDestroyHWRTDataOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDestroyHWRTData_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDestroyHWRTDataOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hCleanupCookieInt2,
+											psRGXDestroyHWRTDataIN->hCleanupCookie,
+											PVRSRV_HANDLE_TYPE_RGX_RTDATA_CLEANUP);
+					if(psRGXDestroyHWRTDataOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDestroyHWRTData_exit;
+					}
+
+				}
 
 	psRGXDestroyHWRTDataOUT->eError = RGXDestroyHWRTDataResManProxy(hCleanupCookieInt2);
 	/* Exit early if bridged call fails */
@@ -394,16 +408,20 @@ PVRSRVBridgeRGXCreateRenderTarget(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXCreateRenderTargetOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXCreateRenderTargetIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXCreateRenderTargetOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateRenderTarget_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXCreateRenderTargetOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXCreateRenderTargetIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXCreateRenderTargetOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateRenderTarget_exit;
+					}
+
+				}
 
 	psRGXCreateRenderTargetOUT->eError =
 		RGXCreateRenderTarget(
@@ -474,16 +492,20 @@ PVRSRVBridgeRGXDestroyRenderTarget(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXDestroyRenderTargetOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hsRenderTargetMemDescInt2,
-							   psRGXDestroyRenderTargetIN->hsRenderTargetMemDesc,
-							   PVRSRV_HANDLE_TYPE_RGX_FWIF_RENDERTARGET);
-		if(psRGXDestroyRenderTargetOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDestroyRenderTarget_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDestroyRenderTargetOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hsRenderTargetMemDescInt2,
+											psRGXDestroyRenderTargetIN->hsRenderTargetMemDesc,
+											PVRSRV_HANDLE_TYPE_RGX_FWIF_RENDERTARGET);
+					if(psRGXDestroyRenderTargetOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDestroyRenderTarget_exit;
+					}
+
+				}
 
 	psRGXDestroyRenderTargetOUT->eError = RGXDestroyRenderTargetResManProxy(hsRenderTargetMemDescInt2);
 	/* Exit early if bridged call fails */
@@ -522,50 +544,62 @@ PVRSRVBridgeRGXCreateZSBuffer(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXCreateZSBufferOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXCreateZSBufferIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateZSBuffer_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXCreateZSBufferOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hReservationInt2,
-							   psRGXCreateZSBufferIN->hReservation,
-							   PVRSRV_HANDLE_TYPE_DEVMEMINT_RESERVATION);
-		if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateZSBuffer_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psRGXCreateZSBufferOUT->eError = ResManFindPrivateDataByPtr(hReservationInt2, (IMG_VOID **) &psReservationInt);
-		if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateZSBuffer_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXCreateZSBufferOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPMRInt2,
-							   psRGXCreateZSBufferIN->hPMR,
-							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateZSBuffer_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psRGXCreateZSBufferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXCreateZSBufferIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateZSBuffer_exit;
+					}
 
-		/* Look up the data from the resman address */
-		psRGXCreateZSBufferOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
-		if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateZSBuffer_exit;
-		}
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXCreateZSBufferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hReservationInt2,
+											psRGXCreateZSBufferIN->hReservation,
+											PVRSRV_HANDLE_TYPE_DEVMEMINT_RESERVATION);
+					if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateZSBuffer_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXCreateZSBufferOUT->eError = ResManFindPrivateDataByPtr(hReservationInt2, (IMG_VOID **) &psReservationInt);
+
+					if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateZSBuffer_exit;
+					}
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXCreateZSBufferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPMRInt2,
+											psRGXCreateZSBufferIN->hPMR,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateZSBuffer_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXCreateZSBufferOUT->eError = ResManFindPrivateDataByPtr(hPMRInt2, (IMG_VOID **) &psPMRInt);
+
+					if(psRGXCreateZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateZSBuffer_exit;
+					}
+				}
 
 	psRGXCreateZSBufferOUT->eError =
 		RGXCreateZSBufferKM(
@@ -638,16 +672,20 @@ PVRSRVBridgeRGXDestroyZSBuffer(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXDestroyZSBufferOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hsZSBufferMemDescInt2,
-							   psRGXDestroyZSBufferIN->hsZSBufferMemDesc,
-							   PVRSRV_HANDLE_TYPE_RGX_FWIF_ZSBUFFER);
-		if(psRGXDestroyZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDestroyZSBuffer_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDestroyZSBufferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hsZSBufferMemDescInt2,
+											psRGXDestroyZSBufferIN->hsZSBufferMemDesc,
+											PVRSRV_HANDLE_TYPE_RGX_FWIF_ZSBUFFER);
+					if(psRGXDestroyZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDestroyZSBuffer_exit;
+					}
+
+				}
 
 	psRGXDestroyZSBufferOUT->eError = RGXDestroyZSBufferResManProxy(hsZSBufferMemDescInt2);
 	/* Exit early if bridged call fails */
@@ -683,23 +721,27 @@ PVRSRVBridgeRGXPopulateZSBuffer(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXPopulateZSBufferOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hsZSBufferKMInt2,
-							   psRGXPopulateZSBufferIN->hsZSBufferKM,
-							   PVRSRV_HANDLE_TYPE_RGX_FWIF_ZSBUFFER);
-		if(psRGXPopulateZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXPopulateZSBuffer_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psRGXPopulateZSBufferOUT->eError = ResManFindPrivateDataByPtr(hsZSBufferKMInt2, (IMG_VOID **) &pssZSBufferKMInt);
-		if(psRGXPopulateZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXPopulateZSBuffer_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psRGXPopulateZSBufferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hsZSBufferKMInt2,
+											psRGXPopulateZSBufferIN->hsZSBufferKM,
+											PVRSRV_HANDLE_TYPE_RGX_FWIF_ZSBUFFER);
+					if(psRGXPopulateZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXPopulateZSBuffer_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXPopulateZSBufferOUT->eError = ResManFindPrivateDataByPtr(hsZSBufferKMInt2, (IMG_VOID **) &pssZSBufferKMInt);
+
+					if(psRGXPopulateZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXPopulateZSBuffer_exit;
+					}
+				}
 
 	psRGXPopulateZSBufferOUT->eError =
 		RGXPopulateZSBufferKM(
@@ -768,16 +810,20 @@ PVRSRVBridgeRGXUnpopulateZSBuffer(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXUnpopulateZSBufferOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hsPopulationInt2,
-							   psRGXUnpopulateZSBufferIN->hsPopulation,
-							   PVRSRV_HANDLE_TYPE_RGX_POPULATION);
-		if(psRGXUnpopulateZSBufferOUT->eError != PVRSRV_OK)
-		{
-			goto RGXUnpopulateZSBuffer_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXUnpopulateZSBufferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hsPopulationInt2,
+											psRGXUnpopulateZSBufferIN->hsPopulation,
+											PVRSRV_HANDLE_TYPE_RGX_POPULATION);
+					if(psRGXUnpopulateZSBufferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXUnpopulateZSBuffer_exit;
+					}
+
+				}
 
 	psRGXUnpopulateZSBufferOUT->eError = RGXUnpopulateZSBufferResManProxy(hsPopulationInt2);
 	/* Exit early if bridged call fails */
@@ -814,33 +860,41 @@ PVRSRVBridgeRGXCreateFreeList(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXCreateFreeListOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXCreateFreeListIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXCreateFreeListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateFreeList_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXCreateFreeListOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hsFreeListPMRInt2,
-							   psRGXCreateFreeListIN->hsFreeListPMR,
-							   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-		if(psRGXCreateFreeListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateFreeList_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psRGXCreateFreeListOUT->eError = ResManFindPrivateDataByPtr(hsFreeListPMRInt2, (IMG_VOID **) &pssFreeListPMRInt);
-		if(psRGXCreateFreeListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateFreeList_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psRGXCreateFreeListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXCreateFreeListIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXCreateFreeListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateFreeList_exit;
+					}
+
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXCreateFreeListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hsFreeListPMRInt2,
+											psRGXCreateFreeListIN->hsFreeListPMR,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psRGXCreateFreeListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateFreeList_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXCreateFreeListOUT->eError = ResManFindPrivateDataByPtr(hsFreeListPMRInt2, (IMG_VOID **) &pssFreeListPMRInt);
+
+					if(psRGXCreateFreeListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateFreeList_exit;
+					}
+				}
 
 	psRGXCreateFreeListOUT->eError =
 		RGXCreateFreeList(
@@ -916,16 +970,20 @@ PVRSRVBridgeRGXDestroyFreeList(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXDestroyFreeListOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hCleanupCookieInt2,
-							   psRGXDestroyFreeListIN->hCleanupCookie,
-							   PVRSRV_HANDLE_TYPE_RGX_FREELIST);
-		if(psRGXDestroyFreeListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDestroyFreeList_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDestroyFreeListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hCleanupCookieInt2,
+											psRGXDestroyFreeListIN->hCleanupCookie,
+											PVRSRV_HANDLE_TYPE_RGX_FREELIST);
+					if(psRGXDestroyFreeListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDestroyFreeList_exit;
+					}
+
+				}
 
 	psRGXDestroyFreeListOUT->eError = RGXDestroyFreeListResManProxy(hCleanupCookieInt2);
 	/* Exit early if bridged call fails */
@@ -959,23 +1017,27 @@ PVRSRVBridgeRGXAddBlockToFreeList(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXAddBlockToFreeListOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hsFreeListInt2,
-							   psRGXAddBlockToFreeListIN->hsFreeList,
-							   PVRSRV_HANDLE_TYPE_RGX_FREELIST);
-		if(psRGXAddBlockToFreeListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXAddBlockToFreeList_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psRGXAddBlockToFreeListOUT->eError = ResManFindPrivateDataByPtr(hsFreeListInt2, (IMG_VOID **) &pssFreeListInt);
-		if(psRGXAddBlockToFreeListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXAddBlockToFreeList_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psRGXAddBlockToFreeListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hsFreeListInt2,
+											psRGXAddBlockToFreeListIN->hsFreeList,
+											PVRSRV_HANDLE_TYPE_RGX_FREELIST);
+					if(psRGXAddBlockToFreeListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXAddBlockToFreeList_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXAddBlockToFreeListOUT->eError = ResManFindPrivateDataByPtr(hsFreeListInt2, (IMG_VOID **) &pssFreeListInt);
+
+					if(psRGXAddBlockToFreeListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXAddBlockToFreeList_exit;
+					}
+				}
 
 	psRGXAddBlockToFreeListOUT->eError =
 		RGXAddBlockToFreeListKM(
@@ -1003,23 +1065,27 @@ PVRSRVBridgeRGXRemoveBlockFromFreeList(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXRemoveBlockFromFreeListOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hsFreeListInt2,
-							   psRGXRemoveBlockFromFreeListIN->hsFreeList,
-							   PVRSRV_HANDLE_TYPE_RGX_FREELIST);
-		if(psRGXRemoveBlockFromFreeListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXRemoveBlockFromFreeList_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psRGXRemoveBlockFromFreeListOUT->eError = ResManFindPrivateDataByPtr(hsFreeListInt2, (IMG_VOID **) &pssFreeListInt);
-		if(psRGXRemoveBlockFromFreeListOUT->eError != PVRSRV_OK)
-		{
-			goto RGXRemoveBlockFromFreeList_exit;
-		}
+				{
+					/* Look up the address from the handle */
+					psRGXRemoveBlockFromFreeListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hsFreeListInt2,
+											psRGXRemoveBlockFromFreeListIN->hsFreeList,
+											PVRSRV_HANDLE_TYPE_RGX_FREELIST);
+					if(psRGXRemoveBlockFromFreeListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXRemoveBlockFromFreeList_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXRemoveBlockFromFreeListOUT->eError = ResManFindPrivateDataByPtr(hsFreeListInt2, (IMG_VOID **) &pssFreeListInt);
+
+					if(psRGXRemoveBlockFromFreeListOUT->eError != PVRSRV_OK)
+					{
+						goto RGXRemoveBlockFromFreeList_exit;
+					}
+				}
 
 	psRGXRemoveBlockFromFreeListOUT->eError =
 		RGXRemoveBlockFromFreeListKM(
@@ -1039,118 +1105,75 @@ PVRSRVBridgeRGXCreateRenderContext(IMG_UINT32 ui32BridgeID,
 					 CONNECTION_DATA *psConnection)
 {
 	IMG_HANDLE hDevNodeInt = IMG_NULL;
-	DEVMEM_MEMDESC * psTACCBMemDescInt = IMG_NULL;
-	DEVMEM_MEMDESC * psTACCBCtlMemDescInt = IMG_NULL;
-	DEVMEM_MEMDESC * ps3DCCBMemDescInt = IMG_NULL;
-	DEVMEM_MEMDESC * ps3DCCBCtlMemDescInt = IMG_NULL;
-	RGX_RC_CLEANUP_DATA * psCleanupCookieInt = IMG_NULL;
-	IMG_HANDLE hCleanupCookieInt2 = IMG_NULL;
-	DEVMEM_MEMDESC * psFWRenderContextInt = IMG_NULL;
-	DEVMEM_MEMDESC * psFW3DContextStateInt = IMG_NULL;
 	IMG_BYTE *psFrameworkCmdInt = IMG_NULL;
 	IMG_HANDLE hPrivDataInt = IMG_NULL;
+	RGX_SERVER_RENDER_CONTEXT * psRenderContextInt = IMG_NULL;
+	IMG_HANDLE hRenderContextInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTA3D_RGXCREATERENDERCONTEXT);
 
 
 
-	psRGXCreateRenderContextOUT->hCleanupCookie = IMG_NULL;
 
-	psFrameworkCmdInt = OSAllocMem(RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE));
-	if (!psFrameworkCmdInt)
+	if (psRGXCreateRenderContextIN->ui32FrameworkCmdize != 0)
 	{
-		psRGXCreateRenderContextOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXCreateRenderContext_exit;
+		psFrameworkCmdInt = OSAllocMem(psRGXCreateRenderContextIN->ui32FrameworkCmdize * sizeof(IMG_BYTE));
+		if (!psFrameworkCmdInt)
+		{
+			psRGXCreateRenderContextOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXCreateRenderContext_exit;
+		}
 	}
 
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXCreateRenderContextIN->psFrameworkCmd, psRGXCreateRenderContextIN->ui32FrameworkCmdize * sizeof(IMG_BYTE))
+				|| (OSCopyFromUser(NULL, psFrameworkCmdInt, psRGXCreateRenderContextIN->psFrameworkCmd,
+				psRGXCreateRenderContextIN->ui32FrameworkCmdize * sizeof(IMG_BYTE)) != PVRSRV_OK) )
+			{
+				psRGXCreateRenderContextOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
-	if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXCreateRenderContextIN->psFrameworkCmd, RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE)) 
-		|| (OSCopyFromUser(NULL, psFrameworkCmdInt, psRGXCreateRenderContextIN->psFrameworkCmd,
-		RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE)) != PVRSRV_OK) )
-	{
-		psRGXCreateRenderContextOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+				goto RGXCreateRenderContext_exit;
+			}
 
-		goto RGXCreateRenderContext_exit;
-	}
+				{
+					/* Look up the address from the handle */
+					psRGXCreateRenderContextOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXCreateRenderContextIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateRenderContext_exit;
+					}
 
-		/* Look up the address from the handle */
-		psRGXCreateRenderContextOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXCreateRenderContextIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateRenderContext_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXCreateRenderContextOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &psTACCBMemDescInt,
-							   psRGXCreateRenderContextIN->hTACCBMemDesc,
-							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-		if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateRenderContext_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXCreateRenderContextOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &psTACCBCtlMemDescInt,
-							   psRGXCreateRenderContextIN->hTACCBCtlMemDesc,
-							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-		if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateRenderContext_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXCreateRenderContextOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &ps3DCCBMemDescInt,
-							   psRGXCreateRenderContextIN->h3DCCBMemDesc,
-							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-		if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateRenderContext_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXCreateRenderContextOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &ps3DCCBCtlMemDescInt,
-							   psRGXCreateRenderContextIN->h3DCCBCtlMemDesc,
-							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-		if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateRenderContext_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXCreateRenderContextOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hPrivDataInt,
-							   psRGXCreateRenderContextIN->hPrivData,
-							   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
-		if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
-		{
-			goto RGXCreateRenderContext_exit;
-		}
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXCreateRenderContextOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPrivDataInt,
+											psRGXCreateRenderContextIN->hPrivData,
+											PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
+					if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateRenderContext_exit;
+					}
+
+				}
 
 	psRGXCreateRenderContextOUT->eError =
 		PVRSRVRGXCreateRenderContextKM(
 					hDevNodeInt,
-					psTACCBMemDescInt,
-					psTACCBCtlMemDescInt,
-					ps3DCCBMemDescInt,
-					ps3DCCBCtlMemDescInt,
-					&psCleanupCookieInt,
-					&psFWRenderContextInt,
-					&psFW3DContextStateInt,
 					psRGXCreateRenderContextIN->ui32Priority,
 					psRGXCreateRenderContextIN->sMCUFenceAddr,
 					psRGXCreateRenderContextIN->sVDMCallStackAddr,
 					psRGXCreateRenderContextIN->ui32FrameworkCmdize,
 					psFrameworkCmdInt,
-					hPrivDataInt);
+					hPrivDataInt,
+					&psRenderContextInt);
 	/* Exit early if bridged call fails */
 	if(psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
 	{
@@ -1158,42 +1181,22 @@ PVRSRVBridgeRGXCreateRenderContext(IMG_UINT32 ui32BridgeID,
 	}
 
 	/* Create a resman item and overwrite the handle with it */
-	hCleanupCookieInt2 = ResManRegisterRes(psConnection->hResManContext,
-												RESMAN_TYPE_RGX_RENDER_CONTEXT,
-												psCleanupCookieInt,
+	hRenderContextInt2 = ResManRegisterRes(psConnection->hResManContext,
+												RESMAN_TYPE_RGX_SERVER_RENDER_CONTEXT,
+												psRenderContextInt,
 												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVRGXDestroyRenderContextKM);
-	if (hCleanupCookieInt2 == IMG_NULL)
+	if (hRenderContextInt2 == IMG_NULL)
 	{
 		psRGXCreateRenderContextOUT->eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_RESOURCE;
 		goto RGXCreateRenderContext_exit;
 	}
 	psRGXCreateRenderContextOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
-							&psRGXCreateRenderContextOUT->hCleanupCookie,
-							(IMG_HANDLE) hCleanupCookieInt2,
-							PVRSRV_HANDLE_TYPE_RGX_RC_CLEANUP,
+							&psRGXCreateRenderContextOUT->hRenderContext,
+							(IMG_HANDLE) hRenderContextInt2,
+							PVRSRV_HANDLE_TYPE_RGX_SERVER_RENDER_CONTEXT,
 							PVRSRV_HANDLE_ALLOC_FLAG_NONE
 							);
-	if (psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateRenderContext_exit;
-	}
-	psRGXCreateRenderContextOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
-							&psRGXCreateRenderContextOUT->hFWRenderContext,
-							(IMG_HANDLE) psFWRenderContextInt,
-							PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
-							PVRSRV_HANDLE_ALLOC_FLAG_NONE
-							,psRGXCreateRenderContextOUT->hCleanupCookie);
-	if (psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateRenderContext_exit;
-	}
-	psRGXCreateRenderContextOUT->eError = PVRSRVAllocSubHandle(psConnection->psHandleBase,
-							&psRGXCreateRenderContextOUT->hFW3DContextState,
-							(IMG_HANDLE) psFW3DContextStateInt,
-							PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
-							PVRSRV_HANDLE_ALLOC_FLAG_NONE
-							,psRGXCreateRenderContextOUT->hCleanupCookie);
 	if (psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
 	{
 		goto RGXCreateRenderContext_exit;
@@ -1203,24 +1206,17 @@ PVRSRVBridgeRGXCreateRenderContext(IMG_UINT32 ui32BridgeID,
 RGXCreateRenderContext_exit:
 	if (psRGXCreateRenderContextOUT->eError != PVRSRV_OK)
 	{
-		if (psRGXCreateRenderContextOUT->hCleanupCookie)
-		{
-			PVRSRVReleaseHandle(psConnection->psHandleBase,
-						(IMG_HANDLE) psRGXCreateRenderContextOUT->hCleanupCookie,
-						PVRSRV_HANDLE_TYPE_RGX_RC_CLEANUP);
-		}
-
 		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
-		if (hCleanupCookieInt2)
+		if (hRenderContextInt2)
 		{
-			PVRSRV_ERROR eError = ResManFreeResByPtr(hCleanupCookieInt2);
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hRenderContextInt2);
 
 			/* Freeing a resource should never fail... */
 			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
 		}
-		else if (psCleanupCookieInt)
+		else if (psRenderContextInt)
 		{
-			PVRSRVRGXDestroyRenderContextKM(psCleanupCookieInt);
+			PVRSRVRGXDestroyRenderContextKM(psRenderContextInt);
 		}
 	}
 
@@ -1243,16 +1239,20 @@ PVRSRVBridgeRGXDestroyRenderContext(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXDestroyRenderContextOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hCleanupCookieInt2,
-							   psRGXDestroyRenderContextIN->hCleanupCookie,
-							   PVRSRV_HANDLE_TYPE_RGX_RC_CLEANUP);
-		if(psRGXDestroyRenderContextOUT->eError != PVRSRV_OK)
-		{
-			goto RGXDestroyRenderContext_exit;
-		}
+
+				{
+					/* Look up the address from the handle */
+					psRGXDestroyRenderContextOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hCleanupCookieInt2,
+											psRGXDestroyRenderContextIN->hCleanupCookie,
+											PVRSRV_HANDLE_TYPE_RGX_SERVER_RENDER_CONTEXT);
+					if(psRGXDestroyRenderContextOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDestroyRenderContext_exit;
+					}
+
+				}
 
 	psRGXDestroyRenderContextOUT->eError = RGXDestroyRenderContextResManProxy(hCleanupCookieInt2);
 	/* Exit early if bridged call fails */
@@ -1264,7 +1264,7 @@ PVRSRVBridgeRGXDestroyRenderContext(IMG_UINT32 ui32BridgeID,
 	psRGXDestroyRenderContextOUT->eError =
 		PVRSRVReleaseHandle(psConnection->psHandleBase,
 					(IMG_HANDLE) psRGXDestroyRenderContextIN->hCleanupCookie,
-					PVRSRV_HANDLE_TYPE_RGX_RC_CLEANUP);
+					PVRSRV_HANDLE_TYPE_RGX_SERVER_RENDER_CONTEXT);
 
 
 RGXDestroyRenderContext_exit:
@@ -1278,8 +1278,26 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_RGXKICKTA3D *psRGXKickTA3DOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt = IMG_NULL;
-	DEVMEM_MEMDESC * psFWRenderContextInt = IMG_NULL;
+	RGX_SERVER_RENDER_CONTEXT * psRenderContextInt = IMG_NULL;
+	IMG_HANDLE hRenderContextInt2 = IMG_NULL;
+	PRGXFWIF_UFO_ADDR *sClientTAFenceUFOAddressInt = IMG_NULL;
+	IMG_UINT32 *ui32ClientTAFenceValueInt = IMG_NULL;
+	PRGXFWIF_UFO_ADDR *sClientTAUpdateUFOAddressInt = IMG_NULL;
+	IMG_UINT32 *ui32ClientTAUpdateValueInt = IMG_NULL;
+	IMG_UINT32 *ui32ServerTASyncFlagsInt = IMG_NULL;
+	SERVER_SYNC_PRIMITIVE * *psServerTASyncsInt = IMG_NULL;
+	IMG_HANDLE *hServerTASyncsInt2 = IMG_NULL;
+	PRGXFWIF_UFO_ADDR *sClient3DFenceUFOAddressInt = IMG_NULL;
+	IMG_UINT32 *ui32Client3DFenceValueInt = IMG_NULL;
+	PRGXFWIF_UFO_ADDR *sClient3DUpdateUFOAddressInt = IMG_NULL;
+	IMG_UINT32 *ui32Client3DUpdateValueInt = IMG_NULL;
+	IMG_UINT32 *ui32Server3DSyncFlagsInt = IMG_NULL;
+	SERVER_SYNC_PRIMITIVE * *psServer3DSyncsInt = IMG_NULL;
+	IMG_HANDLE *hServer3DSyncsInt2 = IMG_NULL;
+	IMG_INT32 *i32FenceFdsInt = IMG_NULL;
+	IMG_BYTE *psTACmdInt = IMG_NULL;
+	IMG_BYTE *ps3DPRCmdInt = IMG_NULL;
+	IMG_BYTE *ps3DCmdInt = IMG_NULL;
 	RGX_RTDATA_CLEANUP_DATA * psRTDataCleanupInt = IMG_NULL;
 	IMG_HANDLE hRTDataCleanupInt2 = IMG_NULL;
 	RGX_ZSBUFFER_DATA * psZBufferInt = IMG_NULL;
@@ -1292,97 +1310,520 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32BridgeID,
 
 
 
-		/* Look up the address from the handle */
-		psRGXKickTA3DOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hDevNodeInt,
-							   psRGXKickTA3DIN->hDevNode,
-							   PVRSRV_HANDLE_TYPE_DEV_NODE);
-		if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
-		{
-			goto RGXKickTA3D_exit;
-		}
-		/* Look up the address from the handle */
-		psRGXKickTA3DOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &psFWRenderContextInt,
-							   psRGXKickTA3DIN->hFWRenderContext,
-							   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-		if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
-		{
-			goto RGXKickTA3D_exit;
-		}
-	if(psRGXKickTA3DIN->hRTDataCleanup)
+	if (psRGXKickTA3DIN->ui32ClientTAFenceCount != 0)
 	{
-		/* Look up the address from the handle */
-		psRGXKickTA3DOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hRTDataCleanupInt2,
-							   psRGXKickTA3DIN->hRTDataCleanup,
-							   PVRSRV_HANDLE_TYPE_RGX_RTDATA_CLEANUP);
-		if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+		sClientTAFenceUFOAddressInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR));
+		if (!sClientTAFenceUFOAddressInt)
 		{
-			goto RGXKickTA3D_exit;
-		}
-
-		/* Look up the data from the resman address */
-		psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hRTDataCleanupInt2, (IMG_VOID **) &psRTDataCleanupInt);
-		if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
-		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto RGXKickTA3D_exit;
 		}
 	}
-	if(psRGXKickTA3DIN->hZBuffer)
-	{
-		/* Look up the address from the handle */
-		psRGXKickTA3DOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hZBufferInt2,
-							   psRGXKickTA3DIN->hZBuffer,
-							   PVRSRV_HANDLE_TYPE_RGX_FWIF_ZSBUFFER);
-		if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
-		{
-			goto RGXKickTA3D_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hZBufferInt2, (IMG_VOID **) &psZBufferInt);
-		if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->psClientTAFenceUFOAddress, psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR))
+				|| (OSCopyFromUser(NULL, sClientTAFenceUFOAddressInt, psRGXKickTA3DIN->psClientTAFenceUFOAddress,
+				psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32ClientTAFenceCount != 0)
+	{
+		ui32ClientTAFenceValueInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32));
+		if (!ui32ClientTAFenceValueInt)
 		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto RGXKickTA3D_exit;
 		}
 	}
-	if(psRGXKickTA3DIN->hSBuffer)
-	{
-		/* Look up the address from the handle */
-		psRGXKickTA3DOUT->eError =
-			PVRSRVLookupHandle(psConnection->psHandleBase,
-							   (IMG_HANDLE *) &hSBufferInt2,
-							   psRGXKickTA3DIN->hSBuffer,
-							   PVRSRV_HANDLE_TYPE_RGX_FWIF_ZSBUFFER);
-		if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
-		{
-			goto RGXKickTA3D_exit;
-		}
 
-		/* Look up the data from the resman address */
-		psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hSBufferInt2, (IMG_VOID **) &psSBufferInt);
-		if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->pui32ClientTAFenceValue, psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32ClientTAFenceValueInt, psRGXKickTA3DIN->pui32ClientTAFenceValue,
+				psRGXKickTA3DIN->ui32ClientTAFenceCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32ClientTAUpdateCount != 0)
+	{
+		sClientTAUpdateUFOAddressInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR));
+		if (!sClientTAUpdateUFOAddressInt)
 		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
 			goto RGXKickTA3D_exit;
 		}
 	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->psClientTAUpdateUFOAddress, psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR))
+				|| (OSCopyFromUser(NULL, sClientTAUpdateUFOAddressInt, psRGXKickTA3DIN->psClientTAUpdateUFOAddress,
+				psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32ClientTAUpdateCount != 0)
+	{
+		ui32ClientTAUpdateValueInt = OSAllocMem(psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32));
+		if (!ui32ClientTAUpdateValueInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->pui32ClientTAUpdateValue, psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32ClientTAUpdateValueInt, psRGXKickTA3DIN->pui32ClientTAUpdateValue,
+				psRGXKickTA3DIN->ui32ClientTAUpdateCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32ServerTASyncPrims != 0)
+	{
+		ui32ServerTASyncFlagsInt = OSAllocMem(psRGXKickTA3DIN->ui32ServerTASyncPrims * sizeof(IMG_UINT32));
+		if (!ui32ServerTASyncFlagsInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->pui32ServerTASyncFlags, psRGXKickTA3DIN->ui32ServerTASyncPrims * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32ServerTASyncFlagsInt, psRGXKickTA3DIN->pui32ServerTASyncFlags,
+				psRGXKickTA3DIN->ui32ServerTASyncPrims * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32ServerTASyncPrims != 0)
+	{
+		psServerTASyncsInt = OSAllocMem(psRGXKickTA3DIN->ui32ServerTASyncPrims * sizeof(SERVER_SYNC_PRIMITIVE *));
+		if (!psServerTASyncsInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+		hServerTASyncsInt2 = OSAllocMem(psRGXKickTA3DIN->ui32ServerTASyncPrims * sizeof(IMG_HANDLE));
+		if (!hServerTASyncsInt2)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->phServerTASyncs, psRGXKickTA3DIN->ui32ServerTASyncPrims * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hServerTASyncsInt2, psRGXKickTA3DIN->phServerTASyncs,
+				psRGXKickTA3DIN->ui32ServerTASyncPrims * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32Client3DFenceCount != 0)
+	{
+		sClient3DFenceUFOAddressInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR));
+		if (!sClient3DFenceUFOAddressInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->psClient3DFenceUFOAddress, psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR))
+				|| (OSCopyFromUser(NULL, sClient3DFenceUFOAddressInt, psRGXKickTA3DIN->psClient3DFenceUFOAddress,
+				psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32Client3DFenceCount != 0)
+	{
+		ui32Client3DFenceValueInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_UINT32));
+		if (!ui32Client3DFenceValueInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->pui32Client3DFenceValue, psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32Client3DFenceValueInt, psRGXKickTA3DIN->pui32Client3DFenceValue,
+				psRGXKickTA3DIN->ui32Client3DFenceCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32Client3DUpdateCount != 0)
+	{
+		sClient3DUpdateUFOAddressInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR));
+		if (!sClient3DUpdateUFOAddressInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->psClient3DUpdateUFOAddress, psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR))
+				|| (OSCopyFromUser(NULL, sClient3DUpdateUFOAddressInt, psRGXKickTA3DIN->psClient3DUpdateUFOAddress,
+				psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(PRGXFWIF_UFO_ADDR)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32Client3DUpdateCount != 0)
+	{
+		ui32Client3DUpdateValueInt = OSAllocMem(psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32));
+		if (!ui32Client3DUpdateValueInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->pui32Client3DUpdateValue, psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32Client3DUpdateValueInt, psRGXKickTA3DIN->pui32Client3DUpdateValue,
+				psRGXKickTA3DIN->ui32Client3DUpdateCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32Server3DSyncPrims != 0)
+	{
+		ui32Server3DSyncFlagsInt = OSAllocMem(psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(IMG_UINT32));
+		if (!ui32Server3DSyncFlagsInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->pui32Server3DSyncFlags, psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32Server3DSyncFlagsInt, psRGXKickTA3DIN->pui32Server3DSyncFlags,
+				psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32Server3DSyncPrims != 0)
+	{
+		psServer3DSyncsInt = OSAllocMem(psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(SERVER_SYNC_PRIMITIVE *));
+		if (!psServer3DSyncsInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+		hServer3DSyncsInt2 = OSAllocMem(psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(IMG_HANDLE));
+		if (!hServer3DSyncsInt2)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->phServer3DSyncs, psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(IMG_HANDLE))
+				|| (OSCopyFromUser(NULL, hServer3DSyncsInt2, psRGXKickTA3DIN->phServer3DSyncs,
+				psRGXKickTA3DIN->ui32Server3DSyncPrims * sizeof(IMG_HANDLE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32NumFenceFds != 0)
+	{
+		i32FenceFdsInt = OSAllocMem(psRGXKickTA3DIN->ui32NumFenceFds * sizeof(IMG_INT32));
+		if (!i32FenceFdsInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->pi32FenceFds, psRGXKickTA3DIN->ui32NumFenceFds * sizeof(IMG_INT32))
+				|| (OSCopyFromUser(NULL, i32FenceFdsInt, psRGXKickTA3DIN->pi32FenceFds,
+				psRGXKickTA3DIN->ui32NumFenceFds * sizeof(IMG_INT32)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui32TACmdSize != 0)
+	{
+		psTACmdInt = OSAllocMem(psRGXKickTA3DIN->ui32TACmdSize * sizeof(IMG_BYTE));
+		if (!psTACmdInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->psTACmd, psRGXKickTA3DIN->ui32TACmdSize * sizeof(IMG_BYTE))
+				|| (OSCopyFromUser(NULL, psTACmdInt, psRGXKickTA3DIN->psTACmd,
+				psRGXKickTA3DIN->ui32TACmdSize * sizeof(IMG_BYTE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui323DPRCmdSize != 0)
+	{
+		ps3DPRCmdInt = OSAllocMem(psRGXKickTA3DIN->ui323DPRCmdSize * sizeof(IMG_BYTE));
+		if (!ps3DPRCmdInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->ps3DPRCmd, psRGXKickTA3DIN->ui323DPRCmdSize * sizeof(IMG_BYTE))
+				|| (OSCopyFromUser(NULL, ps3DPRCmdInt, psRGXKickTA3DIN->ps3DPRCmd,
+				psRGXKickTA3DIN->ui323DPRCmdSize * sizeof(IMG_BYTE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+	if (psRGXKickTA3DIN->ui323DCmdSize != 0)
+	{
+		ps3DCmdInt = OSAllocMem(psRGXKickTA3DIN->ui323DCmdSize * sizeof(IMG_BYTE));
+		if (!ps3DCmdInt)
+		{
+			psRGXKickTA3DOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXKickTA3D_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXKickTA3DIN->ps3DCmd, psRGXKickTA3DIN->ui323DCmdSize * sizeof(IMG_BYTE))
+				|| (OSCopyFromUser(NULL, ps3DCmdInt, psRGXKickTA3DIN->ps3DCmd,
+				psRGXKickTA3DIN->ui323DCmdSize * sizeof(IMG_BYTE)) != PVRSRV_OK) )
+			{
+				psRGXKickTA3DOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXKickTA3D_exit;
+			}
+
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hRenderContextInt2,
+											psRGXKickTA3DIN->hRenderContext,
+											PVRSRV_HANDLE_TYPE_RGX_SERVER_RENDER_CONTEXT);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hRenderContextInt2, (IMG_VOID **) &psRenderContextInt);
+
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psRGXKickTA3DIN->ui32ServerTASyncPrims;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hServerTASyncsInt2[i],
+											psRGXKickTA3DIN->phServerTASyncs[i],
+											PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hServerTASyncsInt2[i], (IMG_VOID **) &psServerTASyncsInt[i]);
+
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psRGXKickTA3DIN->ui32Server3DSyncPrims;i++)
+		{
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hServer3DSyncsInt2[i],
+											psRGXKickTA3DIN->phServer3DSyncs[i],
+											PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hServer3DSyncsInt2[i], (IMG_VOID **) &psServer3DSyncsInt[i]);
+
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+		}
+	}
+
+				if (psRGXKickTA3DIN->hRTDataCleanup)
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hRTDataCleanupInt2,
+											psRGXKickTA3DIN->hRTDataCleanup,
+											PVRSRV_HANDLE_TYPE_RGX_RTDATA_CLEANUP);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hRTDataCleanupInt2, (IMG_VOID **) &psRTDataCleanupInt);
+
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
+				if (psRGXKickTA3DIN->hZBuffer)
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hZBufferInt2,
+											psRGXKickTA3DIN->hZBuffer,
+											PVRSRV_HANDLE_TYPE_RGX_FWIF_ZSBUFFER);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hZBufferInt2, (IMG_VOID **) &psZBufferInt);
+
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
+
+				if (psRGXKickTA3DIN->hSBuffer)
+				{
+					/* Look up the address from the handle */
+					psRGXKickTA3DOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hSBufferInt2,
+											psRGXKickTA3DIN->hSBuffer,
+											PVRSRV_HANDLE_TYPE_RGX_FWIF_ZSBUFFER);
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXKickTA3DOUT->eError = ResManFindPrivateDataByPtr(hSBufferInt2, (IMG_VOID **) &psSBufferInt);
+
+					if(psRGXKickTA3DOUT->eError != PVRSRV_OK)
+					{
+						goto RGXKickTA3D_exit;
+					}
+				}
 
 	psRGXKickTA3DOUT->eError =
-		PVRSRVRGXKickTA3DKM(
-					hDevNodeInt,
-					psFWRenderContextInt,
+		PVRSRVRGXKickTA3DKM(psConnection,
+					psRenderContextInt,
+					psRGXKickTA3DIN->ui32ClientTAFenceCount,
+					sClientTAFenceUFOAddressInt,
+					ui32ClientTAFenceValueInt,
+					psRGXKickTA3DIN->ui32ClientTAUpdateCount,
+					sClientTAUpdateUFOAddressInt,
+					ui32ClientTAUpdateValueInt,
+					psRGXKickTA3DIN->ui32ServerTASyncPrims,
+					ui32ServerTASyncFlagsInt,
+					psServerTASyncsInt,
+					psRGXKickTA3DIN->ui32Client3DFenceCount,
+					sClient3DFenceUFOAddressInt,
+					ui32Client3DFenceValueInt,
+					psRGXKickTA3DIN->ui32Client3DUpdateCount,
+					sClient3DUpdateUFOAddressInt,
+					ui32Client3DUpdateValueInt,
+					psRGXKickTA3DIN->ui32Server3DSyncPrims,
+					ui32Server3DSyncFlagsInt,
+					psServer3DSyncsInt,
+					psRGXKickTA3DIN->sPRFenceUFOAddress,
+					psRGXKickTA3DIN->ui32FRFenceValue,
+					psRGXKickTA3DIN->ui32NumFenceFds,
+					i32FenceFdsInt,
+					psRGXKickTA3DIN->ui32TACmdSize,
+					psTACmdInt,
+					psRGXKickTA3DIN->ui323DPRCmdSize,
+					ps3DPRCmdInt,
+					psRGXKickTA3DIN->ui323DCmdSize,
+					ps3DCmdInt,
 					psRGXKickTA3DIN->bbLastTAInScene,
 					psRGXKickTA3DIN->bbKickTA,
 					psRGXKickTA3DIN->bbKickPR,
 					psRGXKickTA3DIN->bbKick3D,
-					psRGXKickTA3DIN->ui32TAcCCBWoffUpdate,
-					psRGXKickTA3DIN->ui323DcCCBWoffUpdate,
+					psRGXKickTA3DIN->bbAbort,
 					psRGXKickTA3DIN->bbPDumpContinuous,
 					psRTDataCleanupInt,
 					psZBufferInt,
@@ -1391,6 +1832,90 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32BridgeID,
 
 
 RGXKickTA3D_exit:
+	if (sClientTAFenceUFOAddressInt)
+		OSFreeMem(sClientTAFenceUFOAddressInt);
+	if (ui32ClientTAFenceValueInt)
+		OSFreeMem(ui32ClientTAFenceValueInt);
+	if (sClientTAUpdateUFOAddressInt)
+		OSFreeMem(sClientTAUpdateUFOAddressInt);
+	if (ui32ClientTAUpdateValueInt)
+		OSFreeMem(ui32ClientTAUpdateValueInt);
+	if (ui32ServerTASyncFlagsInt)
+		OSFreeMem(ui32ServerTASyncFlagsInt);
+	if (psServerTASyncsInt)
+		OSFreeMem(psServerTASyncsInt);
+	if (hServerTASyncsInt2)
+		OSFreeMem(hServerTASyncsInt2);
+	if (sClient3DFenceUFOAddressInt)
+		OSFreeMem(sClient3DFenceUFOAddressInt);
+	if (ui32Client3DFenceValueInt)
+		OSFreeMem(ui32Client3DFenceValueInt);
+	if (sClient3DUpdateUFOAddressInt)
+		OSFreeMem(sClient3DUpdateUFOAddressInt);
+	if (ui32Client3DUpdateValueInt)
+		OSFreeMem(ui32Client3DUpdateValueInt);
+	if (ui32Server3DSyncFlagsInt)
+		OSFreeMem(ui32Server3DSyncFlagsInt);
+	if (psServer3DSyncsInt)
+		OSFreeMem(psServer3DSyncsInt);
+	if (hServer3DSyncsInt2)
+		OSFreeMem(hServer3DSyncsInt2);
+	if (i32FenceFdsInt)
+		OSFreeMem(i32FenceFdsInt);
+	if (psTACmdInt)
+		OSFreeMem(psTACmdInt);
+	if (ps3DPRCmdInt)
+		OSFreeMem(ps3DPRCmdInt);
+	if (ps3DCmdInt)
+		OSFreeMem(ps3DCmdInt);
+
+	return 0;
+}
+
+static IMG_INT
+PVRSRVBridgeRGXSetRenderContextPriority(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_RGXSETRENDERCONTEXTPRIORITY *psRGXSetRenderContextPriorityIN,
+					 PVRSRV_BRIDGE_OUT_RGXSETRENDERCONTEXTPRIORITY *psRGXSetRenderContextPriorityOUT,
+					 CONNECTION_DATA *psConnection)
+{
+	RGX_SERVER_RENDER_CONTEXT * psRenderContextInt = IMG_NULL;
+	IMG_HANDLE hRenderContextInt2 = IMG_NULL;
+
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTA3D_RGXSETRENDERCONTEXTPRIORITY);
+
+
+
+
+
+				{
+					/* Look up the address from the handle */
+					psRGXSetRenderContextPriorityOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hRenderContextInt2,
+											psRGXSetRenderContextPriorityIN->hRenderContext,
+											PVRSRV_HANDLE_TYPE_RGX_SERVER_RENDER_CONTEXT);
+					if(psRGXSetRenderContextPriorityOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSetRenderContextPriority_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXSetRenderContextPriorityOUT->eError = ResManFindPrivateDataByPtr(hRenderContextInt2, (IMG_VOID **) &psRenderContextInt);
+
+					if(psRGXSetRenderContextPriorityOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSetRenderContextPriority_exit;
+					}
+				}
+
+	psRGXSetRenderContextPriorityOUT->eError =
+		PVRSRVRGXSetRenderContextPriorityKM(psConnection,
+					psRenderContextInt,
+					psRGXSetRenderContextPriorityIN->ui32Priority);
+
+
+
+RGXSetRenderContextPriority_exit:
 
 	return 0;
 }
@@ -1424,6 +1949,7 @@ PVRSRV_ERROR RegisterRGXTA3DFunctions(IMG_VOID)
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D_RGXCREATERENDERCONTEXT, PVRSRVBridgeRGXCreateRenderContext);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D_RGXDESTROYRENDERCONTEXT, PVRSRVBridgeRGXDestroyRenderContext);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D_RGXKICKTA3D, PVRSRVBridgeRGXKickTA3D);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D_RGXSETRENDERCONTEXTPRIORITY, PVRSRVBridgeRGXSetRenderContextPriority);
 
 	return PVRSRV_OK;
 }

@@ -41,6 +41,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
+#include "srvkm.h"
 #include "pdump_km.h"
 #include "pvr_debug.h"
 #include "rgxutils.h"
@@ -50,41 +51,50 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem.h"
 #include "devicemem_pdump.h"
 #include "osfunc.h"
+#include "rgxccb.h"
+
+#include "sync_server.h"
 #include "sync_internal.h"
 #include "rgx_memallocflags.h"
 
+struct _RGX_SERVER_COMPUTE_CONTEXT_ {
+	PVRSRV_DEVICE_NODE			*psDeviceNode;
+	RGX_SERVER_COMMON_CONTEXT	*psServerCommonContext;
+	DEVMEM_MEMDESC				*psFWFrameworkMemDesc;
+	DEVMEM_MEMDESC				*psFWComputeContextStateMemDesc;
+	PVRSRV_CLIENT_SYNC_PRIM		*psSync;
+};
+
 IMG_EXPORT
 PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
-											 DEVMEM_MEMDESC 			*psCmpCCBMemDesc,
-											 DEVMEM_MEMDESC 			*psCmpCCBCtlMemDesc,
-											 RGX_CC_CLEANUP_DATA		**ppsCleanupData,
-											 DEVMEM_MEMDESC 			**ppsFWComputeContextMemDesc,
-											 DEVMEM_MEMDESC 			**ppsFWComputeContextStateMemDesc,
 											 IMG_UINT32					ui32Priority,
 											 IMG_DEV_VIRTADDR			sMCUFenceAddr,
-											 IMG_UINT32					ui32FrameworkRegisterSize,
-											 IMG_PBYTE					pbyFrameworkRegisters,
-											 IMG_HANDLE					hMemCtxPrivData)
+											 IMG_UINT32					ui32FrameworkCommandSize,
+											 IMG_PBYTE					pbyFrameworkCommand,
+											 IMG_HANDLE					hMemCtxPrivData,
+											 RGX_SERVER_COMPUTE_CONTEXT	**ppsComputeContext)
 {
-	PVRSRV_ERROR			eError = PVRSRV_OK;
-	PVRSRV_RGXDEV_INFO 		*psDevInfo = psDeviceNode->pvDevice;
-	RGXFWIF_FWCOMMONCONTEXT	*psFWComputeContext;
-	RGX_CC_CLEANUP_DATA		*psTmpCleanup;
-	DEVMEM_MEMDESC 			*psFWFrameworkMemDesc;
+	PVRSRV_RGXDEV_INFO 			*psDevInfo = psDeviceNode->pvDevice;
+	DEVMEM_MEMDESC				*psFWMemContextMemDesc = hMemCtxPrivData;
+	RGX_SERVER_COMPUTE_CONTEXT	*psComputeContext;
+	RGX_COMMON_CONTEXT_INFO		sInfo;
+	PVRSRV_ERROR				eError = PVRSRV_OK;
 
 	/* Prepare cleanup struct */
-	psTmpCleanup = OSAllocMem(sizeof(*psTmpCleanup));
-	if (psTmpCleanup == IMG_NULL)
+	psComputeContext = OSAllocMem(sizeof(*psComputeContext));
+	if (psComputeContext == IMG_NULL)
 	{
 		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
 
-	OSMemSet(psTmpCleanup, 0, sizeof(*psTmpCleanup));
-	*ppsCleanupData = psTmpCleanup;
+	OSMemSet(psComputeContext, 0, sizeof(*psComputeContext));
+	*ppsComputeContext = psComputeContext;
+
+	psComputeContext->psDeviceNode = psDeviceNode;
 
 	/* Allocate cleanup sync */
 	eError = SyncPrimAlloc(psDeviceNode->hSyncPrimContext,
-						   &psTmpCleanup->psCleanupSync);
+						   &psComputeContext->psSync);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateComputeContextKM: Failed to allocate cleanup sync (0x%x)",
@@ -93,46 +103,15 @@ PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 	}
 
 	/*
-		Allocate device memory for the firmware compute context.
-	*/
-	PDUMPCOMMENT("Allocate RGX firmware compute context");
-	
-	eError = DevmemFwAllocate(psDevInfo,
-							sizeof(*psFWComputeContext),
-							RGX_FWCOMCTX_ALLOCFLAGS,
-							ppsFWComputeContextMemDesc);
-
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateComputeContextKM: Failed to allocate firmware compute context (0x%x)",
-				eError));
-		goto fail_contextalloc;
-	}
-	psTmpCleanup->psFWComputeContextMemDesc = *ppsFWComputeContextMemDesc;
-	psTmpCleanup->psDeviceNode = psDeviceNode;
-
-	/*
-		Temporarily map the firmware compute context to the kernel.
-	*/
-	eError = DevmemAcquireCpuVirtAddr(*ppsFWComputeContextMemDesc,
-									  (IMG_VOID **)&psFWComputeContext);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateComputeContextKM: Failed to map firmware compute context (0x%x)",
-				eError));
-		goto fail_cpuvirtacquire;
-	}
-
-	/*
 		Allocate device memory for the firmware GPU context suspend state.
 		Note: the FW reads/writes the state to memory by accessing the GPU register interface.
 	*/
-	PDUMPCOMMENT("Allocate RGX firmware 3D context suspend state");
+	PDUMPCOMMENT("Allocate RGX firmware compute context suspend state");
 
 	eError = DevmemFwAllocate(psDevInfo,
-							sizeof(RGXFWIF_COMPUTECTX_STATE),
-							RGX_FWCOMCTX_ALLOCFLAGS,
-							ppsFWComputeContextStateMemDesc);
+							  sizeof(RGXFWIF_COMPUTECTX_STATE),
+							  RGX_FWCOMCTX_ALLOCFLAGS,
+							  &psComputeContext->psFWComputeContextStateMemDesc);
 
 	if (eError != PVRSRV_OK)
 	{
@@ -140,208 +119,218 @@ PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 				eError));
 		goto fail_contextsuspendalloc;
 	}
-	psTmpCleanup->psFWComputeContextStateMemDesc = *ppsFWComputeContextStateMemDesc;
 
 	/* 
 	 * Create the FW framework buffer
 	 */
-	eError = PVRSRVRGXFrameworkCreateKM(psDeviceNode, & psFWFrameworkMemDesc, ui32FrameworkRegisterSize);
+	eError = PVRSRVRGXFrameworkCreateKM(psDeviceNode,
+										&psComputeContext->psFWFrameworkMemDesc,
+										ui32FrameworkCommandSize);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateComputeContextKM: Failed to allocate firmware GPU framework state (%u)",
 				eError));
 		goto fail_frameworkcreate;
 	}
-	
-	psTmpCleanup->psFWFrameworkMemDesc = psFWFrameworkMemDesc;
 
 	/* Copy the Framework client data into the framework buffer */
-	eError = PVRSRVRGXFrameworkCopyRegisters(psFWFrameworkMemDesc, pbyFrameworkRegisters, ui32FrameworkRegisterSize);
+	eError = PVRSRVRGXFrameworkCopyCommand(psComputeContext->psFWFrameworkMemDesc,
+										   pbyFrameworkCommand,
+										   ui32FrameworkCommandSize);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateComputeContextKM: Failed to populate the framework buffer (%u)",
 				eError));
 		goto fail_frameworkcopy;
 	}
+	
+	sInfo.psFWFrameworkMemDesc = psComputeContext->psFWFrameworkMemDesc;
+	sInfo.psMCUFenceAddr = &sMCUFenceAddr;
 
-	eError = RGXInitFWCommonContext(psFWComputeContext,
-									psCmpCCBMemDesc,
-									psCmpCCBCtlMemDesc,
-									hMemCtxPrivData,
-									psFWFrameworkMemDesc,
-									ui32Priority,
-									&sMCUFenceAddr,
-									&psTmpCleanup->sFWComContextCleanup);
+	eError = FWCommonContextAllocate(psDeviceNode,
+									 "CDM",
+									 IMG_NULL,
+									 0,
+									 psFWMemContextMemDesc,
+									 psComputeContext->psFWComputeContextStateMemDesc,
+									 RGX_CCB_SIZE_LOG2,
+									 ui32Priority,
+									 &sInfo,
+									 &psComputeContext->psServerCommonContext);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateComputeContextKM: Failed to init firmware common context (%u)",
-				eError));
-		goto fail_contextinit;
+		goto fail_contextalloc;
 	}
-
-	/*
-	 * Set the firmware GPU context state buffer. Offset zero below because the
-	 * compute context state occupies the entire buffer (c.f. render context). The
-	 * buffer itself is allocated/deallocated with the granularity of the parent
-	 * structure.
-	 * 
-	 * The common context stores a dword pointer (FW) so we can cast the generic buffer to
-	 * the correct compute state structure type in the FW.
-	 */
-	RGXSetFirmwareAddress(&psFWComputeContext->psContextState,
-						  *ppsFWComputeContextStateMemDesc,
-						  0,
-						  RFW_FWADDR_METACACHED_FLAG);
-
-	/*
-	 * Dump the Compute and the memory contexts
-	 */
-	PDUMPCOMMENT("Dump FWComputeContext");
-	DevmemPDumpLoadMem(*ppsFWComputeContextMemDesc, 0, sizeof(*psFWComputeContext), PDUMP_FLAGS_CONTINUOUS);
-
-	/*
-	 * Dump the FW compute context suspend state buffer
-	 */
-	PDUMPCOMMENT("Dump FWComputeContextState");
-	DevmemPDumpLoadMem(*ppsFWComputeContextStateMemDesc, 0, sizeof(RGXFWIF_COMPUTECTX_STATE), PDUMP_FLAGS_CONTINUOUS);
-
-	/* Release address acquired above. */
-	DevmemReleaseCpuVirtAddr(*ppsFWComputeContextMemDesc);
 
 	return PVRSRV_OK;
-fail_contextinit:
-fail_frameworkcopy:
-	DevmemFwFree(psFWFrameworkMemDesc);
-fail_frameworkcreate:
-	DevmemReleaseCpuVirtAddr(*ppsFWComputeContextMemDesc);
-fail_contextsuspendalloc:
-	DevmemReleaseCpuVirtAddr(*ppsFWComputeContextStateMemDesc);
-fail_cpuvirtacquire:
-	DevmemFwFree(*ppsFWComputeContextMemDesc);
+
 fail_contextalloc:
-	SyncPrimFree(psTmpCleanup->psCleanupSync);
+fail_frameworkcopy:
+	DevmemFwFree(psComputeContext->psFWFrameworkMemDesc);
+fail_frameworkcreate:
+	DevmemFwFree(psComputeContext->psFWComputeContextStateMemDesc);
+fail_contextsuspendalloc:
+	SyncPrimFree(psComputeContext->psSync);
 fail_syncalloc:
-	OSFreeMem(psTmpCleanup);
+	OSFreeMem(psComputeContext);
 	return eError;
 }
 
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXDestroyComputeContextKM(RGX_CC_CLEANUP_DATA *psCleanupData)
+PVRSRV_ERROR PVRSRVRGXDestroyComputeContextKM(RGX_SERVER_COMPUTE_CONTEXT *psComputeContext)
 {
 	PVRSRV_ERROR				eError = PVRSRV_OK;
-	PRGXFWIF_FWCOMMONCONTEXT	psFWComContextFWAddr;
 
-	RGXSetFirmwareAddress(&psFWComContextFWAddr,
-							psCleanupData->psFWComputeContextMemDesc,
-							0,
-							RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
-
-	eError = RGXFWRequestCommonContextCleanUp(psCleanupData->psDeviceNode,
-											  psFWComContextFWAddr,
-											  psCleanupData->psCleanupSync,
+	/* Check if the FW has finished with this resource ... */
+	eError = RGXFWRequestCommonContextCleanUp(psComputeContext->psDeviceNode,
+											  FWCommonContextGetFWAddress(psComputeContext->psServerCommonContext),
+											  psComputeContext->psSync,
 											  RGXFWIF_DM_CDM);
 
-	/*
-		If we get retry error then we can't free this resource
-		as it's still in use and we will be called again
-	*/
-	if (eError != PVRSRV_ERROR_RETRY)
+	if (eError == PVRSRV_ERROR_RETRY)
 	{
-		eError = RGXDeinitFWCommonContext(&psCleanupData->sFWComContextCleanup);
-	
-		if (eError != PVRSRV_OK)
-		{
-			PVR_DPF((PVR_DBG_ERROR, "PVRSRVRGXDestroyComputeContextKM : failed to deinit fw common ctx. Error:%u", eError));
-			goto e0;
-		}
-	
-#if defined(DEBUG)
-			/* Log the number of TA context stores which occurred */
-			{
-				RGXFWIF_COMPUTECTX_STATE	*psFWState;
-
-				eError = DevmemAcquireCpuVirtAddr(psCleanupData->psFWComputeContextStateMemDesc,
-												  (IMG_VOID**)&psFWState);
-				if (eError != PVRSRV_OK)
-				{
-					PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXDestroyComputeContextKM: Failed to map firmware compute context state (%u)",
-							eError));
-				}
-				else
-				{
-					PVR_DPF((PVR_DBG_WARNING,"Number of context stores on FW compute context 0x%010x: %u",
-							psFWComContextFWAddr.ui32Addr,
-							psFWState->ui32NumStores));
-	
-					/* Release the CPU virt addr */
-					DevmemReleaseCpuVirtAddr(psCleanupData->psFWComputeContextStateMemDesc);
-				}
-			}
-#endif
-
-		RGXUnsetFirmwareAddress(psCleanupData->psFWComputeContextStateMemDesc);
-
-		/* Free the firmware Tcompute context state buffer */
-		DevmemFwFree(psCleanupData->psFWComputeContextStateMemDesc);
-	
-		/* Free the framework buffer */
-		DevmemFwFree(psCleanupData->psFWFrameworkMemDesc);
-		
-		/*
-		 * Free the firmware common context.
-		 */
-		DevmemFwFree(psCleanupData->psFWComputeContextMemDesc);
-
-		/* Free the cleanup sync */
-		SyncPrimFree(psCleanupData->psCleanupSync);
-
-		OSFreeMem(psCleanupData);
+		return eError;
+	}
+	else if (eError != PVRSRV_OK)
+	{
+		PVR_LOG(("%s: Unexpected error from RGXFWRequestCommonContextCleanUp (%s)",
+				__FUNCTION__,
+				PVRSRVGetErrorStringKM(eError)));
 	}
 
-e0:
-	return eError;
+	/* ... it has so we can free it's resources */
+	FWCommonContextFree(psComputeContext->psServerCommonContext);
+	DevmemFwFree(psComputeContext->psFWFrameworkMemDesc);
+	DevmemFwFree(psComputeContext->psFWComputeContextStateMemDesc);
+	SyncPrimFree(psComputeContext->psSync);
+	OSFreeMem(psComputeContext);
+
+	return PVRSRV_OK;
 }
 
 
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXKickCDMKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
-								DEVMEM_MEMDESC 		*psFWComputeContextMemDesc,
-								IMG_UINT32			ui32cCCBWoffUpdate,
-								IMG_BOOL			bbPDumpContinuous)
+PVRSRV_ERROR PVRSRVRGXKickCDMKM(CONNECTION_DATA				*psConnection,
+								RGX_SERVER_COMPUTE_CONTEXT	*psComputeContext,
+								IMG_UINT32					ui32ClientFenceCount,
+								PRGXFWIF_UFO_ADDR			*pauiClientFenceUFOAddress,
+								IMG_UINT32					*paui32ClientFenceValue,
+								IMG_UINT32					ui32ClientUpdateCount,
+								PRGXFWIF_UFO_ADDR			*pauiClientUpdateUFOAddress,
+								IMG_UINT32					*paui32ClientUpdateValue,
+								IMG_UINT32					ui32ServerSyncPrims,
+								IMG_UINT32					*paui32ServerSyncFlags,
+								SERVER_SYNC_PRIMITIVE 		**pasServerSyncs,
+								IMG_UINT32					ui32CmdSize,
+								IMG_PBYTE					pui8DMCmd,
+								IMG_BOOL					bPDumpContinuous)
 {
-	PVRSRV_ERROR			eError;
 	RGXFWIF_KCCB_CMD		sCmpKCCBCmd;
+	RGX_CCB_CMD_HELPER_DATA	sCmdHelperData;
+	IMG_BOOL				bKickRequired;
+	PVRSRV_ERROR			eError;
+	IMG_UINT32				i;
+	
+	/* Sanity check the server fences */
+	for (i=0;i<ui32ServerSyncPrims;i++)
+	{
+		if (!(paui32ServerSyncFlags[i] & PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK))
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: Server fence (on SH) must fence", __FUNCTION__));
+			return PVRSRV_ERROR_INVALID_SYNC_PRIM_OP;
+		}
+	}
+
+	eError = RGXCmdHelperInitCmdCCB(FWCommonContextGetClientCCB(psComputeContext->psServerCommonContext),
+									  psConnection,
+									  ui32ClientFenceCount,
+									  pauiClientFenceUFOAddress,
+									  paui32ClientFenceValue,
+									  ui32ClientUpdateCount,
+									  pauiClientUpdateUFOAddress,
+									  paui32ClientUpdateValue,
+									  ui32ServerSyncPrims,
+									  paui32ServerSyncFlags,
+									  pasServerSyncs,
+									  ui32CmdSize,
+									  pui8DMCmd,
+									  RGXFWIF_CCB_CMD_TYPE_CDM,
+									  bPDumpContinuous,
+									  "Compute",
+									  &sCmdHelperData);
+	if (eError != PVRSRV_OK)
+	{
+		goto fail_cmdinit;
+	}
+
+	eError = RGXCmdHelperAcquireCmdCCB(1, &sCmdHelperData, &bKickRequired);
+	if ((eError != PVRSRV_OK) && (!bKickRequired))
+	{
+		/*
+			Only bail if no new data was submitted into the client CCB, we might
+			have already submitted a padding packet which we should flush through
+			the FW.
+		*/
+		PVR_DPF((PVR_DBG_ERROR, "RGXKickCDM: Failed to create client CCB command"));
+		goto fail_cmdaquire;
+	}
+
 
 	/*
-	 * Construct the kernel compute CCB command.
-	 * (Safe to release reference to compute context virtual address because
-	 * render context destruction must flush the firmware).
-	 */
+		We should reserved space in the kerenl CCB here and fill in the command
+		directly.
+		This is so if there isn't space in the kernel CCB we can return with
+		retry back to services client before we take any operations
+	*/
+
+	/*
+		We might only be kicking for flush out a padding packet so only submit
+		the command if the create was successful
+	*/
+	if (eError == PVRSRV_OK)
+	{
+		/*
+			All the required resources are ready at this point, we can't fail so
+			take the required server sync operations and commit all the resources
+		*/
+		RGXCmdHelperReleaseCmdCCB(1, &sCmdHelperData);
+	}
+
+	/* Construct the kernel compute CCB command. */
 	sCmpKCCBCmd.eCmdType = RGXFWIF_KCCB_CMD_KICK;
-	RGXSetFirmwareAddress(&sCmpKCCBCmd.uCmdData.sCmdKickData.psContext,
-						  psFWComputeContextMemDesc,
-						  0, RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
-	sCmpKCCBCmd.uCmdData.sCmdKickData.ui32CWoffUpdate = ui32cCCBWoffUpdate;
+	sCmpKCCBCmd.uCmdData.sCmdKickData.psContext = FWCommonContextGetFWAddress(psComputeContext->psServerCommonContext);
+	sCmpKCCBCmd.uCmdData.sCmdKickData.ui32CWoffUpdate = RGXGetHostWriteOffsetCCB(FWCommonContextGetClientCCB(psComputeContext->psServerCommonContext));
 
 	/*
 	 * Submit the compute command to the firmware.
 	 */
-	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
-								RGXFWIF_DM_CDM,
-								&sCmpKCCBCmd,
-								sizeof(sCmpKCCBCmd),
-								bbPDumpContinuous);
+	LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
+	{
+		eError = RGXScheduleCommand(psComputeContext->psDeviceNode->pvDevice,
+									RGXFWIF_DM_CDM,
+									&sCmpKCCBCmd,
+									sizeof(sCmpKCCBCmd),
+									bPDumpContinuous);
+		if (eError != PVRSRV_ERROR_RETRY)
+		{
+			break;
+		}
+		OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
+	} END_LOOP_UNTIL_TIMEOUT();
+	
+
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "PVRSRVRGXKickCDMKM failed to schedule kernel CCB command. (0x%x)", eError));
-		goto PVRSRVRGXKickCDMKM_Exit;
 	}
-	
-PVRSRVRGXKickCDMKM_Exit:
+	return PVRSRV_OK;
+
+fail_cmdaquire:
+fail_cmdinit:
 	return eError;
 }
 
-IMG_EXPORT PVRSRV_ERROR PVRSRVRGXFlushComputeDataKM(PVRSRV_DEVICE_NODE *psDeviceNode, DEVMEM_MEMDESC *psFWContextMemDesc)
+IMG_EXPORT PVRSRV_ERROR PVRSRVRGXFlushComputeDataKM(RGX_SERVER_COMPUTE_CONTEXT *psComputeContext)
 {
 	RGXFWIF_KCCB_CMD sFlushCmd;
 	PVRSRV_ERROR eError = PVRSRV_OK;
@@ -352,17 +341,21 @@ IMG_EXPORT PVRSRV_ERROR PVRSRVRGXFlushComputeDataKM(PVRSRV_DEVICE_NODE *psDevice
 	sFlushCmd.eCmdType = RGXFWIF_KCCB_CMD_SLCFLUSHINVAL;
 	sFlushCmd.uCmdData.sSLCFlushInvalData.bInval = IMG_FALSE;
 	sFlushCmd.uCmdData.sSLCFlushInvalData.eDM = RGXFWIF_DM_CDM;
-	
-	RGXSetFirmwareAddress(&sFlushCmd.uCmdData.sSLCFlushInvalData.psContext,
-							psFWContextMemDesc,
-							0,
-							RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
-	
-	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
-						RGXFWIF_DM_GP,
-						&sFlushCmd,
-						sizeof(sFlushCmd),
-						IMG_TRUE);
+
+	LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
+	{
+		eError = RGXScheduleCommand(psComputeContext->psDeviceNode->pvDevice,
+									RGXFWIF_DM_GP,
+									&sFlushCmd,
+									sizeof(sFlushCmd),
+									IMG_TRUE);
+		if (eError != PVRSRV_ERROR_RETRY)
+		{
+			break;
+		}
+		OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
+	} END_LOOP_UNTIL_TIMEOUT();
+
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXFlushComputeDataKM: Failed to schedule SLC flush command with error (%u)", eError));
@@ -370,11 +363,32 @@ IMG_EXPORT PVRSRV_ERROR PVRSRVRGXFlushComputeDataKM(PVRSRV_DEVICE_NODE *psDevice
 	else
 	{
 		/* Wait for the SLC flush to complete */
-		eError = RGXWaitForFWOp(psDeviceNode->pvDevice, RGXFWIF_DM_GP, psDeviceNode->psSyncPrim, IMG_TRUE);
+		eError = RGXWaitForFWOp(psComputeContext->psDeviceNode->pvDevice,
+								RGXFWIF_DM_GP,
+								psComputeContext->psSync,
+								IMG_TRUE);
 		if (eError != PVRSRV_OK)
 		{
 			PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXFlushComputeDataKM: Compute flush aborted with error (%u)", eError));
 		}
+	}
+	return eError;
+}
+
+PVRSRV_ERROR PVRSRVRGXSetComputeContextPriorityKM(CONNECTION_DATA *psConnection,
+												  RGX_SERVER_COMPUTE_CONTEXT *psComputeContext,
+												  IMG_UINT32 ui32Priority)
+{
+	PVRSRV_ERROR eError;
+
+	eError = ContextSetPriority(psComputeContext->psServerCommonContext,
+								psConnection,
+								psComputeContext->psDeviceNode->pvDevice,
+								ui32Priority,
+								RGXFWIF_DM_CDM);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the compute context", __FUNCTION__));
 	}
 	return eError;
 }

@@ -49,6 +49,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrsrv_memallocflags.h"
 #include "devicemem_server_utils.h"
 
+
 IMG_VOID *
 _IORemapWrapper(IMG_CPU_PHYADDR BasePAddr,
                IMG_UINT32 ui32Bytes,
@@ -83,6 +84,7 @@ _IORemapWrapper(IMG_CPU_PHYADDR BasePAddr,
 
     return pvIORemapCookie;
 }
+
 
 IMG_VOID
 _IOUnmapWrapper(IMG_VOID *pvIORemapCookie, IMG_CHAR *pszFileName, IMG_UINT32 ui32Line)

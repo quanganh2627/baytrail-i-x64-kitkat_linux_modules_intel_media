@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.76.4.6
+@File
+@Title          RGX PDump panic definitions header
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    RGX PDump panic definitions header
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,34 +41,27 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_76_4_6_H_
-#define _RGXCORE_KM_1_76_4_6_H_
-
-/***** Automatically generated file (5/13/2013 9:25:47 AM): Do not edit manually ********************/
-/***** Timestamp:  (5/13/2013 9:25:47 AM)************************************************************/
-/***** CS: @2318404 ******************************************************************/
+#if !defined (RGX_PDUMP_PANICS_H_)
+#define RGX_PDUMP_PANICS_H_
 
 
-/******************************************************************************
- * BVNC = 1.76.4.6 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 76
-#define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 6
+/*! Unique device specific IMG_UINT16 panic IDs to identify the cause of a
+ * RGX PDump panic in a PDump script. */
+typedef enum
+{
+	RGX_PDUMP_PANIC_UNDEFINED = 0,
 
-/******************************************************************************
- * Errata 
- *****************************************************************************/
-
-#define FIX_HW_BRN_38344
-
-
+	/* These panics occur when test parameters and driver configuration
+	 * enable features that require the firmware and host driver to
+	 * communicate. Such features are not supported with off-line playback.
+	 */
+	RGX_PDUMP_PANIC_ZSBUFFER_BACKING         = 101, /*!< Requests ZSBuffer to be backed with physical pages */
+	RGX_PDUMP_PANIC_ZSBUFFER_UNBACKING       = 102, /*!< Requests ZSBuffer to be unbacked */
+	RGX_PDUMP_PANIC_FREELIST_GROW            = 103, /*!< Requests an on-demand freelist grow/shrink */
+	RGX_PDUMP_PANIC_FREELISTS_RECONSTRUCTION = 104, /*!< Requests freelists reconstruction */
+} RGX_PDUMP_PANIC;
  
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
+
+#endif /* RGX_PDUMP_PANICS_H_ */
 
 
-
-#endif /* _RGXCORE_KM_1_76_4_6_H_ */

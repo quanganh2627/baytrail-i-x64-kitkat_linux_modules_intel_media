@@ -97,6 +97,7 @@ typedef struct PVRSRV_BRIDGE_IN_RGXINITFIRMWARE_TAG
 	IMG_BOOL bEnableSignatureChecks;
 	IMG_UINT32 ui32SignatureChecksBufSize;
 	IMG_UINT32 ui32HWPerfFWBufSizeKB;
+	IMG_UINT64 ui64HWPerfFilter;
 	IMG_UINT32 ui32RGXFWAlignChecksSize;
 	IMG_UINT32 * pui32RGXFWAlignChecks;
 	IMG_UINT32 ui32ConfigFlags;

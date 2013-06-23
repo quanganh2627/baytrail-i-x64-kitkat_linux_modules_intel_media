@@ -61,6 +61,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	this per memory context
 */
 static IMG_UINT32 ui32CacheOpps = 0;
+static IMG_UINT32 ui32CacheOpSequence = 0;
 /* FIXME: End */
 
 
@@ -153,45 +154,69 @@ PVRSRV_ERROR RGXSLCCacheInvalidateRequest(PVRSRV_DEVICE_NODE *psDeviceNode,
 
 PVRSRV_ERROR RGXPreKickCacheCommand(PVRSRV_RGXDEV_INFO 	*psDevInfo)
 {
+	PVRSRV_DEVICE_NODE *psDeviceNode = psDevInfo->psDeviceNode;
 	RGXFWIF_KCCB_CMD sFlushCmd;
 	PVRSRV_ERROR eError = PVRSRV_OK;
+	RGXFWIF_DM eDMcount = RGXFWIF_DM_MAX;
 
-
-	if (ui32CacheOpps)
+	if (!ui32CacheOpps)
 	{
-		/* Schedule MMU cache command */
+		goto _PVRSRVPowerLock_Exit;
+	}
+
+	sFlushCmd.eCmdType = RGXFWIF_KCCB_CMD_MMUCACHE;
+#if 0
+	/* Set which memory context this command is for */
+	sFlushCmd.uCmdData.sMMUCacheData.psMemoryContext = ???
+#endif
+
+	/* PVRSRVPowerLock guarantees atomicity between commands and global variables consistency.
+	 * This is helpful in a scenario with several applications allocating resources. */
+	PVRSRVForcedPowerLock();
+
+	PDUMPPOWCMDSTART();
+
+	eError = PVRSRVSetDevicePowerStateKM(psDeviceNode->sDevId.ui32DeviceIndex,
+										 PVRSRV_DEV_POWER_STATE_ON,
+										 IMG_FALSE);
+	PDUMPPOWCMDEND();
+
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_WARNING, "RGXPreKickCacheCommand: failed to transition RGX to ON (%s)",
+					PVRSRVGetErrorStringKM(eError)));
+
+		goto _PVRSRVSetDevicePowerStateKM_Exit;
+	}
+
+	sFlushCmd.uCmdData.sMMUCacheData.ui32Flags = ui32CacheOpps;
+	sFlushCmd.uCmdData.sMMUCacheData.ui32CacheSequenceNum = ++ui32CacheOpSequence;
+
+	ui32CacheOpps = 0;
+
+	/* Schedule MMU cache command */
 #if defined(PDUMP)
-		PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_CONTINUOUS, "Submit MMU flush and invalidate (flags = 0x%08x)",ui32CacheOpps);
+	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_CONTINUOUS,
+							"Submit MMU flush and invalidate (flags = 0x%08x, cache operation sequence = %u)",
+							ui32CacheOpps, ui32CacheOpSequence);
 #endif
 
-		sFlushCmd.eCmdType = RGXFWIF_KCCB_CMD_MMUCACHE;
-#if 0 //defined(FIXME)
-		/* Set which memory context this command is for */
-		sFlushCmd.uCmdData.sMMUCacheData.psMemoryContext = ???
-#endif
-		sFlushCmd.uCmdData.sMMUCacheData.ui32Flags = ui32CacheOpps;
-		ui32CacheOpps = 0;
+	while(--eDMcount >= 0)
+	{
+		eError = RGXSendCommandRaw(psDevInfo, eDMcount, &sFlushCmd, sizeof(RGXFWIF_KCCB_CMD), PDUMP_FLAGS_CONTINUOUS);
 
-		eError = RGXSendCommandWithPowLock(psDevInfo,
-											RGXFWIF_DM_GP,
-											&sFlushCmd,
-											sizeof(RGXFWIF_KCCB_CMD),
-											IMG_TRUE);
 		if (eError != PVRSRV_OK)
 		{
-			PVR_DPF((PVR_DBG_ERROR,"RGXPreKickCacheCommand: Failed to schedule MMU cache command with error (%u)", eError));
-		}
-		else
-		{
-			/* Wait for the MMU cache to complete */
-			eError = RGXWaitForFWOp(psDevInfo, RGXFWIF_DM_GP, psDevInfo->psDeviceNode->psSyncPrimPreKick, IMG_TRUE);
-			if (eError != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_ERROR,"RGXPreKickCacheCommand: MMU cache command aborted with error (%u)", eError));
-			}
+			PVR_DPF((PVR_DBG_ERROR,"RGXPreKickCacheCommand: Failed to schedule MMU cache command \
+									to DM=%d with error (%u)", eDMcount, eError));
+			break;
 		}
 	}
 
+_PVRSRVSetDevicePowerStateKM_Exit:
+	PVRSRVPowerUnlock();
+
+_PVRSRVPowerLock_Exit:
 	return eError;
 }
 

@@ -70,10 +70,12 @@ typedef struct _RGXFW_UNITTESTS_			*PRGXFW_UNITTESTS;
 typedef struct _RGXFWIF_TRACEBUF_			*PRGXFWIF_TRACEBUF;
 typedef IMG_UINT8							*PRGXFWIF_HWPERFINFO;
 typedef struct _RGXFWIF_HWRINFOBUF_			*PRGXFWIF_HWRINFOBUF;
+typedef struct _RGXFWIF_GPU_UTIL_FWCB_		*PRGXFWIF_GPU_UTIL_FWCB;
 typedef IMG_UINT8							*PRGXFWIF_COMMONCTX_STATE;
 typedef struct _RGXFWIF_TACTX_STATE_		*PRGXFWIF_TACTX_STATE;
 typedef struct _RGXFWIF_3DCTX_STATE_		*PRGXFWIF_3DCTX_STATE;
 typedef struct _RGXFWIF_COMPUTECTX_STATE_	*PRGXFWIF_COMPUTECTX_STATE;
+typedef struct _RGXFWIF_VRDMCTX_STATE_		*PRGXFWIF_VRDMCTX_STATE;
 typedef IMG_UINT8							*PRGXFWIF_RF_CMD;
 typedef struct _RGXFWIF_COMPCHECKS_			*PRGXFWIF_COMPCHECKS;
 typedef struct _RGX_HWPERF_CONFIG_CNTBLK_	*PRGX_HWPERF_CONFIG_CNTBLK;
@@ -96,6 +98,7 @@ typedef RGXFWIF_DEV_VIRTADDR				PRGXFW_UNITTESTS;
 typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_TRACEBUF;
 typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_HWPERFINFO;
 typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_HWRINFOBUF;
+typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_GPU_UTIL_FWCB;
 typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_COMMONCTX_STATE;
 typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_RF_CMD;
 typedef RGXFWIF_DEV_VIRTADDR				PRGXFWIF_COMPCHECKS;
@@ -103,6 +106,7 @@ typedef RGXFWIF_DEV_VIRTADDR				PRGX_HWPERF_CONFIG_CNTBLK;
 typedef struct {RGXFWIF_DEV_VIRTADDR p;
 				  RGXFWIF_DEV_VIRTADDR n;}	RGXFWIF_DLLIST_NODE;
 #endif /* RGX_FIRMWARE */
+
 
 /*!
 	Firmware memory context.
@@ -116,13 +120,16 @@ typedef struct _RGXFWIF_FWMEMCONTEXT_
 	IMG_UINT32				uiBreakpointCtl; /*!< DM and enable control for BP */
 } RGXFWIF_FWMEMCONTEXT;
 
+
 /*!
  * 	FW context state flags
  */
 #define	RGXFWIF_CONTEXT_TAFLAGS_NEED_RESUME			(0x00000001)
 #define	RGXFWIF_CONTEXT_RENDERFLAGS_NEED_RESUME		(0x00000002)
 #define RGXFWIF_CONTEXT_CDMFLAGS_NEED_RESUME		(0x00000004)
-#define RGXFWIF_CONTEXT_ALLFLAGS_NEED_RESUME		(0x00000007)
+#define RGXFWIF_CONTEXT_SHGFLAGS_NEED_RESUME		(0x00000008)
+#define RGXFWIF_CONTEXT_ALLFLAGS_NEED_RESUME		(0x0000000F)
+
 
 typedef struct _RGXFWIF_TACTX_STATE_
 {
@@ -137,10 +144,11 @@ typedef struct _RGXFWIF_TACTX_STATE_
 #endif
 } RGXFWIF_TACTX_STATE;
 
+
 typedef struct _RGXFWIF_3DCTX_STATE_
 {
 	/* FW-accessible ISP state which must be written out to memory on context store */
-	IMG_UINT32	RGXFW_ALIGN au3DReg_ISP_STORE[3]; /* FIXME: cores with >3 ISP pipes */
+	IMG_UINT32	RGXFW_ALIGN au3DReg_ISP_STORE[8];
 	IMG_UINT64	RGXFW_ALIGN u3DReg_PM_DEALLOCATED_MASK_STATUS;
 	IMG_UINT64	RGXFW_ALIGN u3DReg_PM_PDS_MTILEFREE_STATUS;
 	
@@ -150,11 +158,7 @@ typedef struct _RGXFWIF_3DCTX_STATE_
 #endif
 } RGXFWIF_3DCTX_STATE;
 
-typedef struct _RGXFWIF_CTX_STATE_
-{
-	RGXFWIF_TACTX_STATE		sTAContextState;
-	RGXFWIF_3DCTX_STATE		s3DContextState;
-} RGXFWIF_CTX_STATE;
+
 
 typedef struct _RGXFWIF_COMPUTECTX_STATE_
 {
@@ -165,6 +169,20 @@ typedef struct _RGXFWIF_COMPUTECTX_STATE_
 	IMG_UINT32  ui32NumStores;
 #endif
 } RGXFWIF_COMPUTECTX_STATE;
+
+
+typedef struct _RGXFWIF_VRDMCTX_STATE_
+{
+	/* FW-accessible TA state which must be written out to memory on context store */
+	IMG_UINT64	RGXFW_ALIGN uVRDMReg_VRM_CALL_STACK_POINTER;
+	IMG_UINT64	RGXFW_ALIGN uVRDMReg_VRM_BATCH;
+	
+#if defined(DEBUG)
+	/* Number of stores on this context */
+	IMG_UINT32  ui32NumStores;
+#endif
+} RGXFWIF_VRDMCTX_STATE;
+
 
 typedef struct _RGXFWIF_FWCOMMONCONTEXT_
 {
@@ -228,32 +246,37 @@ typedef struct _RGXFWIF_FWRENDERCONTEXT_
 } RGXFWIF_FWRENDERCONTEXT;
 
 /*!
+	Firmware render context.
+*/
+typedef struct _RGXFWIF_FWRAYCONTEXT_
+{
+	RGXFWIF_FWCOMMONCONTEXT	sSHGContext;				/*!< Firmware context for the SHG */
+	RGXFWIF_FWCOMMONCONTEXT	sRTUContext;				/*!< Firmware context for the RTU */
+
+} RGXFWIF_FWRAYCONTEXT;
+
+/*!
     BIF requester selection
 */
 typedef enum _RGXFWIF_BIFREQ_
 {
 	RGXFWIF_BIFREQ_TA		= 0,
 	RGXFWIF_BIFREQ_3D		= 1,
-	RGXFWIF_BIFREQ_2D		= 2,
-	RGXFWIF_BIFREQ_CDM		= 3,
-	RGXFWIF_BIFREQ_MAX		= 4,
+	RGXFWIF_BIFREQ_CDM		= 2,
+	RGXFWIF_BIFREQ_2D		= 3,
+	RGXFWIF_BIFREQ_HOST		= 4,
+	RGXFWIF_BIFREQ_RTU		= 5,
+	RGXFWIF_BIFREQ_SHG		= 6,
+	RGXFWIF_BIFREQ_MAX		= 7,
 
 	RGXFWIF_BIFREQ_FORCE_I32  = -1,
 } RGXFWIF_BIFREQ;
 
-static INLINE RGXFWIF_BIFREQ rgxfwif_BIFREQ_from_DM(RGXFWIF_DM eDM)
+typedef enum _RGXFWIF_PM_DM_
 {
-	switch(eDM)
-	{
-	case RGXFWIF_DM_TA:  return RGXFWIF_BIFREQ_TA;
-	case RGXFWIF_DM_3D:  return RGXFWIF_BIFREQ_3D;
-	case RGXFWIF_DM_CDM: return RGXFWIF_BIFREQ_CDM;
-	case RGXFWIF_DM_2D:  return RGXFWIF_BIFREQ_2D;
-	default: break;
-	}
-	/* It is an error to translate any other DM to BIFREQ */
-	return RGXFWIF_BIFREQ_MAX;
-}
+	RGXFWIF_PM_DM_TA	= 0,
+	RGXFWIF_PM_DM_3D	= 1,
+} RGXFWIF_PM_DM;
 
 /*!
  ******************************************************************************
@@ -281,6 +304,7 @@ typedef struct _RGXFWIF_MMUCACHEDATA_
 {
 	PRGXFWIF_FWMEMCONTEXT		psMemoryContext;
 	IMG_UINT32					ui32Flags;
+	IMG_UINT32					ui32CacheSequenceNum;
 } RGXFWIF_MMUCACHEDATA;
 
 typedef struct _RGXFWIF_SLCBPCTLDATA_
@@ -344,6 +368,7 @@ typedef struct _RGXFWIF_CLEANUP_REQUEST_
 typedef enum _RGXFWIF_POWER_TYPE_
 {
 	RGXFWIF_POW_OFF_REQ = 1,
+	RGXFWIF_POW_FORCED_IDLE_REQ,
 	RGXFWIF_POW_NUMDUST_CHANGE
 } RGXFWIF_POWER_TYPE;
 
@@ -354,6 +379,7 @@ typedef struct _RGXFWIF_POWER_REQUEST_
 	{
 		IMG_UINT32					ui32NumOfDusts;			/*!< Number of active Dusts */
 		IMG_BOOL					bForced;				/*!< If the operation is mandatory */
+		IMG_BOOL					bCancelForcedIdle;		/*!< If the operation is to cancel previously forced idle */
 	} uPoweReqData;
 } RGXFWIF_POWER_REQUEST;
 
@@ -525,6 +551,11 @@ typedef struct _RGXFWIF_INIT_
 
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sPDSExecBase;
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sUSCExecBase;
+	IMG_DEV_VIRTADDR		RGXFW_ALIGN sPrimIDBase;
+	IMG_DEV_VIRTADDR		RGXFW_ALIGN sRootIDBase;
+	IMG_DEV_VIRTADDR		RGXFW_ALIGN sResultDumpBase;
+	IMG_DEV_VIRTADDR		RGXFW_ALIGN sDPXControlStreamBase;
+	IMG_DEV_VIRTADDR		RGXFW_ALIGN sRTUHeapBase;
 
 	IMG_BOOL				bFirstRender;
 	IMG_BOOL				bFrameworkAfterInit;
@@ -556,7 +587,10 @@ typedef struct _RGXFWIF_INIT_
 
 	PRGXFWIF_TRACEBUF		psTraceBufCtl;
 	PRGXFWIF_HWPERFINFO		psHWPerfInfoCtl;
+	IMG_UINT64	RGXFW_ALIGN ui64HWPerfFilter;
+
 	PRGXFWIF_HWRINFOBUF		psRGXFWIfHWRInfoBufCtl;
+	PRGXFWIF_GPU_UTIL_FWCB	psGpuUtilFWCbCtl;
 
 #if defined(RGXFW_ALIGNCHECKS)
 #if defined(RGX_FIRMWARE)
@@ -566,10 +600,26 @@ typedef struct _RGXFWIF_INIT_
 #endif
 #endif
 
+	/* Snapshot of CR Timer taken when bFirmwareStarted is set */
+	IMG_UINT64				RGXFW_ALIGN ui64CRTimerInitSnapshot;
+
+	/* Flag to be set by the Firmware after successful start */
+	IMG_BOOL				bFirmwareStarted;
+
 	/* Compatibility checks to be populated by the Firmware */
 	RGXFWIF_COMPCHECKS		sRGXCompChecks;
 
 } RGXFWIF_INIT;
+
+
+/*!
+ ******************************************************************************
+ * Client CCB commands which are only required by the kernel
+ *****************************************************************************/
+typedef struct _RGXFWIF_CMD_PRIORITY_
+{
+	IMG_UINT32				ui32Priority;
+} RGXFWIF_CMD_PRIORITY;
 
 /*!
  ******************************************************************************
@@ -604,6 +654,24 @@ typedef struct _RGXFW_UNITTESTS_
 	RGXFW_UNITTEST2 sUnitTest2;
 
 } RGXFW_UNITTESTS;
+
+/*!
+ ******************************************************************************
+ * GPU DVFS History CB
+ *****************************************************************************/
+#define RGXFWIF_GPU_DVFS_HIST_SIZE							100
+typedef struct _RGXFWIF_GPU_DVFS_HIST_ENTRY_
+{
+	IMG_UINT64				ui64CRTimerStamp;	/*!< CR Timer value at DVFS transition */
+	IMG_UINT32				ui32OSTimeStamp;	/*!< OS Time stamp at DVFS transition */
+	IMG_UINT32				ui32DVFSClock;		/*!< New DVFS clock value */
+} RGXFWIF_GPU_DVFS_HIST_ENTRY;
+
+typedef struct _RGXFWIF_GPU_DVFS_HIST_
+{
+	IMG_UINT32						ui32CurrentDVFSId;						/*!< Current history entry index */
+	RGXFWIF_GPU_DVFS_HIST_ENTRY		asCB[RGXFWIF_GPU_DVFS_HIST_SIZE];		/*!< Circular buffer of DVFS transitions history */
+} RGXFWIF_GPU_DVFS_HIST;
 
 #endif /*  __RGX_FWIF_KM_H__ */
 

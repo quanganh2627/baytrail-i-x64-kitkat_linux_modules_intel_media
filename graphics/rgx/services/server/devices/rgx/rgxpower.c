@@ -240,6 +240,7 @@ static IMG_VOID RGXAXIACELiteInit(PVRSRV_RGXDEV_INFO *psDevInfo)
 				   (2U << RGX_CR_AXI_ACE_LITE_CONFIGURATION_ARDOMAIN_CACHE_MAINTENANCE_SHIFT)  |
 				   (2U << RGX_CR_AXI_ACE_LITE_CONFIGURATION_AWDOMAIN_COHERENT_SHIFT) |
 				   (2U << RGX_CR_AXI_ACE_LITE_CONFIGURATION_ARDOMAIN_COHERENT_SHIFT) |
+				   (((IMG_UINT64) 1) << RGX_CR_AXI_ACE_LITE_CONFIGURATION_DISABLE_COHERENT_WRITELINEUNIQUE_SHIFT) |
 				   (2U << RGX_CR_AXI_ACE_LITE_CONFIGURATION_AWCACHE_COHERENT_SHIFT) |
 				   (2U << RGX_CR_AXI_ACE_LITE_CONFIGURATION_ARCACHE_COHERENT_SHIFT) |
 				   (2U << RGX_CR_AXI_ACE_LITE_CONFIGURATION_ARCACHE_CACHE_MAINTENANCE_SHIFT);
@@ -269,6 +270,7 @@ static IMG_VOID RGXAXIACELiteInit(PVRSRV_RGXDEV_INFO *psDevInfo)
 static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG *psDevConfig)
 {
 	PVRSRV_ERROR	eError = PVRSRV_OK;
+	RGXFWIF_INIT	*psRGXFWInit;
 
 	/* Set RGX in soft-reset */
 	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXStart: soft reset everything");
@@ -353,6 +355,33 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 	
 	OSMemoryBarrier();
 
+	/* Check whether the FW has started by polling on bFirmwareStarted flag */
+	eError = DevmemAcquireCpuVirtAddr(psDevInfo->psRGXFWIfInitMemDesc,
+									  (IMG_VOID **)&psRGXFWInit);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"RGXStart: Failed to acquire kernel fw if ctl (%u)", eError));
+		return eError;
+	}
+
+	if (PVRSRVPollForValueKM((IMG_UINT32 *)&psRGXFWInit->bFirmwareStarted,
+							 IMG_TRUE,
+							 0xFFFFFFFF) != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "RGXStart: Polling for 'FW started' flag failed."));
+		eError = PVRSRV_ERROR_TIMEOUT;
+		DevmemReleaseCpuVirtAddr(psDevInfo->psRGXFWIfInitMemDesc);
+		return eError;
+	}
+
+	/* Initialize the first entry in DVFS history with current OS time and snapshot of CR timer */
+	psDevInfo->psGpuDVFSHistory->asCB[0].ui32OSTimeStamp = OSClockms();
+	psDevInfo->psGpuDVFSHistory->asCB[0].ui64CRTimerStamp = psRGXFWInit->ui64CRTimerInitSnapshot;
+
+	/* This place should contain PDUMP POL for bFirmwareStarted, once objanal supports it */
+
+	DevmemReleaseCpuVirtAddr(psDevInfo->psRGXFWIfInitMemDesc);
+
 	return eError;
 }
 
@@ -413,7 +442,7 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 		SyncPrimSet(psDevInfo->psPowSyncPrim, 0);
 
 		/* Send one pow command to each DM to make sure we flush all the DMs pipelines */
-		for (ui32DM = RGXFWIF_DM_TA; ui32DM <= RGXFWIF_DM_GP; ui32DM++)
+		for (ui32DM = 0; ui32DM < RGXFWIF_DM_MAX; ui32DM++)
 		{
 			eError = RGXSendCommandRaw(psDevInfo,
 					ui32DM,
@@ -482,6 +511,7 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 		PVRSRV_DEVICE_NODE	 *psDeviceNode = hDevHandle;
 		PVRSRV_RGXDEV_INFO	 *psDevInfo = psDeviceNode->pvDevice;
 		PVRSRV_DEVICE_CONFIG *psDevConfig = psDeviceNode->psDevConfig;
+		RGX_DATA			 *psRGXData = (RGX_DATA*)psDevConfig->hDevData;
 
 		if (eCurrentPowerState == PVRSRV_DEV_POWER_STATE_OFF)
 		{
@@ -489,6 +519,12 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 				Coming up from off, re-initialise RGX.
 			*/
 
+			/* Reset DVFS history */
+			psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId = 0;
+			psDevInfo->psGpuDVFSHistory->asCB[0].ui64CRTimerStamp = 0;
+			psDevInfo->psGpuDVFSHistory->asCB[0].ui32OSTimeStamp = 0;
+			psDevInfo->psGpuDVFSHistory->asCB[0].ui32DVFSClock = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
+			psDevInfo->ui32GpuUtilTransitionsCountSample = 0;
 
 			/*
 				Run the RGX init script.
@@ -515,18 +551,86 @@ PVRSRV_ERROR RGXPreClockSpeedChange (IMG_HANDLE				hDevHandle,
 									 IMG_BOOL				bIdleDevice,
 									 PVRSRV_DEV_POWER_STATE	eCurrentPowerState)
 {
-
+	PVRSRV_ERROR		eError = PVRSRV_OK;
 	PVRSRV_DEVICE_NODE	*psDeviceNode = hDevHandle;
 	PVRSRV_RGXDEV_INFO	*psDevInfo = psDeviceNode->pvDevice;
+	RGX_DATA			*psRGXData = (RGX_DATA*)psDeviceNode->psDevConfig->hDevData;
+	RGXFWIF_TRACEBUF	*psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
 
-    PVR_UNREFERENCED_PARAMETER(psDevInfo);
-    PVR_UNREFERENCED_PARAMETER(bIdleDevice);
-    PVR_UNREFERENCED_PARAMETER(eCurrentPowerState);
+	PVR_UNREFERENCED_PARAMETER(psRGXData);
 
 	PVR_DPF((PVR_DBG_MESSAGE,"RGXPreClockSpeedChange: RGX clock speed was %uHz",
-			psDevInfo->ui32CoreClockSpeed));
+			psRGXData->psRGXTimingInfo->ui32CoreClockSpeed));
 
-	return PVRSRV_OK;
+    if ((eCurrentPowerState != PVRSRV_DEV_POWER_STATE_OFF) 
+		&& (psFWTraceBuf->ePowState != RGXFWIF_POW_OFF) 
+		&& bIdleDevice)
+	{
+		RGXFWIF_KCCB_CMD	sPowCmd;
+
+		/* Send the IDLE request to the FW */
+		sPowCmd.eCmdType = RGXFWIF_KCCB_CMD_POW;
+		sPowCmd.uCmdData.sPowData.ePowType = RGXFWIF_POW_FORCED_IDLE_REQ;
+		sPowCmd.uCmdData.sPowData.uPoweReqData.bCancelForcedIdle = IMG_FALSE;
+
+		SyncPrimSet(psDevInfo->psPowSyncPrim, 0);
+
+		/* Send one forced IDLE command to GP */
+		eError = RGXSendCommandRaw(psDevInfo,
+				RGXFWIF_DM_GP,
+				&sPowCmd,
+				sizeof(sPowCmd),
+				PDUMP_FLAGS_POWERTRANS);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR,"RGXPreClockSpeedChange: Failed to send IDLE request for DM%d", RGXFWIF_DM_GP));
+			return eError;
+		}
+
+		/* Wait for the firmware to complete processing. */
+		eError = PVRSRVPollForValueKM(psDevInfo->psPowSyncPrim->pui32LinAddr, 0x1, 0xFFFFFFFF);
+
+		/* Check the Power state after the answer */
+		if (eError == PVRSRV_OK)	
+		{
+			if (psFWTraceBuf->ePowState != RGXFWIF_POW_FORCED_IDLE)
+			{
+				/* the sync was updated but the pow state isn't idle -> the FW denied the transition */
+				eError = PVRSRV_ERROR_DEVICE_POWER_CHANGE_DENIED;
+			}
+			else
+			{
+				RGXFWIF_GPU_DVFS_HIST_ENTRY *psCBEntry;
+
+				/* Advance DVFS history ID */
+				psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId++;
+				if (psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId >= RGXFWIF_GPU_DVFS_HIST_SIZE)
+				{
+					psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId = 0;
+				}
+
+				/* Update DVFS history ID that is used by the FW to populate state changes CB */
+				psDevInfo->psRGXFWIfGpuUtilFWCb->ui32CurrentDVFSId = psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId;
+				/* Populate DVFS history entry */
+				psCBEntry = &psDevInfo->psGpuDVFSHistory->asCB[psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId];
+				psCBEntry->ui64CRTimerStamp = psFWTraceBuf->ui64CRTimerSnapshot;
+				psCBEntry->ui32OSTimeStamp = OSClockms();
+				psCBEntry->ui32DVFSClock = 0;
+			}
+		}
+		else if (eError == PVRSRV_ERROR_TIMEOUT)
+		{
+			/* timeout waiting for the FW to ack the request: return timeout */
+			PVR_DPF((PVR_DBG_ERROR,"RGXPreClockSpeedChange: Timeout waiting for idle ack from the FW"));
+		}
+		else
+		{
+			PVR_DPF((PVR_DBG_ERROR,"RGXPreClockSpeedChange: Error waiting for idle ack from the FW (%s)", PVRSRVGetErrorStringKM(eError)));
+			eError = PVRSRV_ERROR_DEVICE_POWER_CHANGE_FAILURE;
+		}
+	}
+
+	return eError;
 }
 
 
@@ -539,40 +643,63 @@ PVRSRV_ERROR RGXPostClockSpeedChange (IMG_HANDLE				hDevHandle,
 {
 	PVRSRV_DEVICE_NODE	*psDeviceNode = hDevHandle;
 	PVRSRV_RGXDEV_INFO	*psDevInfo = psDeviceNode->pvDevice;
-	IMG_UINT32			ui32OldClockSpeed = psDevInfo->ui32CoreClockSpeed;
-	PVRSRV_ERROR		eError;
+	RGX_DATA			*psRGXData = (RGX_DATA*)psDeviceNode->psDevConfig->hDevData;
+	PVRSRV_ERROR		eError = PVRSRV_OK;
 	RGXFWIF_KCCB_CMD 	sCOREClkSpeedChangeCmd;
+	RGXFWIF_TRACEBUF	*psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
 
-	PVR_UNREFERENCED_PARAMETER(ui32OldClockSpeed);
-
-	if (bIdleDevice)
+    if ((eCurrentPowerState != PVRSRV_DEV_POWER_STATE_OFF) 
+		&& (psFWTraceBuf->ePowState == RGXFWIF_POW_FORCED_IDLE) 
+		&& bIdleDevice)
 	{
-		eError = PVRSRV_ERROR_INVALID_PARAMS;
-		PVR_DPF((PVR_DBG_ERROR, "RGXPostClockSpeedChange: Idling RGX on a DVFS transition is not supported yet. Error:%u", eError));
-		return eError;
+		RGXFWIF_KCCB_CMD	sPowCmd;
+
+		/* Send the IDLE request to the FW */
+		sPowCmd.eCmdType = RGXFWIF_KCCB_CMD_POW;
+		sPowCmd.uCmdData.sPowData.ePowType = RGXFWIF_POW_FORCED_IDLE_REQ;
+		sPowCmd.uCmdData.sPowData.uPoweReqData.bCancelForcedIdle = IMG_TRUE;
+
+		SyncPrimSet(psDevInfo->psPowSyncPrim, 0);
+
+		/* Send one forced IDLE command to GP */
+		eError = RGXSendCommandRaw(psDevInfo,
+				RGXFWIF_DM_GP,
+				&sPowCmd,
+				sizeof(sPowCmd),
+				PDUMP_FLAGS_POWERTRANS);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR,"RGXPostClockSpeedChange: Failed to send Cancel IDLE request for DM%d", RGXFWIF_DM_GP));
+			return eError;
+		}
 	}
 
-	sCOREClkSpeedChangeCmd.eCmdType = RGXFWIF_KCCB_CMD_CORECLKSPEEDCHANGE;
-	sCOREClkSpeedChangeCmd.uCmdData.sCORECLKSPEEDCHANGEData.ui32NewClockSpeed = psDevInfo->ui32CoreClockSpeed;
+    if (eCurrentPowerState != PVRSRV_DEV_POWER_STATE_OFF) 
+	{
+		sCOREClkSpeedChangeCmd.eCmdType = RGXFWIF_KCCB_CMD_CORECLKSPEEDCHANGE;
+		sCOREClkSpeedChangeCmd.uCmdData.sCORECLKSPEEDCHANGEData.ui32NewClockSpeed = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
+		/* Store new DVFS freq into DVFS history entry */
+		psDevInfo->psGpuDVFSHistory->asCB[psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId].ui32DVFSClock = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
 
-	PDUMPCOMMENT("Scheduling CORE clock speed change command");
-	eError = RGXSendCommandWithPowLock(psDeviceNode->pvDevice,
-										RGXFWIF_DM_GP,
-										&sCOREClkSpeedChangeCmd,
-										sizeof(sCOREClkSpeedChangeCmd),
-										IMG_TRUE);
+		PDUMPCOMMENT("Scheduling CORE clock speed change command");
+		eError = RGXSendCommandRaw(psDeviceNode->pvDevice,
+											RGXFWIF_DM_GP,
+											&sCOREClkSpeedChangeCmd,
+											sizeof(sCOREClkSpeedChangeCmd),
+											IMG_TRUE);
 	
-	if (eError != PVRSRV_OK)
-	{
-		PDUMPCOMMENT("Scheduling CORE clock speed change command failed");
-		PVR_DPF((PVR_DBG_ERROR, "RGXPostClockSpeedChange: Scheduling KCCB command failed. Error:%u", eError));
-		return eError;
-	}
+		if (eError != PVRSRV_OK)
+		{
+			PDUMPCOMMENT("Scheduling CORE clock speed change command failed");
+			PVR_DPF((PVR_DBG_ERROR, "RGXPostClockSpeedChange: Scheduling KCCB command failed. Error:%u", eError));
+			return eError;
+		}
  
-	PVR_DPF((PVR_DBG_MESSAGE,"RGXPostClockSpeedChange: RGX clock speed changed from %uHz to %uHz",
-			ui32OldClockSpeed, psDevInfo->ui32CoreClockSpeed));
+		PVR_DPF((PVR_DBG_MESSAGE,"RGXPostClockSpeedChange: RGX clock speed changed to %uHz",
+				psRGXData->psRGXTimingInfo->ui32CoreClockSpeed));
+	}
 
-	return PVRSRV_OK;
+	return eError;
 }
 
 

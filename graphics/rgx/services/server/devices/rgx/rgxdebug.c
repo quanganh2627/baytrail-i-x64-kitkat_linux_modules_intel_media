@@ -513,7 +513,12 @@ static IMG_VOID _RGXDumpFWHWRInfo(RGXFWIF_TRACEBUF *psRGXFWIfTraceBufCtl, RGXFWI
 	IMG_UINT32      dm, i;
 	IMG_CHAR	    *pszLine, *pszTemp;
 	IMG_UINT32      ui32LineSize;
-	const IMG_CHAR* apszDmNames[RGXFWIF_DM_MAX + 1] = { "TA(", "3D(", "CDM(", "2D(", "GP(", IMG_NULL };
+	const IMG_CHAR * apszDmNames[RGXFWIF_DM_MAX + 1] = { "GP(", "2D(", "TA(", "3D(", "CDM(",
+#if defined(RGX_FEATURE_RAY_TRACING)
+								 "RTU(", "SHG(",
+#endif /* RGX_FEATURE_RAY_TRACING */
+								 NULL };
+
 	const IMG_CHAR* pszMsgHeader = "Number of HWR: ";
 	IMG_UINT32      ui32MsgHeaderSize = OSStringLength(pszMsgHeader);
 
@@ -533,7 +538,7 @@ static IMG_VOID _RGXDumpFWHWRInfo(RGXFWIF_TRACEBUF *psRGXFWIfTraceBufCtl, RGXFWI
 	}
 
 	ui32LineSize = sizeof(IMG_CHAR) * (	ui32MsgHeaderSize + 
-			(RGXFWIF_HWDM_MAX*(	4/*DM name + left parenthesis*/ + 
+			(RGXFWIF_DM_MAX*(	4/*DM name + left parenthesis*/ + 
 								5/*UINT16 max num of digits*/ + 
 								1/*slash*/ + 
 								5/*UINT16 max num of digits*/ + 
@@ -1444,11 +1449,11 @@ PVRSRV_ERROR PVRSRVRGXCtrlHWPerfKM(
 #if defined(DEBUG)
 	if (bEnable)
 	{
-		PVR_DPF((PVR_DBG_WARNING, "HWPerf events have been ENABLED"));
+		PVR_DPF((PVR_DBG_WARNING, "HWPerf events have been ENABLED (%llx)", ui64Mask));
 	}
 	else
 	{
-		PVR_DPF((PVR_DBG_WARNING, "HWPerf events have been DISABLED"));
+		PVR_DPF((PVR_DBG_WARNING, "HWPerf events have been DISABLED (%llx)", ui64Mask));
 	}
 #endif
 

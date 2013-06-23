@@ -47,7 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrsrv.h"
 #include "osfunc.h"
 
-/* FIXME: use mutex here if required */
+/* use mutex here if required */
 #define ACQUIRE_SYNC_OBJ
 #define RELEASE_SYNC_OBJ
 
@@ -89,7 +89,7 @@ typedef struct _RESMAN_CONTEXT_
 typedef struct _RESMAN_DEFER_CONTEXT_
 {
 	IMG_UINT32					ui32Signature;
-	IMG_HANDLE					hCleanupEventObject;      /*!< used to trigger deferred clean-up when it is requried */
+	IMG_HANDLE					hCleanupEventObject;      /*!< used to trigger deferred clean-up when it is required */
 
 	RESMAN_CONTEXT				*psDeferResManContextList; /*!< list of contexts for deferred clean-up */
 } RESMAN_DEFER_CONTEXT;
@@ -302,6 +302,14 @@ static IMG_VOID FlushDeferResManContext(PRESMAN_CONTEXT psResManContext)
 		PVR_DPF((PVR_DBG_WARNING, "PVRSRVResManDisconnect: Resman context (%p) deferred free finished", psResManContext));
 		List_RESMAN_CONTEXT_Remove(psResManContext);
 		PVRSRVResManDisconnect(psResManContext);
+	}
+	else
+	{
+		PVR_DPF((PVR_DBG_MESSAGE, "PVRSRVResManDisconnect: Resman context (%p) still has pending resources", psResManContext));
+		PVR_DPF((PVR_DBG_MESSAGE, "PVRSRVResManDisconnect: psResManContext->psResItemList = %p", psResManContext->psResItemList));
+		PVR_DPF((PVR_DBG_MESSAGE, "PVRSRVResManDisconnect: type = %d, pvParam = %p",
+				psResManContext->psResItemList->ui32ResType,
+				psResManContext->psResItemList->pvParam));
 	}
 }
 
@@ -516,11 +524,6 @@ PVRSRV_ERROR ResManFreeResByPtr(RESMAN_ITEM	*psResItem)
 }
 
 
-/*
-  FIXME:
-   
-  following comment should be in .h file
-*/
 /*!
 ******************************************************************************
  @Function	 	ResManFindPrivateDataByPtr
@@ -740,7 +743,6 @@ IMG_INTERNAL PVRSRV_ERROR ResManFindResourceByPtr(PRESMAN_CONTEXT	psResManContex
 	/* Release resource list sync object */
 	RELEASE_SYNC_OBJ;
 
-/*	return PVRSRV_ERROR_NOT_OWNER;*/
 	return eResult;
 }
 
@@ -916,7 +918,7 @@ static PVRSRV_ERROR FreeResourceByCriteria(PRESMAN_CONTEXT	psResManContext,
 			PVRSRV_ERROR ret;
 
 			PVR_ASSERT(psResManContext->psDeferContext);
-			PVR_DPF((PVR_DBG_WARNING, "FreeResourceByCriteria: Resource %p returned retry. Moving resman context to defer context", psCurItem));
+			PVR_DPF((PVR_DBG_WARNING, "FreeResourceByCriteria: Resource %p (type %d) returned retry. Moving resman context to defer context", psCurItem, ui32ResType));
 
 			/*
 				Due to the fact the not all resources are refcounted against each
@@ -970,16 +972,15 @@ static IMG_UINT32 g_ui32OrderedFreeList [] = {
 	RESMAN_TYPE_SHARED_EVENT_OBJECT,
 
 	/* RGX types */
-	RESMAN_TYPE_RGX_RENDER_CONTEXT,
 	RESMAN_TYPE_RGX_POPULATION,
 	RESMAN_TYPE_RGX_FWIF_HWRTDATA,
 	RESMAN_TYPE_RGX_FWIF_FREELIST,
 	RESMAN_TYPE_RGX_FWIF_ZSBUFFER,
 	RESMAN_TYPE_RGX_FWIF_RENDERTARGET,
-	RESMAN_TYPE_RGX_TQ3D_CONTEXT,
-	RESMAN_TYPE_RGX_TQ2D_CONTEXT,
-	RESMAN_TYPE_RGX_COMPUTE_CONTEXT,
-	RESMAN_TYPE_RGX_CCB,
+	RESMAN_TYPE_RGX_SERVER_RENDER_CONTEXT,
+	RESMAN_TYPE_RGX_SERVER_TQ_CONTEXT,
+	RESMAN_TYPE_RGX_SERVER_COMPUTE_CONTEXT,
+	RESMAN_TYPE_RGX_RAY_CONTEXT,
 	RESMAN_TYPE_SHARED_PB_DESC_CREATE_LOCK,
 	RESMAN_TYPE_SHARED_PB_DESC,
 
@@ -1020,6 +1021,9 @@ static IMG_UINT32 g_ui32OrderedFreeList [] = {
 
 	/* TRANSPORT LAYER types: */
 	RESMAN_TYPE_TL_STREAM_DESC,
+
+	/* RI types: */
+	RESMAN_TYPE_RI_HANDLE,
 };
 
 /*!

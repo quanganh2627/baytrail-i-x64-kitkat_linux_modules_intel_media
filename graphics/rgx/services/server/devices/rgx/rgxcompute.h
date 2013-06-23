@@ -49,19 +49,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxfwutils.h"
 #include "rgx_fwif_resetframework.h"
 
+#include "sync_server.h"
+#include "sync_internal.h"
+#include "connection_server.h"
+
 #if defined (__cplusplus)
 extern "C" {
 #endif
 
-typedef struct {
-	PVRSRV_DEVICE_NODE 		*psDeviceNode;
-	DEVMEM_MEMDESC			*psFWComputeContextMemDesc;
-	DEVMEM_MEMDESC			*psFWComputeContextStateMemDesc;
-	DEVMEM_MEMDESC			*psFWFrameworkMemDesc;
-	RGX_FWCOMCTX_CLEANUP 	sFWComContextCleanup;
-	PVRSRV_CLIENT_SYNC_PRIM	*psCleanupSync;
-} RGX_CC_CLEANUP_DATA;
-
+typedef struct _RGX_SERVER_COMPUTE_CONTEXT_ RGX_SERVER_COMPUTE_CONTEXT;
 
 /*!
 *******************************************************************************
@@ -79,16 +75,12 @@ typedef struct {
 ******************************************************************************/
 IMG_EXPORT
 PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
-											 DEVMEM_MEMDESC				*psCmpCCBMemDesc,
-											 DEVMEM_MEMDESC				*psCmpCCBCtlMemDesc,
-											 RGX_CC_CLEANUP_DATA		**ppsCleanupData,
-											 DEVMEM_MEMDESC				**ppsFWComputeContextMemDesc,
-											 DEVMEM_MEMDESC 			**ppsFWComputeContextStateMemDesc,
 											 IMG_UINT32					ui32Priority,
 											 IMG_DEV_VIRTADDR			sMCUFenceAddr,
 											 IMG_UINT32					ui32FrameworkRegisterSize,
 											 IMG_PBYTE					pbyFrameworkRegisters,
-											 IMG_HANDLE					hMemCtxPrivData);
+											 IMG_HANDLE					hMemCtxPrivData,
+											 RGX_SERVER_COMPUTE_CONTEXT	**ppsComputeContext);
 
 /*! 
 *******************************************************************************
@@ -102,7 +94,7 @@ PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
  @Return   PVRSRV_ERROR
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXDestroyComputeContextKM(RGX_CC_CLEANUP_DATA *psCleanupData);
+PVRSRV_ERROR PVRSRVRGXDestroyComputeContextKM(RGX_SERVER_COMPUTE_CONTEXT *psComputeContext);
 
 
 /*!
@@ -119,10 +111,20 @@ PVRSRV_ERROR PVRSRVRGXDestroyComputeContextKM(RGX_CC_CLEANUP_DATA *psCleanupData
  @Return   PVRSRV_ERROR
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXKickCDMKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
-								DEVMEM_MEMDESC 		*psFWComputeContextMemDesc,
-								IMG_UINT32			ui32cCCBWoffUpdate,
-								IMG_BOOL			bbPDumpContinuous);
+PVRSRV_ERROR PVRSRVRGXKickCDMKM(CONNECTION_DATA				*psConnection,
+								RGX_SERVER_COMPUTE_CONTEXT	*psComputeContext,
+								IMG_UINT32					ui32ClientFenceCount,
+								PRGXFWIF_UFO_ADDR			*pauiClientFenceUFOAddress,
+								IMG_UINT32					*paui32ClientFenceValue,
+								IMG_UINT32					ui32ClientUpdateCount,
+								PRGXFWIF_UFO_ADDR			*pauiClientUpdateUFOAddress,
+								IMG_UINT32					*paui32ClientUpdateValue,
+								IMG_UINT32					ui32ServerSyncPrims,
+								IMG_UINT32					*paui32ServerSyncFlags,
+								SERVER_SYNC_PRIMITIVE 		**pasServerSyncs,
+								IMG_UINT32					ui32CmdSize,
+								IMG_PBYTE					pui8DMCmd,
+								IMG_BOOL					bPDumpContinuous);
 								
 /*!
 *******************************************************************************
@@ -131,11 +133,15 @@ PVRSRV_ERROR PVRSRVRGXKickCDMKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
  @Description
 	Server-side implementation of RGXFlushComputeData
 
- @Input psDeviceNode - RGX Device node
+ @Input psComputeContext - Compute context to flush
 
  @Return   PVRSRV_ERROR
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXFlushComputeDataKM(PVRSRV_DEVICE_NODE *psDeviceNode,  DEVMEM_MEMDESC *psFWContextMemDesc);
+PVRSRV_ERROR PVRSRVRGXFlushComputeDataKM(RGX_SERVER_COMPUTE_CONTEXT *psComputeContext);
+
+PVRSRV_ERROR PVRSRVRGXSetComputeContextPriorityKM(CONNECTION_DATA *psConnection,
+												  RGX_SERVER_COMPUTE_CONTEXT *psComputeContext,
+												  IMG_UINT32 ui32Priority);
 
 #endif /* __RGXCOMPUTE_H__ */

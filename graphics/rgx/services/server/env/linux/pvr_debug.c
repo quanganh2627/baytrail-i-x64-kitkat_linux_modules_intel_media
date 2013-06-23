@@ -472,9 +472,9 @@ IMG_VOID PVRSRVDebugPrintf	(
 				pszFileName = pszLeafName+1;
 			}
 #endif /* __sh__ */
-				pszLeafName = (IMG_CHAR *)strrchr (pszFileName, '/');
-				if (pszLeafName)
-					pszFileName = pszLeafName;
+			pszLeafName = (IMG_CHAR *)strrchr (pszFileName, '/');
+			if (pszLeafName)
+				pszFileName = pszLeafName;
 
 			if (BAppend(pszBuf, ui32BufSiz, " [%u, %s]", ui32Line, pszFileName))
 			{

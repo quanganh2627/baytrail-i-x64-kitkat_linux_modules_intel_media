@@ -239,6 +239,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __func__ __FUNCTION__
 #endif
 
+
+
+
+#if defined(SUPPORT_PVR_VALGRIND)
+	#if !defined(__METAG)
+		#include "/usr/include/valgrind/memcheck.h"
+
+		#define VALGRIND_HEADER_PRESENT
+
+		#define VG_MARK_INITIALIZED(pvData,ui32Size)  VALGRIND_MAKE_MEM_DEFINED(pvData,ui32Size)
+	#else
+		#define VG_MARK_INITIALIZED(pvData,ui32Size) do { } while(0)
+	#endif
+#else
+
+	#define VG_MARK_INITIALIZED(pvData,ui32Size) do { } while(0)
+#endif
+
+
 #endif /* #if !defined (__IMG_DEFS_H__) */
 /*****************************************************************************
  End of file (IMG_DEFS.H)

@@ -58,6 +58,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "osfunc.h"
 #include "pvrsrv.h"
 #include "pvr_debug.h"
+#include "srvkm.h"
 #include "pdump_physmem.h"
 #include "hash.h"
 
@@ -631,6 +632,70 @@ PVRSRV_ERROR PDumpComment(IMG_CHAR *pszFormat, ...)
 	return PDumpCommentKM(pszMsg, PDUMP_FLAGS_CONTINUOUS);
 }
 
+/*************************************************************************/ /*!
+ * Function Name  : PDumpPanic
+ * Inputs         : ui32PanicNo - Unique number for panic condition
+ *				  : pszPanicMsg - Panic reason message limited to ~90 chars
+ *				  : pszPPFunc   - Function name string where panic occurred
+ *				  : ui32PPline  - Source line number where panic occurred
+ * Outputs        : None
+ * Returns        : PVRSRV_ERROR
+ * Description    : PDumps a panic assertion. Used when the host driver
+ *                : detects a condition that will lead to an invalid PDump
+ *                : script that cannot be played back off-line.
+ */ /*************************************************************************/
+PVRSRV_ERROR PDumpPanic(IMG_UINT32      ui32PanicNo,
+						IMG_CHAR*       pszPanicMsg,
+						const IMG_CHAR* pszPPFunc,
+						IMG_UINT32      ui32PPline)
+{
+	PVRSRV_ERROR   eError = PVRSRV_OK;
+	PDUMP_FLAGS_T  uiPDumpFlags = PDUMP_FLAGS_CONTINUOUS;
+	IMG_CHAR       pszConsoleMsg[] =
+"COM ***************************************************************************\n"
+"COM Script invalid and not compatible with off-line playback. Check test \n"
+"COM parameters and driver configuration, stop imminent.\n"
+"COM ***************************************************************************\n";
+	PDUMP_GET_SCRIPT_STRING();
+
+	/* Log the panic condition to the live kern.log in both REL and DEB mode 
+	 * to aid user PDump trouble shooting. */
+	PVR_LOG(("PDUMP PANIC %08x: %s", ui32PanicNo, pszPanicMsg));
+	PVR_DPF((PVR_DBG_MESSAGE, "PDUMP PANIC start %s:%d", pszPPFunc, ui32PPline));
+
+	/* Check the supplied panic reason string is within length limits */
+	PVR_ASSERT(OSStringLength(pszPanicMsg)+sizeof("PANIC   ") < PVRSRV_PDUMP_MAX_COMMENT_SIZE-1);
+
+	/* Add persistent flag if required and obtain lock to keep the multi-line
+	 * panic statement together in a single atomic write */
+	uiPDumpFlags |= (PDumpIsPersistent()) ? PDUMP_FLAGS_PERSISTENT : 0;
+	PDUMP_LOCK();
+
+	/* Write -- Panic start (Function:line) */
+	eError = PDumpOSBufprintf(hScript, ui32MaxLen, "-- Panic start (%s:%d)", pszPPFunc, ui32PPline);
+	PVR_LOGG_IF_ERROR(eError, "PDumpOSBufprintf", e1);
+	(IMG_VOID)PDumpOSWriteString2(hScript, uiPDumpFlags);
+
+	/* Write COM <message> x4 */
+	eError = PDumpOSBufprintf(hScript, ui32MaxLen, pszConsoleMsg);
+	PVR_LOGG_IF_ERROR(eError, "PDumpOSBufprintf", e1);
+	(IMG_VOID)PDumpOSWriteString2(hScript, uiPDumpFlags);
+
+	/* Write PANIC no msg command */
+	eError = PDumpOSBufprintf(hScript, ui32MaxLen, "PANIC %08x %s", ui32PanicNo, pszPanicMsg);
+	PVR_LOGG_IF_ERROR(eError, "PDumpOSBufprintf", e1);
+	(IMG_VOID)PDumpOSWriteString2(hScript, uiPDumpFlags);
+
+	/* Write -- Panic end */
+	eError = PDumpOSBufprintf(hScript, ui32MaxLen, "-- Panic end");
+	PVR_LOGG_IF_ERROR(eError, "PDumpOSBufprintf", e1);
+	(IMG_VOID)PDumpOSWriteString2(hScript, uiPDumpFlags);
+
+e1:
+	PDUMP_UNLOCK();
+
+	return eError;
+}
 
 /*!
 ******************************************************************************
@@ -714,16 +779,8 @@ PVRSRV_ERROR PDumpBitmapKM(	PVRSRV_DEVICE_NODE *psDeviceNode,
 			const IMG_UINT32 ui32Plane1FileOffset = ui32FileOffset + ui32Plane0Size;
 			const IMG_UINT32 ui32Plane1MemOffset = ui32Plane0Size;
 			
-			#if 1 // Remove this when the c-sim is fixed
 			PDumpCommentWithFlags(ui32PDumpFlags, "YUV420 2-plane. Width=0x%08X Height=0x%08X Stride=0x%08X",
 							 						ui32Width, ui32Height, ui32StrideInBytes);
-							 						
-			PDumpCommentWithFlags(ui32PDumpFlags, "SII <imageset> <filename>");
-			PDumpCommentWithFlags(ui32PDumpFlags, "    :<memsp1>:v<id1>:<virtaddr1> <size1> <fileoffset1>");
-			PDumpCommentWithFlags(ui32PDumpFlags, "    :<memsp2>:v<id2>:<virtaddr2> <size2> <fileoffset2>");
-			PDumpCommentWithFlags(ui32PDumpFlags, "    <pixfmt> <width> <height> <stride> <addrmode>");
-			#endif
-			
 			eErr = PDumpOSBufprintf(hScript,
 						ui32MaxLen,
 						"SII %s %s.bin :%s:v%x:0x%010llX 0x%08X 0x%08X :%s:v%x:0x%010llX 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X",
@@ -771,17 +828,8 @@ PVRSRV_ERROR PDumpBitmapKM(	PVRSRV_DEVICE_NODE *psDeviceNode,
 			const IMG_UINT32 ui32Plane1MemOffset = ui32Plane0Size;
 			const IMG_UINT32 ui32Plane2MemOffset = ui32Plane0Size+ui32Plane1Size;
 	
-			#if 1 // Remove this when the c-sim is fixed
 			PDumpCommentWithFlags(ui32PDumpFlags, "YUV420 3-plane. Width=0x%08X Height=0x%08X Stride=0x%08X",
 							 						ui32Width, ui32Height, ui32StrideInBytes);
-
-			PDumpCommentWithFlags(ui32PDumpFlags, "SII <imageset> <filename>");
-			PDumpCommentWithFlags(ui32PDumpFlags, "    :<memsp1>:v<id1>:<virtaddr1> <size1> <fileoffset1>");
-			PDumpCommentWithFlags(ui32PDumpFlags, "    :<memsp2>:v<id2>:<virtaddr2> <size2> <fileoffset2>");
-			PDumpCommentWithFlags(ui32PDumpFlags, "    :<memsp3>:v<id2>:<virtaddr3> <size3> <fileoffset3>");
-			PDumpCommentWithFlags(ui32PDumpFlags, "    <pixfmt> <width> <height> <stride> <addrmode>");
-			#endif
-			
 			eErr = PDumpOSBufprintf(hScript,
 						ui32MaxLen,
 						"SII %s %s.bin :%s:v%x:0x%010llX 0x%08X 0x%08X :%s:v%x:0x%010llX 0x%08X 0x%08X :%s:v%x:0x%010llX 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X 0x%08X",

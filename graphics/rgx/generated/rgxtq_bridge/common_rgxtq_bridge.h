@@ -46,145 +46,109 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define COMMON_RGXTQ_BRIDGE_H
 
 #include "rgx_bridge.h"
+#include "sync_external.h"
+#include "rgx_fwif_shared.h"
 
 
 /* FIXME: need to create pvrbridge_common.h" */
 #include "pvr_bridge.h"
 
 #define PVRSRV_BRIDGE_RGXTQ_CMD_FIRST			(PVRSRV_BRIDGE_RGXTQ_START)
-#define PVRSRV_BRIDGE_RGXTQ_RGXCREATETQ3DCONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+0)
-#define PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTQ3DCONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+1)
-#define PVRSRV_BRIDGE_RGXTQ_SUBMITTQ3DKICK			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+2)
-#define PVRSRV_BRIDGE_RGXTQ_RGXCREATETQ2DCONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+3)
-#define PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTQ2DCONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+4)
-#define PVRSRV_BRIDGE_RGXTQ_SUBMITTQ2DKICK			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+5)
-#define PVRSRV_BRIDGE_RGXTQ_CMD_LAST			(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+5)
+#define PVRSRV_BRIDGE_RGXTQ_RGXCREATETRANSFERCONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+0)
+#define PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTRANSFERCONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+1)
+#define PVRSRV_BRIDGE_RGXTQ_RGXSUBMITTRANSFER			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+2)
+#define PVRSRV_BRIDGE_RGXTQ_RGXSETTRANSFERCONTEXTPRIORITY			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+3)
+#define PVRSRV_BRIDGE_RGXTQ_CMD_LAST			(PVRSRV_BRIDGE_RGXTQ_CMD_FIRST+3)
 
 
 /*******************************************
-            RGXCreateTQ3DContext          
+            RGXCreateTransferContext          
  *******************************************/
 
-/* Bridge in structure for RGXCreateTQ3DContext */
-typedef struct PVRSRV_BRIDGE_IN_RGXCREATETQ3DCONTEXT_TAG
+/* Bridge in structure for RGXCreateTransferContext */
+typedef struct PVRSRV_BRIDGE_IN_RGXCREATETRANSFERCONTEXT_TAG
 {
 	IMG_HANDLE hDevNode;
-	IMG_HANDLE hTQ3DCCBMemDesc;
-	IMG_HANDLE hTQ3DCCBCtlMemDesc;
 	IMG_UINT32 ui32Priority;
 	IMG_DEV_VIRTADDR sMCUFenceAddr;
 	IMG_UINT32 ui32FrameworkCmdize;
 	IMG_BYTE * psFrameworkCmd;
 	IMG_HANDLE hPrivData;
-} PVRSRV_BRIDGE_IN_RGXCREATETQ3DCONTEXT;
+} PVRSRV_BRIDGE_IN_RGXCREATETRANSFERCONTEXT;
 
 
-/* Bridge out structure for RGXCreateTQ3DContext */
-typedef struct PVRSRV_BRIDGE_OUT_RGXCREATETQ3DCONTEXT_TAG
+/* Bridge out structure for RGXCreateTransferContext */
+typedef struct PVRSRV_BRIDGE_OUT_RGXCREATETRANSFERCONTEXT_TAG
 {
-	IMG_HANDLE hCleanupCookie;
-	IMG_HANDLE hFWTQ3DContext;
-	IMG_HANDLE hFWTQ3DContextState;
+	IMG_HANDLE hTransferContext;
 	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_RGXCREATETQ3DCONTEXT;
+} PVRSRV_BRIDGE_OUT_RGXCREATETRANSFERCONTEXT;
 
 /*******************************************
-            RGXDestroyTQ3DContext          
+            RGXDestroyTransferContext          
  *******************************************/
 
-/* Bridge in structure for RGXDestroyTQ3DContext */
-typedef struct PVRSRV_BRIDGE_IN_RGXDESTROYTQ3DCONTEXT_TAG
+/* Bridge in structure for RGXDestroyTransferContext */
+typedef struct PVRSRV_BRIDGE_IN_RGXDESTROYTRANSFERCONTEXT_TAG
 {
-	IMG_HANDLE hCleanupCookie;
-} PVRSRV_BRIDGE_IN_RGXDESTROYTQ3DCONTEXT;
+	IMG_HANDLE hTransferContext;
+} PVRSRV_BRIDGE_IN_RGXDESTROYTRANSFERCONTEXT;
 
 
-/* Bridge out structure for RGXDestroyTQ3DContext */
-typedef struct PVRSRV_BRIDGE_OUT_RGXDESTROYTQ3DCONTEXT_TAG
+/* Bridge out structure for RGXDestroyTransferContext */
+typedef struct PVRSRV_BRIDGE_OUT_RGXDESTROYTRANSFERCONTEXT_TAG
 {
 	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_RGXDESTROYTQ3DCONTEXT;
+} PVRSRV_BRIDGE_OUT_RGXDESTROYTRANSFERCONTEXT;
 
 /*******************************************
-            SubmitTQ3DKick          
+            RGXSubmitTransfer          
  *******************************************/
 
-/* Bridge in structure for SubmitTQ3DKick */
-typedef struct PVRSRV_BRIDGE_IN_SUBMITTQ3DKICK_TAG
+/* Bridge in structure for RGXSubmitTransfer */
+typedef struct PVRSRV_BRIDGE_IN_RGXSUBMITTRANSFER_TAG
 {
-	IMG_HANDLE hDevNode;
-	IMG_HANDLE hFWTQ3DContext;
-	IMG_UINT32 ui32ui32TQ3DcCCBWoffUpdate;
-	IMG_BOOL bbPDumpContinuous;
-} PVRSRV_BRIDGE_IN_SUBMITTQ3DKICK;
+	IMG_HANDLE hTransferContext;
+	IMG_UINT32 ui32PrepareCount;
+	IMG_UINT32 * pui32ClientFenceCount;
+	PRGXFWIF_UFO_ADDR* * psFenceUFOAddress;
+	IMG_UINT32* * pui32FenceValue;
+	IMG_UINT32 * pui32ClientUpdateCount;
+	PRGXFWIF_UFO_ADDR* * psUpdateUFOAddress;
+	IMG_UINT32* * pui32UpdateValue;
+	IMG_UINT32 * pui32ServerSyncCount;
+	IMG_UINT32* * pui32ServerSyncFlags;
+	IMG_HANDLE* * phServerSync;
+	IMG_UINT32 ui32NumFenceFDs;
+	IMG_INT32 * pi32FenceFDs;
+	IMG_UINT32 * pui32CommandSize;
+	IMG_UINT8* * pui8FWCommand;
+	IMG_UINT32 * pui32TQPrepareFlags;
+} PVRSRV_BRIDGE_IN_RGXSUBMITTRANSFER;
 
 
-/* Bridge out structure for SubmitTQ3DKick */
-typedef struct PVRSRV_BRIDGE_OUT_SUBMITTQ3DKICK_TAG
+/* Bridge out structure for RGXSubmitTransfer */
+typedef struct PVRSRV_BRIDGE_OUT_RGXSUBMITTRANSFER_TAG
 {
 	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_SUBMITTQ3DKICK;
+} PVRSRV_BRIDGE_OUT_RGXSUBMITTRANSFER;
 
 /*******************************************
-            RGXCreateTQ2DContext          
+            RGXSetTransferContextPriority          
  *******************************************/
 
-/* Bridge in structure for RGXCreateTQ2DContext */
-typedef struct PVRSRV_BRIDGE_IN_RGXCREATETQ2DCONTEXT_TAG
+/* Bridge in structure for RGXSetTransferContextPriority */
+typedef struct PVRSRV_BRIDGE_IN_RGXSETTRANSFERCONTEXTPRIORITY_TAG
 {
-	IMG_HANDLE hDevNode;
-	IMG_HANDLE hTQ2DCCBMemDesc;
-	IMG_HANDLE hTQ2DCCBCtlMemDesc;
+	IMG_HANDLE hTransferContext;
 	IMG_UINT32 ui32Priority;
-	IMG_UINT32 ui32FrameworkCmdize;
-	IMG_BYTE * psFrameworkCmd;
-	IMG_HANDLE hPrivData;
-} PVRSRV_BRIDGE_IN_RGXCREATETQ2DCONTEXT;
+} PVRSRV_BRIDGE_IN_RGXSETTRANSFERCONTEXTPRIORITY;
 
 
-/* Bridge out structure for RGXCreateTQ2DContext */
-typedef struct PVRSRV_BRIDGE_OUT_RGXCREATETQ2DCONTEXT_TAG
-{
-	IMG_HANDLE hCleanupCookie;
-	IMG_HANDLE hFWTQ2DContext;
-	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_RGXCREATETQ2DCONTEXT;
-
-/*******************************************
-            RGXDestroyTQ2DContext          
- *******************************************/
-
-/* Bridge in structure for RGXDestroyTQ2DContext */
-typedef struct PVRSRV_BRIDGE_IN_RGXDESTROYTQ2DCONTEXT_TAG
-{
-	IMG_HANDLE hCleanupCookie;
-} PVRSRV_BRIDGE_IN_RGXDESTROYTQ2DCONTEXT;
-
-
-/* Bridge out structure for RGXDestroyTQ2DContext */
-typedef struct PVRSRV_BRIDGE_OUT_RGXDESTROYTQ2DCONTEXT_TAG
+/* Bridge out structure for RGXSetTransferContextPriority */
+typedef struct PVRSRV_BRIDGE_OUT_RGXSETTRANSFERCONTEXTPRIORITY_TAG
 {
 	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_RGXDESTROYTQ2DCONTEXT;
-
-/*******************************************
-            SubmitTQ2DKick          
- *******************************************/
-
-/* Bridge in structure for SubmitTQ2DKick */
-typedef struct PVRSRV_BRIDGE_IN_SUBMITTQ2DKICK_TAG
-{
-	IMG_HANDLE hDevNode;
-	IMG_HANDLE hFWTQ2DContext;
-	IMG_UINT32 ui32ui32TQ2DcCCBWoffUpdate;
-	IMG_BOOL bbPDumpContinuous;
-} PVRSRV_BRIDGE_IN_SUBMITTQ2DKICK;
-
-
-/* Bridge out structure for SubmitTQ2DKick */
-typedef struct PVRSRV_BRIDGE_OUT_SUBMITTQ2DKICK_TAG
-{
-	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_SUBMITTQ2DKICK;
+} PVRSRV_BRIDGE_OUT_RGXSETTRANSFERCONTEXTPRIORITY;
 
 #endif /* COMMON_RGXTQ_BRIDGE_H */

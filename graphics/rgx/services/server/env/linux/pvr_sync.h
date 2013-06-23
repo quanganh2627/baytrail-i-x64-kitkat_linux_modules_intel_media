@@ -44,26 +44,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define _PVR_SYNC_H
 
 #include "pvr_fd_sync_user.h"
+#include "rgx_fwif_shared.h"
 
 /* Services internal interface */
 PVRSRV_ERROR PVRFDSyncDeviceInitKM(void);
 void PVRFDSyncDeviceDeInitKM(void);
 
-PVRSRV_ERROR
-PVRFDSyncSizeFenceKM(IMG_INT32 i32FDFence,
-					 IMG_BOOL bUpdate,
-					 IMG_UINT32 *pui32NumFenceSyncs,
-					 IMG_UINT32 *pui32NumUpdateSyncs);
+PVRSRV_ERROR PVRFDSyncQueryFencesKM(IMG_UINT32 ui32NumFDFences,
+									IMG_INT32 *ai32FDFences,
+									IMG_BOOL bUpdate,
+									IMG_UINT32 *pui32NumFenceSyncs,
+									PRGXFWIF_UFO_ADDR **ppuiFenceFWAddrs,
+									IMG_UINT32 **ppui32FenceValues,
+									IMG_UINT32 *pui32NumUpdateSyncs,
+									PRGXFWIF_UFO_ADDR **ppuiUpdateFWAddrs,
+									IMG_UINT32 **ppui32UpdateValues);
 
 PVRSRV_ERROR
-PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
-					  IMG_BOOL bUpdate,
-					  IMG_UINT32 ui32MaxNumSyncs,
-					  IMG_UINT32 *pui32NumSyncs,
-					  PVR_SYNC_POINT_DATA *aPts);
-
-PVRSRV_ERROR
-PVRFDSyncNoHwUpdateFenceKM(IMG_INT32 i32FDFence,
-						   IMG_UINT32 ui32UpdateValue);
+PVRFDSyncNoHwUpdateFenceKM(IMG_INT32 i32FDFence);
 
 #endif /* _PVR_SYNC_H */

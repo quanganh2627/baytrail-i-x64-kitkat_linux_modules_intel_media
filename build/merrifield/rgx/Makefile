@@ -35,7 +35,6 @@ ccflags-y += \
 	-I$(RGXINC)/generated/rgxinit_bridge \
 	-I$(RGXINC)/generated/pdumpmm_bridge \
 	-I$(RGXINC)/generated/rgxta3d_bridge \
-	-I$(RGXINC)/generated/rgxccb_bridge \
 	-I$(RGXINC)/generated/srvcore_bridge \
 	-I$(RGXINC)/generated/breakpoint_bridge \
 	-I$(RGXINC)/generated/pvrtl_bridge \
@@ -255,7 +254,6 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/pdumpmm_bridge/server_pdumpmm_bridge.o \
 	$(RGXDIR)/generated/rgxcmp_bridge/server_rgxcmp_bridge.o \
 	$(RGXDIR)/generated/debugmisc_bridge/server_debugmisc_bridge.o \
-	$(RGXDIR)/generated/rgxccb_bridge/server_rgxccb_bridge.o \
 	$(RGXDIR)/generated/sync_bridge/server_sync_bridge.o \
 	$(RGXDIR)/generated/rgxtq_bridge/server_rgxtq_bridge.o \
 	$(RGXDIR)/generated/dmm_bridge/client_mm_bridge.o \

@@ -74,6 +74,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "ossecure_export.h"
 #endif
 
+#if defined(PVR_RI_DEBUG)
+#include "ri_server.h"
+#endif 
+
 /* ourselves */
 #include "pmr.h"
 
@@ -231,6 +235,13 @@ struct _PMR_
        ever one per system as a whole, but we'll keep the concept
        anyway, just-in-case. */
     struct _PMR_CTX_ *psContext;
+
+#if defined(PVR_RI_DEBUG)
+    /*
+	 * Stored handle to PMR RI entry
+	 */
+	IMG_PVOID	hRIHandle;
+#endif
 };
 
 /* do we need a struct for the export handle?  I'll use one for now, but if nothing goes in it, we'll lose it */
@@ -417,7 +428,15 @@ _UnrefAndMaybeDestroy(PMR *psPMR)
 
         PVR_ASSERT(psPMR->uiLockCount == 0);
 
-        psCtx = psPMR->psContext;
+#if defined(PVR_RI_DEBUG)
+		{
+            PVRSRV_ERROR eError;
+
+			/* Delete RI entry */
+			eError = RIDeletePMREntryKM ((RI_HANDLE)psPMR->hRIHandle);
+		}
+#endif /* if defined(PVR_RI_DEBUG) */
+		psCtx = psPMR->psContext;
 
 		OSLockDestroy(psPMR->hLock);
         OSFreeMem(psPMR);
@@ -479,6 +498,16 @@ PMRCreatePMR(PHYS_HEAP *psPhysHeap,
     psPMR->uiRefCount = 1;
 
     *ppsPMRPtr = psPMR;
+
+#if defined(PVR_RI_DEBUG)
+	{
+		/* Attach RI information */
+		eError = RIWritePMREntryKM (psPMR,
+									(IMG_CHAR *)pszPDumpFlavour,
+									uiLogicalSize,
+									(RI_HANDLE*)&psPMR->hRIHandle);
+	}
+#endif  /* if defined(PVR_RI_DEBUG) */
 
     return PVRSRV_OK;
 

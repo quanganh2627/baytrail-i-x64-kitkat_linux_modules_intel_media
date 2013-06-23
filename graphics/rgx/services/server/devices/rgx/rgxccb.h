@@ -46,60 +46,96 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "devicemem.h"
 #include "device.h"
+#include "sync_server.h"
+#include "connection_server.h"
+#include "rgx_fwif_shared.h"
 
 #if defined (__cplusplus)
 extern "C" {
 #endif
 
-typedef struct {
-	DEVMEM_MEMDESC *psClientCCBMemDesc;
-	DEVMEM_MEMDESC *psClientCCBCtlMemDesc;
-	DEVMEM_EXPORTCOOKIE sClientCCBExportCookie;
-	DEVMEM_EXPORTCOOKIE sClientCCBCtlExportCookie;
-} RGX_CCB_CLEANUP_DATA;
+typedef struct _RGX_CLIENT_CCB_ RGX_CLIENT_CCB;
 
-/*!
-*******************************************************************************
+/*
+	This structure is declared here as it's allocated on the heap by
+	the callers
+*/
 
- @Function	PVRSRVRGXCreateCCBKM
+typedef struct _RGX_CCB_CMD_HELPER_DATA_ {
+	/* Data setup at command init time */
+	RGX_CLIENT_CCB  		*psClientCCB;
+	IMG_CHAR 				*pszCommandName;
+	IMG_BOOL 				bPDumpContinuous;
+	CONNECTION_DATA			*psConnection;
+	IMG_UINT32				ui32ClientFenceCount;
+	PRGXFWIF_UFO_ADDR		*pauiFenceUFOAddress;
+	IMG_UINT32				*paui32FenceValue;
+	IMG_UINT32				ui32ClientUpdateCount;
+	PRGXFWIF_UFO_ADDR		*pauiUpdateUFOAddress;
+	IMG_UINT32				*paui32UpdateValue;
+	IMG_UINT32				ui32ServerSyncCount;
+	IMG_UINT32				*paui32ServerSyncFlags;
+	SERVER_SYNC_PRIMITIVE	**papsServerSyncs;
+	RGXFWIF_KCCB_CMD_TYPE	eType;
+	IMG_UINT32				ui32CmdSize;
+	IMG_UINT8				*pui8DMCmd;
+	IMG_UINT32				ui32FenceCmdSize;
+	IMG_UINT32				ui32DMCmdSize;
+	IMG_UINT32				ui32UpdateCmdSize;
 
- @Description
-	Server-side implementation of RGXCreateCCB
+	/* Data setup at command acquire time */
+	IMG_UINT8				*pui8StartPtr;
+	IMG_UINT8				*pui8ServerUpdateStart;
+	IMG_UINT8				*pui8ServerFenceStart;
+	IMG_UINT32				ui32ServerFenceCount;
+	IMG_UINT32				ui32ServerUpdateCount;
+} RGX_CCB_CMD_HELPER_DATA;
 
- @Input pvDeviceNode - device node
+#define PADDING_COMMAND_SIZE	(sizeof(RGXFWIF_CCB_CMD_HEADER))
 
-FIXME fill this in
+PVRSRV_ERROR RGXCreateCCB(PVRSRV_DEVICE_NODE	*psDeviceNode,
+						  IMG_UINT32			ui32CCBSizeLog2,
+						  RGX_CLIENT_CCB		**ppsClientCCB,
+						  DEVMEM_MEMDESC 		**ppsClientCCBMemDesc,
+						  DEVMEM_MEMDESC 		**ppsClientCCBCtlMemDesc);
 
- @Return   PVRSRV_ERROR
+IMG_VOID RGXDestroyCCB(RGX_CLIENT_CCB *psClientCCB);
 
-******************************************************************************/
-IMG_IMPORT
-PVRSRV_ERROR PVRSRVRGXCreateCCBKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
-								  IMG_UINT32			ui32AllocSize,
-								  IMG_UINT32			ui32AllocAlignment,
-								  RGX_CCB_CLEANUP_DATA	**ppsCleanupData,
-								  DEVMEM_MEMDESC 		**ppsClientCCBMemDesc,
-								  DEVMEM_MEMDESC 		**ppsClientCCBCtlMemDesc,
-								  DEVMEM_EXPORTCOOKIE 	**psClientCCBExportCookie,
-								  DEVMEM_EXPORTCOOKIE 	**psClientCCBCtlExportCookie);
+PVRSRV_ERROR RGXAcquireCCB(RGX_CLIENT_CCB *psClientCCB,
+										IMG_UINT32		ui32CmdSize,
+										IMG_PVOID		*ppvBufferSpace,
+										IMG_BOOL		bPDumpContinuous);
 
+IMG_INTERNAL IMG_VOID RGXReleaseCCB(RGX_CLIENT_CCB *psClientCCB,
+									IMG_UINT32		ui32CmdSize,
+									IMG_BOOL		bPDumpContinuous,
+									SYNC_CONNECTION_DATA 	*psSyncConnectionData);
 
-/*!
-*******************************************************************************
+IMG_UINT32 RGXGetHostWriteOffsetCCB(RGX_CLIENT_CCB *psClientCCB);
 
- @Function	PVRSRVRGXDestroyCCBKM
+PVRSRV_ERROR RGXCmdHelperInitCmdCCB(RGX_CLIENT_CCB 			*psClientCCB,
+								    CONNECTION_DATA			*psConnection,
+								    IMG_UINT32				ui32ClientFenceCount,
+								    PRGXFWIF_UFO_ADDR		*pauiFenceUFOAddress,
+								    IMG_UINT32				*paui32FenceValue,
+								    IMG_UINT32				ui32ClientUpdateCount,
+								    PRGXFWIF_UFO_ADDR		*pauiUpdateUFOAddress,
+								    IMG_UINT32				*paui32UpdateValue,
+								    IMG_UINT32				ui32ServerSyncCount,
+								    IMG_UINT32				*paui32ServerSyncFlags,
+								    SERVER_SYNC_PRIMITIVE	**pasServerSyncs,
+								    IMG_UINT32				ui32CmdSize,
+								    IMG_UINT8				*pui8DMCmd,
+								    RGXFWIF_CCB_CMD_TYPE	eType,
+								    IMG_BOOL				bPDumpContinuous,
+								    IMG_CHAR				*pszCommandName,
+								    RGX_CCB_CMD_HELPER_DATA	*psCmdHelperData);
 
- @Description
-	Server-side implementation of RGXDestroyCCB
+PVRSRV_ERROR RGXCmdHelperAcquireCmdCCB(IMG_UINT32 ui32CmdCount,
+									   RGX_CCB_CMD_HELPER_DATA *asCmdHelperData,
+									   IMG_BOOL *pbKickRequired);
 
- @Input pvDeviceNode - device node
-
-FIXME fill this in
-
- @Return   PVRSRV_ERROR
-
-******************************************************************************/
-IMG_IMPORT
-PVRSRV_ERROR PVRSRVRGXDestroyCCBKM(RGX_CCB_CLEANUP_DATA *psCleanupData);
+IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
+								   RGX_CCB_CMD_HELPER_DATA *asCmdHelperData);
 
 #endif /* __RGXCCB_H__ */

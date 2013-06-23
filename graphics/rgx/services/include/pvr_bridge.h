@@ -89,7 +89,9 @@ extern "C" {
 #include "common_smm_bridge.h"
 #endif
 #include "common_pvrtl_bridge.h"
-
+#if defined(PVR_RI_DEBUG)
+#include "common_ri_bridge.h"
+#endif
 /* 
  * Bridge Cmd Ids
  */
@@ -200,9 +202,15 @@ extern "C" {
 /* Transport Layer interface */
 #define PVRSRV_BRIDGE_PVRTL_START				(PVRSRV_BRIDGE_SMM_CMD_LAST + 1)
 
+/* RI interface */
+#define PVRSRV_BRIDGE_RI_START				(PVRSRV_BRIDGE_PVRTL_CMD_LAST + 1)
+#if !defined(PVR_RI_DEBUG)
+#define PVRSRV_BRIDGE_RI_CMD_LAST			(PVRSRV_BRIDGE_RI_START - 1)
+#endif
+
 
 /* For rgx_bridge.h. "last" below means last+1 (first beyond last) */
-#define PVRSRV_BRIDGE_LAST_NON_DEVICE_CMD       (PVRSRV_BRIDGE_PVRTL_CMD_LAST)
+#define PVRSRV_BRIDGE_LAST_NON_DEVICE_CMD       (PVRSRV_BRIDGE_RI_CMD_LAST)
 
 /******************************************************************************
  * Generic bridge structures 

@@ -65,8 +65,6 @@ typedef struct _SYNC_PRIM_CONTEXT_
 	IMG_CHAR					azSpanName[SYNC_PRIM_NAME_SIZE];/*!< Name of the span RA */
 	RA_ARENA					*psSpanRA;						/*!< RA used for span management of SubAllocRA */
 	IMG_UINT32					ui32RefCount;					/*!< Refcount for this context */
-	DLLIST_NODE					sListNode;						/*!< Listnode for per-process context list */
-	DLLIST_NODE					sBlockListHead;					/*!< Head listnode for the blocks in this context */
 	POS_LOCK					hLock;							/*!< Lock for this context */
 } SYNC_PRIM_CONTEXT;
 

@@ -53,7 +53,6 @@ extern "C" {
 #include "common_rgxinit_bridge.h"
 #include "common_rgxta3d_bridge.h"
 #include "common_rgxcmp_bridge.h"
-#include "common_rgxccb_bridge.h"
 #include "common_rgxtq_bridge.h"
 #include "common_breakpoint_bridge.h"
 #include "common_debugmisc_bridge.h"
@@ -73,11 +72,9 @@ extern "C" {
 
 #define PVRSRV_BRIDGE_RGX_CMD_BASE (PVRSRV_BRIDGE_LAST_NON_DEVICE_CMD+1)
 
-/* FIXME*/
 /* "last" below actually means last, not plus 1 as elsewhere */
 #define PVRSRV_BRIDGE_RGXTQ_START      (PVRSRV_BRIDGE_RGX_CMD_BASE + 0)
-#define PVRSRV_BRIDGE_RGXCCB_START     (PVRSRV_BRIDGE_RGXTQ_CMD_LAST + 1)
-#define PVRSRV_BRIDGE_RGXCMP_START     (PVRSRV_BRIDGE_RGXCCB_CMD_LAST + 1)
+#define PVRSRV_BRIDGE_RGXCMP_START     (PVRSRV_BRIDGE_RGXTQ_CMD_LAST + 1)
 #define PVRSRV_BRIDGE_RGXINIT_START    (PVRSRV_BRIDGE_RGXCMP_CMD_LAST + 1)
 #define PVRSRV_BRIDGE_RGXTA3D_START    (PVRSRV_BRIDGE_RGXINIT_CMD_LAST + 1)
 #define PVRSRV_BRIDGE_BREAKPOINT_START (PVRSRV_BRIDGE_RGXTA3D_CMD_LAST + 1)

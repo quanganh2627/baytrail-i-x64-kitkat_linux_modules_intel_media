@@ -185,7 +185,7 @@ PVRSRV_ERROR RGXMMUInit_Register(PVRSRV_DEVICE_NODE *psDeviceNode)
 	 * Setup sRGXMMUDeviceAttributes
 	 */
 	sRGXMMUDeviceAttributes.eTopLevel = MMU_LEVEL_3;
-	sRGXMMUDeviceAttributes.ui32BaseAlign = 12;	/* FIXME: Is there a define for this? */
+	sRGXMMUDeviceAttributes.ui32BaseAlign = RGX_MMUCTRL_PC_DATA_PD_BASE_ALIGNSHIFT;
 	sRGXMMUDeviceAttributes.psBaseConfig = &sRGXMMUPCEConfig;
 	sRGXMMUDeviceAttributes.psTopLevelDevVAddrConfig = &sRGXMMUTopLevelDevVAddrConfig;
 
@@ -561,7 +561,7 @@ PVRSRV_ERROR RGXMMUInit_Register(PVRSRV_DEVICE_NODE *psDeviceNode)
 	 * Setup sRGXMMUDeviceAttributes
 	 */
 	sRGXMMUDeviceAttributes.eTopLevel = MMU_LEVEL_3;
-	sRGXMMUDeviceAttributes.ui32BaseAlign = 12,	/* FIXME: Is there a define for this? */
+	sRGXMMUDeviceAttributes.ui32BaseAlign = RGX_MMUCTRL_PC_DATA_PD_BASE_ALIGNSHIFT;
 	sRGXMMUDeviceAttributes.psBaseConfig = &sRGXMMUPCEConfig;
 	sRGXMMUDeviceAttributes.psTopLevelDevVAddrConfig = &sRGXMMUTopLevelDevVAddrConfig;
 
@@ -578,7 +578,6 @@ PVRSRV_ERROR RGXMMUInit_Register(PVRSRV_DEVICE_NODE *psDeviceNode)
 	sRGXMMUDeviceAttributes.pfnGetPageSizeConfiguration = RGXGetPageSizeConfigCB;
 	sRGXMMUDeviceAttributes.pfnPutPageSizeConfiguration = RGXPutPageSizeConfigCB;
 
-	/* FIXME: This probably ought to be a call into the mmu code. */
 	psDeviceNode->psMMUDevAttrs = &sRGXMMUDeviceAttributes;
 
 	return PVRSRV_OK;
@@ -594,9 +593,7 @@ PVRSRV_ERROR RGXMMUInit_Unregister(PVRSRV_DEVICE_NODE *psDeviceNode)
     psDeviceNode->pfnMMUGetContextID = IMG_NULL;
 #endif
 
-    /* FIXME: This probably ought to be a call into the mmu code. */
-    psDeviceNode->psMMUDevAttrs = IMG_NULL; // &sRGXMMUDeviceAttributes;
-    //    psDeviceNode->eMMUType = MMU_TYPE_3LEVEL;
+    psDeviceNode->psMMUDevAttrs = IMG_NULL;
 
 #if defined(DEBUG)
     PVR_DPF((PVR_DBG_MESSAGE, "Variable Page Size Heap Stats:"));
@@ -683,8 +680,8 @@ static IMG_UINT32 RGXDerivePDEProt4(IMG_UINT32 uiProtFlags)
 */ /**************************************************************************/
 static IMG_UINT64 RGXDerivePDEProt8(IMG_UINT32 uiProtFlags)
 {
+	/* Need to consider varible page size */
     return (uiProtFlags & MMU_PROTFLAGS_INVALID)?0:RGX_MMUCTRL_PD_DATA_VALID_EN;
-	//FIXME:  what about page size?  Where does this get set?
 }
 
 

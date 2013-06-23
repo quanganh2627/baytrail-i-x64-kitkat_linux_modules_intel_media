@@ -45,17 +45,17 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __RGXFWUTILS_H__
 
 #include "rgxdevice.h"
+#include "rgxccb.h"
 #include "devicemem.h"
 #include "device.h"
 #include "pvrsrv.h"
 
-typedef struct
-{
-	DEVMEM_MEMDESC		*psCCBMemDesc;
-	DEVMEM_MEMDESC		*psCCBCtlMemDesc;
-	DEVMEM_MEMDESC		*psFWMemContextMemDesc;
+typedef struct _RGX_SERVER_COMMON_CONTEXT_ RGX_SERVER_COMMON_CONTEXT;
+
+typedef struct {
 	DEVMEM_MEMDESC		*psFWFrameworkMemDesc;
-} RGX_FWCOMCTX_CLEANUP;
+	IMG_DEV_VIRTADDR	*psMCUFenceAddr;
+} RGX_COMMON_CONTEXT_INFO;
 
 
 /*
@@ -170,6 +170,7 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							     IMG_BOOL				bEnableSignatureChecks,
 							     IMG_UINT32			ui32SignatureChecksBufSize,
 							     IMG_UINT32			ui32HWPerfFWBufSizeKB,
+							     IMG_UINT64			ui64HWPerfFilter,
 							     IMG_UINT32			ui32RGXFWAlignChecksSize,
 							     IMG_UINT32			*pui32RGXFWAlignChecks,
 							     IMG_UINT32			ui32ConfigFlags,
@@ -207,6 +208,50 @@ IMG_VOID RGXSetFirmwareAddress(RGXFWIF_DEV_VIRTADDR	*ppDest,
 @Return			IMG_VOID
 */ /**************************************************************************/
 IMG_VOID RGXUnsetFirmwareAddress(DEVMEM_MEMDESC			*psSrc);
+
+/*************************************************************************/ /*!
+@Function       FWCommonContextAllocate
+
+@Description    Allocate a FW common coontext. This allocates the HW memory
+                for the context, the CCB and wires it all together.
+
+@Input          psDeviceNode		    Device node to create the FW context on
+                                        (must be RGX device node)
+@Input          pszContextName          Name of the context
+@Input          psAllocatedMemDesc      Pointer to pre-allocated MemDesc to use
+                                        as the FW context or NULL if this function
+                                        should allocate it
+@Input          ui32AllocatedOffset     Offset into pre-allocate MemDesc to use
+                                        as the FW context. If psAllocatedMemDesc
+                                        is NULL then this parameter is ingored
+@Input          psFWMemContextMemDesc   MemDesc of the FW memory context this
+                                        common context resides on
+@Input          psContextStateMemDesc   FW context state (context switch) MemDesc
+@Input          ui32CCBAllocSize        Size of the CCB for this context
+@Input          ui32Priority            Priority of the context
+@Input          psInfo                  Structure that contains extra info
+                                        required for the creation of the context
+                                        (elements might change from core to core)
+@Return			PVRSRV_OK if the context was succesfully created
+*/ /**************************************************************************/
+PVRSRV_ERROR FWCommonContextAllocate(PVRSRV_DEVICE_NODE *psDeviceNode,
+									 const IMG_CHAR *pszContextName,
+									 DEVMEM_MEMDESC *psAllocatedMemDesc,
+									 IMG_UINT32 ui32AllocatedOffset,
+									 DEVMEM_MEMDESC *psFWMemContextMemDesc,
+									 DEVMEM_MEMDESC *psContextStateMemDesc,
+									 IMG_UINT32 ui32CCBAllocSize,
+									 IMG_UINT32 ui32Priority,
+									 RGX_COMMON_CONTEXT_INFO *psInfo,
+									 RGX_SERVER_COMMON_CONTEXT **ppsServerCommonContext);
+
+									 
+
+IMG_VOID FWCommonContextFree(RGX_SERVER_COMMON_CONTEXT *psServerCommonContext);
+
+PRGXFWIF_FWCOMMONCONTEXT FWCommonContextGetFWAddress(RGX_SERVER_COMMON_CONTEXT *psServerCommonContext);
+
+RGX_CLIENT_CCB *FWCommonContextGetClientCCB(RGX_SERVER_COMMON_CONTEXT *psServerCommonContext);
 
 PVRSRV_ERROR RGXStartFirmware(PVRSRV_RGXDEV_INFO 	*psDevInfo);
 
@@ -334,7 +379,7 @@ PVRSRV_ERROR RGXFirmwareUnittests(PVRSRV_RGXDEV_INFO *psDevInfo);
 
 
 /*! ***********************************************************************//**
-@brief          Copy framework state into FW addressable buffer
+@brief          Copy framework command into FW addressable buffer
 
 @param          psFWFrameworkMemDesc
 @param          pbyGPUFRegisterList
@@ -342,9 +387,9 @@ PVRSRV_ERROR RGXFirmwareUnittests(PVRSRV_RGXDEV_INFO *psDevInfo);
 
 @returns        PVRSRV_ERROR 
 */ /**************************************************************************/
-PVRSRV_ERROR PVRSRVRGXFrameworkCopyRegisters(DEVMEM_MEMDESC * psFWFrameworkMemDesc,
-		IMG_PBYTE                                           pbyGPUFRegisterList,
-		IMG_UINT32                                          ui32FrameworkRegisterSize);
+PVRSRV_ERROR PVRSRVRGXFrameworkCopyCommand(DEVMEM_MEMDESC	*psFWFrameworkMemDesc,
+										   IMG_PBYTE		pbyGPUFRegisterList,
+										   IMG_UINT32		ui32FrameworkRegisterSize);
 
 
 /*! ***********************************************************************//**
@@ -359,18 +404,6 @@ PVRSRV_ERROR PVRSRVRGXFrameworkCopyRegisters(DEVMEM_MEMDESC * psFWFrameworkMemDe
 PVRSRV_ERROR PVRSRVRGXFrameworkCreateKM(PVRSRV_DEVICE_NODE * psDeviceNode,
 										DEVMEM_MEMDESC     ** ppsFWFrameworkMemDesc,
 										IMG_UINT32         ui32FrameworkRegisterSize);
-
-PVRSRV_ERROR RGXInitFWCommonContext(RGXFWIF_FWCOMMONCONTEXT		*psFWComContext,
-									  DEVMEM_MEMDESC 			*psCCBMemDesc,
-									  DEVMEM_MEMDESC 			*psCCBCtlMemDesc,
-									  DEVMEM_MEMDESC			*psFWMemContextMemDesc,
-									  DEVMEM_MEMDESC			*psFWFrameworkMemDesc,
-									  IMG_UINT32				ui32Priority,
-									  IMG_DEV_VIRTADDR			*psMCUFenceAddr,
-									  RGX_FWCOMCTX_CLEANUP		*psCleanupData);
-
-PVRSRV_ERROR RGXDeinitFWCommonContext(RGX_FWCOMCTX_CLEANUP *psCleanupData);
-
 
 /*************************************************************************/ /*!
 @Function       RGXWaitForFWOp
@@ -476,6 +509,12 @@ PVRSRV_ERROR RGXFWRequestZSBufferCleanUp(PVRSRV_RGXDEV_INFO *psDevInfo,
 										 PRGXFWIF_ZSBUFFER psFWZSBuffer,
 										 IMG_UINT32 ui32SubmittedCommands,
 										 PVRSRV_CLIENT_SYNC_PRIM *psSync);
+
+PVRSRV_ERROR ContextSetPriority(RGX_SERVER_COMMON_CONTEXT *psContext,
+								CONNECTION_DATA *psConnection,
+								PVRSRV_RGXDEV_INFO *psDevInfo,
+								IMG_UINT32 ui32Priority,
+								RGXFWIF_DM eDM);
 
 /*!
 ******************************************************************************

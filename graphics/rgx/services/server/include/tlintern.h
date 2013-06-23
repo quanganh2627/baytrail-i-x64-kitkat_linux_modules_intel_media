@@ -151,7 +151,6 @@ PTL_SNODE TLMakeSNode(IMG_HANDLE f2, TL_STREAM *f3, TL_STREAM_DESC *f4);
 /*
  * Transport Layer global top types and variables
  * Use access function to obtain pointer.
- * TODO: Add Lock in case Destroy stream clash with client APIs?
  */
 typedef struct _TL_GDATA_
 {

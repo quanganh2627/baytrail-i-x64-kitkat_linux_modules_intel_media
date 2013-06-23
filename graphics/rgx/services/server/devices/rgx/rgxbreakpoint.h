@@ -58,7 +58,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
  @Input psDeviceNode - RGX Device node
  @Input eDataMaster - Data Master to schedule command for
- @Input hMemCtxPrivData - FIXME
+ @Input hMemCtxPrivData - memory context private data
  @Input ui32BPAddr - Address of breakpoint
  @Input ui32HandlerAddr - Address of breakpoint handler
  @Input ui32BPCtl - Breakpoint controls
@@ -80,7 +80,7 @@ PVRSRV_ERROR PVRSRVRGXSetBreakpointKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	Server-side implementation of RGXClearBreakpoint
 
  @Input psDeviceNode - RGX Device node
- @Input hMemCtxPrivData - FIXME
+ @Input hMemCtxPrivData - memory context private data
 
  @Return   PVRSRV_ERROR
 ******************************************************************************/
@@ -95,7 +95,7 @@ PVRSRV_ERROR PVRSRVRGXClearBreakpointKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	Server-side implementation of RGXEnableBreakpoint
 
  @Input psDeviceNode - RGX Device node
- @Input hMemCtxPrivData - FIXME
+ @Input hMemCtxPrivData - memory context private data
 
  @Return   PVRSRV_ERROR
 ******************************************************************************/
@@ -110,7 +110,7 @@ PVRSRV_ERROR PVRSRVRGXEnableBreakpointKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	Server-side implementation of RGXDisableBreakpoint
 
  @Input psDeviceNode - RGX Device node
- @Input hMemCtxPrivData - FIXME
+ @Input hMemCtxPrivData - memory context private data
 
  @Return   PVRSRV_ERROR
 ******************************************************************************/

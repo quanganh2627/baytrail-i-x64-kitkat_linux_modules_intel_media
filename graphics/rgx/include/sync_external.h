@@ -63,7 +63,6 @@ typedef struct _PVRSRV_CLIENT_SYNC_PRIM_OP_
 	IMG_UINT32 					ui32Flags;				/*!< Operation flags */
 #define PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK	(1 << 0) 
 #define PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE	(1 << 1)
-#define PVRSRV_CLIENT_SYNC_PRIM_OP_SYNC_FD  (1 << 2)
 	PVRSRV_CLIENT_SYNC_PRIM		*psSync;				/*!< Pointer to the client sync */
 	IMG_UINT32					ui32FenceValue;			/*!< The Fence value (only used if PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK is set) */
 	IMG_UINT32					ui32UpdateValue;		/*!< The Update value (only used if PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE is set) */

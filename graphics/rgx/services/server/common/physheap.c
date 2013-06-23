@@ -129,10 +129,8 @@ PVRSRV_ERROR PhysHeapRegister(PHYS_HEAP_CONFIG *psConfig,
 	psNew->ui32RefCount = 0;
 	psNew->pszPDumpMemspaceName = psConfig->pszPDumpMemspaceName;
 
-	/* FIXME: Lock */
 	psNew->psNext = g_psPhysHeapList;
 	g_psPhysHeapList = psNew;
-	/* FIXME: Unlock */
 
 	*ppsPhysHeap = psNew;
 
@@ -145,7 +143,6 @@ IMG_VOID PhysHeapUnregister(PHYS_HEAP *psPhysHeap)
 
 	PVR_ASSERT(psPhysHeap->ui32RefCount == 0);
 
-	/* FIXME: Lock */
 	if (g_psPhysHeapList == psPhysHeap)
 	{
 		g_psPhysHeapList = psPhysHeap->psNext;
@@ -161,7 +158,6 @@ IMG_VOID PhysHeapUnregister(PHYS_HEAP *psPhysHeap)
 		psTmp->psNext = psPhysHeap->psNext;
 	}
 
-	/* FIXME: Unlock */
 	OSFreeMem(psPhysHeap);
 
 	PVR_DPF_RETURN;
@@ -175,7 +171,6 @@ PVRSRV_ERROR PhysHeapAcquire(IMG_UINT32 ui32PhysHeapID,
 
 	PVR_DPF_ENTERED1(ui32PhysHeapID);
 
-	/* FIXME: Lock */
 	while (psTmp)
 	{
 		if (psTmp->ui32PhysHeapID == ui32PhysHeapID)
@@ -195,7 +190,6 @@ PVRSRV_ERROR PhysHeapAcquire(IMG_UINT32 ui32PhysHeapID,
 		PHYSHEAP_REFCOUNT_PRINT("%s: Heap %p, refcount = %d", __FUNCTION__, psTmp, psTmp->ui32RefCount);
 	}
 
-	/* FIXME: Unlock */
 	*ppsPhysHeap = psTmp;
 	PVR_DPF_RETURN_RC1(eError, *ppsPhysHeap);
 }

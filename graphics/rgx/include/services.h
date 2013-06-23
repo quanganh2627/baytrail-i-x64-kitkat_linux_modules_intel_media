@@ -88,11 +88,11 @@ extern "C" {
 #define EVENTOBJNAME_MAXLENGTH (50) /*!< Max length of an event object name */
 
 
-/*
+/*!
 	Flags for Services connection.
 	Allows to define per-client policy for Services
 */
-#define SRV_FLAGS_PERSIST		0x1     /* DOXYGEN_FIXME */
+#define SRV_FLAGS_PERSIST		0x1     /*!< persist flag */
 
 /*
 	Pdump flags which are accessible to Services clients
@@ -102,7 +102,7 @@ extern "C" {
  * (from services/include/pdump.h)
  * The flags need to either be moved here, or e.g. all PDump functions need a bContinuous parameter
  */
-#define PVRSRV_PDUMP_FLAGS_CONTINUOUS		0x40000000UL /* DOXYGEN_FIXME */
+#define PVRSRV_PDUMP_FLAGS_CONTINUOUS		0x40000000UL /*!< pdump continuous */
 
 #define PVRSRV_UNDEFINED_HEAP_ID			(~0LU)
 
@@ -186,8 +186,6 @@ typedef struct _PVRSRV_DEV_DATA_
 	PVRSRV_CONNECTION	 *psConnection;	/*!< Services connection info */
 	IMG_HANDLE			hDevCookie;				/*!< Dev cookie */
 
-	IMG_BOOL			bSyncPrimAlreadyPdumped;
-
 } PVRSRV_DEV_DATA;
 
 /*
@@ -220,7 +218,7 @@ typedef struct _PVRSRV_HWREG64_
 */ /**************************************************************************/
 typedef enum _PVRSRV_CLIENT_EVENT_
 {
-	PVRSRV_CLIENT_EVENT_HWTIMEOUT = 0,              /* DOXYGEN_FIXME */
+	PVRSRV_CLIENT_EVENT_HWTIMEOUT = 0,              /*!< hw timeout event */
 } PVRSRV_CLIENT_EVENT;
 
 /**************************************************************************/ /*!
@@ -229,7 +227,7 @@ typedef enum _PVRSRV_CLIENT_EVENT_
 @Input          eEvent          event type
 @Input          psDevData       pointer to the PVRSRV_DEV_DATA context
 @Input          pvData          client-specific data
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_ 
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_ 
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -249,7 +247,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVClientEvent(const PVRSRV_CLIENT_EVENT eEvent,
                                 PVRSRV_CONNECTION instance.
 @Input          ui32SrvFlags    a bit-wise OR of the following:
                                 SRV_FLAGS_PERSIST
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_ 
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_ 
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -259,7 +257,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVConnect(PVRSRV_CONNECTION **ppsConnection, IMG_U
 @Function       PVRSRVDisconnect 
 @Description    Disconnects from the services module
 @Input          psConnection    the connection to be disconnected
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -267,7 +265,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVDisconnect(PVRSRV_CONNECTION *psConnection);
 
 /**************************************************************************/ /*!
 @Function       PVRSRVEnumerateDevices
-@Description    Enumerate all PowerVR services supported devices in the 
+@Description    Enumerate all services managed devices in the 
                 system.
 
                 The function returns a list of the device IDs stored either
@@ -282,23 +280,21 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVDisconnect(PVRSRV_CONNECTION *psConnection);
                 In a binary layered component which does not support dynamic
                 runtime selection, the glue code should compile to return 
                 the supported devices statically, e.g. multiple instances of
-                the same device if multiple devices are supported, or the 
-                target combination of RGX and display device.
+                the same device if multiple devices are supported
 
-                ** FIXME:  should we really have device specific references here?  FIXME! **
+                In the case of an environment (for instance) where one 
+                services managed device may connect to two display devices
+                this code would enumerate all three devices and even
+                non-dynamic device selection code should retain the facility
+                to parse the list to find the index of a given device.}
 
-                In the case of an environment (for instance) where one RGX
-                may connect to two display devices this code would enumerate
-                all three devices and even non-dynamic RGX selection code 
-                should retain the facility to parse the list to find the
-                index of the RGX device.}
 @Input          psConnection    Services connection
 @Output         puiNumDevices   Number of devices present in the system
 @Output         puiDevIDs       Pointer to called supplied array of
                                 PVRSRV_DEVICE_IDENTIFIER structures. The
                                 array is assumed to be at least
                                 PVRSRV_MAX_DEVICES long.
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -322,7 +318,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVEnumerateDevices(const PVRSRV_CONNECTION 	*psCon
 @Output         psDevData       The returned Device Data
 @Input          eDeviceType     Required device type. If type is unknown use 
                                 uiDevIndex to locate device data
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -344,7 +340,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVAcquireDeviceData(PVRSRV_CONNECTION 	*psConnecti
 @Input          ui32Mask            the mask to use
 @Input          ui32Waitus          interval between tries (us)
 @Input          ui32Tries           number of tries to make before giving up
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a 
+@Return                             PVRSRV_OK on success. Otherwise, a 
                                     PVRSRV_ error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -364,7 +360,7 @@ PVRSRV_ERROR PVRSRVPollForValue(const PVRSRV_CONNECTION	*psConnection,
 @Function       PVRSRVPDumpInit
 @Description    Pdump initialisation
 @Input          psConnection    Services connection
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -374,7 +370,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVPDumpInit(const PVRSRV_CONNECTION *psConnection)
 @Function       PVRSRVPDumpStartInitPhase
 @Description    Resume the pdump init phase state   
 @Input          psConnection    Services connection
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -385,7 +381,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVPDumpStartInitPhase(const PVRSRV_CONNECTION *psC
 @Description    Stop the pdump init phase state
 @Input          psConnection    Services connection
 @Input          eModuleID       Which module is requesting to stop the init phase
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -396,8 +392,8 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVPDumpStopInitPhase(const PVRSRV_CONNECTION *psCo
 @Function       PVRSRVPDumpSetFrame
 @Description    Sets the pdump frame
 @Input          psConnection    Services connection
-@Input          ui32Frame       DOXYGEN_FIXME
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Input          ui32Frame       frame id
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
 */ /**************************************************************************/
 IMG_IMPORT
@@ -408,8 +404,8 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVPDumpSetFrame(const PVRSRV_CONNECTION *psConnect
 @Function       PVRSRVPDumpIsLastCaptureFrame
 @Description    Returns whether this is the last frame of the capture range
 @Input          psConnection    Services connection
-@Return         IMG_BOOL:		IMG_TRUE if last frame,
-								IMG_FALSE otherwise
+@Return                         IMG_TRUE if last frame,
+                                IMG_FALSE otherwise
 */ /**************************************************************************/
 IMG_IMPORT
 IMG_BOOL IMG_CALLCONV PVRSRVPDumpIsLastCaptureFrame(const PVRSRV_CONNECTION *psConnection);
@@ -419,8 +415,8 @@ IMG_BOOL IMG_CALLCONV PVRSRVPDumpIsLastCaptureFrame(const PVRSRV_CONNECTION *psC
 @Description    PDumps a comment
 @Input          psConnection        Services connection
 @Input          pszComment          Comment to be inserted
-@Input          bContinuous         DOXYGEN_FIXME
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Input          bContinuous         pdump contiunous boolean
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -432,10 +428,10 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVPDumpComment(const PVRSRV_CONNECTION *psConnecti
 @Function       PVRSRVPDumpCommentf
 @Description    PDumps a formatted comment
 @Input          psConnection        Services connection
-@Input          bContinuous         DOXYGEN_FIXME
+@Input          bContinuous         pdump continuous boolean
 @Input          pszFormat           Format string
 @Input          ...                 vararg list
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -451,7 +447,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVPDumpCommentf(const PVRSRV_CONNECTION *psConnect
 @Input          ui32Flags           Flags
 @Input          pszFormat           Format string
 @Input          ...                 vararg list
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -467,7 +463,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVPDumpCommentWithFlagsf(const PVRSRV_CONNECTION *
 @Input          psConnection        Services connection
 @Output         pbIsCapturing       Indicates whether PDump is currently
                                     capturing
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**************************************************************************/
 IMG_IMPORT
@@ -477,7 +473,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVPDumpIsCapturing(const PVRSRV_CONNECTION *psConn
 
 /**************************************************************************/ /*!
 @Function       PVRSRVPDumpIsCapturingTest
-@Description    DOXYGEN_FIXME
+@Description    checks whether pdump is currently in frame capture range
 @Input          psConnection        Services connection
 @Return         IMG_BOOL
  */ /**************************************************************************/
@@ -610,7 +606,7 @@ PVRSRVPDumpIsCapturingTest(const PVRSRV_CONNECTION *psConnection)
 				so for example if the same library is loaded twice and unloaded once,
 				a reference to the library will remain.
 @Input          pszLibraryName      the name of the library to load
-@Return         IMG_HANDLE          On success, the handle of the newly-loaded
+@Return                             On success, the handle of the newly-loaded
                                     library. Otherwise, zero.
  */ /**************************************************************************/
 IMG_IMPORT IMG_HANDLE	PVRSRVLoadLibrary(const IMG_CHAR *pszLibraryName);
@@ -622,7 +618,7 @@ IMG_IMPORT IMG_HANDLE	PVRSRVLoadLibrary(const IMG_CHAR *pszLibraryName);
 				information regarding reference counting.
 @Input          hExtDrv             handle of the Dynamic-Link / Shared library
                                     to unload, as returned by PVRSRVLoadLibrary().
-@Return         PVRSRV_ERROR        PVRSRV_OK if successful. Otherwise,
+@Return                             PVRSRV_OK if successful. Otherwise,
                                     PVRSRV_ERROR_UNLOAD_LIBRARY_FAILED.
  */ /**************************************************************************/
 IMG_IMPORT PVRSRV_ERROR	PVRSRVUnloadLibrary(IMG_HANDLE hExtDrv);
@@ -636,7 +632,7 @@ IMG_IMPORT PVRSRV_ERROR	PVRSRVUnloadLibrary(IMG_HANDLE hExtDrv);
 @Input          pszFunctionName     the name of the function
 @Output         ppvFuncAddr         on success, the address of the function
                                     requested. Otherwise, NULL.
-@Return         PVRSRV_ERROR        PVRSRV_OK if successful. Otherwise,
+@Return                             PVRSRV_OK if successful. Otherwise,
                                     PVRSRV_ERROR_UNABLE_TO_GET_FUNC_ADDR.
  */ /**************************************************************************/
 IMG_IMPORT PVRSRV_ERROR	PVRSRVGetLibFuncAddr(IMG_HANDLE hExtDrv, 
@@ -647,7 +643,7 @@ IMG_IMPORT PVRSRV_ERROR	PVRSRVGetLibFuncAddr(IMG_HANDLE hExtDrv,
 @Function       PVRSRVClockus
 @Description    Returns the current system clock time, in microseconds.  Note 
                 that this does not necessarily guarantee microsecond accuracy.
-@Return         IMG_UINT32          the curent system clock time, in 
+@Return                             the curent system clock time, in 
                                     microseconds
  */ /**************************************************************************/
 IMG_IMPORT IMG_UINT32 PVRSRVClockus (void);
@@ -678,7 +674,7 @@ IMG_IMPORT IMG_PID  IMG_CALLCONV PVRSRVGetCurrentProcessID(void);
 @Function       PVRSRVSetLocale
 @Description    Thin wrapper on posix setlocale
 @Input          pszLocale
-@Return         IMG_CHAR *      DOXYGEN_FIXME
+@Return         IMG_NULL (currently)
  */ /**************************************************************************/
 IMG_IMPORT IMG_CHAR * IMG_CALLCONV PVRSRVSetLocale(const IMG_CHAR *pszLocale);
 
@@ -686,9 +682,9 @@ IMG_IMPORT IMG_CHAR * IMG_CALLCONV PVRSRVSetLocale(const IMG_CHAR *pszLocale);
 /**************************************************************************/ /*!
 @Function       PVRSRVCreateAppHintState
 @Description    Create app hint state
-@Input          eModuleID       DOXYGEN_FIXME
-@Input          pszAppName      DOXYGEN_FIXME
-@Output         ppvState        DOXYGEN_FIXME
+@Input          eModuleID       module id
+@Input          pszAppName      app name
+@Output         ppvState        state
 @Return         None
  */ /**************************************************************************/
 IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVCreateAppHintState(IMG_MODULE_ID eModuleID,
@@ -697,8 +693,8 @@ IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVCreateAppHintState(IMG_MODULE_ID eModuleI
 /**************************************************************************/ /*!
 @Function       PVRSRVFreeAppHintState
 @Description    Free the app hint state, if it was created
-@Input          eModuleID       DOXYGEN_FIXME
-@Input          pvHintState     DOXYGEN_FIXME
+@Input          eModuleID       module id
+@Input          pvHintState     app hint state
 @Return         None
  */ /**************************************************************************/
 IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVFreeAppHintState(IMG_MODULE_ID eModuleID,
@@ -707,12 +703,12 @@ IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVFreeAppHintState(IMG_MODULE_ID eModuleID,
 /**************************************************************************/ /*!
 @Function       PVRSRVGetAppHint
 @Description    Return the value of this hint from state or use default
-@Input          pvHintState     DOXYGEN_FIXME
-@Input          pszHintName     DOXYGEN_FIXME
-@Input          eDataType       DOXYGEN_FIXME
-@Input          pvDefault       DOXYGEN_FIXME
-@Output         pvReturn        DOXYGEN_FIXME
-@Return         IMG_BOOL        True if hint read, False if used default
+@Input          pvHintState     hint state
+@Input          pszHintName     hint name
+@Input          eDataType       data type
+@Input          pvDefault       default value
+@Output         pvReturn        hint value
+@Return                         True if hint read, False if used default
  */ /**************************************************************************/
 IMG_IMPORT IMG_BOOL IMG_CALLCONV PVRSRVGetAppHint(IMG_VOID			*pvHintState,
 												  const IMG_CHAR	*pszHintName,
@@ -729,7 +725,7 @@ IMG_IMPORT IMG_BOOL IMG_CALLCONV PVRSRVGetAppHint(IMG_VOID			*pvHintState,
 @Function       PVRSRVAllocUserModeMem
 @Description    Allocate a block of user-mode memory
 @Input          ui32Size    the amount of memory to allocate
-@Return         IMG_PVOID   On success, a pointer to the memory allocated.
+@Return                     On success, a pointer to the memory allocated.
                             Otherwise, NULL.
  */ /**************************************************************************/
 IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVAllocUserModeMem (IMG_SIZE_T ui32Size);
@@ -738,7 +734,7 @@ IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVAllocUserModeMem (IMG_SIZE_T ui32Size);
 @Function       PVRSRVCallocUserModeMem
 @Description    Allocate a block of user-mode memory
 @Input          ui32Size    the amount of memory to allocate
-@Return         IMG_PVOID   On success, a pointer to the memory allocated.
+@Return                     On success, a pointer to the memory allocated.
                             Otherwise, NULL.
  */ /**************************************************************************/
 IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVCallocUserModeMem (IMG_SIZE_T ui32Size);
@@ -749,7 +745,7 @@ IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVCallocUserModeMem (IMG_SIZE_T ui32Size);
 @Input          pvBase      the address of the existing memory, previously
                             allocated with PVRSRVAllocUserModeMem
 @Input          uNewSize    the newly-desired size of the memory chunk
-@Return         IMG_PVOID   On success, a pointer to the memory block. If the
+@Return                     On success, a pointer to the memory block. If the
                             size of the block could not be changed, the
                             return value is NULL.
  */ /**************************************************************************/
@@ -786,9 +782,7 @@ IMG_IMPORT IMG_VOID PVRSRVMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_
 @Function       PVRSRVLockProcessGlobalMutex
 @Description    Locking function for non-recursive coarse-grained mutex shared
                 between all threads in a proccess.
-@Output         phMutex             DOXYGEN_FIXME
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
-                                    error code
+@Return         None
  */ /**************************************************************************/
 IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVLockProcessGlobalMutex(void);
 
@@ -796,9 +790,7 @@ IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVLockProcessGlobalMutex(void);
 @Function       PVRSRVUnlockProcessGlobalMutex
 @Description    Unlocking function for non-recursive coarse-grained mutex shared
                 between all threads in a proccess.
-@Output         phMutex             DOXYGEN_FIXME
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
-                                    error code
+@Return         None
  */ /**************************************************************************/
 IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVUnlockProcessGlobalMutex(void);
 
@@ -807,9 +799,9 @@ typedef	struct _OS_MUTEX_ *PVRSRV_MUTEX_HANDLE;
 
 /**************************************************************************/ /*!
 @Function       PVRSRVCreateMutex
-@Description    DOXYGEN_FIXME
-@Output         phMutex             DOXYGEN_FIXME
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Description    creates a mutex
+@Output         phMutex             ptr to mutex handle
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**************************************************************************/
 #if !defined(PVR_DEBUG_MUTEXES)
@@ -827,7 +819,7 @@ IMG_IMPORT PVRSRV_ERROR IMG_CALLCONV PVRSRVCreateMutex(PVRSRV_MUTEX_HANDLE *phMu
 @Function       PVRSRVDestroyMutex
 @Description    Create a mutex.
 @Input          hMutex              On success, filled with the new Mutex
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**********************************************************************/
 #if !defined(PVR_DEBUG_MUTEXES)
@@ -901,8 +893,8 @@ typedef	struct  _PVRSRV_SEMAPHORE_OPAQUE_STRUCT_ *PVRSRV_SEMAPHORE_HANDLE; /*!< 
 @Description    Create a semaphore with an initial count
 @Output         phSemaphore         on success, ptr to the handle of the new 
                                     semaphore. Otherwise, zero.
-@Input          iInitialCount       DOXYGEN_FIXME
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Input          iInitialCount       initial count
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**************************************************************************/
 static INLINE PVRSRV_ERROR PVRSRVCreateSemaphore(PVRSRV_SEMAPHORE_HANDLE *phSemaphore, 
@@ -920,7 +912,7 @@ static INLINE PVRSRV_ERROR PVRSRVCreateSemaphore(PVRSRV_SEMAPHORE_HANDLE *phSema
 @Function       PVRSRVDestroySemaphore
 @Description    destroy the semaphore passed
 @Input          hSemaphore          the semaphore to be destroyed
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**************************************************************************/
 static INLINE PVRSRV_ERROR PVRSRVDestroySemaphore(PVRSRV_SEMAPHORE_HANDLE hSemaphore)
@@ -939,7 +931,7 @@ static INLINE PVRSRV_ERROR PVRSRVDestroySemaphore(PVRSRV_SEMAPHORE_HANDLE hSemap
 @Input          ui64TimeoutMicroSeconds the time to wait for the semaphore to
                                     become unlocked, if locked when the function
                                     is called.
-@Return         PVRSRV_ERROR:       PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                             PVRSRV_OK on success. Otherwise, a PVRSRV_
                                     error code
  */ /**************************************************************************/
 static INLINE PVRSRV_ERROR PVRSRVWaitSemaphore(PVRSRV_SEMAPHORE_HANDLE hSemaphore, 
@@ -955,9 +947,9 @@ static INLINE PVRSRV_ERROR PVRSRVWaitSemaphore(PVRSRV_SEMAPHORE_HANDLE hSemaphor
 #endif
 /**************************************************************************/ /*!
 @Function       PVRSRVPostSemaphore
-@Description    DOXYGEN_FIXME
-@Input          hSemaphore      DOXYGEN_FIXME
-@Input          iPostCount      DOXYGEN_FIXME
+@Description    post semphore
+@Input          hSemaphore      handle to semaphore
+@Input          iPostCount      post count
 @Return         None
  */ /**************************************************************************/
 static INLINE IMG_VOID PVRSRVPostSemaphore(PVRSRV_SEMAPHORE_HANDLE hSemaphore, IMG_INT iPostCount)
@@ -974,7 +966,7 @@ static INLINE IMG_VOID PVRSRVPostSemaphore(PVRSRV_SEMAPHORE_HANDLE hSemaphore, I
 @Input          ui32Size            number of bytes to be allocated
 @Input          pszFileName         filename of the calling code
 @Input          ui32LineNumber      line number of the calling code
-@Return         IMG_PVOID           On success, a ptr to the newly-allocated
+@Return                             On success, a ptr to the newly-allocated
                                     memory. Otherwise, NULL.
  */ /**************************************************************************/
 IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVAllocUserModeMemTracking(IMG_SIZE_T ui32Size, 
@@ -987,7 +979,7 @@ IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVAllocUserModeMemTracking(IMG_SIZE_T ui32
 @Input          ui32Size            number of bytes to be allocated
 @Input          pszFileName         filename of the calling code
 @Input          ui32LineNumber      line number of the calling code
-@Return         IMG_PVOID           On success, a ptr to the newly-allocated
+@Return                             On success, a ptr to the newly-allocated
                                     memory. Otherwise, NULL.
  */ /**************************************************************************/
 IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVCallocUserModeMemTracking(IMG_SIZE_T ui32Size, 
@@ -1009,7 +1001,7 @@ IMG_IMPORT IMG_VOID  IMG_CALLCONV PVRSRVFreeUserModeMemTracking(IMG_VOID *pvMem)
 @Input          ui32NewSize     the desired new size of the block
 @Input          pszFileName     the filename of the calling code
 @Input          ui32LineNumber  the line number of the calling code
-@Return         IMG_PVOID       on success, a pointer to the memory block.
+@Return                         on success, a pointer to the memory block.
                                 This may not necessarily be the same
                                 location as the block was at before the
                                 call. On failure, NULL is returned.
@@ -1039,7 +1031,7 @@ PVRSRVDumpDebugInfo(const PVRSRV_CONNECTION *psConnection, IMG_UINT32 ui32VerbLe
 @Description    Gets a handle to an event
  Outputs            : phOSEvent    Global eventobject event
  Returns            : 
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
                       
 ******************************************************************************/
@@ -1051,7 +1043,7 @@ PVRSRVAcquireGlobalEventObject(const PVRSRV_CONNECTION *psConnection,
  Function Name      : PVRSRVReleaseGlobalEventObject
  Inputs             : phOSEvent    Global eventobject event
  Outputs            : 
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
                       
 ******************************************************************************/
@@ -1064,7 +1056,7 @@ PVRSRVReleaseGlobalEventObject(const PVRSRV_CONNECTION *psConnection,
 @Description    Wait (block) on the OS-specific event object passed
 @Input          psConnection    Services connection
 @Input          hOSEvent        the event object to wait on
-@Return         PVRSRV_ERROR:   PVRSRV_OK on success. Otherwise, a PVRSRV_
+@Return                         PVRSRV_OK on success. Otherwise, a PVRSRV_
                                 error code
  */ /**************************************************************************/
 IMG_IMPORT PVRSRV_ERROR

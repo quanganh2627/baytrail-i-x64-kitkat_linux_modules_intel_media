@@ -444,7 +444,6 @@ PhysmemImportIon(CONNECTION_DATA *psConnection,
 	psPrivData->psIonHandle = ion_import_dma_buf(psPrivData->psIonClient, fd);
 	if (psPrivData->psIonHandle == IMG_NULL)
 	{
-		/* FIXME: add ion specific error? */
 		PVR_DPF((PVR_DBG_ERROR, "%s: ion_import_dma_buf failed", __func__));
 		eError = PVRSRV_ERROR_BAD_MAPPING;
 		goto fail_ionimport;

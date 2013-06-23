@@ -121,7 +121,6 @@ typedef struct _DEVICE_MEMORY_INFO_
     /* Blueprints for creating new device memory contexts */
     IMG_UINT32              uiNumHeapConfigs;
     DEVMEM_HEAP_CONFIG      *psDeviceMemoryHeapConfigArray;
-    /* FIXME: The following ought not the be exposed */
     DEVMEM_HEAP_BLUEPRINT   *psDeviceMemoryHeap;
 } DEVICE_MEMORY_INFO;
 

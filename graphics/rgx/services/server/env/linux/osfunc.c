@@ -373,6 +373,22 @@ IMG_UINT32 OSClockus(IMG_VOID)
 }
 
 
+/*************************************************************************/ /*!
+@Function       OSClockms
+@Description    This function returns the clock in miliseconds
+@Return         clock (ms)
+*/ /**************************************************************************/ 
+IMG_UINT32 OSClockms(IMG_VOID)
+{
+    IMG_UINT64 time, j = (IMG_UINT32)jiffies;
+
+    time = j * (((1 << 16) * 1000) / HZ);
+	time >>= 16;
+
+    return (IMG_UINT32)time;
+}
+
+
 /*
 	OSWaitus
 */
@@ -383,7 +399,7 @@ IMG_VOID OSWaitus(IMG_UINT32 ui32Timeus)
 
 
 /*
-	OSWaitus
+	OSSleepms
 */
 IMG_VOID OSSleepms(IMG_UINT32 ui32Timems)
 {
@@ -414,6 +430,15 @@ IMG_PID OSGetCurrentProcessIDKM(IMG_VOID)
 #endif
 }
 
+/*************************************************************************/ /*!
+@Function       OSGetCurrentProcessNameKM
+@Description    gets name of current process
+@Return         none
+*****************************************************************************/
+IMG_VOID OSGetCurrentProcessNameKM(IMG_CHAR *pszProcName, IMG_UINT32 ui32Size)
+{
+	strncpy(pszProcName, current->comm, MIN(ui32Size,TASK_COMM_LEN));
+}
 
 /*************************************************************************/ /*!
 @Function       OSGetPageSize
