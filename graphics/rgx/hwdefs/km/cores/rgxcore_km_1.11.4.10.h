@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.69.4.4
+@Title          RGX Core BVNC 1.11.4.10
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,27 +39,30 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_69_4_4_H_
-#define _RGXCORE_KM_1_69_4_4_H_
+#ifndef _RGXCORE_KM_1_11_4_10_H_
+#define _RGXCORE_KM_1_11_4_10_H_
 
-/***** Automatically generated file (6/17/2013 9:48:05 AM): Do not edit manually ********************/
-/***** Timestamp:  (6/17/2013 9:48:05 AM)************************************************************/
-/***** CS: @2281645 ******************************************************************/
+/***** Automatically generated file (6/17/2013 9:49:11 AM): Do not edit manually ********************/
+/***** Timestamp:  (6/17/2013 9:49:11 AM)************************************************************/
+/***** CS: @812371 ******************************************************************/
 
 
 /******************************************************************************
- * BVNC = 1.69.4.4 
+ * BVNC = 1.11.4.10 
  *****************************************************************************/
 #define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 69
+#define RGX_BVNC_KM_V 11
 #define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 4
+#define RGX_BVNC_KM_C 10
 
 /******************************************************************************
  * Errata 
  *****************************************************************************/
 
+#define FIX_HW_BRN_36492
+#define FIX_HW_BRN_37200
 #define FIX_HW_BRN_38344
+#define FIX_HW_BRN_38835
 
 
  
@@ -69,4 +72,4 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 
-#endif /* _RGXCORE_KM_1_69_4_4_H_ */
+#endif /* _RGXCORE_KM_1_11_4_10_H_ */

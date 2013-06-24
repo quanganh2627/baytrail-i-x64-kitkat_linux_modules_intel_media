@@ -65,7 +65,6 @@ static PVRSRV_ERROR SysDevicePrePowerState(
 		PVRSRV_DEV_POWER_STATE eCurrentPowerState,
 		IMG_BOOL bForced);
 
-
 static RGX_TIMING_INFORMATION sRGXTimingInfo =
 {
 	.ui32CoreClockSpeed        = 400000000, /* changed from 100000000, */

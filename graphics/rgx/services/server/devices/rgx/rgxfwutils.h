@@ -49,6 +49,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem.h"
 #include "device.h"
 #include "pvrsrv.h"
+#include "connection_server.h"
 
 typedef struct _RGX_SERVER_COMMON_CONTEXT_ RGX_SERVER_COMMON_CONTEXT;
 
@@ -215,6 +216,7 @@ IMG_VOID RGXUnsetFirmwareAddress(DEVMEM_MEMDESC			*psSrc);
 @Description    Allocate a FW common coontext. This allocates the HW memory
                 for the context, the CCB and wires it all together.
 
+@Input          psConnection            Connection this context is being created on
 @Input          psDeviceNode		    Device node to create the FW context on
                                         (must be RGX device node)
 @Input          pszContextName          Name of the context
@@ -234,7 +236,8 @@ IMG_VOID RGXUnsetFirmwareAddress(DEVMEM_MEMDESC			*psSrc);
                                         (elements might change from core to core)
 @Return			PVRSRV_OK if the context was succesfully created
 */ /**************************************************************************/
-PVRSRV_ERROR FWCommonContextAllocate(PVRSRV_DEVICE_NODE *psDeviceNode,
+PVRSRV_ERROR FWCommonContextAllocate(CONNECTION_DATA *psConnection,
+									 PVRSRV_DEVICE_NODE *psDeviceNode,
 									 const IMG_CHAR *pszContextName,
 									 DEVMEM_MEMDESC *psAllocatedMemDesc,
 									 IMG_UINT32 ui32AllocatedOffset,

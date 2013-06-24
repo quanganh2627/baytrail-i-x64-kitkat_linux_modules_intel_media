@@ -155,7 +155,7 @@ PVRSRVBridgeRGXCreateTransferContext(IMG_UINT32 ui32BridgeID,
 				}
 
 	psRGXCreateTransferContextOUT->eError =
-		PVRSRVRGXCreateTransferContextKM(
+		PVRSRVRGXCreateTransferContextKM(psConnection,
 					hDevNodeInt,
 					psRGXCreateTransferContextIN->ui32Priority,
 					psRGXCreateTransferContextIN->sMCUFenceAddr,
@@ -1020,7 +1020,7 @@ PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
 	}
 
 	psRGXSubmitTransferOUT->eError =
-		PVRSRVRGXSubmitTransferKM(psConnection,
+		PVRSRVRGXSubmitTransferKM(
 					psTransferContextInt,
 					psRGXSubmitTransferIN->ui32PrepareCount,
 					ui32ClientFenceCountInt,

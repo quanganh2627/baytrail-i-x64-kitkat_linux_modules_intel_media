@@ -87,6 +87,15 @@ PVRSRV_ERROR DCDimQuery(DC_DEVICE *psDevice,
 						  PVRSRV_SURFACE_DIMS *pasDim,
 						  IMG_UINT32 *pui32Supported);
 
+PVRSRV_ERROR DCSetBlank(DC_DEVICE *psDevice,
+						IMG_BOOL bEnabled);
+
+PVRSRV_ERROR DCSetVSyncReporting(DC_DEVICE *psDevice,
+								 IMG_BOOL bEnabled);
+
+PVRSRV_ERROR DCLastVSyncQuery(DC_DEVICE *psDevice,
+							  IMG_INT64 *pi64Timestamp);
+
 PVRSRV_ERROR DCSystemBufferAcquire(DC_DEVICE *psDevice,
 								   IMG_UINT32 *pui32ByteStride,
 								   DC_BUFFER **ppsBuffer);

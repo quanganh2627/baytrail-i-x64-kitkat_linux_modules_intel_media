@@ -1165,7 +1165,7 @@ PVRSRVBridgeRGXCreateRenderContext(IMG_UINT32 ui32BridgeID,
 				}
 
 	psRGXCreateRenderContextOUT->eError =
-		PVRSRVRGXCreateRenderContextKM(
+		PVRSRVRGXCreateRenderContextKM(psConnection,
 					hDevNodeInt,
 					psRGXCreateRenderContextIN->ui32Priority,
 					psRGXCreateRenderContextIN->sMCUFenceAddr,
@@ -1789,7 +1789,7 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32BridgeID,
 				}
 
 	psRGXKickTA3DOUT->eError =
-		PVRSRVRGXKickTA3DKM(psConnection,
+		PVRSRVRGXKickTA3DKM(
 					psRenderContextInt,
 					psRGXKickTA3DIN->ui32ClientTAFenceCount,
 					sClientTAFenceUFOAddressInt,

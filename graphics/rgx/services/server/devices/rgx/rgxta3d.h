@@ -334,7 +334,8 @@ IMG_VOID RGXProcessRequestFreelistsReconstruction(PVRSRV_RGXDEV_INFO *psDevInfo,
 
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateRenderContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
+PVRSRV_ERROR PVRSRVRGXCreateRenderContextKM(CONNECTION_DATA				*psConnection,
+											PVRSRV_DEVICE_NODE			*psDeviceNode,
 											IMG_UINT32					ui32Priority,
 											IMG_DEV_VIRTADDR			sMCUFenceAddr,
 											IMG_DEV_VIRTADDR			sVDMCallStackAddr,
@@ -377,8 +378,7 @@ PVRSRV_ERROR PVRSRVRGXDestroyRenderContextKM(RGX_SERVER_RENDER_CONTEXT *psRender
 
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
-								 RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
+PVRSRV_ERROR PVRSRVRGXKickTA3DKM(RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
 								 IMG_UINT32					ui32ClientTAFenceCount,
 								 PRGXFWIF_UFO_ADDR			*pauiClientTAFenceUFOAddress,
 								 IMG_UINT32					*paui32ClientTAFenceValue,

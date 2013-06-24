@@ -74,7 +74,8 @@ typedef struct _RGX_SERVER_COMPUTE_CONTEXT_ RGX_SERVER_COMPUTE_CONTEXT;
  @Return   PVRSRV_ERROR
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
+PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(CONNECTION_DATA			*psConnection,
+											 PVRSRV_DEVICE_NODE			*psDeviceNode,
 											 IMG_UINT32					ui32Priority,
 											 IMG_DEV_VIRTADDR			sMCUFenceAddr,
 											 IMG_UINT32					ui32FrameworkRegisterSize,
@@ -111,8 +112,7 @@ PVRSRV_ERROR PVRSRVRGXDestroyComputeContextKM(RGX_SERVER_COMPUTE_CONTEXT *psComp
  @Return   PVRSRV_ERROR
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXKickCDMKM(CONNECTION_DATA				*psConnection,
-								RGX_SERVER_COMPUTE_CONTEXT	*psComputeContext,
+PVRSRV_ERROR PVRSRVRGXKickCDMKM(RGX_SERVER_COMPUTE_CONTEXT	*psComputeContext,
 								IMG_UINT32					ui32ClientFenceCount,
 								PRGXFWIF_UFO_ADDR			*pauiClientFenceUFOAddress,
 								IMG_UINT32					*paui32ClientFenceValue,

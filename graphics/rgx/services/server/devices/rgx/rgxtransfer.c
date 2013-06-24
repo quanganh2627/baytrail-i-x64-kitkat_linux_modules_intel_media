@@ -68,10 +68,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 typedef struct {
 	DEVMEM_MEMDESC				*psFWContextStateMemDesc;
 	RGX_SERVER_COMMON_CONTEXT	*psServerCommonContext;
+	IMG_UINT32					ui32Priority;
 } RGX_SERVER_TQ_3D_DATA;
 
 typedef struct {
 	RGX_SERVER_COMMON_CONTEXT	*psServerCommonContext;
+	IMG_UINT32					ui32Priority;
 } RGX_SERVER_TQ_2D_DATA;
 
 struct _RGX_SERVER_TQ_CONTEXT_ {
@@ -89,7 +91,8 @@ struct _RGX_SERVER_TQ_CONTEXT_ {
 	Static functions used by tranfser context code
 */
 
-static PVRSRV_ERROR _Create3DTransferContext(PVRSRV_DEVICE_NODE *psDeviceNode,
+static PVRSRV_ERROR _Create3DTransferContext(CONNECTION_DATA *psConnection,
+											 PVRSRV_DEVICE_NODE *psDeviceNode,
 											 DEVMEM_MEMDESC *psFWMemContextMemDesc,
 											 IMG_UINT32 ui32Priority,
 											 RGX_COMMON_CONTEXT_INFO *psInfo,
@@ -113,7 +116,8 @@ static PVRSRV_ERROR _Create3DTransferContext(PVRSRV_DEVICE_NODE *psDeviceNode,
 		goto fail_contextswitchstate;
 	}
 
-	eError = FWCommonContextAllocate(psDeviceNode,
+	eError = FWCommonContextAllocate(psConnection,
+									 psDeviceNode,
 									 "TQ 3D",
 									 IMG_NULL,
 									 0,
@@ -132,6 +136,7 @@ static PVRSRV_ERROR _Create3DTransferContext(PVRSRV_DEVICE_NODE *psDeviceNode,
 	PDUMPCOMMENT("Dump 3D context suspend state buffer");
 	DevmemPDumpLoadMem(ps3DData->psFWContextStateMemDesc, 0, sizeof(RGXFWIF_3DCTX_STATE), PDUMP_FLAGS_CONTINUOUS);
 
+	ps3DData->ui32Priority = ui32Priority;
 	return PVRSRV_OK;
 
 fail_contextalloc:
@@ -141,7 +146,8 @@ fail_contextswitchstate:
 	return eError;
 }
 
-static PVRSRV_ERROR _Create2DTransferContext(PVRSRV_DEVICE_NODE *psDeviceNode,
+static PVRSRV_ERROR _Create2DTransferContext(CONNECTION_DATA *psConnection,
+											 PVRSRV_DEVICE_NODE *psDeviceNode,
 											 DEVMEM_MEMDESC *psFWMemContextMemDesc,
 											 IMG_UINT32 ui32Priority,
 											 RGX_COMMON_CONTEXT_INFO *psInfo,
@@ -149,7 +155,8 @@ static PVRSRV_ERROR _Create2DTransferContext(PVRSRV_DEVICE_NODE *psDeviceNode,
 {
 	PVRSRV_ERROR eError;
 
-	eError = FWCommonContextAllocate(psDeviceNode,
+	eError = FWCommonContextAllocate(psConnection,
+									 psDeviceNode,
 									 "TQ 2D",
 									 IMG_NULL,
 									 0,
@@ -164,6 +171,7 @@ static PVRSRV_ERROR _Create2DTransferContext(PVRSRV_DEVICE_NODE *psDeviceNode,
 		goto fail_contextalloc;
 	}
 
+	ps2DData->ui32Priority = ui32Priority;
 	return PVRSRV_OK;
 
 fail_contextalloc:
@@ -232,7 +240,8 @@ static PVRSRV_ERROR _Destroy3DTransferContext(RGX_SERVER_TQ_3D_DATA *ps3DData,
  * PVRSRVCreateTransferContextKM
  */
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
+PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(CONNECTION_DATA		*psConnection,
+										   PVRSRV_DEVICE_NODE		*psDeviceNode,
 										   IMG_UINT32				ui32Priority,
 										   IMG_DEV_VIRTADDR			sMCUFenceAddr,
 										   IMG_UINT32				ui32FrameworkCommandSize,
@@ -294,7 +303,8 @@ PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
 	sInfo.psFWFrameworkMemDesc = psTransferContext->psFWFrameworkMemDesc;
 	sInfo.psMCUFenceAddr = &sMCUFenceAddr;
 
-	eError = _Create3DTransferContext(psDeviceNode,
+	eError = _Create3DTransferContext(psConnection,
+									  psDeviceNode,
 									  psFWMemContextMemDesc,
 									  ui32Priority,
 									  &sInfo,
@@ -305,7 +315,8 @@ PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
 	}
 	psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_3D;
 
-	eError = _Create2DTransferContext(psDeviceNode,
+	eError = _Create2DTransferContext(psConnection,
+									  psDeviceNode,
 									  psFWMemContextMemDesc,
 									  ui32Priority,
 									  &sInfo,
@@ -380,8 +391,7 @@ fail_destory3d:
  * PVRSRVSubmitTQ3DKickKM
  */
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(CONNECTION_DATA			*psConnection,
-									   RGX_SERVER_TQ_CONTEXT	*psTransferContext,
+PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(RGX_SERVER_TQ_CONTEXT	*psTransferContext,
 									   IMG_UINT32				ui32PrepareCount,
 									   IMG_UINT32				*paui32ClientFenceCount,
 									   PRGXFWIF_UFO_ADDR		**papauiClientFenceUFOAddress,
@@ -418,6 +428,7 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(CONNECTION_DATA			*psConnection,
 	PRGXFWIF_UFO_ADDR *pauiIntUpdateUFOAddress = IMG_NULL;
 	IMG_UINT32 *paui32IntUpdateValue = IMG_NULL;
 	PVRSRV_ERROR eError;
+	PVRSRV_ERROR eError2;
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 	IMG_BOOL bSyncsMerged = IMG_FALSE;
@@ -676,7 +687,6 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(CONNECTION_DATA			*psConnection,
 			Create the command helper data for this command
 		*/
 		eError = RGXCmdHelperInitCmdCCB(psClientCCB,
-										psConnection,
 										ui32IntClientFenceCount,
 										pauiIntFenceUFOAddress,
 										paui32IntFenceValue,
@@ -779,12 +789,12 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(CONNECTION_DATA			*psConnection,
 
 		LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
 		{
-			eError = RGXScheduleCommand(psDeviceNode->pvDevice,
+			eError2 = RGXScheduleCommand(psDeviceNode->pvDevice,
 										RGXFWIF_DM_3D,
 										&s3DKCCBCmd,
 										sizeof(s3DKCCBCmd),
 										bPDumpContinuous);
-			if (eError != PVRSRV_ERROR_RETRY)
+			if (eError2 != PVRSRV_ERROR_RETRY)
 			{
 				break;
 			}
@@ -803,17 +813,27 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(CONNECTION_DATA			*psConnection,
 
 		LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
 		{
-			eError = RGXScheduleCommand(psDeviceNode->pvDevice,
+			eError2 = RGXScheduleCommand(psDeviceNode->pvDevice,
 										RGXFWIF_DM_2D,
 										&s2DKCCBCmd,
 										sizeof(s2DKCCBCmd),
 										bPDumpContinuous);
-			if (eError != PVRSRV_ERROR_RETRY)
+			if (eError2 != PVRSRV_ERROR_RETRY)
 			{
 				break;
 			}
 			OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
 		} END_LOOP_UNTIL_TIMEOUT();
+	}
+
+	/*
+	 * Now check eError (which may have returned an error from our earlier calls
+	 * to RGXCmdHelperAcquireCmdCCB) - we needed to process any flush command first
+	 * so we check it now...
+	 */
+	if (eError != PVRSRV_OK )
+	{
+		goto fail_2dcmdacquire;
 	}
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
@@ -838,6 +858,11 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(CONNECTION_DATA			*psConnection,
         }    
     }    
 #endif
+#endif
+
+#if !defined(WDDM)
+	OSFreeMem(pas2DCmdHelper);
+	OSFreeMem(pas3DCmdHelper);
 #endif
 
 	return PVRSRV_OK;
@@ -878,31 +903,39 @@ fail_alloc3dhelper:
 }
 
 PVRSRV_ERROR PVRSRVRGXSetTransferContextPriorityKM(CONNECTION_DATA *psConnection,
-												   RGX_SERVER_TQ_CONTEXT *psTranfserContext,
+												   RGX_SERVER_TQ_CONTEXT *psTransferContext,
 												   IMG_UINT32 ui32Priority)
 {
 	PVRSRV_ERROR eError;
 
-	eError = ContextSetPriority(psTranfserContext->s2DData.psServerCommonContext,
-								psConnection,
-								psTranfserContext->psDeviceNode->pvDevice,
-								ui32Priority,
-								RGXFWIF_DM_2D);
-	if (eError != PVRSRV_OK)
+	if (psTransferContext->s2DData.ui32Priority != ui32Priority)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the 2D part of the transfercontext", __FUNCTION__));
-		goto fail_2dcontext;
+		eError = ContextSetPriority(psTransferContext->s2DData.psServerCommonContext,
+									psConnection,
+									psTransferContext->psDeviceNode->pvDevice,
+									ui32Priority,
+									RGXFWIF_DM_2D);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the 2D part of the transfercontext", __FUNCTION__));
+			goto fail_2dcontext;
+		}
+		psTransferContext->s2DData.ui32Priority = ui32Priority;
 	}
 
-	eError = ContextSetPriority(psTranfserContext->s3DData.psServerCommonContext,
-								psConnection,
-								psTranfserContext->psDeviceNode->pvDevice,
-								ui32Priority,
-								RGXFWIF_DM_3D);
-	if (eError != PVRSRV_OK)
+	if (psTransferContext->s3DData.ui32Priority != ui32Priority)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the 3D part of the transfercontext", __FUNCTION__));
-		goto fail_3dcontext;
+		eError = ContextSetPriority(psTransferContext->s3DData.psServerCommonContext,
+									psConnection,
+									psTransferContext->psDeviceNode->pvDevice,
+									ui32Priority,
+									RGXFWIF_DM_3D);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the 3D part of the transfercontext", __FUNCTION__));
+			goto fail_3dcontext;
+		}
+		psTransferContext->s3DData.ui32Priority = ui32Priority;
 	}
 	return PVRSRV_OK;
 

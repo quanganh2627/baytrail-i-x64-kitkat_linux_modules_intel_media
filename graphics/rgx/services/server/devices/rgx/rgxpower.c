@@ -526,6 +526,17 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 			psDevInfo->psGpuDVFSHistory->asCB[0].ui32DVFSClock = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
 			psDevInfo->ui32GpuUtilTransitionsCountSample = 0;
 
+			/* Reset FW CB of GPU state transitions history */
+			psDevInfo->psRGXFWIfGpuUtilFWCb->ui32LastGpuUtilState = RGXFWIF_GPU_UTIL_FWCB_STATE_RESERVED;
+			psDevInfo->psRGXFWIfGpuUtilFWCb->ui32WriteOffset = 0;
+			psDevInfo->psRGXFWIfGpuUtilFWCb->ui32CurrentDVFSId = 0;
+			psDevInfo->psRGXFWIfGpuUtilFWCb->aui64CB[0] = 
+				RGXFWIF_GPU_UTIL_FWCB_STATE_RESERVED << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT;
+			psDevInfo->psRGXFWIfGpuUtilFWCb->aui64CB[RGXFWIF_GPU_UTIL_FWCB_SIZE-1] = 
+				RGXFWIF_GPU_UTIL_FWCB_STATE_RESERVED << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT;
+			psDevInfo->psRGXFWIfGpuUtilFWCb->ui32GpuUtilTransitionsCount = 0;
+			psDevInfo->psRGXFWIfGpuUtilFWCb->ui32GpuUtilRendersCount = 0;
+
 			/*
 				Run the RGX init script.
 			*/

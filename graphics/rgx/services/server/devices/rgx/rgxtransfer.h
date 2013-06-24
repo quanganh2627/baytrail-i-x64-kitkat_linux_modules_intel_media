@@ -75,7 +75,8 @@ FIXME fill this in
 
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
+PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(CONNECTION_DATA			*psConnection,
+										   PVRSRV_DEVICE_NODE		*psDeviceNode,
 										   IMG_UINT32				ui32Priority,
 										   IMG_DEV_VIRTADDR			sMCUFenceAddr,
 										   IMG_UINT32				ui32FrameworkCommandSize,
@@ -113,8 +114,7 @@ PVRSRV_ERROR PVRSRVRGXDestroyTransferContextKM(RGX_SERVER_TQ_CONTEXT *psTransfer
 
 ******************************************************************************/
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(CONNECTION_DATA			*psConnection,
-									RGX_SERVER_TQ_CONTEXT	*psTransferContext,
+PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(RGX_SERVER_TQ_CONTEXT	*psTransferContext,
 									IMG_UINT32				ui32PrepareCount,
 									IMG_UINT32				*paui32ClientFenceCount,
 									PRGXFWIF_UFO_ADDR		**papauiClientFenceUFOAddress,

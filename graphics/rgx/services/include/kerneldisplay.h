@@ -157,6 +157,59 @@ typedef PVRSRV_ERROR (*DimQuery)(IMG_HANDLE hDeviceData,
 								 PVRSRV_SURFACE_DIMS *psDim,
 								 IMG_UINT32 *pui32Supported);
 
+
+/*************************************************************************/ /*!
+@Function       SetBlank
+
+@Description    Enable/disable blanking of the screen
+
+@Input          psConnection            Services connection
+
+@Input          hDevice                 3rd party display class device
+
+@Input          bEnabled                Enable/Disable the blanking
+
+@Return         PVRSRV_OK on success
+*/
+/*****************************************************************************/
+typedef PVRSRV_ERROR (*SetBlank)(IMG_HANDLE hDeviceData,
+								 IMG_BOOL bEnabled);
+
+/*************************************************************************/ /*!
+@Function       SetVSyncReporting
+
+@Description    Enable VSync reporting by trigger the global event object on
+                every vsync happened.
+
+@Input          psConnection            Services connection
+
+@Input          hDevice                 3rd party display class device
+
+@Input          bEnabled                Enable/Disable the reporting
+
+@Return         PVRSRV_OK on success
+*/
+/*****************************************************************************/
+typedef PVRSRV_ERROR (*SetVSyncReporting)(IMG_HANDLE hDeviceData,
+										  IMG_BOOL bEnabled);
+
+/*************************************************************************/ /*!
+@Function       PVRSRVDCLastVSyncQuery
+
+@Description    Query the time the last vsync happened.
+
+@Input          psConnection            Services connection
+
+@Input          hDevice                 3rd party display class device
+
+@Output         pi64Timestamp           the requested timestamp
+
+@Return         PVRSRV_OK if the query was successful
+*/
+/*****************************************************************************/
+typedef PVRSRV_ERROR (*LastVSyncQuery)(IMG_HANDLE hDeviceData,
+									   IMG_INT64 *pi64Timestamp);
+
 typedef PVRSRV_ERROR (*BufferSystemAcquire)(IMG_HANDLE hDeviceData,
 											IMG_DEVMEM_LOG2ALIGN_T *puiLog2PageSize,
 											IMG_UINT32 *pui32PageCount,
@@ -326,7 +379,7 @@ typedef PVRSRV_ERROR (*BufferImport)(IMG_HANDLE hDisplayContext,
                 have any memory backing it yet then this will trigger the 3rd
                 party driver to allocate it.
 
-                Note: The page count isn't passed back in this function as 
+                Note: The page count isn't passed back in this function as
                 services has already obtained it during BufferAlloc.
 
 @Input          hBuffer                 Handle to the buffer
@@ -411,6 +464,11 @@ typedef struct _DC_DEVICE_FUNCTIONS_
 	PanelQuery					pfnPanelQuery;
 	FormatQuery					pfnFormatQuery;
 	DimQuery					pfnDimQuery;
+
+	/*! Optional blank/vsync function */
+	SetBlank		            pfnSetBlank;
+	SetVSyncReporting		    pfnSetVSyncReporting;
+	LastVSyncQuery				pfnLastVSyncQuery;
 
 	/*! Mandatory configure function */
 	ContextCreate				pfnContextCreate;

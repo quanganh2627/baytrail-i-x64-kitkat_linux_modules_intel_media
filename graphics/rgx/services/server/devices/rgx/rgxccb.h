@@ -54,6 +54,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 extern "C" {
 #endif
 
+#define MAX_CLIENT_CCB_NAME	30
+
 typedef struct _RGX_CLIENT_CCB_ RGX_CLIENT_CCB;
 
 /*
@@ -66,7 +68,6 @@ typedef struct _RGX_CCB_CMD_HELPER_DATA_ {
 	RGX_CLIENT_CCB  		*psClientCCB;
 	IMG_CHAR 				*pszCommandName;
 	IMG_BOOL 				bPDumpContinuous;
-	CONNECTION_DATA			*psConnection;
 	IMG_UINT32				ui32ClientFenceCount;
 	PRGXFWIF_UFO_ADDR		*pauiFenceUFOAddress;
 	IMG_UINT32				*paui32FenceValue;
@@ -95,6 +96,8 @@ typedef struct _RGX_CCB_CMD_HELPER_DATA_ {
 
 PVRSRV_ERROR RGXCreateCCB(PVRSRV_DEVICE_NODE	*psDeviceNode,
 						  IMG_UINT32			ui32CCBSizeLog2,
+						  CONNECTION_DATA		*psConnectionData,
+						  const IMG_CHAR		*pszName,
 						  RGX_CLIENT_CCB		**ppsClientCCB,
 						  DEVMEM_MEMDESC 		**ppsClientCCBMemDesc,
 						  DEVMEM_MEMDESC 		**ppsClientCCBCtlMemDesc);
@@ -108,13 +111,11 @@ PVRSRV_ERROR RGXAcquireCCB(RGX_CLIENT_CCB *psClientCCB,
 
 IMG_INTERNAL IMG_VOID RGXReleaseCCB(RGX_CLIENT_CCB *psClientCCB,
 									IMG_UINT32		ui32CmdSize,
-									IMG_BOOL		bPDumpContinuous,
-									SYNC_CONNECTION_DATA 	*psSyncConnectionData);
+									IMG_BOOL		bPDumpContinuous);
 
 IMG_UINT32 RGXGetHostWriteOffsetCCB(RGX_CLIENT_CCB *psClientCCB);
 
 PVRSRV_ERROR RGXCmdHelperInitCmdCCB(RGX_CLIENT_CCB 			*psClientCCB,
-								    CONNECTION_DATA			*psConnection,
 								    IMG_UINT32				ui32ClientFenceCount,
 								    PRGXFWIF_UFO_ADDR		*pauiFenceUFOAddress,
 								    IMG_UINT32				*paui32FenceValue,

@@ -939,6 +939,46 @@ PVRSRV_ERROR DCDimQuery(DC_DEVICE *psDevice,
 	return PVRSRV_OK;
 }
 
+
+PVRSRV_ERROR DCSetBlank(DC_DEVICE *psDevice,
+						IMG_BOOL bEnabled)
+{
+	PVRSRV_ERROR eError = PVRSRV_ERROR_NOT_IMPLEMENTED;
+	if (psDevice->psFuncTable->pfnSetBlank)
+	{
+		eError = psDevice->psFuncTable->pfnSetBlank(psDevice->hDeviceData,
+													bEnabled);
+	}
+
+	return eError;
+}
+
+PVRSRV_ERROR DCSetVSyncReporting(DC_DEVICE *psDevice,
+								 IMG_BOOL bEnabled)
+{
+	PVRSRV_ERROR eError = PVRSRV_ERROR_NOT_IMPLEMENTED;
+	if (psDevice->psFuncTable->pfnSetVSyncReporting)
+	{
+		eError = psDevice->psFuncTable->pfnSetVSyncReporting(psDevice->hDeviceData,
+															 bEnabled);
+	}
+
+	return eError;
+}
+
+PVRSRV_ERROR DCLastVSyncQuery(DC_DEVICE *psDevice,
+							  IMG_INT64 *pi64Timestamp)
+{
+	PVRSRV_ERROR eError = PVRSRV_ERROR_NOT_IMPLEMENTED;
+	if (psDevice->psFuncTable->pfnLastVSyncQuery)
+	{
+		eError = psDevice->psFuncTable->pfnLastVSyncQuery(psDevice->hDeviceData,
+														  pi64Timestamp);
+	}
+
+	return eError;
+}
+
 /*
 	The system buffer breaks the rule of only calling DC callbacks on first
 	ref and last deref. For the pfnBufferSystemAcquire this is expected

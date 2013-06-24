@@ -59,6 +59,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "env_connection.h"
 #include "linkage.h"
 #include "pvrsrv.h"
+#include "rgxdevice.h"
 
 #include "lists.h"
 
@@ -1095,6 +1096,26 @@ static void ProcSeqShowStatus(struct seq_file *sfile, void* el)
 				{
 					seq_printf(sfile, "Firmware Status: UNKNOWN (%d)\n", psDeviceNode->eHealthStatus);
 					break;
+				}
+			}
+
+			/* Calculate the number of HWR events in total across all the DMs... */
+			if (psDeviceNode->pvDevice != IMG_NULL)
+			{
+				PVRSRV_RGXDEV_INFO*  psDevInfo = psDeviceNode->pvDevice;
+				RGXFWIF_TRACEBUF*  psRGXFWIfTraceBufCtl = psDevInfo->psRGXFWIfTraceBuf;
+
+				if (psRGXFWIfTraceBufCtl != IMG_NULL)
+				{
+					IMG_UINT32  ui32HWREventCount = 0;
+					IMG_UINT32  ui32DMIndex;
+
+					for (ui32DMIndex = 0; ui32DMIndex < RGXFWIF_DM_MAX; ui32DMIndex++)
+					{
+						ui32HWREventCount += psRGXFWIfTraceBufCtl->aui16HwrDmRecoveredCount[ui32DMIndex];
+					}
+
+					seq_printf(sfile, "HWR Event Count: %d\n", ui32HWREventCount);
 				}
 			}
 		}

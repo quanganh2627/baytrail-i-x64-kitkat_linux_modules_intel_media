@@ -600,6 +600,12 @@ typedef struct _RGXFWIF_INIT_
 #endif
 #endif
 
+	/* Core clock speed at FW boot time */ 
+	IMG_UINT32              ui32InitialCoreClockSpeed;
+	
+	/* APM latency in ms before signalling IDLE to the host */
+	IMG_UINT32				ui32ActivePMLatencyms;
+
 	/* Snapshot of CR Timer taken when bFirmwareStarted is set */
 	IMG_UINT64				RGXFW_ALIGN ui64CRTimerInitSnapshot;
 
@@ -659,7 +665,7 @@ typedef struct _RGXFW_UNITTESTS_
  ******************************************************************************
  * GPU DVFS History CB
  *****************************************************************************/
-#define RGXFWIF_GPU_DVFS_HIST_SIZE							100
+#define RGXFWIF_GPU_DVFS_HIST_SIZE		100	/* History size must NOT be greater than 16384 (2^14) */
 typedef struct _RGXFWIF_GPU_DVFS_HIST_ENTRY_
 {
 	IMG_UINT64				ui64CRTimerStamp;	/*!< CR Timer value at DVFS transition */

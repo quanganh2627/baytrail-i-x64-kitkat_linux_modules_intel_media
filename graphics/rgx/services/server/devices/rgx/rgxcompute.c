@@ -66,7 +66,8 @@ struct _RGX_SERVER_COMPUTE_CONTEXT_ {
 };
 
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
+PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(CONNECTION_DATA			*psConnection,
+											 PVRSRV_DEVICE_NODE			*psDeviceNode,
 											 IMG_UINT32					ui32Priority,
 											 IMG_DEV_VIRTADDR			sMCUFenceAddr,
 											 IMG_UINT32					ui32FrameworkCommandSize,
@@ -147,7 +148,8 @@ PVRSRV_ERROR PVRSRVRGXCreateComputeContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 	sInfo.psFWFrameworkMemDesc = psComputeContext->psFWFrameworkMemDesc;
 	sInfo.psMCUFenceAddr = &sMCUFenceAddr;
 
-	eError = FWCommonContextAllocate(psDeviceNode,
+	eError = FWCommonContextAllocate(psConnection,
+									 psDeviceNode,
 									 "CDM",
 									 IMG_NULL,
 									 0,
@@ -210,8 +212,7 @@ PVRSRV_ERROR PVRSRVRGXDestroyComputeContextKM(RGX_SERVER_COMPUTE_CONTEXT *psComp
 
 
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXKickCDMKM(CONNECTION_DATA				*psConnection,
-								RGX_SERVER_COMPUTE_CONTEXT	*psComputeContext,
+PVRSRV_ERROR PVRSRVRGXKickCDMKM(RGX_SERVER_COMPUTE_CONTEXT	*psComputeContext,
 								IMG_UINT32					ui32ClientFenceCount,
 								PRGXFWIF_UFO_ADDR			*pauiClientFenceUFOAddress,
 								IMG_UINT32					*paui32ClientFenceValue,
@@ -229,6 +230,7 @@ PVRSRV_ERROR PVRSRVRGXKickCDMKM(CONNECTION_DATA				*psConnection,
 	RGX_CCB_CMD_HELPER_DATA	sCmdHelperData;
 	IMG_BOOL				bKickRequired;
 	PVRSRV_ERROR			eError;
+	PVRSRV_ERROR			eError2;
 	IMG_UINT32				i;
 	
 	/* Sanity check the server fences */
@@ -242,7 +244,6 @@ PVRSRV_ERROR PVRSRVRGXKickCDMKM(CONNECTION_DATA				*psConnection,
 	}
 
 	eError = RGXCmdHelperInitCmdCCB(FWCommonContextGetClientCCB(psComputeContext->psServerCommonContext),
-									  psConnection,
 									  ui32ClientFenceCount,
 									  pauiClientFenceUFOAddress,
 									  paui32ClientFenceValue,
@@ -306,23 +307,32 @@ PVRSRV_ERROR PVRSRVRGXKickCDMKM(CONNECTION_DATA				*psConnection,
 	 */
 	LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
 	{
-		eError = RGXScheduleCommand(psComputeContext->psDeviceNode->pvDevice,
+		eError2 = RGXScheduleCommand(psComputeContext->psDeviceNode->pvDevice,
 									RGXFWIF_DM_CDM,
 									&sCmpKCCBCmd,
 									sizeof(sCmpKCCBCmd),
 									bPDumpContinuous);
-		if (eError != PVRSRV_ERROR_RETRY)
+		if (eError2 != PVRSRV_ERROR_RETRY)
 		{
 			break;
 		}
 		OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
 	} END_LOOP_UNTIL_TIMEOUT();
 	
-
-	if (eError != PVRSRV_OK)
+	if (eError2 != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "PVRSRVRGXKickCDMKM failed to schedule kernel CCB command. (0x%x)", eError));
 	}
+	/*
+	 * Now check eError (which may have returned an error from our earlier call
+	 * to RGXCmdHelperAcquireCmdCCB) - we needed to process any flush command first
+	 * so we check it now...
+	 */
+	if (eError != PVRSRV_OK )
+	{
+		goto fail_cmdaquire;
+	}
+
 	return PVRSRV_OK;
 
 fail_cmdaquire:
@@ -341,6 +351,7 @@ IMG_EXPORT PVRSRV_ERROR PVRSRVRGXFlushComputeDataKM(RGX_SERVER_COMPUTE_CONTEXT *
 	sFlushCmd.eCmdType = RGXFWIF_KCCB_CMD_SLCFLUSHINVAL;
 	sFlushCmd.uCmdData.sSLCFlushInvalData.bInval = IMG_FALSE;
 	sFlushCmd.uCmdData.sSLCFlushInvalData.eDM = RGXFWIF_DM_CDM;
+	sFlushCmd.uCmdData.sSLCFlushInvalData.psContext = FWCommonContextGetFWAddress(psComputeContext->psServerCommonContext);
 
 	LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
 	{

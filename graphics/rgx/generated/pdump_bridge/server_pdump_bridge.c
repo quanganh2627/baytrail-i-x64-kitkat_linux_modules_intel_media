@@ -158,13 +158,12 @@ PVRSRVBridgePVRSRVPDumpSetFrame(IMG_UINT32 ui32BridgeID,
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_PDUMP_PVRSRVPDUMPSETFRAME);
 
-	PVR_UNREFERENCED_PARAMETER(psConnection);
 
 
 
 
 	psPVRSRVPDumpSetFrameOUT->eError =
-		PDumpSetFrameKM(
+		PDumpSetFrameKM(psConnection,
 					psPVRSRVPDumpSetFrameIN->ui32Frame);
 
 

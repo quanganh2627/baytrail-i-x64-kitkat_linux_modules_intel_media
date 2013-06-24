@@ -63,8 +63,8 @@ typedef struct _SYNC_CONNECTION_DATA_ SYNC_CONNECTION_DATA;
 	PVR_ASSERT(fenceCountAll == (fenceCountA + fenceCountB)); \
 	OSMemCopy(fenceUFOAddrAll, fenceUFOAddrA, sizeof(PRGXFWIF_UFO_ADDR) * fenceCountA); \
 	OSMemCopy(((IMG_UINT8 *) fenceUFOAddrAll) + (sizeof(PRGXFWIF_UFO_ADDR) * fenceCountA), fenceUFOAddrB, sizeof(PRGXFWIF_UFO_ADDR) * fenceCountB); \
-	OSMemCopy(fenceValueAll, fenceValueA, sizeof(PRGXFWIF_UFO_ADDR) * fenceCountA); \
-	OSMemCopy(((IMG_UINT8 *) fenceValueAll) + (sizeof(PRGXFWIF_UFO_ADDR) * fenceCountA), fenceValueB, sizeof(PRGXFWIF_UFO_ADDR) * fenceCountB)
+	OSMemCopy(fenceValueAll, fenceValueA, sizeof(IMG_UINT32) * fenceCountA); \
+	OSMemCopy(((IMG_UINT8 *) fenceValueAll) + (sizeof(IMG_UINT32) * fenceCountA), fenceValueB, sizeof(IMG_UINT32) * fenceCountB)
 
 #define SYNC_MERGE_CLIENT_UPDATES(updateCountAll, updateUFOAddrAll, updateValueAll, \
 								  updateCountA, updateUFOAddrA, updateValueA, \
@@ -72,8 +72,8 @@ typedef struct _SYNC_CONNECTION_DATA_ SYNC_CONNECTION_DATA;
 	PVR_ASSERT(updateCountAll == (updateCountA + updateCountB)); \
 	OSMemCopy(updateUFOAddrAll, updateUFOAddrA, sizeof(PRGXFWIF_UFO_ADDR) * updateCountA); \
 	OSMemCopy(((IMG_UINT8 *) updateUFOAddrAll) + (sizeof(PRGXFWIF_UFO_ADDR) * updateCountA), updateUFOAddrB, sizeof(PRGXFWIF_UFO_ADDR) * updateCountB); \
-	OSMemCopy(updateValueAll, updateValueA, sizeof(PRGXFWIF_UFO_ADDR) * updateCountA); \
-	OSMemCopy(((IMG_UINT8 *) updateValueAll) + (sizeof(PRGXFWIF_UFO_ADDR) * updateCountA), updateValueB, sizeof(PRGXFWIF_UFO_ADDR) * updateCountB)
+	OSMemCopy(updateValueAll, updateValueA, sizeof(IMG_UINT32) * updateCountA); \
+	OSMemCopy(((IMG_UINT8 *) updateValueAll) + (sizeof(IMG_UINT32) * updateCountA), updateValueB, sizeof(IMG_UINT32) * updateCountB)
 
 PVRSRV_ERROR
 PVRSRVAllocSyncPrimitiveBlockKM(CONNECTION_DATA *psConnection,
@@ -211,7 +211,6 @@ IMG_VOID ServerSyncDumpPending(IMG_VOID);
 PVRSRV_ERROR SyncRegisterConnection(SYNC_CONNECTION_DATA **ppsSyncConnectionData);
 IMG_VOID SyncUnregisterConnection(SYNC_CONNECTION_DATA *ppsSyncConnectionData);
 IMG_VOID SyncConnectionPDumpSyncBlocks(SYNC_CONNECTION_DATA *ppsSyncConnectionData);
-IMG_VOID SyncConnectionPDumpExit(SYNC_CONNECTION_DATA *psSyncConnectionData);
 
 PVRSRV_ERROR ServerSyncInit(IMG_VOID);
 IMG_VOID ServerSyncDeinit(IMG_VOID);

@@ -246,10 +246,8 @@ typedef struct _PVRSRV_DEVICE_NODE_
 	PSYNC_PRIM_CONTEXT		hSyncPrimContext;
 
 	PVRSRV_CLIENT_SYNC_PRIM *psSyncPrim;
-	IMG_UINT32				ui32SyncPrimRefCount;
 
 	PVRSRV_CLIENT_SYNC_PRIM *psSyncPrimPreKick;
-	IMG_UINT32				ui32SyncPrimPreKickRefCount;
 
 	IMG_HANDLE				hCmdCompNotify;
 	IMG_HANDLE				hDbgReqNotify;

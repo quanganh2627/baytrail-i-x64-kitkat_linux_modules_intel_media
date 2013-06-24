@@ -44,6 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "img_types.h"
 #include "physheap.h"
 #include "kerneldisplay.h"
+#include "pvrsrv.h"
 
 #if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 #include "syscommon.h"
@@ -90,6 +91,9 @@ typedef PVRSRV_ERROR (*PFN_SYS_INSTALL_DEVICE_LISR)(IMG_UINT32 ui32IRQ, IMG_BOOL
 typedef PVRSRV_ERROR (*PFN_SYS_UNINSTALL_DEVICE_LISR)(IMG_HANDLE hLISRData);
 #endif
 
+/* Other service related functions */
+typedef IMG_VOID (*PFN_CHECK_STATUS)(IMG_PVOID hCmdCompCallerHandle);
+
 #define DC_OS_BYTES_TO_PAGES(range)	(((range) + (DC_OSGetPageSize() - 1)) >> DC_OSGetPageShift())
 
 typedef struct DC_SERVICES_FUNCS_TAG
@@ -114,6 +118,8 @@ typedef struct DC_SERVICES_FUNCS_TAG
 	PFN_SYS_INSTALL_DEVICE_LISR		pfnSysInstallDeviceLISR;
 	PFN_SYS_UNINSTALL_DEVICE_LISR		pfnSysUninstallDeviceLISR;
 #endif
+	/* Other service related functions */
+	PFN_CHECK_STATUS		        pfnCheckStatus;
 } DC_SERVICES_FUNCS;
 
 typedef enum
@@ -134,6 +140,8 @@ IMG_VOID DC_OSAbort(const IMG_CHAR *pszFile, IMG_UINT32 ui32Line);
 IMG_VOID DC_OSDebugPrintf(DC_OS_DEBUG_LEVEL eDebugLevel, const IMG_CHAR *pszFormat, ...);
 
 IMG_CHAR *DC_OSStringNCopy(IMG_CHAR *pszDest, const IMG_CHAR *pszSrc, IMG_SIZE_T uiLength);
+
+IMG_INT64 DC_OSClockns(IMG_VOID);
 
 /* Memory management */
 IMG_UINT32 DC_OSGetPageSize(IMG_VOID);

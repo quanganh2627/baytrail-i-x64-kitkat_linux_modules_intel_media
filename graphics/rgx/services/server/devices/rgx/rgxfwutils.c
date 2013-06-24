@@ -293,7 +293,8 @@ struct _RGX_SERVER_COMMON_CONTEXT_ {
 	IMG_BOOL bCommonContextMemProvided;
 };
 
-PVRSRV_ERROR FWCommonContextAllocate(PVRSRV_DEVICE_NODE *psDeviceNode,
+PVRSRV_ERROR FWCommonContextAllocate(CONNECTION_DATA *psConnection,
+									 PVRSRV_DEVICE_NODE *psDeviceNode,
 									 const IMG_CHAR *pszContextName,
 									 DEVMEM_MEMDESC *psAllocatedMemDesc,
 									 IMG_UINT32 ui32AllocatedOffset,
@@ -353,6 +354,8 @@ PVRSRV_ERROR FWCommonContextAllocate(PVRSRV_DEVICE_NODE *psDeviceNode,
 	/* Allocate the client CCB */
 	eError = RGXCreateCCB(psDeviceNode,
 						  ui32CCBAllocSize,
+						  psConnection,
+						  pszContextName,
 						  &psServerCommonContext->psClientCCB,
 						  &psServerCommonContext->psClientCCBMemDesc,
 						  &psServerCommonContext->psClientCCBCtrlMemDesc);
@@ -1317,6 +1320,13 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 	psRGXFWInit->uiPowerSync = SyncPrimGetFirmwareAddr(psDevInfo->psPowSyncPrim);
 
+	/* Required infor by FW to calculate the ActivePM idle timer latency */
+	{
+		RGX_DATA *psRGXData = (RGX_DATA*) psDeviceNode->psDevConfig->hDevData;
+
+		psRGXFWInit->ui32InitialCoreClockSpeed = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
+		psRGXFWInit->ui32ActivePMLatencyms = psRGXData->psRGXTimingInfo->ui32ActivePMLatencyms;
+	}
 
 	/* Setup BIF Fault read register */
 	eError = RGXSetupBIFFaultReadRegister(psDeviceNode, psRGXFWInit);
@@ -2210,7 +2220,14 @@ static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 	PVRSRV_ERROR		eError;
 
 	/* Ensure RGX is powered up before kicking MTS */
-	PVRSRVForcedPowerLock();
+	eError = PVRSRVPowerLock();
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_WARNING, "RGXScheduleProcessQueuesKM: failed to acquire powerlock (%s)",
+					PVRSRVGetErrorStringKM(eError)));
+
+		return;
+	}
 
 	/* We don't need to acquire the BridgeLock as this power transition won't
 	   send a command to the FW */
@@ -2439,21 +2456,14 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 	RGXFWIF_KCCB_CMD	sCmdSyncPrim;
 
 	/* Ensure RGX is powered up before kicking MTS */
-	PVRSRVForcedPowerLock();
+	eError = PVRSRVPowerLock();
 
-	/* sanity check. Concurrent use of the syncPrim should be prevented by the bridge-lock */
-	if (psSyncPrim == psDevInfo->psDeviceNode->psSyncPrim)
+	if (eError != PVRSRV_OK)
 	{
-		/* general command sync prim */
-		PVR_ASSERT(psDevInfo->psDeviceNode->ui32SyncPrimRefCount == 0);
-		psDevInfo->psDeviceNode->ui32SyncPrimRefCount++;
-	}
-	else
-	{
-		/* prekick sync prim */
-		PVR_ASSERT(psSyncPrim == psDevInfo->psDeviceNode->psSyncPrimPreKick);
-		PVR_ASSERT(psDevInfo->psDeviceNode->ui32SyncPrimPreKickRefCount == 0);
-		psDevInfo->psDeviceNode->ui32SyncPrimPreKickRefCount++;
+		PVR_DPF((PVR_DBG_ERROR, "RGXWaitForFWOp: failed to acquire powerlock (%s)",
+					PVRSRVGetErrorStringKM(eError)));
+
+		goto _PVRSRVPowerLock_Exit;
 	}
 
 	PDUMPPOWCMDSTART();
@@ -2546,14 +2556,6 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 
 _RGXSendCommandRaw_Exit:
 _PVRSRVSetDevicePowerStateKM_Exit:
-	if (psSyncPrim == psDevInfo->psDeviceNode->psSyncPrim)
-	{
-		psDevInfo->psDeviceNode->ui32SyncPrimRefCount--;
-	}
-	else
-	{
-		psDevInfo->psDeviceNode->ui32SyncPrimPreKickRefCount--;
-	}
 
 	PVRSRVPowerUnlock();
 
@@ -2885,8 +2887,7 @@ PVRSRV_ERROR ContextSetPriority(RGX_SERVER_COMMON_CONTEXT *psContext,
 		*/
 		RGXReleaseCCB(FWCommonContextGetClientCCB(psContext),
 					  ui32CmdSize,
-					  IMG_TRUE,
-					  psConnection->psSyncConnectionData);
+					  IMG_TRUE);
 	
 		if (eError != PVRSRV_OK)
 		{
@@ -2999,7 +3000,7 @@ PVRSRV_ERROR RGXUpdateHealthStatus(PVRSRV_DEVICE_NODE* psDevNode,
 					"RGXGetDeviceHealthStatus: Device is powered off.\n"));
 		return PVRSRV_OK;
 	}
-
+	
 	/* If this is a quick update, then include the last current value... */
 	if (!bCheckAfterTimePassed)
 	{

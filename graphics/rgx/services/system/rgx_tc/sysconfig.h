@@ -47,6 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrsrv_device.h"
 #include "rgxdevice.h"
 
+#define SYS_RGX_ACTIVE_POWER_LATENCY_MS (10)
 static RGX_TIMING_INFORMATION gsRGXTimingInfo =
 {
 	/* ui32CoreClockSpeed */
@@ -54,7 +55,9 @@ static RGX_TIMING_INFORMATION gsRGXTimingInfo =
 	/* bEnableActivePM */ 
 	IMG_FALSE,
 	/* bEnableRDPowIsland */ 
-	IMG_FALSE
+	IMG_FALSE,
+	/* ui32ActivePMLatencyms */
+	SYS_RGX_ACTIVE_POWER_LATENCY_MS
 };
 
 static RGX_DATA gsRGXData =

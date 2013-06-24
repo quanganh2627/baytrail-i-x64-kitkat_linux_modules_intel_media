@@ -130,6 +130,13 @@ IMG_CHAR *DC_OSStringNCopy(IMG_CHAR *pszDest, const IMG_CHAR *pszSrc, IMG_SIZE_T
 	return strncpy(pszDest, pszSrc, uiLength);
 }
 
+IMG_INT64 DC_OSClockns(IMG_VOID)
+{
+	struct timespec now;
+	ktime_get_ts(&now);
+	return now.tv_sec * 1000000000ULL + now.tv_nsec;
+}
+
 IMG_UINT32 DC_OSGetPageSize(IMG_VOID)
 {
 	return PAGE_SIZE;
@@ -302,6 +309,8 @@ PVRSRV_ERROR DC_OSPVRServicesSetupFuncs(IMG_HANDLE hPVRServicesConnection, DC_SE
 	psServicesFuncs->pfnSysInstallDeviceLISR = SysInstallDeviceLISR;
 	psServicesFuncs->pfnSysUninstallDeviceLISR = SysUninstallDeviceLISR;
 #endif
+
+	psServicesFuncs->pfnCheckStatus = PVRSRVCheckStatus;
 
 	return PVRSRV_OK;
 }

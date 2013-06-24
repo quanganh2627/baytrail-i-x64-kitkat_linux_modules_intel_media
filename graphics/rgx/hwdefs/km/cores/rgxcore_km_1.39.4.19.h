@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 2.7.6.3
+@Title          RGX Core BVNC 1.39.4.19
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,21 +39,21 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_2_7_6_3_H_
-#define _RGXCORE_KM_2_7_6_3_H_
+#ifndef _RGXCORE_KM_1_39_4_19_H_
+#define _RGXCORE_KM_1_39_4_19_H_
 
-/***** Automatically generated file (5/24/2013 4:03:21 PM): Do not edit manually ********************/
-/***** Timestamp:  (5/24/2013 4:03:21 PM)************************************************************/
-/***** CS: @2200583 ******************************************************************/
+/***** Automatically generated file (6/17/2013 9:49:11 AM): Do not edit manually ********************/
+/***** Timestamp:  (6/17/2013 9:49:11 AM)************************************************************/
+/***** CS: @2292017 ******************************************************************/
 
 
 /******************************************************************************
- * BVNC = 2.7.6.3 
+ * BVNC = 1.39.4.19 
  *****************************************************************************/
-#define RGX_BVNC_KM_B 2
-#define RGX_BVNC_KM_V 7
-#define RGX_BVNC_KM_N 6
-#define RGX_BVNC_KM_C 3
+#define RGX_BVNC_KM_B 1
+#define RGX_BVNC_KM_V 39
+#define RGX_BVNC_KM_N 4
+#define RGX_BVNC_KM_C 19
 
 /******************************************************************************
  * Errata 
@@ -68,4 +68,4 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 
-#endif /* _RGXCORE_KM_2_7_6_3_H_ */
+#endif /* _RGXCORE_KM_1_39_4_19_H_ */

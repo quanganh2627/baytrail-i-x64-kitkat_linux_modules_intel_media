@@ -222,6 +222,7 @@ typedef struct _RGX_TIMING_INFORMATION_
 	IMG_UINT32			ui32CoreClockSpeed;
 	IMG_BOOL			bEnableActivePM;
 	IMG_BOOL			bEnableRDPowIsland;
+	IMG_UINT32			ui32ActivePMLatencyms;
 } RGX_TIMING_INFORMATION;
 
 typedef struct _RGX_DATA_

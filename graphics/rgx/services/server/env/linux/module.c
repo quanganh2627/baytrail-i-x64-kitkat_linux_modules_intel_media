@@ -123,6 +123,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "power.h"
 #include "env_connection.h"
 #include "rgxsysinfo.h"
+#include "pvrsrv.h"
 
 #if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 #include "syscommon.h"
@@ -187,6 +188,8 @@ EXPORT_SYMBOL(PhysHeapCpuPAddrToDevPAddr);
 EXPORT_SYMBOL(SysInstallDeviceLISR);
 EXPORT_SYMBOL(SysUninstallDeviceLISR);
 #endif
+
+EXPORT_SYMBOL(PVRSRVCheckStatus);
 
 #if defined(PVR_LDM_DEVICE_CLASS) && !defined(SUPPORT_DRM)
 /*

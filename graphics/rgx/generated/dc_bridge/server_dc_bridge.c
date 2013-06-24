@@ -722,6 +722,150 @@ DCDimQuery_exit:
 }
 
 static IMG_INT
+PVRSRVBridgeDCSetBlank(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_DCSETBLANK *psDCSetBlankIN,
+					 PVRSRV_BRIDGE_OUT_DCSETBLANK *psDCSetBlankOUT,
+					 CONNECTION_DATA *psConnection)
+{
+	DC_DEVICE * psDeviceInt = IMG_NULL;
+	IMG_HANDLE hDeviceInt2 = IMG_NULL;
+
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_DC_DCSETBLANK);
+
+
+
+
+
+				{
+					/* Look up the address from the handle */
+					psDCSetBlankOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCSetBlankIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCSetBlankOUT->eError != PVRSRV_OK)
+					{
+						goto DCSetBlank_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCSetBlankOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCSetBlankOUT->eError != PVRSRV_OK)
+					{
+						goto DCSetBlank_exit;
+					}
+				}
+
+	psDCSetBlankOUT->eError =
+		DCSetBlank(
+					psDeviceInt,
+					psDCSetBlankIN->bEnabled);
+
+
+
+DCSetBlank_exit:
+
+	return 0;
+}
+
+static IMG_INT
+PVRSRVBridgeDCSetVSyncReporting(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_DCSETVSYNCREPORTING *psDCSetVSyncReportingIN,
+					 PVRSRV_BRIDGE_OUT_DCSETVSYNCREPORTING *psDCSetVSyncReportingOUT,
+					 CONNECTION_DATA *psConnection)
+{
+	DC_DEVICE * psDeviceInt = IMG_NULL;
+	IMG_HANDLE hDeviceInt2 = IMG_NULL;
+
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_DC_DCSETVSYNCREPORTING);
+
+
+
+
+
+				{
+					/* Look up the address from the handle */
+					psDCSetVSyncReportingOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCSetVSyncReportingIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCSetVSyncReportingOUT->eError != PVRSRV_OK)
+					{
+						goto DCSetVSyncReporting_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCSetVSyncReportingOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCSetVSyncReportingOUT->eError != PVRSRV_OK)
+					{
+						goto DCSetVSyncReporting_exit;
+					}
+				}
+
+	psDCSetVSyncReportingOUT->eError =
+		DCSetVSyncReporting(
+					psDeviceInt,
+					psDCSetVSyncReportingIN->bEnabled);
+
+
+
+DCSetVSyncReporting_exit:
+
+	return 0;
+}
+
+static IMG_INT
+PVRSRVBridgeDCLastVSyncQuery(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_DCLASTVSYNCQUERY *psDCLastVSyncQueryIN,
+					 PVRSRV_BRIDGE_OUT_DCLASTVSYNCQUERY *psDCLastVSyncQueryOUT,
+					 CONNECTION_DATA *psConnection)
+{
+	DC_DEVICE * psDeviceInt = IMG_NULL;
+	IMG_HANDLE hDeviceInt2 = IMG_NULL;
+
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_DC_DCLASTVSYNCQUERY);
+
+
+
+
+
+				{
+					/* Look up the address from the handle */
+					psDCLastVSyncQueryOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDeviceInt2,
+											psDCLastVSyncQueryIN->hDevice,
+											PVRSRV_HANDLE_TYPE_DC_DEVICE);
+					if(psDCLastVSyncQueryOUT->eError != PVRSRV_OK)
+					{
+						goto DCLastVSyncQuery_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psDCLastVSyncQueryOUT->eError = ResManFindPrivateDataByPtr(hDeviceInt2, (IMG_VOID **) &psDeviceInt);
+
+					if(psDCLastVSyncQueryOUT->eError != PVRSRV_OK)
+					{
+						goto DCLastVSyncQuery_exit;
+					}
+				}
+
+	psDCLastVSyncQueryOUT->eError =
+		DCLastVSyncQuery(
+					psDeviceInt,
+					&psDCLastVSyncQueryOUT->i64Timestamp);
+
+
+
+DCLastVSyncQuery_exit:
+
+	return 0;
+}
+
+static IMG_INT
 PVRSRVBridgeDCSystemBufferAcquire(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_DCSYSTEMBUFFERACQUIRE *psDCSystemBufferAcquireIN,
 					 PVRSRV_BRIDGE_OUT_DCSYSTEMBUFFERACQUIRE *psDCSystemBufferAcquireOUT,
@@ -1998,6 +2142,9 @@ PVRSRV_ERROR RegisterDCFunctions(IMG_VOID)
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCPANELQUERY, PVRSRVBridgeDCPanelQuery);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCFORMATQUERY, PVRSRVBridgeDCFormatQuery);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCDIMQUERY, PVRSRVBridgeDCDimQuery);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCSETBLANK, PVRSRVBridgeDCSetBlank);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCSETVSYNCREPORTING, PVRSRVBridgeDCSetVSyncReporting);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCLASTVSYNCQUERY, PVRSRVBridgeDCLastVSyncQuery);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCSYSTEMBUFFERACQUIRE, PVRSRVBridgeDCSystemBufferAcquire);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCSYSTEMBUFFERRELEASE, PVRSRVBridgeDCSystemBufferRelease);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCDISPLAYCONTEXTCREATE, PVRSRVBridgeDCDisplayContextCreate);

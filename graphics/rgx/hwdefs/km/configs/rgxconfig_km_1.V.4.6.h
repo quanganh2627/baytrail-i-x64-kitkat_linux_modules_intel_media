@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.69.4.4
+@Title          RGX Config BVNC 1.V.4.6
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,34 +39,23 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_69_4_4_H_
-#define _RGXCORE_KM_1_69_4_4_H_
+#ifndef _RGXCONFIG_KM_1_V_4_6_H_
+#define _RGXCONFIG_KM_1_V_4_6_H_
 
 /***** Automatically generated file (6/17/2013 9:48:05 AM): Do not edit manually ********************/
 /***** Timestamp:  (6/17/2013 9:48:05 AM)************************************************************/
-/***** CS: @2281645 ******************************************************************/
 
-
-/******************************************************************************
- * BVNC = 1.69.4.4 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 69
-#define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 4
+#define RGX_BNC_KM_B 1
+#define RGX_BNC_KM_N 4
+#define RGX_BNC_KM_C 6
 
 /******************************************************************************
- * Errata 
+ * DDK Defines
  *****************************************************************************/
-
-#define FIX_HW_BRN_38344
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
+#define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
+#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
+#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
+#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 
 
-
-#endif /* _RGXCORE_KM_1_69_4_4_H_ */
+#endif /* _RGXCONFIG_1_V_4_6_H_ */

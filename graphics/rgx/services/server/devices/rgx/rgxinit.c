@@ -176,6 +176,7 @@ static IMG_VOID RGXUpdateGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNode)
 	IMG_UINT64				ui64CurrentOSTime = (IMG_UINT64)OSClockms() * 1000; /* mul by 1000 to scale from ms to us */
 	IMG_UINT32				ui32CheckedSamples = 0;
 	IMG_UINT32				ui32Remainder;
+	IMG_UINT64				ui64PreviousCrTimerValue = RGXFWIF_GPU_UTIL_FWCB_TIMER_MASK >> RGXFWIF_GPU_UTIL_FWCB_TIMER_SHIFT;
 
 	/* write offset is incremented after writing to FWCB, so subtract 1 */
 	ui32WOffSample = (psUtilFWCb->ui32WriteOffset - 1) & RGXFWIF_GPU_UTIL_FWCB_MASK;
@@ -195,13 +196,23 @@ static IMG_VOID RGXUpdateGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNode)
 
 			if (psDVFSHistEntry->ui32DVFSClock < 256)
 			{
-				/* DVFS frequency is 0 in DVFS history entry. Is ui32CoreClockSpeed in PVRSRV_RGXDEV_INFO being updated? */
+				/* DVFS frequency is 0 in DVFS history entry, which means that 
+						system layer doesn't define core clock frequency */
 				ui32StatCumulative = 0;
 				break;
 			}
 
+			if (RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(ui64FWCbEntryCurrent) > ui64PreviousCrTimerValue)
+			{
+				/* CR timer value of current FW CB entry should always be smaller than in the next entry in the CB. 
+				  If it's greater then we have a FW CB overlap. */
+				break;
+			}
+
+			ui64PreviousCrTimerValue = RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(ui64FWCbEntryCurrent);
+
 			/* Calculate the difference between CR timer at state transition and CR timer at DVFS transition */
-			ui64OSTimeOfCurrentEntry = ((RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(ui64FWCbEntryCurrent) - psDVFSHistEntry->ui64CRTimerStamp) 
+			ui64OSTimeOfCurrentEntry = ((ui64PreviousCrTimerValue - psDVFSHistEntry->ui64CRTimerStamp) 
 										* 1000000); /* mul by 1000000 to get result in us after dividing by FREQ in the next line */
 			/* Divide CR Timer cycles by number of cycles per 1s to get OS time period from DVFS transition */
 			ui64OSTimeOfCurrentEntry = OSDivide64(ui64OSTimeOfCurrentEntry, (psDVFSHistEntry->ui32DVFSClock / 256), &ui32Remainder);

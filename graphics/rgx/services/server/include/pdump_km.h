@@ -60,6 +60,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 extern "C" {
 #endif
 
+#include "connection_server.h"
+#include "sync_server.h"
 /*
  *	Pull in pdump flags from services include
  */
@@ -82,6 +84,9 @@ extern "C" {
 extern IMG_UINT32 g_ui32EveryLineCounter;
 #endif
 
+typedef struct _PDUMP_CONNECTION_DATA_ PDUMP_CONNECTION_DATA;
+typedef PVRSRV_ERROR (*PFN_PDUMP_TRANSITION)(IMG_PVOID *pvData, IMG_BOOL bInto, IMG_BOOL bContinuous);
+
 /*! Macro used to record a panic in the PDump script stream */
 #define PDUMP_PANIC(_type, _id, _msg) do \
 		{ PVRSRV_ERROR _eE;\
@@ -102,7 +107,7 @@ extern IMG_UINT32 g_ui32EveryLineCounter;
 	IMG_BOOL PDumpIsSuspended(IMG_VOID);
 	PVRSRV_ERROR PDumpStartInitPhaseKM(IMG_VOID);
 	PVRSRV_ERROR PDumpStopInitPhaseKM(IMG_MODULE_ID eModuleID);
-	IMG_IMPORT PVRSRV_ERROR PDumpSetFrameKM(IMG_UINT32 ui32Frame);
+	IMG_IMPORT PVRSRV_ERROR PDumpSetFrameKM(CONNECTION_DATA *psConnection, IMG_UINT32 ui32Frame);
 	IMG_IMPORT PVRSRV_ERROR PDumpCommentKM(IMG_CHAR *pszComment, IMG_UINT32 ui32Flags);
 
 	PVRSRV_ERROR PDumpReg32(IMG_CHAR	*pszPDumpRegName,
@@ -195,9 +200,6 @@ extern IMG_UINT32 g_ui32EveryLineCounter;
 									IMG_CHAR *pszMemSpace,
 									IMG_UINT32 ui32MMUContextID,
 									IMG_UINT32 ui32MMUType);
-
-
-	IMG_BOOL PDumpTestNextFrame(IMG_UINT32 ui32CurrentFrame);
 
 	PVRSRV_ERROR PDumpCounterRegisters(PVRSRV_DEVICE_IDENTIFIER *psDevId,
 					IMG_UINT32 ui32DumpFrameNum,
@@ -292,14 +294,32 @@ PDumpWriteSymbAddress(const IMG_CHAR *pszDestSpaceName,
                       IMG_DEVMEM_OFFSET_T uiRefOffset,
                       IMG_DEVMEM_SIZE_T uiWordSize,
                       IMG_UINT32 uiPDumpFlags);
-    
+
+/* Register the connection with the PDump subsystem */
+extern PVRSRV_ERROR PDumpRegisterConnection(SYNC_CONNECTION_DATA *psSyncConnectionData,
+											PDUMP_CONNECTION_DATA **ppsPDumpConnectionData);
+
+/* Unregister the connection with the PDump subsystem */
+extern IMG_VOID PDumpUnregisterConnection(PDUMP_CONNECTION_DATA *psPDumpConnectionData);
+
+/* Register for notification of PDump Transition into/outof capture range */
+extern PVRSRV_ERROR PDumpRegisterTransitionCallback(PDUMP_CONNECTION_DATA *psPDumpConnectionData,
+													 PFN_PDUMP_TRANSITION pfnCallback,
+													 IMG_PVOID hPrivData,
+													 IMG_PVOID *ppvHandle);
+
+/* Unregister notification of PDump Transition */
+extern IMG_VOID PDumpUnregisterTransitionCallback(IMG_PVOID pvHandle);
+
+/* Notify PDump of a Transition into/outof capture range */
+extern PVRSRV_ERROR PDumpTransition(PDUMP_CONNECTION_DATA *psPDumpConnectionData, IMG_BOOL bInto, IMG_BOOL bContinuous);
+   
 	#define PDUMP_LOCK				PDumpLockKM
 	#define PDUMP_UNLOCK			PDumpUnlockKM
 
 	#define PDUMPINIT				PDumpInitCommon
 	#define PDUMPDEINIT				PDumpDeInitCommon
 	#define PDUMPISLASTFRAME		PDumpIsLastCaptureFrameKM
-	#define PDUMPTESTNEXTFRAME		PDumpTestNextFrame
 	#define PDUMPREG32				PDumpReg32
 	#define PDUMPREG64				PDumpReg64
 	#define PDUMPREGREAD32			PDumpRegRead32
@@ -403,8 +423,9 @@ PDumpStopInitPhaseKM(IMG_MODULE_ID eModuleID)
 #pragma inline(PDumpSetFrameKM)
 #endif
 static INLINE PVRSRV_ERROR
-PDumpSetFrameKM(IMG_UINT32 ui32Frame)
+PDumpSetFrameKM(CONNECTION_DATA *psConnection, IMG_UINT32 ui32Frame)
 {
+	PVR_UNREFERENCED_PARAMETER(psConnection);
 	PVR_UNREFERENCED_PARAMETER(ui32Frame);
 	return PVRSRV_OK;
 }
@@ -487,11 +508,70 @@ PDumpBitmapKM(PVRSRV_DEVICE_NODE *psDeviceNode,
 	return PVRSRV_OK;
 }
 
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpRegisterConnection)
+#endif
+static INLINE PVRSRV_ERROR
+PDumpRegisterConnection(SYNC_CONNECTION_DATA *psSyncConnectionData,
+						PDUMP_CONNECTION_DATA **ppsPDumpConnectionData)
+{
+	PVR_UNREFERENCED_PARAMETER(psSyncConnectionData);
+	PVR_UNREFERENCED_PARAMETER(ppsPDumpConnectionData);
+
+	return PVRSRV_OK;
+}
+
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpUnregisterConnection)
+#endif
+static INLINE
+IMG_VOID PDumpUnregisterConnection(PDUMP_CONNECTION_DATA *psPDumpConnectionData)
+{
+	PVR_UNREFERENCED_PARAMETER(psPDumpConnectionData);
+}
+
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpRegisterTransitionCallback)
+#endif
+static INLINE
+PVRSRV_ERROR PDumpRegisterTransitionCallback(PDUMP_CONNECTION_DATA *psPDumpConnectionData,
+											  PFN_PDUMP_TRANSITION pfnCallback,
+											  IMG_PVOID hPrivData,
+											  IMG_PVOID *ppvHandle)
+{
+	PVR_UNREFERENCED_PARAMETER(psPDumpConnectionData);
+	PVR_UNREFERENCED_PARAMETER(pfnCallback);
+	PVR_UNREFERENCED_PARAMETER(hPrivData);
+	PVR_UNREFERENCED_PARAMETER(ppvHandle);
+
+	return PVRSRV_OK;
+}
+
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpUnregisterTransitionCallback)
+#endif
+static INLINE
+IMG_VOID PDumpUnregisterTransitionCallback(IMG_PVOID pvHandle)
+{
+	PVR_UNREFERENCED_PARAMETER(pvHandle);
+}
+
+#ifdef INLINE_IS_PRAGMA
+#pragma inline(PDumpTransition)
+#endif
+static INLINE
+PVRSRV_ERROR PDumpTransition(PDUMP_CONNECTION_DATA *psPDumpConnectionData, IMG_BOOL bInto, IMG_BOOL bContinuous)
+{
+	PVR_UNREFERENCED_PARAMETER(psPDumpConnectionData);
+	PVR_UNREFERENCED_PARAMETER(bInto);
+	PVR_UNREFERENCED_PARAMETER(bContinuous);
+	return PVRSRV_OK;
+}
+
 	#if defined WIN32 || defined UNDER_WDDM
 		#define PDUMPINIT			PDumpInitCommon
 		#define PDUMPDEINIT(...)		/ ## * PDUMPDEINIT(__VA_ARGS__) * ## /
 		#define PDUMPISLASTFRAME(...)		/ ## * PDUMPISLASTFRAME(__VA_ARGS__) * ## /
-		#define PDUMPTESTNEXTFRAME(...)		/ ## * PDUMPTESTNEXTFRAME(__VA_ARGS__) * ## /
 		#define PDUMPREG32(...)			/ ## * PDUMPREG32(__VA_ARGS__) * ## /
 		#define PDUMPREG64(...)			/ ## * PDUMPREG64(__VA_ARGS__) * ## /
 		#define PDUMPREGREAD32(...)			/ ## * PDUMPREGREAD32(__VA_ARGS__) * ## /
@@ -528,7 +608,6 @@ PDumpBitmapKM(PVRSRV_DEVICE_NODE *psDeviceNode,
 			#define PDUMPINIT	PDumpInitCommon
 			#define PDUMPDEINIT(args...)
 			#define PDUMPISLASTFRAME(args...)
-			#define PDUMPTESTNEXTFRAME(args...)
 			#define PDUMPREG32(args...)
 			#define PDUMPREG64(args...)
 			#define PDUMPREGREAD32(args...)

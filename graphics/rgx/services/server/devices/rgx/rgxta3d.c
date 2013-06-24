@@ -81,11 +81,13 @@ typedef struct _DEVMEM_FREELIST_LOOKUP_
 typedef struct {
 	DEVMEM_MEMDESC				*psContextStateMemDesc;
 	RGX_SERVER_COMMON_CONTEXT	*psServerCommonContext;
+	IMG_UINT32					ui32Priority;
 } RGX_SERVER_RC_TA_DATA;
 
 typedef struct {
 	DEVMEM_MEMDESC				*psContextStateMemDesc;
 	RGX_SERVER_COMMON_CONTEXT	*psServerCommonContext;
+	IMG_UINT32					ui32Priority;
 } RGX_SERVER_RC_3D_DATA;
 
 struct _RGX_SERVER_RENDER_CONTEXT_ {
@@ -2098,7 +2100,8 @@ IMG_VOID RGXProcessRequestZSBufferUnbacking(PVRSRV_RGXDEV_INFO *psDevInfo,
 }
 
 static
-PVRSRV_ERROR _CreateTAContext(PVRSRV_DEVICE_NODE *psDeviceNode,
+PVRSRV_ERROR _CreateTAContext(CONNECTION_DATA *psConnection,
+							  PVRSRV_DEVICE_NODE *psDeviceNode,
 							  DEVMEM_MEMDESC *psAllocatedMemDesc,
 							  IMG_UINT32 ui32AllocatedOffset,
 							  DEVMEM_MEMDESC *psFWMemContextMemDesc,
@@ -2138,7 +2141,8 @@ PVRSRV_ERROR _CreateTAContext(PVRSRV_DEVICE_NODE *psDeviceNode,
 	psContextState->uTAReg_VDM_CALL_STACK_POINTER_Init = sVDMCallStackAddr.uiAddr;
 	DevmemReleaseCpuVirtAddr(psTAData->psContextStateMemDesc);
 
-	eError = FWCommonContextAllocate(psDeviceNode,
+	eError = FWCommonContextAllocate(psConnection,
+									 psDeviceNode,
 									 "TA",
 									 psAllocatedMemDesc,
 									 ui32AllocatedOffset,
@@ -2164,6 +2168,7 @@ PVRSRV_ERROR _CreateTAContext(PVRSRV_DEVICE_NODE *psDeviceNode,
 					   sizeof(RGXFWIF_TACTX_STATE),
 					   PDUMP_FLAGS_CONTINUOUS);
 
+	psTAData->ui32Priority = ui32Priority;
 	return PVRSRV_OK;
 
 fail_tacommoncontext:
@@ -2176,7 +2181,8 @@ fail_tacontextsuspendalloc:
 }
 
 static
-PVRSRV_ERROR _Create3DContext(PVRSRV_DEVICE_NODE *psDeviceNode,
+PVRSRV_ERROR _Create3DContext(CONNECTION_DATA *psConnection,
+							  PVRSRV_DEVICE_NODE *psDeviceNode,
 							  DEVMEM_MEMDESC *psAllocatedMemDesc,
 							  IMG_UINT32 ui32AllocatedOffset,
 							  DEVMEM_MEMDESC *psFWMemContextMemDesc,
@@ -2204,7 +2210,8 @@ PVRSRV_ERROR _Create3DContext(PVRSRV_DEVICE_NODE *psDeviceNode,
 		goto fail_3dcontextsuspendalloc;
 	}
 
-	eError = FWCommonContextAllocate(psDeviceNode,
+	eError = FWCommonContextAllocate(psConnection,
+									 psDeviceNode,
 									 "3D",
 									 psAllocatedMemDesc,
 									 ui32AllocatedOffset,
@@ -2230,6 +2237,7 @@ PVRSRV_ERROR _Create3DContext(PVRSRV_DEVICE_NODE *psDeviceNode,
 					   sizeof(RGXFWIF_3DCTX_STATE),
 					   PDUMP_FLAGS_CONTINUOUS);
 
+	ps3DData->ui32Priority = ui32Priority;
 	return PVRSRV_OK;
 
 fail_3dcommoncontext:
@@ -2245,7 +2253,8 @@ fail_3dcontextsuspendalloc:
  * PVRSRVRGXCreateRenderContextKM
  */
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateRenderContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
+PVRSRV_ERROR PVRSRVRGXCreateRenderContextKM(CONNECTION_DATA				*psConnection,
+											PVRSRV_DEVICE_NODE			*psDeviceNode,
 											IMG_UINT32					ui32Priority,
 											IMG_DEV_VIRTADDR			sMCUFenceAddr,
 											IMG_DEV_VIRTADDR			sVDMCallStackAddr,
@@ -2332,7 +2341,8 @@ PVRSRV_ERROR PVRSRVRGXCreateRenderContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 	sInfo.psFWFrameworkMemDesc = psRenderContext->psFWFrameworkMemDesc;
 	sInfo.psMCUFenceAddr = &sMCUFenceAddr;
 
-	eError = _CreateTAContext(psDeviceNode,
+	eError = _CreateTAContext(psConnection,
+							  psDeviceNode,
 							  psRenderContext->psFWRenderContextMemDesc,
 							  offsetof(RGXFWIF_FWRENDERCONTEXT, sTAContext),
 							  psFWMemContextMemDesc,
@@ -2345,7 +2355,8 @@ PVRSRV_ERROR PVRSRVRGXCreateRenderContextKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 		goto fail_tacontext;
 	}
 
-	eError = _Create3DContext(psDeviceNode,
+	eError = _Create3DContext(psConnection,
+							  psDeviceNode,
 							  psRenderContext->psFWRenderContextMemDesc,
 							  offsetof(RGXFWIF_FWRENDERCONTEXT, s3DContext),
 							  psFWMemContextMemDesc,
@@ -2502,8 +2513,7 @@ static IMG_VOID _UpdateResourcesSubmissionCounts(RGX_RTDATA_CLEANUP_DATA        
  * PVRSRVRGXKickTA3DKM
  */
 IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
-								 RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
+PVRSRV_ERROR PVRSRVRGXKickTA3DKM(RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
 								 IMG_UINT32					ui32ClientTAFenceCount,
 								 PRGXFWIF_UFO_ADDR			*pauiClientTAFenceUFOAddress,
 								 IMG_UINT32					*paui32ClientTAFenceValue,
@@ -2555,6 +2565,7 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
 	IMG_UINT32				*paui32Server3DSyncFlags3D = IMG_NULL;
 	IMG_UINT32				i;
 	PVRSRV_ERROR			eError = PVRSRV_OK;
+	PVRSRV_ERROR			eError2;
 
 	/* Internal client sync info, used to help with merging of Android fd syncs */
 	IMG_UINT32				ui32IntClient3DFenceCount = 0;
@@ -2604,7 +2615,6 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
 
 		/* Init the TA command helper */
 		eError = RGXCmdHelperInitCmdCCB(FWCommonContextGetClientCCB(psTAData->psServerCommonContext),
-										  psConnection,
 										  ui32ClientTAFenceCount,
 										  pauiClientTAFenceUFOAddress,
 										  paui32ClientTAFenceValue,
@@ -2768,10 +2778,9 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
 
 		/* Init the PR fence command helper */
 		eError = RGXCmdHelperInitCmdCCB(FWCommonContextGetClientCCB(ps3DData->psServerCommonContext),
-										psConnection,
-										ui32Client3DFenceCount,
-										pauiClient3DFenceUFOAddress,
-										paui32Client3DFenceValue,
+										ui32IntClient3DFenceCount,
+										pauiIntClient3DFenceUFOAddress,
+										paui32IntClient3DFenceValue,
 										0,
 										IMG_NULL,
 										IMG_NULL,
@@ -2795,7 +2804,6 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
 			syncs are passed in with the PR
 		*/
 		eError = RGXCmdHelperInitCmdCCB(FWCommonContextGetClientCCB(ps3DData->psServerCommonContext),
-										psConnection,
 										0,
 										IMG_NULL,
 										IMG_NULL,
@@ -2843,7 +2851,6 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
 
 		/* Init the 3D command helper */
 		eError = RGXCmdHelperInitCmdCCB(FWCommonContextGetClientCCB(ps3DData->psServerCommonContext),
-										  psConnection,
 										  0,
 										  IMG_NULL,
 										  IMG_NULL,
@@ -2925,12 +2932,12 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
 
 		LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
 		{
-			eError = RGXScheduleCommand(psRenderContext->psDeviceNode->pvDevice,
+			eError2 = RGXScheduleCommand(psRenderContext->psDeviceNode->pvDevice,
 										RGXFWIF_DM_TA,
 										&sTAKCCBCmd,
 										sizeof(sTAKCCBCmd),
 										bPDumpContinuous);
-			if (eError != PVRSRV_ERROR_RETRY)
+			if (eError2 != PVRSRV_ERROR_RETRY)
 			{
 				break;
 			}
@@ -2949,17 +2956,27 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
 
 		LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
 		{
-			eError = RGXScheduleCommand(psRenderContext->psDeviceNode->pvDevice,
+			eError2 = RGXScheduleCommand(psRenderContext->psDeviceNode->pvDevice,
 										RGXFWIF_DM_3D,
 										&s3DKCCBCmd,
 										sizeof(s3DKCCBCmd),
 										bPDumpContinuous);
-			if (eError != PVRSRV_ERROR_RETRY)
+			if (eError2 != PVRSRV_ERROR_RETRY)
 			{
 				break;
 			}
 			OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
 		} END_LOOP_UNTIL_TIMEOUT();
+	}
+
+	/*
+	 * Now check eError (which may have returned an error from our earlier calls
+	 * to RGXCmdHelperAcquireCmdCCB) - we needed to process any flush command first
+	 * so we check it now...
+	 */
+	if (eError != PVRSRV_OK )
+	{
+		goto fail_3dacquirecmd;
 	}
 
 	_UpdateResourcesSubmissionCounts(psRTDataCleanup, psZBuffer, psSBuffer, bKickTA, bKick3D);
@@ -2984,6 +3001,9 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(CONNECTION_DATA			*psConnection,
     }    
 #endif
 #endif
+
+	OSFreeMem(paui32Server3DSyncFlags3D);
+	OSFreeMem(paui32Server3DSyncFlagsPR);
 
 	return PVRSRV_OK;
 
@@ -3025,26 +3045,34 @@ PVRSRV_ERROR PVRSRVRGXSetRenderContextPriorityKM(CONNECTION_DATA *psConnection,
 {
 	PVRSRV_ERROR eError;
 
-	eError = ContextSetPriority(psRenderContext->sTAData.psServerCommonContext,
-								psConnection,
-								psRenderContext->psDeviceNode->pvDevice,
-								ui32Priority,
-								RGXFWIF_DM_TA);
-	if (eError != PVRSRV_OK)
+	if (psRenderContext->sTAData.ui32Priority != ui32Priority)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the TA part of the rendercontext", __FUNCTION__));
-		goto fail_tacontext;
+		eError = ContextSetPriority(psRenderContext->sTAData.psServerCommonContext,
+									psConnection,
+									psRenderContext->psDeviceNode->pvDevice,
+									ui32Priority,
+									RGXFWIF_DM_TA);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the TA part of the rendercontext", __FUNCTION__));
+			goto fail_tacontext;
+		}
+		psRenderContext->sTAData.ui32Priority = ui32Priority;
 	}
 
-	eError = ContextSetPriority(psRenderContext->s3DData.psServerCommonContext,
-								psConnection,
-								psRenderContext->psDeviceNode->pvDevice,
-								ui32Priority,
-								RGXFWIF_DM_3D);
-	if (eError != PVRSRV_OK)
+	if (psRenderContext->s3DData.ui32Priority != ui32Priority)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the 3D part of the rendercontext", __FUNCTION__));
-		goto fail_3dcontext;
+		eError = ContextSetPriority(psRenderContext->s3DData.psServerCommonContext,
+									psConnection,
+									psRenderContext->psDeviceNode->pvDevice,
+									ui32Priority,
+									RGXFWIF_DM_3D);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: Failed to set the priority of the 3D part of the rendercontext", __FUNCTION__));
+			goto fail_3dcontext;
+		}
+		psRenderContext->s3DData.ui32Priority = ui32Priority;
 	}
 	return PVRSRV_OK;
 

@@ -130,7 +130,6 @@ struct _SYNC_CONNECTION_DATA_
 	DLLIST_NODE	sListHead;
 	IMG_UINT32	ui32RefCount;
 	POS_LOCK	hLock;
-	IMG_BOOL	bPDumpRequired;
 };
 
 static IMG_UINT32 g_ServerSyncUID = 0;
@@ -1345,7 +1344,6 @@ PVRSRV_ERROR SyncRegisterConnection(SYNC_CONNECTION_DATA **ppsSyncConnectionData
 	}
 	dllist_init(&psSyncConnectionData->sListHead);
 	psSyncConnectionData->ui32RefCount = 1;
-	psSyncConnectionData->bPDumpRequired = IMG_TRUE;
 
 	*ppsSyncConnectionData = psSyncConnectionData;
 	return PVRSRV_OK;
@@ -1380,21 +1378,12 @@ IMG_VOID SyncConnectionPDumpSyncBlocks(SYNC_CONNECTION_DATA *psSyncConnectionDat
 {
 	OSLockAcquire(psSyncConnectionData->hLock);
 
-	if (psSyncConnectionData->bPDumpRequired)
-	{
-		PDUMPCOMMENT("Dump client Sync Prim state");
-		dllist_foreach_node(&psSyncConnectionData->sListHead,
-							_PDumpSyncBlock,
-							IMG_NULL);
-		psSyncConnectionData->bPDumpRequired = IMG_FALSE;
-	}
+	PDUMPCOMMENT("Dump client Sync Prim state");
+	dllist_foreach_node(&psSyncConnectionData->sListHead,
+						_PDumpSyncBlock,
+						IMG_NULL);
 
 	OSLockRelease(psSyncConnectionData->hLock);
-}
-
-IMG_VOID SyncConnectionPDumpExit(SYNC_CONNECTION_DATA *psSyncConnectionData)
-{
-	psSyncConnectionData->bPDumpRequired = IMG_TRUE;
 }
 
 PVRSRV_ERROR ServerSyncInit(IMG_VOID)

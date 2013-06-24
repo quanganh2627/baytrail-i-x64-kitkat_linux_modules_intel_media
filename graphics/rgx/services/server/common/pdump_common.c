@@ -61,6 +61,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvkm.h"
 #include "pdump_physmem.h"
 #include "hash.h"
+#include "connection_server.h"
+#include "sync_server.h"
 
 /* pdump headers */
 #include "pdump_km.h"
@@ -94,6 +96,57 @@ static HASH_TABLE *g_psPersistentHash = IMG_NULL;
 /* counter increments each time debug write is called */
 IMG_UINT32 g_ui32EveryLineCounter = 1U;
 #endif
+
+#if defined(PDUMP_DEBUG) || defined(REFCOUNT_DEBUG)
+#define PDUMP_REFCOUNT_PRINT(fmt, ...) PVRSRVDebugPrintf(PVR_DBG_WARNING, __FILE__, __LINE__, fmt, __VA_ARGS__)
+#else
+#define PDUMP_REFCOUNT_PRINT(fmt, ...)
+#endif
+
+struct _PDUMP_CONNECTION_DATA_ {
+	IMG_UINT32				ui32RefCount;
+	POS_LOCK				hLock;
+	DLLIST_NODE				sListHead;
+	IMG_BOOL				bLastInto;
+	IMG_UINT32				ui32LastSetFrameNumber;
+	IMG_BOOL				bWasInCaptureRange;
+	IMG_BOOL				bIsInCaptureRange;
+	IMG_BOOL				bLastTransitionFailed;
+	SYNC_CONNECTION_DATA	*psSyncConnectionData;
+};
+
+static PDUMP_CONNECTION_DATA * _PDumpConnectionAcquire(PDUMP_CONNECTION_DATA *psPDumpConnectionData)
+{
+	IMG_UINT32 ui32RefCount;
+
+	OSLockAcquire(psPDumpConnectionData->hLock);
+	ui32RefCount = ++psPDumpConnectionData->ui32RefCount;
+	OSLockRelease(psPDumpConnectionData->hLock);
+
+	PDUMP_REFCOUNT_PRINT("%s: PDump connection %p, refcount = %d",
+						 __FUNCTION__, psPDumpConnectionData, ui32RefCount);
+
+	return psPDumpConnectionData;
+}
+
+static IMG_VOID _PDumpConnectionRelease(PDUMP_CONNECTION_DATA *psPDumpConnectionData)
+{
+	IMG_UINT32 ui32RefCount;
+
+	OSLockAcquire(psPDumpConnectionData->hLock);
+	ui32RefCount = --psPDumpConnectionData->ui32RefCount;
+	OSLockRelease(psPDumpConnectionData->hLock);
+
+	if (ui32RefCount == 0)
+	{
+		OSLockDestroy(psPDumpConnectionData->hLock);
+		PVR_ASSERT(dllist_is_empty(&psPDumpConnectionData->sListHead));
+		OSFreeMem(psPDumpConnectionData);
+	}
+
+	PDUMP_REFCOUNT_PRINT("%s: PDump connection %p, refcount = %d",
+						 __FUNCTION__, psPDumpConnectionData, ui32RefCount);
+}
 
 #ifdef INLINE_IS_PRAGMA
 #pragma inline(PDumpIsPersistent)
@@ -219,6 +272,100 @@ IMG_BOOL PDumpIsSuspended(IMG_VOID)
 	return PDumpOSIsSuspended();
 }
 
+typedef struct _PDUMP_Transition_DATA_ {
+	PFN_PDUMP_TRANSITION	pfnCallback;
+	IMG_PVOID				hPrivData;
+	PDUMP_CONNECTION_DATA	*psPDumpConnectionData;
+	DLLIST_NODE				sNode;
+} PDUMP_Transition_DATA;
+
+PVRSRV_ERROR PDumpRegisterTransitionCallback(PDUMP_CONNECTION_DATA *psPDumpConnectionData,
+											  PFN_PDUMP_TRANSITION pfnCallback,
+											  IMG_PVOID hPrivData,
+											  IMG_PVOID *ppvHandle)
+{
+	PDUMP_Transition_DATA *psData;
+	PVRSRV_ERROR eError;
+
+	psData = OSAllocMem(sizeof(*psData));
+	if (psData == IMG_NULL)
+	{
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto fail_alloc;
+	}
+
+	/* Setup the callback and add it to the list for this process */
+	psData->pfnCallback = pfnCallback;
+	psData->hPrivData = hPrivData;
+	dllist_add_to_head(&psPDumpConnectionData->sListHead, &psData->sNode);
+
+	/* Take a reference on the connection so it doesn't get freed too early */
+	psData->psPDumpConnectionData =_PDumpConnectionAcquire(psPDumpConnectionData);
+	*ppvHandle = psData;
+
+	return PVRSRV_OK;
+
+fail_alloc:
+	PVR_ASSERT(eError != PVRSRV_OK);
+	return eError;
+}
+
+IMG_VOID PDumpUnregisterTransitionCallback(IMG_PVOID pvHandle)
+{
+	PDUMP_Transition_DATA *psData = pvHandle;
+
+	dllist_remove_node(&psData->sNode);
+	_PDumpConnectionRelease(psData->psPDumpConnectionData);
+	OSFreeMem(psData);
+}
+
+typedef struct _PTCB_DATA_ {
+	IMG_BOOL bInto;
+	IMG_BOOL bContinuous;
+	PVRSRV_ERROR eError;
+} PTCB_DATA;
+
+static IMG_BOOL _PDumpTransition(DLLIST_NODE *psNode, IMG_PVOID hData)
+{
+	PDUMP_Transition_DATA *psData = IMG_CONTAINER_OF(psNode, PDUMP_Transition_DATA, sNode);
+	PTCB_DATA *psPTCBData = (PTCB_DATA *) hData;
+
+	psPTCBData->eError = psData->pfnCallback(psData->hPrivData, psPTCBData->bInto, psPTCBData->bContinuous);
+	if (psPTCBData->eError != PVRSRV_OK)
+	{
+		/* Got an error, break out of the loop */
+		return IMG_FALSE;
+	}
+
+	return IMG_TRUE;
+}
+
+PVRSRV_ERROR PDumpTransition(PDUMP_CONNECTION_DATA *psPDumpConnectionData, IMG_BOOL bInto, IMG_BOOL bContinuous)
+{
+	PTCB_DATA sPTCBData;
+
+	/* Only call the callbacks if we've really done a Transition */
+	if (bInto != psPDumpConnectionData->bLastInto)
+	{
+		/* We're Transitioning either into or out of capture range */
+		sPTCBData.bInto = bInto;
+		sPTCBData.bContinuous = bContinuous;
+		sPTCBData.eError = PVRSRV_OK;
+		dllist_foreach_node(&psPDumpConnectionData->sListHead, _PDumpTransition, &sPTCBData);
+		if (sPTCBData.eError != PVRSRV_OK)
+		{
+			/* We failed so bail out leaving the state as it is ready for the retry */
+			return sPTCBData.eError;
+		}
+
+		if (bInto)
+		{
+			SyncConnectionPDumpSyncBlocks(psPDumpConnectionData->psSyncConnectionData);
+		}
+		psPDumpConnectionData->bLastInto = bInto;
+	}
+	return PVRSRV_OK;
+}
 
 PVRSRV_ERROR PDumpIsCaptureFrameKM(IMG_BOOL *bIsCapturing)
 {
@@ -249,19 +396,76 @@ PVRSRV_ERROR PDumpIsCaptureFrameKM(IMG_BOOL *bIsCapturing)
 	return PVRSRV_OK;
 }
 
+static PVRSRV_ERROR _PDumpSetFrameKM(CONNECTION_DATA *psConnection, IMG_UINT32 ui32Frame)
+{
+	PDUMP_CONNECTION_DATA *psPDumpConnectionData = psConnection->psPDumpConnectionData;
+	IMG_BOOL bWasInCaptureRange;
+	IMG_BOOL bIsInCaptureRange;
+	PVRSRV_ERROR eError;
 
-PVRSRV_ERROR PDumpSetFrameKM(IMG_UINT32 ui32Frame)
+	/*
+		Note:
+		As we can't test to see if the new frame will be in capture range
+		before we set the frame number and we don't want to roll back
+		the frame number if we fail then we have to save the "transient"
+		data which decides if we're entering or exiting capture range
+		along with a failure boolean so we know what to do on a retry
+	*/
+	if (psPDumpConnectionData->ui32LastSetFrameNumber != ui32Frame)
+	{
+		PDumpIsCaptureFrameKM(&bWasInCaptureRange);
+		PDumpOSSetFrameKM(ui32Frame);
+		PDumpIsCaptureFrameKM(&bIsInCaptureRange);
+		psPDumpConnectionData->ui32LastSetFrameNumber = ui32Frame;
+
+		/* Save the Transition data incase we fail the Transition */
+		psPDumpConnectionData->bWasInCaptureRange = bWasInCaptureRange;
+		psPDumpConnectionData->bIsInCaptureRange = bIsInCaptureRange;
+	}
+	else if (psPDumpConnectionData->bLastTransitionFailed)
+	{
+		/* Load the Transition data so we can try again */
+		bWasInCaptureRange = psPDumpConnectionData->bWasInCaptureRange;
+		bIsInCaptureRange = psPDumpConnectionData->bIsInCaptureRange;
+	}
+
+	if (!bWasInCaptureRange && bIsInCaptureRange)
+	{
+		eError = PDumpTransition(psPDumpConnectionData, IMG_TRUE, IMG_FALSE);
+		if (eError != PVRSRV_OK)
+		{
+			goto fail_Transition;
+		}
+	}
+	else if (bWasInCaptureRange && !bIsInCaptureRange)
+	{
+		eError = PDumpTransition(psPDumpConnectionData, IMG_FALSE, IMG_FALSE);
+		if (eError != PVRSRV_OK)
+		{
+			goto fail_Transition;
+		}
+	}
+
+	psPDumpConnectionData->bLastTransitionFailed = IMG_FALSE;
+	return PVRSRV_OK;
+
+fail_Transition:
+	psPDumpConnectionData->bLastTransitionFailed = IMG_TRUE;
+	return eError;
+}
+
+PVRSRV_ERROR PDumpSetFrameKM(CONNECTION_DATA *psConnection, IMG_UINT32 ui32Frame)
 {
 	PDUMPCOMMENT("Set pdump frame %u", ui32Frame);
 
 #if defined(SUPPORT_PDUMP_MULTI_PROCESS)
 	if( _PDumpIsProcessActive() )
 	{
-		return PDumpOSSetFrameKM(ui32Frame);
+		return _PDumpSetFrameKM(psConnection, ui32Frame);
 	}
 	return PVRSRV_OK;
 #else
-	return PDumpOSSetFrameKM(ui32Frame);
+	return _PDumpSetFrameKM(psConnection, ui32Frame);
 #endif
 }
 
@@ -955,26 +1159,6 @@ PVRSRV_ERROR PDumpReadRegKM		(	IMG_CHAR *pszPDumpRegName,
 	PDUMP_UNLOCK();
 
 	return PVRSRV_OK;
-}
-
-/*****************************************************************************
- @name		PDumpTestNextFrame
- @brief		Tests whether the next frame will be pdumped
- @param		ui32CurrentFrame
- @return	bFrameDumped
-*****************************************************************************/
-IMG_BOOL PDumpTestNextFrame(IMG_UINT32 ui32CurrentFrame)
-{
-	IMG_BOOL	bFrameDumped;
-
-	/*
-		Try dumping a string
-	*/
-	(IMG_VOID) PDumpSetFrameKM(ui32CurrentFrame + 1);
-	PDumpIsCaptureFrameKM(&bFrameDumped);
-	(IMG_VOID) PDumpSetFrameKM(ui32CurrentFrame);
-
-	return bFrameDumped;
 }
 
 /*****************************************************************************
@@ -1713,6 +1897,55 @@ IMG_VOID PDumpLockKM(IMG_VOID)
 IMG_VOID PDumpUnlockKM(IMG_VOID)
 {
 	PDumpOSUnlock();
+}
+
+PVRSRV_ERROR PDumpRegisterConnection(SYNC_CONNECTION_DATA *psSyncConnectionData,
+									 PDUMP_CONNECTION_DATA **ppsPDumpConnectionData)
+{
+	PDUMP_CONNECTION_DATA *psPDumpConnectionData;
+	PVRSRV_ERROR eError;
+
+	PVR_ASSERT(ppsPDumpConnectionData != IMG_NULL);
+
+	psPDumpConnectionData = OSAllocMem(sizeof(*psPDumpConnectionData));
+	if (psPDumpConnectionData == IMG_NULL)
+	{
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto fail_alloc;
+	}
+
+	eError = OSLockCreate(&psPDumpConnectionData->hLock, LOCK_TYPE_PASSIVE);
+	if (eError != PVRSRV_OK)
+	{
+		goto fail_lockcreate;
+	}
+
+	dllist_init(&psPDumpConnectionData->sListHead);
+	psPDumpConnectionData->ui32RefCount = 1;
+	psPDumpConnectionData->bLastInto = IMG_FALSE;
+	psPDumpConnectionData->ui32LastSetFrameNumber = 0;
+	psPDumpConnectionData->bLastTransitionFailed = IMG_FALSE;
+	/*
+		Although we don't take a refcount here resman will ensure that
+		any resource which might trigger use to do a Transition will
+		have been freed before the sync blocks which are keeping the
+		sync connection data alive
+	*/
+	psPDumpConnectionData->psSyncConnectionData = psSyncConnectionData;
+	*ppsPDumpConnectionData = psPDumpConnectionData;
+
+	return PVRSRV_OK;
+
+fail_lockcreate:
+	OSFreeMem(psPDumpConnectionData);
+fail_alloc:
+	PVR_ASSERT(eError != PVRSRV_OK);
+	return eError;
+}
+
+IMG_VOID PDumpUnregisterConnection(PDUMP_CONNECTION_DATA *psPDumpConnectionData)
+{
+	_PDumpConnectionRelease(psPDumpConnectionData);
 }
 
 #else	/* defined(PDUMP) */

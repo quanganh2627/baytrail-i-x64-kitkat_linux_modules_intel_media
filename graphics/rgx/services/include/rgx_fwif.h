@@ -198,6 +198,25 @@ typedef struct _RGXFWIF_TRACEBUF_
 #define RGXFWIF_GPU_UTIL_FWCB_ENTRY_STATE(entry)	(((entry)&RGXFWIF_GPU_UTIL_FWCB_STATE_MASK)>>RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT)
 #define RGXFWIF_GPU_UTIL_FWCB_ENTRY_ID(entry)		(((entry)&RGXFWIF_GPU_UTIL_FWCB_ID_MASK)>>RGXFWIF_GPU_UTIL_FWCB_ID_SHIFT)
 #define RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(entry)	(((entry)&RGXFWIF_GPU_UTIL_FWCB_TIMER_MASK)>>RGXFWIF_GPU_UTIL_FWCB_TIMER_SHIFT)
+
+#define RGXFWIF_GPU_UTIL_FWCB_ENTRY_ADD(cb, crtimer, state) do {														\
+		/* Combine all the informations about current state transition into a single 64-bit word */						\
+		(cb)->aui64CB[(cb)->ui32WriteOffset & RGXFWIF_GPU_UTIL_FWCB_MASK] =												\
+			(((IMG_UINT64)(crtimer) << RGXFWIF_GPU_UTIL_FWCB_TIMER_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_TIMER_MASK) |			\
+			(((IMG_UINT64)(state) << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_STATE_MASK) |			\
+			(((IMG_UINT64)(cb)->ui32CurrentDVFSId << RGXFWIF_GPU_UTIL_FWCB_ID_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_ID_MASK);	\
+		/* Advance the CB write offset */																				\
+		(cb)->ui32WriteOffset++;																						\
+		/* Cache current transition in cached memory */																	\
+		(cb)->ui32LastGpuUtilState = (state);																			\
+		/* Notify the host about a new GPU state transition */															\
+		(cb)->ui32GpuUtilTransitionsCount++;																			\
+		/* Reset render counter */																						\
+		(cb)->ui32GpuUtilRendersCount = 0;																				\
+	} while (0)
+
+typedef IMG_UINT64 RGXFWIF_GPU_UTIL_FWCB_ENTRY;
+
 typedef struct _RGXFWIF_GPU_UTIL_FWCB_
 {
 	IMG_UINT32	ui32WriteOffset;
@@ -205,7 +224,7 @@ typedef struct _RGXFWIF_GPU_UTIL_FWCB_
 	IMG_UINT32	ui32CurrentDVFSId;
 	IMG_UINT32	ui32GpuUtilTransitionsCount;
 	IMG_UINT32	ui32GpuUtilRendersCount;
-	IMG_UINT64	RGXFW_ALIGN aui64CB[RGXFWIF_GPU_UTIL_FWCB_SIZE];
+	RGXFWIF_GPU_UTIL_FWCB_ENTRY	RGXFW_ALIGN aui64CB[RGXFWIF_GPU_UTIL_FWCB_SIZE];
 } RGXFWIF_GPU_UTIL_FWCB;
 
 typedef struct _RGX_HWRINFO_

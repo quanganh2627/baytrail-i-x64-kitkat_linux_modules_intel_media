@@ -155,7 +155,7 @@ PVRSRVBridgeRGXCreateComputeContext(IMG_UINT32 ui32BridgeID,
 				}
 
 	psRGXCreateComputeContextOUT->eError =
-		PVRSRVRGXCreateComputeContextKM(
+		PVRSRVRGXCreateComputeContextKM(psConnection,
 					hDevNodeInt,
 					psRGXCreateComputeContextIN->ui32Priority,
 					psRGXCreateComputeContextIN->sMCUFenceAddr,
@@ -481,7 +481,7 @@ PVRSRVBridgeRGXKickCDM(IMG_UINT32 ui32BridgeID,
 	}
 
 	psRGXKickCDMOUT->eError =
-		PVRSRVRGXKickCDMKM(psConnection,
+		PVRSRVRGXKickCDMKM(
 					psComputeContextInt,
 					psRGXKickCDMIN->ui32ClientFenceCount,
 					sClientFenceUFOAddressInt,
