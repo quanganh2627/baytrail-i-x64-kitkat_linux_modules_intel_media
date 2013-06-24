@@ -566,6 +566,7 @@ struct snd_intelhad {
 struct had_ops {
 	void (*enable_audio) (struct snd_pcm_substream *substream,
 			u8 enable);
+	void (*reset_audio) (u8 reset);
 	int (*prog_n) (u32 aud_samp_freq, u32 *n_param,
 			struct snd_intelhad *intelhaddata);
 	void (*prog_cts) (u32 aud_samp_freq, u32 tmds, u32 n_param,
