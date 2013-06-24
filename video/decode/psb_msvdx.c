@@ -935,7 +935,8 @@ loop: /* just for coding style check */
 		if (flags & FW_VA_RENDER_HOST_INT) {
 			/*Now send the next command from the msvdx cmd queue */
 #ifndef CONFIG_DRM_VXD_BYT
-			if (!(IS_MRFLD(dev)))
+			if (!(IS_MRFLD(dev)) ||
+				drm_msvdx_pmpolicy == PSB_PMPOLICY_NOPM)
 #endif
 				psb_msvdx_dequeue_send(dev);
 			goto done;
