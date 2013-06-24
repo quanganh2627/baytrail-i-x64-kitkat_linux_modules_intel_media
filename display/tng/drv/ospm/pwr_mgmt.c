@@ -183,7 +183,7 @@ static void ospm_resume_pci(struct drm_device *dev)
 {
 	struct pci_dev *pdev = dev->pdev;
 	struct drm_psb_private *dev_priv = dev->dev_private;
-	int ret = 0;
+	int mmadr, ret = 0;
 
 	OSPM_DPF("%s\n", __func__);
 
@@ -197,6 +197,13 @@ static void ospm_resume_pci(struct drm_device *dev)
 	pci_write_config_dword(pdev, PSB_PCIx_MSI_ADDR_LOC, dev_priv->msi_addr);
 	pci_write_config_dword(pdev, PSB_PCIx_MSI_DATA_LOC, dev_priv->msi_data);
 	ret = pci_enable_device(pdev);
+
+	/* FixMe, Change should be removed Once bz 115181 is fixed */
+	pci_read_config_dword(pdev, 0x10, &mmadr);
+	if (mmadr ==0 ) {
+		pr_err("GFX OSPM : Bad PCI config \n");
+		BUG();
+	}
 
 	if (ret != 0)
 		OSPM_DPF("pci_enable_device failed: %d\n", ret);
