@@ -87,6 +87,8 @@
 /* Globals */
 static hdmi_context_t *g_context;
 
+
+
 #define PS_HDMI_MMIO_RESOURCE 0
 #define PS_VDC_OFFSET 0x00000000
 #define PS_VDC_SIZE 0x000080000
@@ -176,6 +178,8 @@ otm_hdmi_ret_t ps_hdmi_pci_dev_init(void *context, struct pci_dev *pdev)
 	ctx->dev.id = pci_dev_revision;
 	/* Store this context for use by MSIC PCI driver */
 	g_context = ctx;
+
+	ctx->is_connected_overridden = true;
 
 	/* Handle CTP specific GPIO configuration */
 	ctx->gpio_hpd_pin = get_gpio_by_name(PS_MSIC_HPD_GPIO_PIN_NAME);
@@ -322,8 +326,37 @@ bool ps_hdmi_get_cable_status(void *context)
 		ctx->is_connected = false;
 	else
 		ctx->is_connected = true;
+
+	if (g_context->override_cable_state)
+		ctx->is_connected = g_context->is_connected_overridden;
+
 	return ctx->is_connected;
 }
+
+/* get HDMI hotplug pin number */
+int ps_hdmi_get_hpd_pin(void)
+{
+	if (g_context == NULL)
+		return 0;
+
+	return g_context->gpio_hpd_pin;
+}
+
+/* override the hdmi hpd cable status */
+void ps_hdmi_override_cable_status(bool state, bool auto_state)
+{
+	if (g_context == NULL)
+		return 0;
+
+	g_context->override_cable_state = auto_state;
+
+	if (state)
+		g_context->is_connected_overridden = true;
+	else
+		g_context->is_connected_overridden = false;
+	return;
+}
+
 
 /**
  * notify security component of hdcp and hdmi cable status

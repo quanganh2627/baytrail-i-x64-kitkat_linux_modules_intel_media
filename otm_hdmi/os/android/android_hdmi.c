@@ -268,8 +268,8 @@ static irqreturn_t __hdmi_irq_handler_bottomhalf(void *data)
 			* cable status to have stabilized
 			*/
 			msleep(60);
-			hdmi_status = otm_hdmi_get_cable_status(
-							hdmi_priv->context);
+			hdmi_status =
+				otm_hdmi_get_cable_status(hdmi_priv->context);
 		}
 		processed_hdmi_status = hdmi_status;
 
@@ -2614,8 +2614,6 @@ void android_hdmi_driver_init(struct drm_device *dev,
 	pr_info("%s: Done with driver init\n", __func__);
 	pr_info("Exit %s\n", __func__);
 }
-
-
 /*
  *
  * Internal scripts wrapper functions.

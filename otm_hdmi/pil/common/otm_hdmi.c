@@ -623,6 +623,33 @@ otm_hdmi_ret_t otm_hdmi_hpd_deinit(void)
 }
 
 /**
+ * otm_hdmi_get_hpd_pin - get hdmi hpd pin number.
+ *
+ * No input arguments
+ *
+ * Returns - pin number
+ */
+unsigned int otm_hdmi_get_hpd_pin(void)
+{
+	unsigned int result = 0;
+	result = ps_hdmi_get_hpd_pin();
+	return result;
+}
+
+/**
+ * otm_hdmi_override_cable_status - override hdmi hpd cable status.
+ *
+ * Input: override state and auto test state
+ */
+void otm_hdmi_override_cable_status(bool state, bool auto_state)
+{
+	ps_hdmi_override_cable_status(state, auto_state);
+	return;
+}
+
+
+
+/**
  * This function fills the given table with timings
  * @unit_id	: hdmi unit revision id
  * @table	: handle to table to be filled
