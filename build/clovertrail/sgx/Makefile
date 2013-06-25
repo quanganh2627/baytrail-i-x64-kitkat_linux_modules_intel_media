@@ -20,7 +20,6 @@ include $(A)/build/clovertrail/pvrdefs.mk
 
 include_dirs := \
 	$(PVRINCS-y) \
-	-I$(MEDIADIR)/ \
 	-I$(DISPLAYINC) \
 	-I$(MEDIAINC)/otm_hdmi/os/android/include \
 	-I$(MEDIAINC)/otm_hdmi/pil/include \
