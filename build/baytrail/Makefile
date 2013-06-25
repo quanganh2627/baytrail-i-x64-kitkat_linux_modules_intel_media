@@ -1,4 +1,6 @@
-DRIVER_NAME := VXD392
+DRIVER_NAME := vxd392
+
+obj-m += $(DRIVER_NAME).o
 
 MEDIADIR=../..
 BAYTRAILDIR=$(MEDIADIR)/common/baytrail
@@ -35,5 +37,3 @@ $(DRIVER_NAME)-objs += \
 	$(VIDEODECDIR)/psb_msvdx.o \
 	$(VIDEODECDIR)/psb_msvdxinit.o \
 	$(VIDEODECDIR)/psb_msvdx_fw.o
-
-obj-y += $(DRIVER_NAME).o

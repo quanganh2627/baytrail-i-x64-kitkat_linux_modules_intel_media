@@ -40,8 +40,8 @@ static struct pci_dev *pci_root;
 
 int drm_psb_trap_pagefaults;
 
+extern struct drm_device *i915_drm_dev;
 
-struct drm_device *gpDrmDevice;
 atomic_t g_videodec_access_count;
 
 static void vxd_power_init(struct drm_device *dev);
@@ -241,13 +241,13 @@ static void psb_do_takedown(struct drm_device *dev)
 	psb_msvdx_uninit(dev);
 }
 
-int vxd_driver_unload(struct drm_device *dev)
+static int  __vxd_driver_unload()
 {
-	struct drm_i915_private *i915_dev_priv = dev->dev_private;
+	struct drm_i915_private *i915_dev_priv = i915_drm_dev->dev_private;
 	struct drm_psb_private *dev_priv = i915_dev_priv->vxd_priv;
 
 	if (dev_priv) {
-		psb_do_takedown(dev);
+		psb_do_takedown(i915_dev_priv->dev);
 
 		if (dev_priv->pf_pd) {
 			psb_mmu_free_pagedir(dev_priv->pf_pd);
@@ -285,6 +285,11 @@ int vxd_driver_unload(struct drm_device *dev)
 	ospm_power_uninit();
 #endif
 	return 0;
+}
+
+static int __exit vxd_driver_unload()
+{
+	return __vxd_driver_unload();
 }
 
 #define PCI_ROOT_MSGBUS_CTRL_REG	0xD0
@@ -342,9 +347,9 @@ void intel_mid_msgbus_write32_vxd(u8 port, u32 addr, u32 data)
 	pci_write_config_dword(pci_root, PCI_ROOT_MSGBUS_CTRL_REG, cmd);
 }
 
-int vxd_driver_load(struct drm_device *dev)
+static int __init vxd_driver_load()
 {
-	struct drm_i915_private *i915_dev_priv = dev->dev_private;
+	struct drm_i915_private *i915_dev_priv = i915_drm_dev->dev_private;
 	struct drm_psb_private *dev_priv;
 	struct ttm_bo_device *bdev;
 	int ret = -ENOMEM;
@@ -355,7 +360,7 @@ int vxd_driver_load(struct drm_device *dev)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&dev_priv->video_ctx);
 	mutex_init(&dev_priv->video_ctx_mutex);
-	dev_priv->dev = dev;
+	dev_priv->dev = i915_dev_priv->dev;
 	bdev = &dev_priv->bdev;
 
 	ret = psb_ttm_global_init(dev_priv);
@@ -374,11 +379,20 @@ int vxd_driver_load(struct drm_device *dev)
 	i915_dev_priv->vxd_priv = dev_priv;
 
 	dev_priv->msvdx_reg = i915_dev_priv->regs + 0x170000;
-	printk("fei %s 3, i915_dev_priv->regs is 0x%x.\n", __func__, i915_dev_priv->regs);
-	printk("fei 0 MSVDX_CORE_REV_OFFSET value is 0x%x.\n", readl(i915_dev_priv->regs + 0x170640));
-	printk("fei 1 MSVDX_CORE_REV_OFFSET value is 0x%x.\n", PSB_RMSVDX32(MSVDX_CORE_REV_OFFSET));
+	DRM_INFO("%s 3, i915_dev_priv->regs is 0x%x.\n",
+				__func__, i915_dev_priv->regs);
+	DRM_INFO("0 MSVDX_CORE_REV_OFFSET value is 0x%x.\n",
+				readl(i915_dev_priv->regs + 0x170640));
+	DRM_INFO("1 MSVDX_CORE_REV_OFFSET value is 0x%x.\n",
+				PSB_RMSVDX32(MSVDX_CORE_REV_OFFSET));
 
-	vxd_power_init(dev);
+	vxd_power_init(i915_dev_priv->dev);
+	i915_dev_priv->vxd_driver_open = vxd_driver_open;
+	i915_dev_priv->vxd_lastclose = vxd_lastclose;
+	i915_dev_priv->vxd_ioctl = vxd_ioctl;
+	i915_dev_priv->vxd_release = vxd_release;
+	i915_dev_priv->psb_mmap = psb_mmap;
+	i915_dev_priv->psb_msvdx_interrupt = psb_msvdx_interrupt;
 
 #if 0
 	get_imr_info(dev_priv);
@@ -439,16 +453,16 @@ int vxd_driver_load(struct drm_device *dev)
 	}
 
 	PSB_DEBUG_INIT("Init MSVDX\n");
-	psb_msvdx_init(dev);
+	psb_msvdx_init(i915_dev_priv->dev);
 
-	vxd_power_post_init(dev);
+	vxd_power_post_init(i915_dev_priv->dev);
 
 #if 0
 	ospm_post_init(dev);
 #endif
 	return 0;
 out_err:
-	vxd_driver_unload(dev);
+	__vxd_driver_unload();
 	return ret;
 
 }
@@ -724,7 +738,6 @@ static void vxd_power_init(struct drm_device *dev)
 		printk(KERN_ALERT "%s: Error: msgbus PCI handle NULL",
 			__func__);
 	}
-	gpDrmDevice = dev;
 	mutex_init(&dev_priv->vxd_pm_mutex);
 	vxd_power_on(dev);
 }
@@ -800,8 +813,9 @@ out:
 
 bool ospm_power_using_video_begin(int hw_island)
 {
-	struct pci_dev *pdev = gpDrmDevice->pdev;
-	struct drm_psb_private *dev_priv = psb_priv(gpDrmDevice);
+	struct pci_dev *pdev = i915_drm_dev->pdev;
+	struct drm_psb_private *dev_priv = psb_priv(i915_drm_dev);
+
 	PSB_DEBUG_PM("MSVDX: %s is called.\n", __func__);
 	if (hw_island != OSPM_VIDEO_DEC_ISLAND) {
 		DRM_ERROR("failed.\n");
@@ -814,7 +828,7 @@ bool ospm_power_using_video_begin(int hw_island)
 #ifdef CONFIG_PM_RUNTIME
 		i915_rpm_get_vxd(dev_priv->dev);
 #endif
-		vxd_power_on(gpDrmDevice);
+		vxd_power_on(i915_drm_dev);
 	}
 	atomic_inc(&g_videodec_access_count);
 	mutex_unlock(&dev_priv->vxd_pm_mutex);
@@ -823,8 +837,9 @@ bool ospm_power_using_video_begin(int hw_island)
 
 void ospm_power_using_video_end(int hw_island)
 {
-	struct pci_dev *pdev = gpDrmDevice->pdev;
-	struct drm_psb_private *dev_priv = psb_priv(gpDrmDevice);
+	struct pci_dev *pdev = i915_drm_dev->pdev;
+	struct drm_psb_private *dev_priv = psb_priv(i915_drm_dev);
+
 	PSB_DEBUG_PM("MSVDX: %s is called.\n", __func__);
 	if (hw_island != OSPM_VIDEO_DEC_ISLAND) {
 		DRM_ERROR("failed.\n");
@@ -837,3 +852,7 @@ void ospm_power_using_video_end(int hw_island)
 		atomic_dec(&g_videodec_access_count);
 	mutex_unlock(&dev_priv->vxd_pm_mutex);
 }
+
+module_init(vxd_driver_load);
+module_exit(vxd_driver_unload);
+MODULE_LICENSE("GPL");

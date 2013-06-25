@@ -363,3 +363,10 @@ config GFX_RGX_DEVFREQ
 	  Rogue/Hood graphics (RGX).  This driver helps control GPU clock
 	  speed in order to provide high performance on demand and power
 	  savings when not busy or when thermal conditions suggest.
+
+config DRM_VXD_BYT
+       bool "Enable vxd on intel by default"
+       depends on DRM_I915
+       default n
+       help
+         Choose this option if you want to enable VXD decoding for Baylake platform
