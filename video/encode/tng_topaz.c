@@ -662,6 +662,7 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 	void *cmd;
 	uint32_t sequence = dev_priv->sequence[LNC_ENGINE_ENCODE];
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+	struct psb_video_ctx *video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 
 	PSB_DEBUG_TOPAZ("TOPAZ: command submit, topaz busy = %d\n",
 		topaz_priv->topaz_busy);
@@ -690,7 +691,7 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 		PSB_DEBUG_TOPAZ("TOPAZ: reset ok.\n");
 
 		/* #.# upload firmware */
-		ret = tng_topaz_setup_fw(dev, 0, topaz_priv->cur_codec);
+		ret = tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
 		if (ret) {
 			DRM_ERROR("TOPAZ: upload FW to HW failed\n");
 			return ret;
