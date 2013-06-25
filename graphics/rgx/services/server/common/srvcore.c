@@ -233,6 +233,7 @@ PVRSRVHWOpTimeoutKM(IMG_VOID)
 #endif
 	PVR_LOG(("HW operation timeout, dump server info"));
 	PVRSRVDumpDebugInfoKM(DEBUG_REQUEST_VERBOSITY_MAX);
+	panic("HW operation timeout\n");
 	return PVRSRV_OK;
 }
 
