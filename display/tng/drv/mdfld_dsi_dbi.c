@@ -1078,10 +1078,10 @@ void mdfld_reset_panel_handler_work(struct work_struct *work)
 
 	dbi_output = dev_priv->dbi_output;
 	dsi_config = dev_priv->dsi_configs[0];
-	dev = dsi_config->dev;
 
 	if (!dsi_config || !dbi_output)
 		return;
+	dev = dsi_config->dev;
 
 	/*disable ESD when HDMI connected*/
 	if (hdmi_state)
