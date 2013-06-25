@@ -40,8 +40,12 @@ static u8 cmi_set_tear_on[]         = {0x35, 0x00};
 static u8 cmi_set_brightness[]      = {0x51, 0x00};
 static u8 cmi_turn_on_backlight[]   = {0x53, 0x24};
 static u8 cmi_turn_off_backlight[]  = {0x53, 0x00};
-static u8 cmi_disable_cabc[]        = {0x55, 0x00};
-static u8 cmi_set_mipi_ctrl[]       = {0xba, 0x12, 0x83};
+static u8 cmi_set_mipi_ctrl[]       = {
+	0xba, 0x12, 0x83, 0x00,
+	0xd6, 0xc5, 0x00, 0x09,
+	0xff, 0x0f, 0x27, 0x03,
+	0x21, 0x27, 0x25, 0x20,
+	0x00, 0x10};
 static u8 cmi_command_mode[]        = {0xc2, 0x08};
 static u8 cmi_set_panel[]           = {0xcc, 0x08};
 static u8 cmi_set_eq_func_ltps[]    = {0xd4, 0x0c};
@@ -275,11 +279,10 @@ int mdfld_cmi_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	/* disalble CABC*/
-	mdfld_dsi_send_mcs_short_hs(sender, cmi_disable_cabc[0],
-			cmi_disable_cabc[1], 1, 0);
-	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
-		return -EIO;
+	/* turn CABC on*/
+	mdfld_dsi_send_mcs_short_hs(sender,
+			write_ctrl_cabc, STILL_IMAGE, 1,
+			MDFLD_DSI_SEND_PACKAGE);
 
 	mdfld_dsi_send_mcs_long_hs(sender, cmi_mcs_protect_on, 4, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
@@ -491,9 +494,9 @@ static int mdfld_dsi_cmi_cmd_power_off(struct mdfld_dsi_config *dsi_config)
 	}
 
 	/* turn off cabc */
-	cmi_disable_cabc[1] = 0x0;
-	mdfld_dsi_send_mcs_long_hs(sender, cmi_disable_cabc,
-				   sizeof(cmi_disable_cabc), 0);
+	err = mdfld_dsi_send_mcs_short_hs(sender,
+		write_ctrl_cabc, 0, 1,
+		MDFLD_DSI_SEND_PACKAGE);
 
 	/*turn off backlight*/
 	err = mdfld_dsi_send_mcs_long_hs(sender, cmi_turn_off_backlight,
