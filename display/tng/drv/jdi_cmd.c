@@ -62,7 +62,7 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 
 	msleep(130);
 	err = mdfld_dsi_send_mcs_short_hs(sender,
-			write_display_brightness, 0xff, 1,
+			write_display_brightness, 0x4, 1,
 			MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
 		DRM_ERROR("%s: %d: Set Brightness\n",
