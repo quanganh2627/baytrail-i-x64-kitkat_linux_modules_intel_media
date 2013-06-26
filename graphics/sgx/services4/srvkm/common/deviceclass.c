@@ -1841,7 +1841,7 @@ PVRSRV_ERROR PVRSRVSwapToDCBuffer2KM(IMG_HANDLE	hDeviceKM,
 	SYS_DATA *psSysData;
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	struct sync_fence *apsFence[SGX_MAX_SRC_SYNCS_TA];
+	struct sync_fence *apsFence[SGX_MAX_SRC_SYNCS_TA] = {0, };
 #endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 
 	if(!hDeviceKM || !hSwapChain || !ppsMemInfos || !ppsSyncInfos || ui32NumMemSyncInfos < 1)
@@ -1954,7 +1954,7 @@ PVRSRV_ERROR PVRSRVSwapToDCBuffer2KM(IMG_HANDLE	hDeviceKM,
 					  sizeof(IMG_BOOL) * psSwapChain->ui32LastNumSyncInfos,
 					  (IMG_VOID *)abUnique, IMG_NULL);
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-			for(i = 0; apsFence[i]; i++)
+			for(i = 0; i < ui32NumSyncInfos; i++)
 				if(apsFence[i])
 					sync_fence_put(apsFence[i]);
 #endif
@@ -2017,7 +2017,7 @@ PVRSRV_ERROR PVRSRVSwapToDCBuffer2KM(IMG_HANDLE	hDeviceKM,
 			{
 				PVR_DPF((PVR_DBG_ERROR,"PVRSRVSwapToDCBuffer2KM: Failed to allocate space for meminfo list"));
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-				for(i = 0; apsFence[i]; i++)
+				for(i = 0; i < ui32NumSyncInfos; i++)
 					if(apsFence[i])
 						sync_fence_put(apsFence[i]);
 #endif
@@ -2073,7 +2073,7 @@ PVRSRV_ERROR PVRSRVSwapToDCBuffer2KM(IMG_HANDLE	hDeviceKM,
 	 * can put the fences now. Even if the fences are deleted, the syncs
 	 * will persist.
 	 */
-	for(i = 0; apsFence[i]; i++)
+	for(i = 0; i < ui32NumSyncInfos; i++)
 		if(apsFence[i])
 			sync_fence_put(apsFence[i]);
 #endif

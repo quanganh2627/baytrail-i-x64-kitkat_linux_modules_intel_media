@@ -1582,7 +1582,7 @@ PVRSyncPatchCCBKickSyncInfos(IMG_HANDLE    ahSyncs[SGX_MAX_SRC_SYNCS_TA],
 							 IMG_UINT32 *pui32NumSrcSyncs)
 {
 	PVRSRV_KERNEL_SYNC_INFO *apsSyncInfo[SGX_MAX_SRC_SYNCS_TA];
-	struct sync_fence *apsFence[SGX_MAX_SRC_SYNCS_TA] = {};
+	struct sync_fence *apsFence[SGX_MAX_SRC_SYNCS_TA] = {0,};
 	IMG_UINT32 i, ui32NumRealSrcSyncs;
 	PVRSRV_ERROR eError = PVRSRV_OK;
 
@@ -1630,7 +1630,7 @@ PVRSyncPatchCCBKickSyncInfos(IMG_HANDLE    ahSyncs[SGX_MAX_SRC_SYNCS_TA],
 	*pui32NumSrcSyncs = ui32NumRealSrcSyncs;
 
 err_put_fence:
-	for(i = 0; i < SGX_MAX_SRC_SYNCS_TA && apsFence[i]; i++)
+	for(i = 0; i < SGX_MAX_SRC_SYNCS_TA; i++)
 		if(apsFence[i])
 			sync_fence_put(apsFence[i]);
 	return eError;
