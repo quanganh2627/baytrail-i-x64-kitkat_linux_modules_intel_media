@@ -1960,6 +1960,8 @@ bool android_enable_hdmi_hdcp(struct drm_device *dev)
 	hdmi_priv = dev_priv->hdmi_priv;
 	if (NULL == hdmi_priv)
 		return false;
+	if (NULL == hdmi_priv->current_mode)
+		return false;
 
 	/* enable hdcp */
 	if (otm_hdmi_hdcp_enable(hdmi_priv->context,
