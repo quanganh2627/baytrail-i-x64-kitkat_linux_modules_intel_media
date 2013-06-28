@@ -791,7 +791,6 @@ static void intel_output_poll_execute(struct work_struct *work)
 	struct drm_device *dev = container_of(delayed_work, struct drm_device,
 			mode_config.output_poll_work);
 	struct drm_connector *connector;
-	enum drm_connector_status old_status;
 	bool repoll = false, changed = false;
 
 	mutex_lock(&dev->mode_config.mutex);
@@ -806,22 +805,13 @@ static void intel_output_poll_execute(struct work_struct *work)
 					DRM_CONNECTOR_POLL_DISCONNECT))
 			repoll = true;
 
-		old_status = connector->status;
-		/* if we are connected and don't want to poll for disconnect
-		   skip it */
-		if (old_status == connector_status_connected &&
-				!(connector->polled &
-					DRM_CONNECTOR_POLL_DISCONNECT) &&
-				!(connector->polled & DRM_CONNECTOR_POLL_HPD))
-			continue;
-
 		connector->status = connector->funcs->detect(connector, false);
-		DRM_DEBUG_KMS("[CONNECTOR:%d:%s] status updated from" \
-				"%d to %d\n",
-				connector->base.id,
-				drm_get_connector_name(connector),
-				old_status, connector->status);
-		if (old_status != connector->status)
+
+		if ((connector->status == connector_status_disconnected &&
+					connector->encoder) ||
+				(!connector->encoder &&
+				 connector->status ==
+				 connector_status_connected))
 			changed = true;
 	}
 
