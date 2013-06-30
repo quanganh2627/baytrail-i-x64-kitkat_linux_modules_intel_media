@@ -1731,9 +1731,13 @@ static IMG_BOOL ProcessFlip2(IMG_HANDLE hCmdCookie,
 	 * fail.
 	 */
 	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {
-		while (!DRMLFBFifoEmpty(psDevInfo) && retry) {
-			usleep_range(500, 1000);
+		if (!DRMLFBFifoEmpty(psDevInfo) && retry) {
+			usleep_range(6000, 6500);
 			retry--;
+			while (!DRMLFBFifoEmpty(psDevInfo) && retry) {
+				usleep_range(2000, 2500);
+				retry--;
+			}
 		}
 		if (!retry) {
 			DRM_ERROR("FIFO never emptied\n");
