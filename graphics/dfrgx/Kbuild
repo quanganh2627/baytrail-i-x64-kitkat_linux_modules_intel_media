@@ -74,8 +74,5 @@ ccflags-y += $(my_warning_flags)
 
 CFLAGS_df_rgx.o += -Idrivers/devfreq
 
-ifeq ($(A),)
+# Fixme: Replace the hardcoded path with something more intelligent approach
 CFLAGS_df_rgx.o += -I../modules/intel_media/display/tng/drv
-else
-CFLAGS_df_rgx.o += -I$(A)/display/tng/drv
-endif

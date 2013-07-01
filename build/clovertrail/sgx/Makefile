@@ -16,7 +16,7 @@ GFXINC=$(MEDIAINC)/graphics/sgx
 DISPLAYINC=$(MEDIAINC)/display/pnw/drv
 
 # Get definitions for PVRINCS-y and PVRDEFS-y
-include $(A)/build/clovertrail/pvrdefs.mk
+include ../modules/intel_media/build/clovertrail/pvrdefs.mk
 
 include_dirs := \
 	$(PVRINCS-y) \
