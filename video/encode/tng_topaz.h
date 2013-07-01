@@ -79,29 +79,21 @@ struct tng_topaz_cmd_queue {
 	uint32_t sequence;
 };
 
-/* define structure */
-/* firmware file's info head */
-struct tng_fwinfo {
-	unsigned int ver:16;
-	unsigned int codec:16;
+#define SECURE_ALING 16
+#define SECURE_VRL_HEADER 728
+#define SECURE_FIP_HEADER 296
 
-	unsigned int text_size;
-	unsigned int data_size;
-	unsigned int data_location;
-};
-
-/* firmware data array define  */
-struct tng_topaz_codec_fw {
-	uint32_t ver;
-	uint32_t codec;
-
+struct tng_secure_fw {
+	uint32_t codec_idx;
+	uint32_t addr_data;
 	uint32_t text_size;
 	uint32_t data_size;
-	uint32_t data_location;
+	uint32_t data_loca;
 
 	struct ttm_buffer_object *text;
 	struct ttm_buffer_object *data;
 };
+
 
 #define MAX_CONTEXT_CNT	2
 #define MAX_TOPAZHP_CORES 4
@@ -167,8 +159,7 @@ struct tng_topaz_private {
 	uint32_t topaz_mtx_saved;
 
 	/* firmware */
-	struct tng_topaz_codec_fw topaz_fw[TNG_TOPAZ_CODEC_NUM_MAX];
-
+	struct tng_secure_fw topaz_fw[TNG_TOPAZ_CODEC_NUM_MAX];
 	uint32_t topaz_hw_busy;
 
 	uint32_t topaz_num_pipes;

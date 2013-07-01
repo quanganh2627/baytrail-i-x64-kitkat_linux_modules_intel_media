@@ -1186,7 +1186,8 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 	int i, need_restore = 0;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	struct psb_video_ctx *pos, *n;
-	const struct tng_topaz_codec_fw *cur_codec_fw;
+	const struct tng_secure_fw *cur_codec_fw;
+
 	/* struct ttm_bo_kmap_obj tmp_kmap; */
 	/* bool is_iomem; */
 	int32_t ret = 0;
