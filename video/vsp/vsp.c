@@ -622,7 +622,8 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 			vsp_priv->fw_type = VSP_FW_TYPE_VPP;
 
-			vsp_new_context(dev_priv->dev);
+			if(vsp_priv->fw_loaded == 0)
+				vsp_new_context(dev_priv->dev);
 		} else if (cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND) {
 			struct vsp_context_settings_t *context_setting;
 			context_setting =
@@ -639,7 +640,8 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 			vsp_priv->fw_type = VSP_FW_TYPE_VP8;
 
-			vsp_new_context(dev_priv->dev);
+			if(vsp_priv->fw_loaded == 0)
+				vsp_new_context(dev_priv->dev);
 		} else
 			/* calculate the numbers of cmd send to VSP */
 			vsp_cmd_num++;
