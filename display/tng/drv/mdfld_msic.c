@@ -139,7 +139,7 @@ irqreturn_t msic_vreg_handler(int irq, void *dev_id)
 /**
  *  msic_probe
  */
-static int __devinit msic_probe(struct pci_dev *pdev,
+static int msic_probe(struct pci_dev *pdev,
 				const struct pci_device_id *ent)
 {
 	struct drm_device *dev = hdmi_priv ? hdmi_priv->dev : 0;

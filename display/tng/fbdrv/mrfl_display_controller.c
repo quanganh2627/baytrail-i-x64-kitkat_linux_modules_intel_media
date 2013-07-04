@@ -385,7 +385,7 @@ static int merrifield_fb_probe(struct pci_dev *pdev,
 	BUG();
 }
 
-static void __devexit merrifield_fb_remove(struct pci_dev *pdev)
+static void merrifield_fb_remove(struct pci_dev *pdev)
 {
 	/* TODO add teardown routine */
 	BUG();
@@ -403,7 +403,7 @@ static struct pci_driver merrifield_fb_driver = {
 	.name = DRV_NAME,
 	.id_table = merrifield_fb_devices,
 	.probe = merrifield_fb_probe,
-	.remove = __devexit_p(merrifield_fb_remove)
+	.remove = merrifield_fb_remove,
 };
 
 static int __init merrifield_fb_init(void)
