@@ -486,7 +486,7 @@ static int df_rgx_busfreq_pm_notifier_event(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 
-static __devinit int df_rgx_busfreq_probe(struct platform_device *pdev)
+static int df_rgx_busfreq_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct busfreq_data *bfdata;
@@ -581,7 +581,7 @@ err_000:
 	return sts;
 }
 
-static __devexit int df_rgx_busfreq_remove(struct platform_device *pdev)
+static int df_rgx_busfreq_remove(struct platform_device *pdev)
 {
 	struct busfreq_data *bfdata = platform_get_drvdata(pdev);
 
@@ -616,7 +616,7 @@ static const struct platform_device_id df_rgx_busfreq_id[] = {
 
 static struct platform_driver df_rgx_busfreq_driver = {
 	.probe	= df_rgx_busfreq_probe,
-	.remove	= __devexit_p(df_rgx_busfreq_remove),
+	.remove	= df_rgx_busfreq_remove,
 	.id_table = df_rgx_busfreq_id,
 	.driver = {
 		.name	= DF_RGX_NAME_DRIVER,
