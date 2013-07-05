@@ -449,6 +449,13 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe)
 		return 0;
 	}
 
+	mutex_lock(&dev->mode_config.mutex);
+	if (dev_priv->early_suspended){
+		mutex_unlock(&dev->mode_config.mutex);
+		return 0;
+	}
+	mutex_unlock(&dev->mode_config.mutex);
+
 	/* get display a for register reading */
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		active = (PSB_RVDC32(pipeconf_reg) & BIT31) ? 1 : 0 ;
