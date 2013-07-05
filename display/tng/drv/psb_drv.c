@@ -1117,6 +1117,10 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 		pVBT->mrst_gct =
 		    ioremap(platform_config_address + sizeof(*pVBT) - 4,
 			    pVBT->Size - sizeof(*pVBT) + 4);
+		if (!pVBT->mrst_gct) {
+		    DRM_ERROR("pVBT->mrst_gct NULL from ioremap\n");
+		    return false;
+		}
 		pGCT = pVBT->mrst_gct;
 		bpi = ((struct mrst_gct_v2 *)pGCT)->PD.BootPanelIndex;
 		dev_priv->gct_data.bpi = bpi;

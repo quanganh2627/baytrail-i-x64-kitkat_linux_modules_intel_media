@@ -62,7 +62,7 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 
 	msleep(130);
 	err = mdfld_dsi_send_mcs_short_hs(sender,
-			write_display_brightness, 0xff, 1,
+			write_display_brightness, 0x4, 1,
 			MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
 		DRM_ERROR("%s: %d: Set Brightness\n",
@@ -80,10 +80,19 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 	}
 
 	err = mdfld_dsi_send_mcs_short_hs(sender,
-			write_ctrl_cabc, 0x00, 1,
+			write_ctrl_cabc, STILL_IMAGE, 1,
 			MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
 		DRM_ERROR("%s: %d: Write Control CABC\n",
+		__func__, __LINE__);
+		goto ic_init_err;
+	}
+
+	err = mdfld_dsi_send_mcs_short_hs(sender,
+			write_cabc_min_bright, 51, 1,
+			MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Write CABC minimum brightness\n",
 		__func__, __LINE__);
 		goto ic_init_err;
 	}

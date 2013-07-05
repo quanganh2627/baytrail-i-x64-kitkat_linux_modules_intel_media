@@ -285,13 +285,11 @@ do {                                            \
 		cpu_relax();                    \
 } while (0)
 
-int vxd_driver_load(struct drm_device *dev);
 struct psb_fpriv *psb_fpriv(struct drm_file *file_priv);
 struct drm_psb_private *psb_priv(struct drm_device *dev);
 int vxd_release(struct inode *inode, struct file *filp);
 int psb_mmap(struct file *filp, struct vm_area_struct *vma);
 int ivxd_mmap(struct file *filp, struct vm_area_struct *vma);
-int vxd_driver_unload(struct drm_device *dev);
 void vxd_lastclose(struct drm_device *dev);
 int vxd_driver_open(struct drm_device *dev, struct drm_file *file);
 long vxd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);

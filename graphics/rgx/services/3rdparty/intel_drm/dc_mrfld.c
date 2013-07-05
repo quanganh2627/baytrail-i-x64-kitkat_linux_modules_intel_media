@@ -1230,7 +1230,7 @@ void DCUnAttachPipe(uint32_t iPipe)
 
 int DC_MRFLD_Enable_Plane(int type, int index, u32 ctx)
 {
-	int err;
+	int err = 0;
 	IMG_INT32 *ui32ActivePlanes;
 
 	/*acquire lock*/

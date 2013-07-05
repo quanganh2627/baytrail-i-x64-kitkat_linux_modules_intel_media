@@ -16,7 +16,7 @@ DISPLAYINC=$(MEDIAINC)/display/pnw/drv
 OTM_HDMI_INC=$(MEDIAINC)/otm_hdmi
 
 # Get definitions for PVRINCS-y and PVRDEFS-y
-include $(A)/build/clovertrail/pvrdefs.mk
+include ../modules/intel_media/build/clovertrail/pvrdefs.mk
 
 include_dirs := \
 	$(PVRINCS-y) \

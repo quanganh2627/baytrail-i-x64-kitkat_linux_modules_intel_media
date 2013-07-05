@@ -351,3 +351,22 @@ config SUPPORT_VSP
         help
           xxxxxx
 
+config GFX_RGX_DEVFREQ
+	tristate "IMG Rogue Graphics DEVFREQ Driver"
+	default y
+	depends on PM_DEVFREQ && DRM_INTEL_HANDSET
+	select DEVFREQ_GOV_SIMPLE_ONDEMAND
+	select DEVFREQ_GOV_PERFORMANCE
+	select DEVFREQ_GOV_POWERSAVE
+	help
+	  This adds the DEVFREQ driver for Imagination Technologies (IMG)
+	  Rogue/Hood graphics (RGX).  This driver helps control GPU clock
+	  speed in order to provide high performance on demand and power
+	  savings when not busy or when thermal conditions suggest.
+
+config DRM_VXD_BYT
+       bool "Enable vxd on intel by default"
+       depends on DRM_I915
+       default n
+       help
+         Choose this option if you want to enable VXD decoding for Baylake platform

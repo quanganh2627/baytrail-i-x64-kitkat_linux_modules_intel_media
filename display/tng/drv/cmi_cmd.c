@@ -21,7 +21,7 @@
  * DEALINGS IN THE SOFTWARE.
  *
  * Authors:
- * Faxing Lu
+ * Faxing Lu<faxing.lu@intel.com>
  */
 
 #include "mdfld_dsi_dbi.h"
@@ -40,7 +40,6 @@ static u8 cmi_set_tear_on[]         = {0x35, 0x00};
 static u8 cmi_set_brightness[]      = {0x51, 0x00};
 static u8 cmi_turn_on_backlight[]   = {0x53, 0x24};
 static u8 cmi_turn_off_backlight[]  = {0x53, 0x00};
-static u8 cmi_disable_cabc[]        = {0x55, 0x00};
 static u8 cmi_set_mipi_ctrl[]       = {
 	0xba, 0x12, 0x83, 0x00,
 	0xd6, 0xc5, 0x00, 0x09,
@@ -137,8 +136,10 @@ static u8 cmi_set_stba[] = {
 static
 int mdfld_cmi_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 {
+	struct drm_device *dev = dsi_config->dev;
 	struct mdfld_dsi_pkg_sender *sender
 			= mdfld_dsi_get_pkg_sender(dsi_config);
+	struct mdfld_dsi_hw_registers *regs;
 
 	if (!sender)
 		return -EINVAL;
@@ -146,129 +147,144 @@ int mdfld_cmi_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 	PSB_DEBUG_ENTRY("\n");
 	sender->status = MDFLD_DSI_PKG_SENDER_FREE;
 
-	/* set password*/
-	mdfld_dsi_send_mcs_short_lp(sender,
+	regs = &dsi_config->regs;
+
+	/* swtich to 2 data lanes */
+	REG_WRITE(regs->device_ready_reg, 0x0);
+	udelay(1);
+	REG_WRITE(regs->dsi_func_prg_reg, 0xA002);
+	udelay(1);
+	REG_WRITE(regs->device_ready_reg, 0x1);
+	udelay(1);
+
+	mdfld_dsi_send_mcs_short_hs(sender,
 		cmi_exit_sleep_mode[0], 0, 0, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
 	mdelay(150);
 
-	/* set password*/
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_mcs_protect_off, 4, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_mcs_protect_off, 4, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_ic_bias_current, 5, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_ic_bias_current, 5, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_power, 14, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_power, 14, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_disp_reg, 13, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_disp_reg, 13, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_command_cyc, 24, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_command_cyc, 24, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_mipi_ctrl, 18, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_mipi_ctrl, 3, 0);
 
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_stba, 3, 0);
+	/* switch back to 3 data lanes */
+	mdfld_dsi_wait_for_fifos_empty(sender);
+	REG_WRITE(regs->device_ready_reg, 0x0);
+	udelay(1);
+	REG_WRITE(regs->dsi_func_prg_reg, 0xA003);
+	udelay(1);
+	REG_WRITE(regs->device_ready_reg, 0x1);
+
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_stba, 3, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_short_lp(sender, cmi_command_mode[0],
+	mdfld_dsi_send_mcs_short_hs(sender, cmi_command_mode[0],
 			cmi_command_mode[1], 1, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_blanking_opt_2,
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_blanking_opt_2,
 			sizeof(cmi_set_blanking_opt_2), 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_short_lp(sender, cmi_set_panel[0],
+	mdfld_dsi_send_mcs_short_hs(sender, cmi_set_panel[0],
 			cmi_set_panel[1], 1, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_short_lp(sender, cmi_set_eq_func_ltps[0],
+	mdfld_dsi_send_mcs_short_hs(sender, cmi_set_eq_func_ltps[0],
 			cmi_set_eq_func_ltps[1], 1, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_ltps_ctrl_output, 22, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_ltps_ctrl_output, 22, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_video_cyc, 24, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_video_cyc, 24, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_gamma_r, 35, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_gamma_r, 35, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_gamma_g, 35, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_gamma_g, 35, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_gamma_b, 35, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_gamma_b, 35, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_short_lp(sender, cmi_set_pixel_format[0],
+	mdfld_dsi_send_mcs_short_hs(sender, cmi_set_pixel_format[0],
 			cmi_set_pixel_format[1], 1, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_mcs_clumn_addr, 5, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_mcs_clumn_addr, 5, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_mcs_page_addr, 5, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_mcs_page_addr, 5, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_short_lp(sender, cmi_set_address_mode[0],
+	mdfld_dsi_send_mcs_short_hs(sender, cmi_set_address_mode[0],
 	cmi_set_address_mode[1], 1, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_set_te_scanline, 4, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_set_te_scanline, 4, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_short_lp(sender, cmi_set_tear_on[0],
+	mdfld_dsi_send_mcs_short_hs(sender, cmi_set_tear_on[0],
 			cmi_set_tear_on[1], 1, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_enter_set_cabc, 10, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_enter_set_cabc, 10, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 
 		return -EIO;
 	/* set backlight on*/
-	mdfld_dsi_send_mcs_short_lp(sender,
+	mdfld_dsi_send_mcs_short_hs(sender,
 		cmi_turn_on_backlight[0],
 		cmi_turn_on_backlight[1], 1 , 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 
-	/* disalble CABC*/
-	mdfld_dsi_send_mcs_short_lp(sender, cmi_disable_cabc[0],
-			cmi_disable_cabc[1], 1, 0);
-	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
-		return -EIO;
+	/* turn CABC on*/
+	mdfld_dsi_send_mcs_short_hs(sender,
+			write_ctrl_cabc, STILL_IMAGE, 1,
+			MDFLD_DSI_SEND_PACKAGE);
 
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_mcs_protect_on, 4, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_mcs_protect_on, 4, 0);
 	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL)
 		return -EIO;
 	mdelay(5);
@@ -422,6 +438,7 @@ int mdfld_dsi_cmi_cmd_power_on(struct mdfld_dsi_config *dsi_config)
 		DRM_ERROR("Failed to get DSI packet sender\n");
 		return -EINVAL;
 	}
+
 	/*exit sleep */
 	err = mdfld_dsi_send_dcs(sender,
 		 exit_sleep_mode,
@@ -477,12 +494,12 @@ static int mdfld_dsi_cmi_cmd_power_off(struct mdfld_dsi_config *dsi_config)
 	}
 
 	/* turn off cabc */
-	cmi_disable_cabc[1] = 0x0;
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_disable_cabc,
-				   sizeof(cmi_disable_cabc), 0);
+	err = mdfld_dsi_send_mcs_short_hs(sender,
+		write_ctrl_cabc, 0, 1,
+		MDFLD_DSI_SEND_PACKAGE);
 
 	/*turn off backlight*/
-	err = mdfld_dsi_send_mcs_long_lp(sender, cmi_turn_off_backlight,
+	err = mdfld_dsi_send_mcs_long_hs(sender, cmi_turn_off_backlight,
 					 sizeof(cmi_turn_off_backlight), 0);
 	if (err) {
 		DRM_ERROR("%s: failed to turn off backlight\n", __func__);
@@ -535,17 +552,17 @@ static int mdfld_dsi_cmi_cmd_power_off(struct mdfld_dsi_config *dsi_config)
 	mdelay(5);
 
 	/*enter deep standby mode*/
-	err = mdfld_dsi_send_mcs_long_lp(sender, cmi_mcs_protect_off, 4, 0);
+	err = mdfld_dsi_send_mcs_long_hs(sender, cmi_mcs_protect_off, 4, 0);
 	if (err) {
 		DRM_ERROR("Failed to turn off protection\n");
 		goto out;
 	}
 
-	err = mdfld_dsi_send_mcs_long_lp(sender, cmi_set_power_dstb, 14, 0);
+	err = mdfld_dsi_send_mcs_long_hs(sender, cmi_set_power_dstb, 14, 0);
 	if (err)
 		DRM_ERROR("Failed to enter DSTB\n");
 	mdelay(5);
-	mdfld_dsi_send_mcs_long_lp(sender, cmi_mcs_protect_on, 4, 0);
+	mdfld_dsi_send_mcs_long_hs(sender, cmi_mcs_protect_on, 4, 0);
 
 out:
 	return err;
@@ -629,7 +646,7 @@ int mdfld_dsi_cmi_cmd_set_brightness(struct mdfld_dsi_config *dsi_config,
 	duty_val = (255 * level) / 100;
 	cmi_set_brightness[1] = duty_val;
 
-	mdfld_dsi_send_mcs_short_lp(sender,
+	mdfld_dsi_send_mcs_short_hs(sender,
 		cmi_set_brightness[0], cmi_set_brightness[1], 1, 0);
 
 	return 0;
@@ -711,7 +728,6 @@ int mdfld_dsi_cmi_cmd_panel_reset(struct mdfld_dsi_config *dsi_config)
 
 void cmi_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 {
-
 	if (!dev || !p_funcs) {
 		DRM_ERROR("Invalid parameters\n");
 		return;
@@ -730,5 +746,4 @@ void cmi_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 	p_funcs->power_on = mdfld_dsi_cmi_cmd_power_on;
 	p_funcs->power_off = mdfld_dsi_cmi_cmd_power_off;
 	p_funcs->set_brightness = mdfld_dsi_cmi_cmd_set_brightness;
-
 }

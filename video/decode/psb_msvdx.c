@@ -508,7 +508,7 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 		PSB_DEBUG_GENERAL("MSVDX: will reset msvdx\n");
 #ifdef PSB_MSVDX_FW_LOADED_BY_HOST
 		if (!msvdx_priv->fw_loaded_by_punit) {
-			if (psb_msvdx_reset(dev_priv)) {
+			if (psb_msvdx_core_reset(dev_priv)) {
 				ret = -EBUSY;
 				DRM_ERROR("MSVDX: Reset failed\n");
 				return ret;

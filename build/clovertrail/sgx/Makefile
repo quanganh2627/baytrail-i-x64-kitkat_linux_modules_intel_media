@@ -16,11 +16,10 @@ GFXINC=$(MEDIAINC)/graphics/sgx
 DISPLAYINC=$(MEDIAINC)/display/pnw/drv
 
 # Get definitions for PVRINCS-y and PVRDEFS-y
-include $(A)/build/clovertrail/pvrdefs.mk
+include ../modules/intel_media/build/clovertrail/pvrdefs.mk
 
 include_dirs := \
 	$(PVRINCS-y) \
-	-I$(MEDIADIR)/ \
 	-I$(DISPLAYINC) \
 	-I$(MEDIAINC)/otm_hdmi/os/android/include \
 	-I$(MEDIAINC)/otm_hdmi/pil/include \

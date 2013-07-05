@@ -353,6 +353,28 @@ static void snd_intelhad_enable_audio_v2(struct snd_pcm_substream *substream,
 }
 
 /**
+ * snd_intelhad_reset_audio_v1 - to reset audio subsystem
+ *
+ * @reset: 1 to reset audio; 0 to bring audio out of reset.
+ *
+ */
+static void snd_intelhad_reset_audio_v1(u8 reset)
+{
+	had_write_register(AUD_HDMI_STATUS, reset);
+}
+
+/**
+ * snd_intelhad_reset_audio_v2 - to reset audio subsystem
+ *
+ * @reset: 1 to reset audio; 0 to bring audio out of reset.
+ *
+ */
+static void snd_intelhad_reset_audio_v2(u8 reset)
+{
+	had_write_register(AUD_HDMI_STATUS_v2, reset);
+}
+
+/**
  * had_prog_status_reg - to initialize audio channel status registers
  *
  * @substream:substream for which the prepare function is called
@@ -1367,8 +1389,8 @@ static int snd_intelhad_pcm_trigger(struct snd_pcm_substream *substream,
 		had_set_caps(HAD_SET_DISABLE_AUDIO, NULL);
 		intelhaddata->ops->enable_audio(substream, 0);
 		/* Reset buffer pointers */
-		had_write_register(AUD_HDMI_STATUS, 1);
-		had_write_register(AUD_HDMI_STATUS, 0);
+		intelhaddata->ops->reset_audio(1);
+		intelhaddata->ops->reset_audio(0);
 		stream->stream_status = STREAM_DROPPED;
 		break;
 
@@ -1665,6 +1687,7 @@ static struct snd_intel_had_interface had_interface = {
 
 static struct had_ops had_ops_v1 = {
 	.enable_audio = snd_intelhad_enable_audio_v1,
+	.reset_audio = snd_intelhad_reset_audio_v1,
 	.prog_n =	snd_intelhad_prog_n_v1,
 	.prog_cts =	snd_intelhad_prog_cts_v1,
 	.audio_ctrl =	snd_intelhad_prog_audio_ctrl_v1,
@@ -1674,6 +1697,7 @@ static struct had_ops had_ops_v1 = {
 
 static struct had_ops had_ops_v2 = {
 	.enable_audio = snd_intelhad_enable_audio_v2,
+	.reset_audio = snd_intelhad_reset_audio_v2,
 	.prog_n =	snd_intelhad_prog_n_v2,
 	.prog_cts =	snd_intelhad_prog_cts_v2,
 	.audio_ctrl =	snd_intelhad_prog_audio_ctrl_v2,
