@@ -166,8 +166,12 @@ static int mid_hdmi_audio_rmw(uint32_t reg, uint32_t val, uint32_t mask)
 	uint32_t val_tmp = 0;
 
 	if (IS_HDMI_AUDIO_REG(reg)) {
-		val_tmp = (val & mask) | (REG_READ(reg) & ~mask);
-		REG_WRITE(reg, val_tmp);
+		if (ospm_power_using_hw_begin(OSPM_DISPLAY_ISLAND,
+			OSPM_UHB_ONLY_IF_ON)) {
+			val_tmp = (val & mask) | (REG_READ(reg) & ~mask);
+			REG_WRITE(reg, val_tmp);
+			ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
+		}
 	} else {
 		ret = -EINVAL;
 	}
@@ -223,18 +227,27 @@ static int mid_hdmi_audio_set_caps(enum had_caps_list set_element, void *capabil
 
 	switch (set_element) {
 	case HAD_SET_ENABLE_AUDIO:
-		hdmib = REG_READ(hdmi_priv->hdmib_reg);
+		if (ospm_power_using_hw_begin(OSPM_DISPLAY_ISLAND,
+			OSPM_UHB_ONLY_IF_ON)) {
+			hdmib = REG_READ(hdmi_priv->hdmib_reg);
 
-		if (hdmib & HDMIB_PORT_EN)
-			hdmib |= HDMIB_AUDIO_ENABLE;
+			if (hdmib & HDMIB_PORT_EN)
+				hdmib |= HDMIB_AUDIO_ENABLE;
 
-		REG_WRITE(hdmi_priv->hdmib_reg, hdmib);
-		REG_READ(hdmi_priv->hdmib_reg);
+			REG_WRITE(hdmi_priv->hdmib_reg, hdmib);
+			REG_READ(hdmi_priv->hdmib_reg);
+			ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
+		}
 		break;
 	case HAD_SET_DISABLE_AUDIO:
-		hdmib = REG_READ(hdmi_priv->hdmib_reg) & ~HDMIB_AUDIO_ENABLE;
-		REG_WRITE(hdmi_priv->hdmib_reg, hdmib);
-		REG_READ(hdmi_priv->hdmib_reg);
+		if (ospm_power_using_hw_begin(OSPM_DISPLAY_ISLAND,
+			OSPM_UHB_ONLY_IF_ON)) {
+			hdmib = REG_READ(hdmi_priv->hdmib_reg) &
+				~HDMIB_AUDIO_ENABLE;
+			REG_WRITE(hdmi_priv->hdmib_reg, hdmib);
+			REG_READ(hdmi_priv->hdmib_reg);
+			ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
+		}
 		break;
 	case HAD_SET_ENABLE_AUDIO_INT:
 		if (*((u32 *)capabilties) & HDMI_AUDIO_UNDERRUN)
