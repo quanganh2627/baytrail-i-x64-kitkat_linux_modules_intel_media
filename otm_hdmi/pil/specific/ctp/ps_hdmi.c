@@ -390,6 +390,10 @@ irqreturn_t ps_hdmi_irq_handler(int irq, void *data)
 static int ps_hdmi_hpd_suspend(struct device *dev)
 {
 	pr_debug("Entered %s\n", __func__);
+
+	if (g_context)
+		disable_irq(g_context->irq_number);
+
 	ps_hdmi_power_rails_off();
 	return 0;
 }
@@ -397,6 +401,9 @@ static int ps_hdmi_hpd_suspend(struct device *dev)
 static int ps_hdmi_hpd_resume(struct device *dev)
 {
 	pr_debug("Entered %s\n", __func__);
+
+	if (g_context)
+		enable_irq(g_context->irq_number);
 
 	if (g_context && g_context->is_connected)
 		ps_hdmi_power_rails_on();
@@ -470,6 +477,8 @@ static int ps_hdmi_hpd_probe(struct pci_dev *pdev,
 			 __func__, ctx->irq_number);
 		goto exit3;
 	}
+	irq_set_irq_wake(ctx->irq_number, 1);
+
 	return result;
 
 exit3:
