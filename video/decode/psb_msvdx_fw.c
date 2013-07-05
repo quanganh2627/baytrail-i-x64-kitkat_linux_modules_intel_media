@@ -740,7 +740,8 @@ int psb_setup_fw(struct drm_device *dev)
 				    0xffffffff, /* Enabled bits */
 				    2000000, 5);
 	if (ret) {
-		panic("MSVDX: firmware fails to initialize.\n");
+		DRM_ERROR("MSVDX: firmware fails to initialize.\n");
+		goto out;
 	}
 
 	PSB_DEBUG_GENERAL("MSVDX: MTX Initial indications OK\n");

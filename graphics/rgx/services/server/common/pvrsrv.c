@@ -336,8 +336,7 @@ static IMG_VOID CleanupThread(IMG_PVOID pvData)
 		OSSetReleasePVRLock();
 
 		/* Only call into resman if something has happened */
-		/* have 1min timeout */
-		OSEventObjectWaitTimeout(hOSEvent, 60000);
+		OSEventObjectWait(hOSEvent);
 
 		/*
 			We have to close the event object so we don't get the event from
