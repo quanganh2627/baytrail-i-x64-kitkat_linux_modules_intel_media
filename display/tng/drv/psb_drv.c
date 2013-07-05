@@ -1916,12 +1916,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 		dev_priv->psb_hotplug_state = psb_hotplug_init(kobj);
 	}
 
-#ifdef CONFIG_GFX_RTPM
-	/*enable runtime pm at last */
-	pm_runtime_enable(&dev->pdev->dev);
-	pm_runtime_set_active(&dev->pdev->dev);
-#endif
-
 #ifdef CONFIG_SUPPORT_HDMI
 	hdmi_hotplug_timer_init(dev);
 	atomic_set(&dev_priv->hotplug_wq_done, 0);
@@ -3706,11 +3700,9 @@ static void psb_proc_cleanup(struct drm_minor *minor)
 #endif /* if KEEP_UNUSED_CODE_DRIVER_DISPATCH */
 
 static const struct dev_pm_ops psb_pm_ops = {
-/*
-	.runtime_suspend = psb_runtime_suspend,
-	.runtime_resume = psb_runtime_resume,
-	.runtime_idle = psb_runtime_idle,
-*/
+	.runtime_suspend = rtpm_suspend,
+	.runtime_resume = rtpm_resume,
+	.runtime_idle = rtpm_idle,
 };
 
 static struct vm_operations_struct psb_ttm_vm_ops;

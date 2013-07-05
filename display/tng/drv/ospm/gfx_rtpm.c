@@ -31,36 +31,70 @@
 
 #include <linux/pm_runtime.h>
 #include "psb_drv.h"
+#include "pwr_mgmt.h"
 
+extern struct ospm_power_island island_list[9];
+extern struct drm_device *gpDrmDevice;
 
 int rtpm_suspend(struct device *dev)
 {
+	int ref_count = 0;
+	int i;
+
 	OSPM_DPF("%s\n", __func__);
-	return -EBUSY;
+
+	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
+		if (island_list[i].island & OSPM_DISPLAY_ISLAND)
+			continue;
+		ref_count += atomic_read(&island_list[i].ref_count);
+	}
+
+	if (ref_count)
+		return -EBUSY;
+
+	return 0;
 }
 
 int rtpm_resume(struct device *dev)
 {
 	OSPM_DPF("%s\n", __func__);
-	return -EBUSY;
+	/* No OPs of GFX/VED/VEC/VSP/DISP */
+	return 0;
 }
 
 int rtpm_idle(struct device *dev)
 {
+	int ref_count = 0;
+	int i;
+
 	OSPM_DPF("%s\n", __func__);
-	return -EBUSY;
+
+	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
+		if (island_list[i].island & OSPM_DISPLAY_ISLAND)
+			continue;
+		ref_count += atomic_read(&island_list[i].ref_count);
+	}
+
+	if (ref_count) {
+		OSPM_DPF("%s return busy\n", __func__);
+		return -EBUSY;
+	} else
+		return 0;
 }
 
 int rtpm_allow(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	OSPM_DPF("%s\n", __func__);
+	pm_runtime_allow(&dev->pdev->dev);
 	dev_priv->rpm_enabled = 1;
-	return -EBUSY;
+	return 0;
 }
 
 void rtpm_forbid(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	OSPM_DPF("%s\n", __func__);
 	pm_runtime_forbid(&dev->pdev->dev);
 	dev_priv->rpm_enabled = 0;
 	return;
@@ -68,17 +102,10 @@ void rtpm_forbid(struct drm_device *dev)
 
 void rtpm_init(struct drm_device *dev)
 {
-}
-
-void rtpm_enable(struct drm_device *dev)
-{
-	/*enable runtime pm at last */
-	pm_runtime_enable(&dev->pdev->dev);
-	pm_runtime_set_active(&dev->pdev->dev);
+	pm_runtime_put_noidle(&dev->pdev->dev);
 }
 
 void rtpm_uninit(struct drm_device *dev)
 {
-	pm_runtime_disable(&dev->pdev->dev);
-	pm_runtime_set_suspended(&dev->pdev->dev);
+	pm_runtime_get_noresume(&dev->pdev->dev);
 }

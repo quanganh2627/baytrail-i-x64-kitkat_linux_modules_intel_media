@@ -31,7 +31,11 @@
 #include "psb_msvdx.h"
 #include "tng_topaz.h"
 #include "tng_wa.h"
+#ifdef CONFIG_GFX_RTPM
+#include <linux/pm_runtime.h>
+#endif
 
+extern struct drm_device *gpDrmDevice;
 /***********************************************************
  * vsp islands
  ***********************************************************/
@@ -266,4 +270,24 @@ void ospm_vec_init(struct drm_device *dev,
 	p_island->p_dependency = get_island_ptr(NC_PM_SSS_GFX_SLC);
 }
 
+#ifdef CONFIG_GFX_RTPM
+void psb_ospm_post_power_down()
+{
+	int ret;
 
+	if (likely(!gpDrmDevice->pdev->dev.power.runtime_auto))
+		return;
+
+	PSB_DEBUG_PM("request runtime idle\n");
+	ret = pm_request_idle(&gpDrmDevice->pdev->dev);
+
+	if (ret) {
+		PSB_DEBUG_PM("pm_request_idle fail, ret %d\n", ret);
+		ret = pm_runtime_barrier(&gpDrmDevice->pdev->dev);
+		if (!ret) {
+			ret = pm_request_idle(&gpDrmDevice->pdev->dev);
+			 PSB_DEBUG_PM("pm_request_idle again, ret %d\n", ret);
+		}
+	}
+}
+#endif
