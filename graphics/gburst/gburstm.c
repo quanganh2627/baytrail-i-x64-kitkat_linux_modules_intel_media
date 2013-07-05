@@ -1118,8 +1118,10 @@ static void request_desired_burst_mode(struct gburst_pvt_s *gbprv)
 		return;
 
 	if (gbprv->gbp_offscreen_rendering) {
-		reqbits = PWRGT_CNT_BURST_REQUEST_M_533;
-		set_state_pwrgt_cnt(gbprv, reqbits);
+		if (!GBURST_BURST_REQUESTED(gbprv)) {
+			reqbits = PWRGT_CNT_BURST_REQUEST_M_533;
+			set_state_pwrgt_cnt(gbprv, reqbits);
+		}
 	} else {
 
 		rva = desired_burst_state_query(gbprv, &whymsg
@@ -1235,11 +1237,17 @@ static int thread_action(struct gburst_pvt_s *gbprv)
 
 	if (delta > FRAME_DURATION)
 		gbprv->gbp_num_of_vsync_limited_frames = 0;
-	if (delta > OFFSCREEN_TIME)
+	if (delta > OFFSCREEN_TIME) {
 		gbprv->gbp_offscreen_rendering = 1;
+		hrt_cancel(gbprv);
+	}
 
 	if (!gbprv->gbp_offscreen_rendering) {
 		utilpct = gburst_stats_gfx_hw_perf_record();
+
+		if (mprm_verbosity >= 4)
+			printk(GBURST_ALERT "util: %d %%\n", utilpct);
+
 		if (utilpct < 0) {
 			/**
 			 * This should only fail if not initialized and is
@@ -1687,6 +1695,16 @@ static int generate_dump_string(struct gburst_pvt_s *gbprv, size_t buflen,
 			GBURST_HEADING "hrt_enable_state_actual = %d\n",
 			tmpv0);
 	}
+
+	ix = ut_isnprintf(ix, buf, buflen,
+		GBURST_HEADING
+		"vsync_limited_frames mode = %d\n",
+		(gbprv->gbp_num_of_vsync_limited_frames >= VSYNC_FRAMES));
+
+	ix = ut_isnprintf(ix, buf, buflen,
+		GBURST_HEADING
+		"offscreen_rendering mode = %d\n",
+		gbprv->gbp_offscreen_rendering);
 
 	ix = ut_isnprintf(ix, buf, buflen,
 		GBURST_HEADING
