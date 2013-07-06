@@ -364,13 +364,21 @@ static int mdfld_dsi_connector_set_property(struct drm_connector *connector,
 			goto set_prop_error;
 		}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 		if (drm_connector_property_get_value(connector, property, &curValue))
+#else
+		if (drm_object_property_get_value(&connector->base, property, &curValue))
+#endif
 			goto set_prop_error;
 
 		if (curValue == value)
 			goto set_prop_done;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 		if (drm_connector_property_set_value(connector, property, value))
+#else
+		if (drm_object_property_set_value(&connector->base, property, value))
+#endif
 			goto set_prop_error;
 
 		bTransitionFromToCentered = (curValue == DRM_MODE_SCALE_NO_SCALE) ||
@@ -390,7 +398,11 @@ static int mdfld_dsi_connector_set_property(struct drm_connector *connector,
 		}
 	} else if (!strcmp(property->name, "backlight") && encoder) {
 		PSB_DEBUG_ENTRY("backlight level = %d\n", (int)value);
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 		if (drm_connector_property_set_value(connector, property, value))
+#else
+		if (drm_object_property_set_value(&connector->base, property, value))
+#endif
 			goto set_prop_error;
 		else {
 			PSB_DEBUG_ENTRY("set brightness to %d", (int)value);
@@ -910,11 +922,19 @@ int mdfld_dsi_output_init(struct drm_device *dev, int pipe)
 	connector->doublescan_allowed = false;
 	
 	/*attach properties*/
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 	drm_connector_attach_property(connector,
+#else
+	drm_object_attach_property(&connector->base,
+#endif
 			dev->mode_config.scaling_mode_property,
 			DRM_MODE_SCALE_FULLSCREEN);
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 	drm_connector_attach_property(connector,
+#else
+	drm_object_attach_property(&connector->base,
+#endif
 			dev_priv->backlight_property,
 			MDFLD_DSI_BRIGHTNESS_MAX_LEVEL);
 

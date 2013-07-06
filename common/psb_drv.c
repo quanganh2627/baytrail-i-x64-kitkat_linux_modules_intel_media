@@ -2976,7 +2976,11 @@ static int validate_overlay_register_buffer(struct drm_file *file_priv,
 	if (ret)
 		goto out_err1;
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
 	ret = ttm_bo_validate(reg_buffer, &placement, 1, 0, 0);
+#else
+	ret = ttm_bo_validate(reg_buffer, &placement, 1, 0);
+#endif
 
 	if (ret)
 		goto out_err2;
