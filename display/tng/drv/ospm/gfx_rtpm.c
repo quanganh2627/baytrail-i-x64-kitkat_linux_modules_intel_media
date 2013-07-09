@@ -49,8 +49,10 @@ int rtpm_suspend(struct device *dev)
 		ref_count += atomic_read(&island_list[i].ref_count);
 	}
 
-	if (ref_count)
+	if (ref_count) {
+		DRM_INFO("OSPM: %s: ref_count = %d\n", __func__, ref_count);
 		return -EBUSY;
+	}
 
 	return 0;
 }
@@ -76,7 +78,7 @@ int rtpm_idle(struct device *dev)
 	}
 
 	if (ref_count) {
-		OSPM_DPF("%s return busy\n", __func__);
+		DRM_INFO("OSPM: %s: ref_count = %d\n", __func__, ref_count);
 		return -EBUSY;
 	} else
 		return 0;
@@ -86,7 +88,7 @@ int rtpm_allow(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	OSPM_DPF("%s\n", __func__);
-	pm_runtime_allow(&dev->pdev->dev);
+	pm_runtime_allow(dev->dev);
 	dev_priv->rpm_enabled = 1;
 	return 0;
 }
@@ -95,17 +97,17 @@ void rtpm_forbid(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	OSPM_DPF("%s\n", __func__);
-	pm_runtime_forbid(&dev->pdev->dev);
+	pm_runtime_forbid(dev->dev);
 	dev_priv->rpm_enabled = 0;
 	return;
 }
 
 void rtpm_init(struct drm_device *dev)
 {
-	pm_runtime_put_noidle(&dev->pdev->dev);
+	pm_runtime_put_noidle(dev->dev);
 }
 
 void rtpm_uninit(struct drm_device *dev)
 {
-	pm_runtime_get_noresume(&dev->pdev->dev);
+	pm_runtime_get_noresume(dev->dev);
 }

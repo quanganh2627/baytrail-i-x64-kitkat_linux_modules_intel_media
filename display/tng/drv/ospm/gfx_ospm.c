@@ -417,5 +417,5 @@ void ospm_gfx_init(struct drm_device *dev,
 	OSPM_DPF("%s\n", __func__);
 	p_island->p_funcs->power_up = ospm_gfx_power_up;
 	p_island->p_funcs->power_down = ospm_gfx_power_down;
-	p_island->p_dependency = NULL;
+	p_island->p_dependency = get_island_ptr(OSPM_VIRTUAL_PCI_ISLAND);
 }

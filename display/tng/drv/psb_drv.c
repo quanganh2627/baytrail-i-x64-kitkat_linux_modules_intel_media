@@ -2911,6 +2911,7 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				break;
 			default:
 				DRM_ERROR("Invalid overlay index %d\n", index);
+				power_island_put(power_island);
 				return -EINVAL;
 			}
 
@@ -3657,9 +3658,11 @@ static void psb_proc_cleanup(struct drm_minor *minor)
 
 
 static const struct dev_pm_ops psb_pm_ops = {
+#ifdef CONFIG_GFX_RTPM
 	.runtime_suspend = rtpm_suspend,
 	.runtime_resume = rtpm_resume,
 	.runtime_idle = rtpm_idle,
+#endif
 };
 
 static struct vm_operations_struct psb_ttm_vm_ops;

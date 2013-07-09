@@ -27,7 +27,7 @@
 
 #include <linux/earlysuspend.h>
 #include <linux/mutex.h>
-#ifdef COFNIG_GFX_RTPM
+#ifdef CONFIG_GFX_RTPM
 #include <linux/pm_runtime.h>
 #endif
 #include "psb_drv.h"
@@ -69,7 +69,8 @@ static void gfx_early_suspend(struct early_suspend *h)
 		}
 	}
 
-	ospm_power_suspend();
+	power_island_put(OSPM_VIRTUAL_PCI_ISLAND);
+
 	dev_priv->early_suspended = true;
 
 	mutex_unlock(&dev->mode_config.mutex);
@@ -92,7 +93,7 @@ static void gfx_late_resume(struct early_suspend *h)
 	mutex_lock(&dev->mode_config.mutex);
 
 	dev_priv->early_suspended = false;
-	ospm_power_resume();
+	power_island_get(OSPM_VIRTUAL_PCI_ISLAND);
 
 	list_for_each_entry(encoder,
 			&dev->mode_config.encoder_list,

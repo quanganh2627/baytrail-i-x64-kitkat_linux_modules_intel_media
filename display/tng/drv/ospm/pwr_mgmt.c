@@ -49,7 +49,14 @@
 struct _ospm_data_ *g_ospm_data;
 struct drm_device *gpDrmDevice;
 
+void ospm_pci_init(struct drm_device *dev,
+			struct ospm_power_island *p_island);
+
 /* island, state, ref_count, init_func, power_func */
+/* Virtual PCI island is powered on by FW so by default it has reference count 1.
+  * The island needs to be deferenced during early suspend and referenced
+  * during late resume.
+  */
 struct ospm_power_island island_list[] = {
 	{OSPM_DISPLAY_A, OSPM_POWER_OFF, {0}, ospm_disp_a_init, NULL},
 	{OSPM_DISPLAY_B, OSPM_POWER_OFF, {0}, ospm_disp_b_init, NULL},
@@ -60,6 +67,7 @@ struct ospm_power_island island_list[] = {
 	{OSPM_VIDEO_VPP_ISLAND, OSPM_POWER_OFF, {0}, ospm_vsp_init, NULL},
 	{OSPM_VIDEO_DEC_ISLAND, OSPM_POWER_OFF, {0}, ospm_ved_init, NULL},
 	{OSPM_VIDEO_ENC_ISLAND, OSPM_POWER_OFF, {0}, ospm_vec_init, NULL},
+	{OSPM_VIRTUAL_PCI_ISLAND, OSPM_POWER_ON, {1}, ospm_pci_init, NULL},
 };
 
 /**
@@ -114,6 +122,9 @@ const char *get_island_name(u32 hw_island)
 	case OSPM_GRAPHICS_ISLAND:
 		pstr = "GFX    ";
 		break;
+	case OSPM_VIRTUAL_PCI_ISLAND:
+		pstr = "PCI    ";
+		break;
 	default:
 		pstr = "(unknown hw_island)";
 		break;
@@ -145,17 +156,24 @@ static void dump_ref_count(u32 hw_island)
 }
 #endif	/* OSPM_DEBUG_INFO */
 
+
 /**
  * ospm_suspend_pci
  *
  * Description: Suspend the pci device saving state and disabling
  * as necessary.
  */
-static void ospm_suspend_pci(struct drm_device *dev)
+static bool ospm_suspend_pci(struct drm_device *dev,
+			struct ospm_power_island *p_island)
 {
 	struct pci_dev *pdev = dev->pdev;
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	int bsm, vbt, bgsm;
+
+
+	/* TODO: move this to graphics island? Asking RGX to power off */
+	if (!PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_OFF))
+		DRM_ERROR("OSPM: %s: failed to power off RGX\n", __func__);
 
 	OSPM_DPF("%s\n", __func__);
 
@@ -171,6 +189,9 @@ static void ospm_suspend_pci(struct drm_device *dev)
 
 	pci_disable_device(pdev);
 	pci_set_power_state(pdev, PCI_D3hot);
+
+	OSPM_DPF("OSPM: %s: PCI suspended\n", __func__);
+	return true;
 }
 
 /**
@@ -179,7 +200,8 @@ static void ospm_suspend_pci(struct drm_device *dev)
  * Description: Resume the pci device restoring state and enabling
  * as necessary.
  */
-static void ospm_resume_pci(struct drm_device *dev)
+static bool ospm_resume_pci(struct drm_device *dev,
+			struct ospm_power_island *p_island)
 {
 	struct pci_dev *pdev = dev->pdev;
 	struct drm_psb_private *dev_priv = dev->dev_private;
@@ -207,7 +229,23 @@ static void ospm_resume_pci(struct drm_device *dev)
 
 	if (ret != 0)
 		OSPM_DPF("pci_enable_device failed: %d\n", ret);
+
+	/* TODO: move this to graphics island?  restore Graphics State */
+	if (!PVRSRVRGXSetPowerState(dev, OSPM_POWER_ON))
+		DRM_ERROR("OSPM: %s: failed to power on RGX\n", __func__);
+
+	OSPM_DPF("OSPM: %s: PCI resumed\n", __func__);
+	return true;
 }
+
+void ospm_pci_init(struct drm_device *dev,
+			struct ospm_power_island *p_island)
+{
+	p_island->p_funcs->power_up = ospm_resume_pci;
+	p_island->p_funcs->power_down = ospm_suspend_pci;
+	p_island->p_dependency = NULL;
+}
+
 
 /**
  * get_island_ptr
@@ -266,8 +304,10 @@ static bool power_up_island(struct ospm_power_island *p_island)
 		ret = p_island->p_funcs->power_up(g_ospm_data->dev, p_island);
 		if (ret)
 			p_island->island_state = OSPM_POWER_ON;
-		else
+		else {
+			DRM_ERROR("OSPM: %s failed\n", __func__);
 			return ret;
+		}
 	}
 
 	/* increment the ref count */
@@ -286,7 +326,7 @@ static bool power_down_island(struct ospm_power_island *p_island)
 	bool ret = true;
 
 	if (atomic_dec_return(&p_island->ref_count) < 0) {
-		OSPM_DPF("Island %x, UnExpect RefCount %d\n",
+		DRM_ERROR("OSPM: Island %x, Unexpected ref count %d\n",
 				p_island->island,
 				p_island->ref_count);
 		goto power_down_err;
@@ -318,6 +358,7 @@ static bool power_down_island(struct ospm_power_island *p_island)
 	return ret;
 
 power_down_err:
+	DRM_ERROR("OSPM: %s failed\n", __func__);
 	atomic_inc(&p_island->ref_count);
 	ret = false;
 	return ret;
@@ -340,13 +381,8 @@ bool power_island_get(u32 hw_island)
 	unsigned long flags;
 
 #ifdef CONFIG_GFX_RTPM
-	pm_runtime_get(&g_ospm_data->dev->pdev->dev);
+	 pm_runtime_get(g_ospm_data->dev->dev);
 #endif
-
-	if (dev_priv->early_suspended) {
-		OSPM_DPF("Resuming PCI\n");
-		ospm_resume_pci(g_ospm_data->dev);
-	}
 
 	spin_lock_irqsave(&g_ospm_data->ospm_lock, flags);
 
@@ -406,13 +442,9 @@ out_err:
 	spin_unlock_irqrestore(&g_ospm_data->ospm_lock, flags);
 
 	/* Check to see if we need to suspend PCI */
-	if ((dev_priv->early_suspended) && (!pwr_count)) {
-		OSPM_DPF("Suspending PCI\n");
-		ospm_suspend_pci(g_ospm_data->dev);
-	}
 
 #ifdef CONFIG_GFX_RTPM
-	pm_runtime_put(&g_ospm_data->dev->pdev->dev);
+	pm_runtime_put(g_ospm_data->dev->dev);
 #endif
 
 	return ret;
@@ -488,7 +520,7 @@ void ospm_power_init(struct drm_device *dev)
 						GFP_KERNEL);
 		if ((island_list[i].p_funcs) && (island_list[i].init_func)) {
 			island_list[i].init_func(dev, &island_list[i]);
-			atomic_set(&island_list[i].ref_count, 0);
+			/* atomic_set(&island_list[i].ref_count, 0); */
 		}
 	}
 
@@ -547,15 +579,7 @@ void ospm_power_uninit(void)
  */
 bool ospm_power_suspend(void)
 {
-	OSPM_DPF("%s\n", __func__);
-
-	/* Asking RGX to power off */
-	if (!PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_OFF))
-		return false;
-
-	/* FIXME: try to turn off PCI in power_island_put(). */
-	ospm_suspend_pci(g_ospm_data->dev);
-
+	DRM_ERROR("OSPM: %s: call unexpected\n", __func__);
 	return true;
 }
 
@@ -566,17 +590,7 @@ bool ospm_power_suspend(void)
  */
 void ospm_power_resume(void)
 {
-	OSPM_DPF("%s\n", __func__);
-
-	ospm_resume_pci(g_ospm_data->dev);
-
-	OSPM_DPF("pci resumed.\n");
-
-	/* restore Graphics State */
-	PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_ON);
-	OSPM_DPF("Graphics state restored.\n");
-
-	OSPM_DPF("display resumed.\n");
+	DRM_ERROR("OSPM: %s: call unexpected\n", __func__);
 }
 
 /* FIXME: hkpatel */
@@ -701,15 +715,14 @@ out:
 
 int ospm_runtime_pm_allow(struct drm_device *dev)
 {
-	return 0;
+	OSPM_DPF("%s\n", __func__);
+	return rtpm_allow(dev);
 }
 
 void ospm_runtime_pm_forbid(struct drm_device *dev)
 {
-	struct drm_psb_private *dev_priv = dev->dev_private;
-
-#ifdef CONFIG_GFX_RTPM
-	pm_runtime_forbid(&dev->pdev->dev);
-#endif
-	dev_priv->rpm_enabled = 0;
+	OSPM_DPF("%s\n", __func__);
+	rtpm_forbid(dev);
 }
+
+

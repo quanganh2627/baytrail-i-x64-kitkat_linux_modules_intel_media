@@ -47,6 +47,12 @@
 #define	OSPM_VIDEO_DEC_ISLAND	NC_PM_SSS_VED
 #define	OSPM_VIDEO_ENC_ISLAND	NC_PM_SSS_VEC
 
+/* PCI device is root of power on/off sequence. PCI device needs to be on
+* if any island is on. PCI device should be powered off if all islands are off.
+* PCI island is a virtual island, so make sure island number assigned here is
+* free and NOT used by any physical island. */
+#define OSPM_VIRTUAL_PCI_ISLAND	0x80000000
+
 enum POWER_ISLAND_STATE {
 	OSPM_POWER_OFF = 0,	/* power island/device OFF */
 	OSPM_POWER_ON,		/* power island/device ON */

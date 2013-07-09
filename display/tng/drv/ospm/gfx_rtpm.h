@@ -31,12 +31,12 @@
 #include <linux/types.h>
 #include <drm/drmP.h>
 
-void rtpm_init(struct drm_device *dev);
-void rtpm_uninit(struct drm_device *dev);
-
 /*
 * GFX-Runtime PM callbacks
 */
+
+void rtpm_init(struct drm_device *dev);
+void rtpm_uninit(struct drm_device *dev);
 int rtpm_suspend(struct device *dev);
 int rtpm_resume(struct device *dev);
 int rtpm_idle(struct device *dev);
