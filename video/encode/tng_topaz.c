@@ -42,6 +42,9 @@
 #define MASK_MTX_INT_ENAB 0x4000ff00
 
 #define LOOP_COUNT 10000
+
+#define MTX_PC		(0x05)
+
 /*static uint32_t setv_cnt = 0;*/
 
 enum MTX_MESSAGE_ID {
@@ -72,6 +75,14 @@ static int tng_topaz_save_command(
 	void *cmd,
 	uint32_t cmd_size,
 	uint32_t sequence);
+
+static void tng_topaz_getvideo(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx);
+
+static void tng_topaz_setvideo(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx);
 
 void mtx_start(struct drm_device *dev)
 {
@@ -1150,34 +1161,6 @@ static int32_t tng_restore_bias_table(
 	return ret;
 }
 
-static void tng_reset_ESB(struct drm_device *dev)
-{
-	uint32_t num_pipes;
-	uint32_t index;
-	struct drm_psb_private *dev_priv;
-
-	dev_priv = (struct drm_psb_private *)dev->dev_private;
-
-	MULTICORE_READ32(TOPAZHP_TOP_CR_MULTICORE_HW_CFG, &num_pipes);
-	num_pipes = num_pipes & MASK_TOPAZHP_TOP_CR_NUM_CORES_SUPPORTED;
-
-	/* initialise the ESBs */
-	for (index = 0; index < num_pipes; index++) {
-		uint32_t n = 0;
-		uint32_t reg_offset = TOPAZHP_CR_PROC_ESB_ACCESS_WORD0;
-
-		for (n = 0; n < 4; n++, reg_offset += 4)
-			TOPAZCORE_WRITE32(index, reg_offset, 0xEd15Dead);
-
-		for (n = 0; n < (10 * 1024); n += 4)
-			TOPAZCORE_WRITE32(index,
-			TOPAZHP_CR_PROC_ESB_ACCESS_CONTROL,
-			F_ENCODE(n >> 4, TOPAZHP_CR_PROC_ESB_ADDR) |
-			F_ENCODE(0, TOPAZHP_CR_PROC_ESB_READ_N_WRITE) |
-			F_ENCODE(1, TOPAZHP_CR_PROC_ESB_OP_VALID));
-	}
-}
-
 int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv =
@@ -1186,7 +1169,7 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 	int i, need_restore = 0;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	struct psb_video_ctx *pos, *n;
-	const struct tng_secure_fw *cur_codec_fw;
+	uint32_t verify_pc;
 
 	/* struct ttm_bo_kmap_obj tmp_kmap; */
 	/* bool is_iomem; */
@@ -1241,9 +1224,13 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 	MULTICORE_READ32(TOPAZHP_TOP_CR_MULTICORE_HW_CFG, &num_pipes);
 	num_pipes = num_pipes & MASK_TOPAZHP_TOP_CR_NUM_CORES_SUPPORTED;
 
-	mtx_set_target(dev_priv);
+	/* Clear registers used for Host-FW communications */
+	MULTICORE_WRITE32(MTX_SCRATCHREG_IDLE, 0);
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_BOOTSTATUS << 2), 0);
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_TOHOST << 2), 0);
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_TOMTX  << 2), 0);
 
-	tng_reset_ESB(dev);
+	mtx_set_target(dev_priv);
 
 	/* write the topaz reset bits */
 	/*1) Disable MTX by writing one to the MTX_TOFF
@@ -1270,13 +1257,8 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 
 	MTX_WRITE32(MTX_CR_MTX_SOFT_RESET, 0);
 
-	cur_codec_fw = &topaz_priv->topaz_fw[video_ctx->codec];
-
-	PSB_DEBUG_TOPAZ("TOPAZ: Restore status to %08x of " \
-		"size %08x of context %08x(%s)\n",
-		video_ctx->fw_data_dma_offset, video_ctx->fw_data_dma_size,
+	PSB_DEBUG_TOPAZ("TOPAZ: Restore status of context %08x(%s)\n",
 		(unsigned int)video_ctx, codec_to_string(video_ctx->codec));
-
 	/*
 	ret = ttm_bo_kmap(video_ctx->reg_saving_bo, 0,
 		video_ctx->reg_saving_bo->num_pages, &tmp_kmap);
@@ -1290,80 +1272,10 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 	mtx_reg_state = (uint32_t *)ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem);
 	*/
 
-	mtx_reg_state = (uint32_t *)video_ctx->mtx_reg_state;
 	/* restore register */
-	/* Saves 8 Registers of D0 Bank  */
-	/* DoRe0, D0Ar6, D0Ar4, D0Ar2, D0FrT, D0.5, D0.6 and D0.7 */
-	for (i = 0; i < 8; i++) {
-		ret = mtx_write_core_reg(dev_priv, 0x1 | (i << 4),
-			*mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to write core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves 8 Registers of D1 Bank  */
-	/* D1Re0, D1Ar5, D1Ar3, D1Ar1, D1RtP, D1.5, D1.6 and D1.7 */
-	for (i = 0; i < 8; i++) {
-		ret = mtx_write_core_reg(dev_priv, 0x2 | (i << 4),
-			*mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to write core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves 4 Registers of A0 Bank  */
-	/* A0StP, A0FrP, A0.2 and A0.3 */
-	for (i = 0; i < 4; i++) {
-		ret = mtx_write_core_reg(dev_priv, 0x3 | (i << 4),
-			*mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to write core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves 4 Registers of A1 Bank  */
-	/* A1GbP, A1LbP, A1.2 and A1.3 */
-	for (i = 0; i < 4; i++) {
-		ret = mtx_write_core_reg(dev_priv, 0x4 | (i << 4),
-			*mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to write core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves PC and PCX  */
-	for (i = 0; i < 2; i++) {
-		ret = mtx_write_core_reg(dev_priv, 0x5 | (i << 4),
-			*mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to write core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves 8 Control Registers */
-	/* TXSTAT, TXMASK, TXSTATI, TXMASKI, TXPOLL, TXGPIOI, TXPOLLI,
-	 * TXGPIOO */
+	mtx_reg_state = (uint32_t *)video_ctx->mtx_reg_state;
 
-	/* NOTE: TXSTAT, TXSTATI, TXPOLL,
-	TXPOLLI contain non-restorable states */
-	for (i = 0; i < 8; i++) {
-		if (i == 1 || i == 3 || i == 7) {
-			ret = mtx_write_core_reg(dev_priv, 0x7 | (i << 4),
-				*mtx_reg_state);
-			if (ret) {
-				DRM_ERROR("Failed to write core reg");
-				goto out;
-			} else
-				mtx_reg_state++;
-		}
-	}
-
+	/* Restore the MMU Control Registers */
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MMU_DIR_LIST_BASE(0),
 			  *mtx_reg_state);
 	mtx_reg_state++;
@@ -1381,6 +1293,11 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MMU_CONTROL1, *mtx_reg_state);
 	mtx_reg_state++;
+
+	/* we do not want to run in secre FW mode so write a place 
+	 * holder to the FIFO that the firmware will know to ignore */
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CMD_FIFO_WRITE,
+			  TOPAZHP_NON_SECURE_FW_MARKER);
 
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MMU_CONTROL0, *mtx_reg_state);
 	mtx_reg_state++;
@@ -1401,7 +1318,7 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 		mtx_reg_state++;
 	}
 
-	ret = mtx_upload_fw(dev, video_ctx->codec, video_ctx, 1);
+	ret = mtx_upload_fw(dev, video_ctx->codec, video_ctx);
 	if (ret) {
 		DRM_ERROR("Failed to upload firmware for codec %s\n",
 			codec_to_string(video_ctx->codec));
@@ -1414,11 +1331,8 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 	/* Turn on MTX */
 	mtx_start(dev);
 
-	ret = tng_restore_bias_table(dev, video_ctx);
-	if (ret) {
-		DRM_ERROR("Failed to restore BIAS table");
-		goto out;
-	}
+	/* Kick the MTX to get things running */
+	mtx_kick(dev);
 
 	/* topaz_priv->topaz_mtx_saved = 0; */
 	PSB_DEBUG_TOPAZ("TOPAZ: Restore MTX status return\n");
@@ -1431,7 +1345,13 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 
 	tng_topaz_enableirq(dev);
 #endif
+	tng_topaz_setvideo(dev, video_ctx);
 
+	ret = tng_restore_bias_table(dev, video_ctx);
+	if (ret) {
+		DRM_ERROR("Failed to restore BIAS table");
+		goto out;
+	}
 out:
 	/* ttm_bo_kunmap(&tmp_kmap); */
 	return ret;
@@ -1538,6 +1458,8 @@ int tng_topaz_save_mtx_state(struct drm_device *dev)
 		goto out;
 	}
 
+	tng_topaz_getvideo(dev, video_ctx);
+
 	MULTICORE_READ32(TOPAZHP_TOP_CR_MULTICORE_HW_CFG, &num_pipes);
 	num_pipes = num_pipes & MASK_TOPAZHP_TOP_CR_NUM_CORES_SUPPORTED;
 
@@ -1571,80 +1493,7 @@ int tng_topaz_save_mtx_state(struct drm_device *dev)
 
 	mtx_reg_state = (uint32_t *)video_ctx->mtx_reg_state;
 
-	/* Save MTX register states  */
-	/* Saves 8 Registers of D0 Bank  */
-	/* DoRe0, D0Ar6, D0Ar4, D0Ar2, D0FrT, D0.5, D0.6 and D0.7 */
-	for (i = 0; i < 8; i++) {
-		ret = mtx_read_core_reg(dev_priv, 0x1 | (i << 4),
-			mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to read core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves 8 Registers of D1 Bank  */
-	/* D1Re0, D1Ar5, D1Ar3, D1Ar1, D1RtP, D1.5, D1.6 and D1.7 */
-	for (i = 0; i < 8; i++) {
-		ret = mtx_read_core_reg(dev_priv, 0x2 | (i << 4),
-			mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to read core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-
-	/* Saves 4 Registers of A0 Bank  */
-	/* A0StP, A0FrP, A0.2 and A0.3 */
-	for (i = 0; i < 4; i++) {
-		ret = mtx_read_core_reg(dev_priv, 0x3 | (i << 4),
-			mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to read core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves 4 Registers of A1 Bank  */
-	/* A1GbP, A1LbP, A1.2 and A1.3 */
-	for (i = 0; i < 4; i++) {
-		ret = mtx_read_core_reg(dev_priv, 0x4 | (i << 4),
-			mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to read core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves PC and PCX  */
-	for (i = 0; i < 2; i++) {
-		ret = mtx_read_core_reg(dev_priv, 0x5 | (i << 4),
-			mtx_reg_state);
-		if (ret) {
-			DRM_ERROR("Failed to read core reg");
-			goto out;
-		} else
-			mtx_reg_state++;
-	}
-	/* Saves 8 Control Registers */
-	/* TXSTAT, TXMASK, TXSTATI, TXMASKI, TXPOLL, TXGPIOI, TXPOLLI,
-	 * TXGPIOO */
-
-	/* NOTE: TXSTAT, TXSTATI, TXPOLL,
-	TXPOLLI contain non-restorable states */
-	for (i = 0; i < 8; i++) {
-		if (i == 1 || i == 3 || i == 7) {
-			ret = mtx_read_core_reg(dev_priv, 0x7 | (i << 4),
-				mtx_reg_state);
-			if (ret) {
-				DRM_ERROR("Failed to read core reg");
-				goto out;
-			} else
-				mtx_reg_state++;
-		}
-	}
-
+	/* Save the MMU Control Registers */
 	MULTICORE_READ32(TOPAZHP_TOP_CR_MMU_DIR_LIST_BASE(0), mtx_reg_state);
 	mtx_reg_state++;
 
@@ -1678,26 +1527,7 @@ int tng_topaz_save_mtx_state(struct drm_device *dev)
 		mtx_reg_state++;
 	}
 
-	/* ttm_bo_kunmap(&tmp_kmap); */
-
-	target = video_ctx->data_saving_bo;
-
-	PSB_DEBUG_TOPAZ("TOPAZ: Save status from %08x of size %08x " \
-		"to BO %08x offset %08x of context %08x(%s)\n",
-		 video_ctx->fw_data_dma_offset, video_ctx->fw_data_dma_size,
-		(unsigned int)target, (unsigned int)target->offset, \
-		video_ctx, codec_to_string(video_ctx->codec));
-
-	ret = mtx_dma_read(dev, target,
-			   video_ctx->fw_data_dma_offset,
-			   video_ctx->fw_data_dma_size);
-	if (ret) {
-		DRM_ERROR("TOPAZ: mtx_dma_read failed!\n");
-		goto out;
-	}
-
 	video_ctx->status |= MASK_TOPAZ_CONTEXT_SAVED;
-
 out:
 #ifdef TOPAZHP_IRQ_ENABLED
 	spin_unlock_irqrestore(&topaz_priv->topaz_lock, irq_flags);
@@ -1910,6 +1740,14 @@ int mtx_write_FIFO(
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	int32_t ret = 0;
+	uint32_t cmdword = 0;
+	struct psb_video_ctx *video_ctx;
+
+	if (topaz_priv->cur_context) {
+		video_ctx = topaz_priv->cur_context;
+	} else {
+		DRM_ERROR("Invalid video context\n");
+	}
 
 #ifdef TOPAZHP_SERIALIZED
 	uint32_t serializeToken;
@@ -1936,6 +1774,20 @@ int mtx_write_FIFO(
 				TOPAZHP_TOP_CR_CMD_FIFO_SPACE);
 	}
 
+	cmdword = F_ENCODE(0, MTX_MSG_CORE) | cmd_header->id;
+
+	if (cmd_header->id & MTX_CMDID_PRIORITY) {
+		video_ctx->high_cmd_count++;
+		cmdword |= F_ENCODE(1, MTX_MSG_PRIORITY) |
+			   F_ENCODE(((video_ctx->low_cmd_count - 1) & 0xff) |
+			   (video_ctx->high_cmd_count << 8), MTX_MSG_COUNT);
+
+	} else {
+		cmdword |= F_ENCODE(video_ctx->low_cmd_count & 0xff, MTX_MSG_COUNT);
+	}
+
+	cmd_header->val = cmdword;
+
 	/* Trigger interrupt on MTX_CMDID_ENCODE_FRAME cmd */
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CMD_FIFO_WRITE,
 				  cmd_header->val);
@@ -1947,13 +1799,13 @@ int mtx_write_FIFO(
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CMD_FIFO_WRITE,
 			  param_addr);
 
-	/* prepare Writeback value */
-	wb_val = (cmd_header->id & MTX_CMDID_PRIORITY) ?
-		 cmd_header->high_cmd_count << 24 :
-		 cmd_header->low_cmd_count << 16;
-
-	topaz_priv->low_cmd_count = cmd_header->low_cmd_count;
-	topaz_priv->core_id = cmd_header->core;
+	if (cmd_header->id & MTX_CMDID_PRIORITY) {
+		/* prepare Writeback value */
+		wb_val = video_ctx->high_cmd_count << 24;
+	} else {
+		wb_val = video_ctx->low_cmd_count << 16;
+		video_ctx->low_cmd_count++;
+	}
 
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CMD_FIFO_WRITE,
 			  wb_val);
@@ -1972,6 +1824,58 @@ int mtx_write_FIFO(
 #endif
 
 	return ret;
+}
+
+static void tng_topaz_getvideo(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx)
+{
+	int ret;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+	struct tng_topaz_cmd_header cmd_header;
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Issue MTX_CMDID_GETVIDEO command to save context\n");
+
+	cmd_header.id = MTX_CMDID_GETVIDEO;
+
+	ret = mtx_write_FIFO(dev, &cmd_header,
+			     video_ctx->enc_ctx_param,
+			     video_ctx->enc_ctx_addr, 0);
+	if (ret) {
+		DRM_ERROR("Failed to write command to FIFO");
+		goto out;
+	}
+
+	/* tng_wait_on_sync(dev, 0, cmd_header.id); */
+out:
+    return;
+}
+
+static void tng_topaz_setvideo(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx)
+{
+	int ret;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+	struct tng_topaz_cmd_header cmd_header;
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Issue MTX_CMDID_SETVIDEO command to resotre context\n");
+
+	cmd_header.id = MTX_CMDID_SETVIDEO;
+
+	ret = mtx_write_FIFO(dev, &cmd_header,
+			     video_ctx->enc_ctx_param,
+			     video_ctx->enc_ctx_addr, 0);
+	if (ret) {
+		DRM_ERROR("Failed to write command to FIFO");
+		goto out;
+	}
+
+	/* tng_wait_on_sync(dev, 0, cmd_header.id); */
+out:
+    return;
 }
 
 static int tng_context_switch(
@@ -2143,6 +2047,12 @@ static int32_t tng_setup_WB_mem(
 			sizeof(struct IMG_WRITEBACK_MSG));
 	}
 
+	video_ctx->enc_ctx_param = *((uint32_t *)command + 1);
+	video_ctx->enc_ctx_addr = *((uint32_t *)command + 2);
+
+	PSB_DEBUG_TOPAZ("TOPAZ: GET/SETVIDEO data: %08x, address: %08x\n", \
+			video_ctx->enc_ctx_param, video_ctx->enc_ctx_addr);
+
 	return ret;
 }
 
@@ -2170,6 +2080,8 @@ static int tng_setup_new_context(
 	video_ctx->status = 0;
 	video_ctx->frame_count = 0;
 	video_ctx->handle_sequence_needed = false;
+	video_ctx->high_cmd_count = 0;
+	video_ctx->low_cmd_count = 0xa5a5a5a5 % MAX_TOPAZ_CMD_COUNT;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: new context %08x(%s)(cur context = %08x)\n",
 		(unsigned int)video_ctx, codec_to_string(codec), \
@@ -2377,18 +2289,10 @@ static int tng_topaz_set_bias(
 
 	/* Update Globals */
 	if (codec != IMG_CODEC_JPEG) {
-
 		uint32_t ui32ToMtxReg = 0;
-		uint32_t ui32ToHostReg = 0;
 
 		MULTICORE_WRITE32(TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
-			(MTX_SCRATCHREG_TOMTX<<2), ui32ToMtxReg);
-
-		MULTICORE_WRITE32(TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
-			(MTX_SCRATCHREG_TOHOST<<2), ui32ToHostReg);
-
-		PSB_DEBUG_TOPAZ("TOPAZ: Init producer(%08x) " \
-			"and consumer(%08x)\n", ui32ToMtxReg, ui32ToHostReg);
+			(MTX_SCRATCHREG_TOMTX << 2), ui32ToMtxReg);
 	}
 
 	return ret;
@@ -2606,29 +2510,6 @@ tng_topaz_send(
 	}
 
 	tng_topaz_kick_null_cmd(dev, sync_seq);
-
-#ifdef MULTI_STREAM_TEST
-	if (cur_cmd_id != MTX_CMDID_SHUTDOWN) {
-		ret = tng_topaz_save_mtx_state(dev);
-		if (ret) {
-			DRM_ERROR("Failed to save mtx status");
-			goto out;
-		}
-
-		if (video_ctx == NULL) {
-			DRM_ERROR("Failed to get video contex from filp");
-			ret = -1;
-			goto out;
-		}
-
-		ret = tng_topaz_restore_mtx_state(dev);
-		if (ret) {
-			DRM_ERROR("Failed to restore mtx status");
-			return ret;
-		}
-	}
-#endif
-
 out:
 	return ret;
 }
@@ -2710,8 +2591,6 @@ int tng_topaz_remove_ctx(
 		video_ctx->wb_bo = NULL;
 	}
 
-	video_ctx->fw_data_dma_size = 0;
-	video_ctx->fw_data_dma_offset = 0;
 	video_ctx->status = 0;
 	video_ctx->codec = 0;
 

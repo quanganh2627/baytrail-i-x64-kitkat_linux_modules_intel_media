@@ -708,36 +708,6 @@ int tng_topaz_init(struct drm_device *dev)
 		return -1;
 	}
 
-	/* tng_topaz_mmu_configure(dev); */
-
-	ui32RegValue = F_ENCODE(1, TOPAZHP_TOP_CR_IMG_TOPAZ_MTX_SOFT_RESET) |
-		F_ENCODE(1, TOPAZHP_TOP_CR_IMG_TOPAZ_CORE_SOFT_RESET) |
-		F_ENCODE(1, TOPAZHP_TOP_CR_IMG_TOPAZ_IO_SOFT_RESET);
-
-	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_SRST, ui32RegValue);
-
-	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_SRST, 0x0);
-
-	MULTICORE_READ32(TOPAZHP_TOP_CR_MULTICORE_HW_CFG,
-		&topaz_priv->topaz_num_pipes);
-
-	topaz_priv->topaz_num_pipes =
-		F_EXTRACT(topaz_priv->topaz_num_pipes,
-			TOPAZHP_TOP_CR_NUM_CORES_SUPPORTED);
-
-	if (topaz_priv->topaz_num_pipes > TOPAZHP_PIPE_NUM) {
-		/* DRM_ERROR("TOPAZ: Number of pipes: 0x%x\n",
-			topaz_priv->topaz_num_pipes); */
-		topaz_priv->topaz_num_pipes = TOPAZHP_PIPE_NUM;
-	}
-
-	PSB_DEBUG_TOPAZ("TOPAZ: Number of pipes: %d\n",
-		topaz_priv->topaz_num_pipes);
-
-	tng_topaz_mmu_hwsetup(dev_priv);
-
-	/* tng_topaz_mmu_enable_tiling(dev, dev_priv, 0); */
-
 	/* # gain write back structure,we may only need 32+4=40DW */
 	ret = ttm_buffer_object_create(bdev, 4096, ttm_bo_type_kernel,
 		DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
@@ -768,24 +738,6 @@ int tng_topaz_init(struct drm_device *dev)
 
 	topaz_priv->cur_context = NULL;
 
-	for (n = 0; n < topaz_priv->topaz_num_pipes; n++) {
-		PSB_DEBUG_TOPAZ("TOPAZ: Reset topaz registers for pipe %d",
-			n);
-		reg_val = F_ENCODE(1, TOPAZHP_CR_TOPAZHP_IPE_SOFT_RESET) |
-			F_ENCODE(1, TOPAZHP_CR_TOPAZHP_SPE_SOFT_RESET) |
-			F_ENCODE(1, TOPAZHP_CR_TOPAZHP_PC_SOFT_RESET) |
-			F_ENCODE(1, TOPAZHP_CR_TOPAZHP_H264COMP_SOFT_RESET) |
-			F_ENCODE(1, TOPAZHP_CR_TOPAZHP_JMCOMP_SOFT_RESET) |
-			F_ENCODE(1, TOPAZHP_CR_TOPAZHP_PREFETCH_SOFT_RESET) |
-			F_ENCODE(1, TOPAZHP_CR_TOPAZHP_VLC_SOFT_RESET) |
-			F_ENCODE(1, TOPAZHP_CR_TOPAZHP_DB_SOFT_RESET) |
-			F_ENCODE(1, TOPAZHP_CR_TOPAZHP_LTRITC_SOFT_RESET);
-
-		TOPAZCORE_WRITE32(n, TOPAZHP_CR_TOPAZHP_SRST, reg_val);
-
-		TOPAZCORE_WRITE32(n, TOPAZHP_CR_TOPAZHP_SRST, 0);
-	}
-
 	PSB_DEBUG_TOPAZ("TOPAZ: Create fiwmware text/data storage");
 	/* create firmware storage */
 	for (n = 0; n < IMG_CODEC_NUM; ++n) {
@@ -811,28 +763,7 @@ int tng_topaz_init(struct drm_device *dev)
 		}
 	}
 
-	tng_set_producer(dev, 0);
-
-	tng_set_consumer(dev, 0);
-
-
-/* #define TEST_FW */
-#ifdef TEST_FW
-	ret = tng_topaz_init_fw(dev);
-	if (ret) {
-		DRM_ERROR("FW TESTING: Failed to load topazhp_fw.bin, " \
-			"ensure udevd is configured correctly!\n");
-			return ret;
-	}
-
-	ret = tng_topaz_setup_fw(dev, 0, 1);
-	if (ret) {
-		DRM_ERROR("FW TESTING: Setup H264_NO_RC firmware fails!\n");
-		return ret;
-	}
-#endif
 	return ret;
-
 out:
 	for (n = 0; n < IMG_CODEC_NUM; ++n) {
 		if (topaz_priv->topaz_fw[n].text)
@@ -1166,20 +1097,6 @@ static void tng_get_bank_size(
 			"mtx bank size: %08x, mtx ram size: %08x\n",
 			last_bank_ram_size,
 			video_ctx->mtx_bank_size, video_ctx->mtx_ram_size);
-
-	video_ctx->fw_data_dma_offset =
-		topaz_priv->topaz_fw[codec].data_loca &
-		~(MTX_DMA_BURSTSIZE_BYTES - 1);
-
-	video_ctx->fw_data_dma_size = video_ctx->mtx_ram_size -
-			(video_ctx->fw_data_dma_offset - MTX_DMA_MEMORY_BASE);
-
-	video_ctx->fw_data_dma_size /= 4;
-
-	PSB_DEBUG_TOPAZ("TOPAZ: Save/Restore MTX at RAM address %08x of" \
-		"size: %08x bytes for codec %s on ctx %08x\n",
-		video_ctx->fw_data_dma_offset, video_ctx->fw_data_dma_size,
-		codec_to_string(codec), video_ctx->filp);
 }
 
 /* setup fw when start a new context */
@@ -1190,7 +1107,6 @@ int tng_topaz_init_board(
 {
 	struct drm_psb_private *dev_priv;
 	struct tng_topaz_private *topaz_priv;
-	uint32_t verify_pc;
 	int32_t i;
 	int32_t ret = 0;
 	uint32_t reg_val = 0;
@@ -1200,13 +1116,22 @@ int tng_topaz_init_board(
 
 	/*psb_irq_uninstall_islands(dev, OSPM_VIDEO_ENC_ISLAND);*/
 
-	PSB_DEBUG_TOPAZ("TOPAZ: will setup firmware ....\n");
+	PSB_DEBUG_TOPAZ("TOPAZ: Init board\n");
 
 	MULTICORE_READ32(TOPAZHP_TOP_CR_MULTICORE_HW_CFG, &reg_val);
-	PSB_DEBUG_TOPAZ("TOPAZ: HW_CFG 0x%08x\n", reg_val);
+
+	MULTICORE_READ32(TOPAZHP_TOP_CR_MULTICORE_HW_CFG,
+		&topaz_priv->topaz_num_pipes);
+
+	topaz_priv->topaz_num_pipes =
+		F_EXTRACT(topaz_priv->topaz_num_pipes,
+			TOPAZHP_TOP_CR_NUM_CORES_SUPPORTED);
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Number of pipes: %d\n", \
+			topaz_priv->topaz_num_pipes);
 
 	if (topaz_priv->topaz_num_pipes > TOPAZHP_PIPE_NUM) {
-		DRM_ERROR("TOPAZ: Number of pipes: 0x%x\n",
+		DRM_ERROR("TOPAZ: Number of pipes: %d\n",
 			topaz_priv->topaz_num_pipes);
 		topaz_priv->topaz_num_pipes = TOPAZHP_PIPE_NUM;
 	}
@@ -1218,8 +1143,6 @@ int tng_topaz_init_board(
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_SRST, reg_val);
 
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_SRST, 0x0);
-
-	tng_topaz_mmu_hwsetup(dev_priv);
 
 	for (i = 0; i < topaz_priv->topaz_num_pipes; i++) {
 		PSB_DEBUG_TOPAZ("TOPAZ: Reset topaz registers for pipe %d",
@@ -1238,6 +1161,8 @@ int tng_topaz_init_board(
 
 		TOPAZCORE_WRITE32(i, TOPAZHP_CR_TOPAZHP_SRST, 0);
 	}
+
+	tng_topaz_mmu_hwsetup(dev_priv);
 
 	tng_set_producer(dev, 0);
 	tng_set_consumer(dev, 0);
@@ -1261,16 +1186,9 @@ int tng_topaz_setup_fw(
 
 	/*psb_irq_uninstall_islands(dev, OSPM_VIDEO_ENC_ISLAND);*/
 
-	PSB_DEBUG_TOPAZ("TOPAZ: will setup firmware ....\n");
+	PSB_DEBUG_TOPAZ("TOPAZ: Setup firmware\n");
 
-	MULTICORE_READ32(TOPAZHP_TOP_CR_MULTICORE_HW_CFG, &reg_val);
-	PSB_DEBUG_TOPAZ("TOPAZ: HW_CFG 0x%08x\n", reg_val);
-
-	if (topaz_priv->topaz_num_pipes > TOPAZHP_PIPE_NUM) {
-		DRM_ERROR("TOPAZ: Number of pipes: 0x%x\n",
-			topaz_priv->topaz_num_pipes);
-		topaz_priv->topaz_num_pipes = TOPAZHP_PIPE_NUM;
-	}
+	tng_get_bank_size(dev, video_ctx, codec);
 
 	/* Soft reset of MTX */
 	reg_val = F_ENCODE(1, TOPAZHP_TOP_CR_IMG_TOPAZ_MTX_SOFT_RESET) |
@@ -1280,14 +1198,25 @@ int tng_topaz_setup_fw(
 
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_SRST, 0x0);
 
-	tng_get_bank_size(dev, video_ctx, codec);
+	/*
+	 * clear TOHOST register now so that our ISR doesn't see any
+	 * intermediate value before the FW has output anything
+	*/
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
+			 (MTX_SCRATCHREG_TOHOST << 2), 0);
+	/*
+	 * clear BOOTSTATUS register.  Firmware will write to this
+	 * to indicate firmware boot progress
+	*/
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
+			 (MTX_SCRATCHREG_BOOTSTATUS << 2), 0);
 
 	tng_set_auto_clk_gating(dev, codec, 1);
 
 	PSB_DEBUG_TOPAZ("TOPAZ: will upload firmware to %d pipes\n",
 			  topaz_priv->topaz_num_pipes);
 
-	ret = mtx_upload_fw(dev, codec, video_ctx, 0);
+	ret = mtx_upload_fw(dev, codec, video_ctx);
 	if (ret) {
 		DRM_ERROR("Failed to upload firmware for codec %s\n",
 				codec_to_string(codec));
@@ -1295,54 +1224,19 @@ int tng_topaz_setup_fw(
 		return ret;
 	}
 
-	/* D0.5, D0.6 and D0.7 */
-	for (i = 5; i < 8; i++)  {
-		ret = mtx_write_core_reg(dev_priv, 0x1 | (i << 4), 0);
-		if (ret) {
-			DRM_ERROR("Failed to write core reg");
-			return ret;
-		}
-	}
-
-	/* Restore 8 Registers of D1 Bank, D1Re0,
-	D1Ar5, D1Ar3, D1Ar1, D1RtP, D1.5, D1.6 and D1.7 */
-	for (i = 5; i < 8; i++) {
-		ret = mtx_write_core_reg(dev_priv, 0x2 | (i << 4), 0);
-		if (ret) {
-			DRM_ERROR("Failed to read core reg");
-			return ret;
-		}
-	}
-
-	PSB_DEBUG_TOPAZ("TOPAZ: setting up pc address 0x%08x\n",
-		PC_START_ADDRESS);
-
-	/* Set Starting PC address */
-	ret = mtx_write_core_reg(dev_priv, MTX_PC, PC_START_ADDRESS);
-	if (ret) {
-		DRM_ERROR("Failed to write core reg");
-		return ret;
-	}
-
-	ret = mtx_read_core_reg(dev_priv, MTX_PC, &verify_pc);
-	if (ret) {
-		DRM_ERROR("Failed to read core reg");
-		return ret;
-	}
-
-	if (verify_pc != PC_START_ADDRESS) {
-		DRM_ERROR("TOPAZ: Wrong starting PC address");
-		return -1;
-	} else {
-		PSB_DEBUG_TOPAZ("TOPAZ: verify pc address = 0x%08x\n",
-				  verify_pc);
-	}
-
 	/* flush the command FIFO - only has effect on master MTX */
 	reg_val = F_ENCODE(1, TOPAZHP_TOP_CR_CMD_FIFO_FLUSH);
 
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_TOPAZ_CMD_FIFO_FLUSH, reg_val);
 
+	/*
+	 * we do not want to run in secre FW mode so write a place
+	 * holder to the FIFO that the firmware will know to ignore
+	*/
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CMD_FIFO_WRITE,
+			  TOPAZHP_NON_SECURE_FW_MARKER);
+
+	/* Clear FW_IDLE_STATUS register */
 	MULTICORE_WRITE32(MTX_SCRATCHREG_IDLE, 0);
 
 	/* turn on MTX */
@@ -1356,17 +1250,13 @@ int tng_topaz_setup_fw(
 		"firmware has completed its setup before continuing\n");
 	ret = tng_topaz_wait_for_register(
 		dev_priv, CHECKFUNC_ISEQUAL,
-		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_TOHOST << 2),
-		0x00000ED5, 0x00000ED5);
+		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_BOOTSTATUS << 2),
+		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff);
 	if (ret) {
 		DRM_ERROR("Firmware failed to complete its setup" \
 			"before continuing\n");
 		return ret;
 	}
-
-	MULTICORE_WRITE32(
-		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_TOHOST << 2),
-		0);
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Firmware uploaded successfully.\n");
 
@@ -1383,8 +1273,7 @@ int tng_topaz_setup_fw(
 
 int mtx_upload_fw(struct drm_device *dev,
 		  enum drm_tng_topaz_codec codec,
-		  struct psb_video_ctx *video_ctx,
-		  uint32_t is_restore)
+		  struct psb_video_ctx *video_ctx)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	const struct tng_secure_fw *cur_codec_fw;
@@ -1392,20 +1281,20 @@ int mtx_upload_fw(struct drm_device *dev,
 	uint32_t data_location;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	int ret = 0;
+	uint32_t verify_pc;
+	int i;
 
 	if (codec >= IMG_CODEC_NUM) {
 		DRM_ERROR("TOPAZ: Invalid codec %d\n", codec);
 		return -1;
 	}
 
-	if (!is_restore) {
-		/* set target to current or all MTXs */
-		mtx_set_target(dev_priv);
+	/* set target to current or all MTXs */
+	mtx_set_target(dev_priv);
 
-		/* MTX reset */
-		MTX_WRITE32(MTX_CR_MTX_SOFT_RESET,
-			    MASK_MTX_MTX_RESET);
-	}
+	/* MTX reset */
+	MTX_WRITE32(MTX_CR_MTX_SOFT_RESET,
+		    MASK_MTX_MTX_RESET);
 
 	/* upload the master and slave firmware by DMA */
 	cur_codec_fw = &topaz_priv->topaz_fw[codec];
@@ -1465,20 +1354,10 @@ int mtx_upload_fw(struct drm_device *dev,
 
 	data_location = cur_codec_fw->data_loca;
 
-	/* transfer the codec */
-	/* Context restore has different DMA size and offset */
-	if (is_restore) {
-		ret = mtx_dmac_transfer(dev_priv, 0,
-			video_ctx->data_saving_bo->offset, 0,
-			video_ctx->fw_data_dma_offset,
-			video_ctx->fw_data_dma_size, 1);
-	} else {
-		ret = mtx_dmac_transfer(dev_priv, 0,
-			cur_codec_fw->data->offset,
-			0, /*offset + 0 = source address*/
-			data_location, data_size, 1);
-	}
-
+	ret = mtx_dmac_transfer(dev_priv, 0,
+		cur_codec_fw->data->offset,
+		0, /*offset + 0 = source address*/
+		data_location, data_size, 1);
 	if (ret) {
 		DRM_ERROR("Failed to transfer data by DMA\n");
 		/* tng_error_dump_reg(dev_priv); */
@@ -1500,6 +1379,49 @@ int mtx_upload_fw(struct drm_device *dev,
 	DMAC_WRITE32(IMG_SOC_DMAC_IRQ_STAT(0), 0);
 
 	tng_topaz_mmu_flushcache(dev_priv);
+
+	/* D0.5, D0.6 and D0.7 */
+	for (i = 5; i < 8; i++)  {
+		ret = mtx_write_core_reg(dev_priv, 0x1 | (i << 4), 0);
+		if (ret) {
+			DRM_ERROR("Failed to write core reg");
+			return ret;
+		}
+	}
+
+	/* Restore 8 Registers of D1 Bank, D1Re0,
+	D1Ar5, D1Ar3, D1Ar1, D1RtP, D1.5, D1.6 and D1.7 */
+	for (i = 5; i < 8; i++) {
+		ret = mtx_write_core_reg(dev_priv, 0x2 | (i << 4), 0);
+		if (ret) {
+			DRM_ERROR("Failed to read core reg");
+			return ret;
+		}
+	}
+
+	PSB_DEBUG_TOPAZ("TOPAZ: setting up pc address 0x%08x\n",
+		PC_START_ADDRESS);
+
+	/* Set Starting PC address */
+	ret = mtx_write_core_reg(dev_priv, MTX_PC, PC_START_ADDRESS);
+	if (ret) {
+		DRM_ERROR("Failed to write core reg");
+		return ret;
+	}
+
+	ret = mtx_read_core_reg(dev_priv, MTX_PC, &verify_pc);
+	if (ret) {
+		DRM_ERROR("Failed to read core reg");
+		return ret;
+	}
+
+	if (verify_pc != PC_START_ADDRESS) {
+		DRM_ERROR("TOPAZ: Wrong starting PC address");
+		return -1;
+	} else {
+		PSB_DEBUG_TOPAZ("TOPAZ: verify pc address = 0x%08x\n",
+				  verify_pc);
+	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Firmware data upload complete.\n");
 

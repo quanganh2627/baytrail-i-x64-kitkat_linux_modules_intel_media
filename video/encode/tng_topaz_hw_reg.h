@@ -732,14 +732,28 @@
 #define MTX_SCRATCHREG_IDLE                     TOPAZHP_TOP_CR_FIRMWARE_REG_4
 
 /* Flags relating to MTX_SCRATCHREG_IDLE */
-#define SHIFT_FW_IDLE_REG_RECEIVED_COMMANDS (2)
-#define MASK_FW_IDLE_REG_RECEIVED_COMMANDS (0x3FC)
+#define SHIFT_FW_IDLE_REG_RECEIVED_COMMANDS	(2)
+#define MASK_FW_IDLE_REG_RECEIVED_COMMANDS	(0x3FC)
 #define SHIFT_FW_IDLE_REG_STATUS                (0)
 #define MASK_FW_IDLE_REG_STATUS                 (3)
 
-#define FW_IDLE_STATUS_IDLE                             (1)
+#define FW_IDLE_STATUS_IDLE                     (1)
 #define FW_IDLE_STATUS_HW_ACTIVE                (2)
-#define FW_IDLE_STATUS_BUSY                             (3)
+#define FW_IDLE_STATUS_BUSY                     (3)
+
+
+/*
+ * In secure FW mode the first value written to the command FIFO is copied to MMU_CONTROL_0 by the firmware.
+ * When we don't want that to happen we can write this value instead.  The firmware will know to ignore it as 
+ * long as it is written BEFORE the firmware starts up
+ */
+ #define TOPAZHP_NON_SECURE_FW_MARKER		(0xffffffff)
+
+/*
+ * This value is an arbitrary value that the firmware will write to TOPAZHP_TOP_CR_FIRMWARE_REG_1 when it has 
+ * completed the boot process it copies the value to TOPAZHP_TOP_CR_FIRMWARE_REG_1 to indicate that it is ready
+ */
+ #define TOPAZHP_FW_BOOT_SIGNAL			(0x12345678)
 
 /* Multicore Regs */
 #define REG_OFFSET_TOPAZ_MULTICORE                      0x00000000
@@ -755,16 +769,15 @@
 #define REG_MAX_TOPAZ_VLC				0x03FC
 
 #define REG_SIZE_TOPAZ_MULTICORE                        0x00000400
-#define REG_SIZE_TOPAZ_DMAC                                     0x00000400
-#define REG_SIZE_TOPAZ_MTX                                      0x00000800
+#define REG_SIZE_TOPAZ_DMAC                             0x00000400
+#define REG_SIZE_TOPAZ_MTX                              0x00000800
 
 enum MTX_eScratchRegData {
-	MTX_SCRATCHREG_FULLNESS = 0, /* !< Coded buffer fullness */
+	MTX_SCRATCHREG_BOOTSTATUS = 0, /* !< Coded buffer fullness */
 	MTX_SCRATCHREG_TOHOST,       /* !< Reg for MTX->Host data */
 	MTX_SCRATCHREG_TOMTX,        /* !< Reg for Host->MTX data */
 	MTX_SCRATCHREG_SIZE          /*!< End marker for enum */
 };
-
 
 /* FIXME, for not(IMG_UINT32_IS_ULONG), use "int" to replace "IMG_INT32" */
 struct IMG_WRITEBACK_MSG {
