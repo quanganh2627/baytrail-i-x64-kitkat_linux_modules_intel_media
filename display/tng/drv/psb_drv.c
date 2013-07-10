@@ -1875,6 +1875,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	atomic_set(&dev_priv->hotplug_wq_done, 0);
 	INIT_WORK(&dev_priv->hdmi_hotplug_wq, hdmi_do_hotplug_wq);
 	INIT_WORK(&dev_priv->hdmi_audio_wq, hdmi_do_audio_wq);
+	INIT_WORK(&dev_priv->hdmi_audio_underrun_wq, hdmi_do_audio_underrun_wq);
+	INIT_WORK(&dev_priv->hdmi_audio_bufferdone_wq, hdmi_do_audio_bufferdone_wq);
 #endif
 
 	/*Intel drm driver load is done, continue doing pvr load */

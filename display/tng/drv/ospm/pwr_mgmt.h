@@ -105,7 +105,7 @@ struct power_ops {
 };
 
 struct _ospm_data_ {
-	spinlock_t	ospm_lock;
+	struct mutex ospm_lock;
 
 	/* drm device */
 	struct drm_device	*dev;
