@@ -676,6 +676,17 @@ static bool hdcp_stage1_authentication(bool *is_repeater)
 	uint8_t retry = 0;
 	uint16_t rx_r0 = 0;
 
+	/* wait for sink to receive TMDS */
+	msleep(500);
+
+	/* Read BSTATUS */
+	if (hdcp_read_bstatus(&bstatus.value) == false)
+		return false;
+
+	/* wait for sink to be in hdmi mode */
+	if (!bstatus.hdmi_mode)
+		msleep(200);
+
 	/* Read BKSV */
 	if (hdcp_read_bksv(bksv, HDCP_KSV_SIZE) == false)
 		return false;
@@ -711,10 +722,6 @@ static bool hdcp_stage1_authentication(bool *is_repeater)
 		return false;
 	pr_debug("hdcp: bcaps: %x\n", bcaps.value);
 
-	/* Read BSTATUS */
-	if (hdcp_read_bstatus(&bstatus.value) == false)
-		return false;
-	pr_debug("hdcp: bstatus: %04x\n", bstatus.value);
 
 	/* Update repeater present status */
 	*is_repeater = bcaps.is_repeater;
