@@ -3013,8 +3013,7 @@ static int pm_cmd_freq_wait(u32 reg_freq)
 		if ((freq_val & IP_FREQ_VALID) == 0)
 			break;
 		if (tcount > 500) {
-			DRM_ERROR(1, "%s: P-Unit freq request wait timeout",
-				__func__);
+			DRM_ERROR("P-Unit freq request wait timeout");
 			return -EBUSY;
 		}
 		udelay(1);
