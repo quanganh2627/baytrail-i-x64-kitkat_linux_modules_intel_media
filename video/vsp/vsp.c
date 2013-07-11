@@ -444,7 +444,7 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 
 	/* If the VSP is in Suspend, need to send "Resume" */
 	if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
-		vsp_resume_function(dev_priv);
+		ret = vsp_resume_function(dev_priv);
 		VSP_DEBUG("The VSP is on suspend, send resume!\n");
 	}
 

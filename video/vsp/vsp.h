@@ -296,7 +296,7 @@ extern int psb_check_vsp_idle(struct drm_device *dev);
 
 void vsp_init_function(struct drm_psb_private *dev_priv);
 void vsp_continue_function(struct drm_psb_private *dev_priv);
-void vsp_resume_function(struct drm_psb_private *dev_priv);
+int vsp_resume_function(struct drm_psb_private *dev_priv);
 
 extern int psb_vsp_dump_info(struct drm_psb_private *dev_priv);
 

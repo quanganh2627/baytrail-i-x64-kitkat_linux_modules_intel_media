@@ -560,10 +560,18 @@ void vsp_continue_function(struct drm_psb_private *dev_priv)
 	vsp_priv->vsp_state = VSP_STATE_ACTIVE;
 }
 
-void vsp_resume_function(struct drm_psb_private *dev_priv)
+int vsp_resume_function(struct drm_psb_private *dev_priv)
 {
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	uint32_t pd_addr;
+	struct pci_dev *pdev = vsp_priv->dev->pdev;
+	uint32_t pd_addr, mmadr;
+
+	/* FIXME, change should be removed once bz 120324 is fixed */
+	pci_read_config_dword(pdev, 0x10, &mmadr);
+	if (mmadr == 0) {
+		DRM_ERROR("Bad PCI config!\n");
+		return -1;
+	}
 
 	vsp_priv->ctrl = (struct vsp_ctrl_reg *) (dev_priv->vsp_reg +
 						  VSP_CONFIG_REG_SDRAM_BASE +
@@ -598,5 +606,7 @@ void vsp_resume_function(struct drm_psb_private *dev_priv)
 	vsp_priv->ctrl->entry_kind = vsp_entry_resume;
 
 	vsp_priv->vsp_state = VSP_STATE_ACTIVE;
+
+	return 0;
 }
 
