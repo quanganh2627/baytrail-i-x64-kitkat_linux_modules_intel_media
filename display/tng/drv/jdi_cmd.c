@@ -208,8 +208,8 @@ void jdi_cmd_controller_init(
 	hw_ctx->lp_rx_timeout = 0xFFFFFF;
 	hw_ctx->device_reset_timer = 0xffff;
 	hw_ctx->turn_around_timeout = 0x1a;
-	hw_ctx->high_low_switch_count = 0x24;
-	hw_ctx->clk_lane_switch_time_cnt = 0x240010;
+	hw_ctx->high_low_switch_count = 0x21;
+	hw_ctx->clk_lane_switch_time_cnt = 0x21000f;
 	hw_ctx->lp_byteclk = 0x5;
 	hw_ctx->dphy_param = 0x25155b1e;
 	hw_ctx->eot_disable = 0x3;
