@@ -268,8 +268,10 @@ void intel_mid_panel_register(
 	/* Post OSPM init */
 	ospm_post_init(dev);
 
+#ifdef CONFIG_CTP_DPST
 	/* init display manager */
 	dpst_init(dev, AGGRESSIVE_LEVEL_DEFAULT);
+#endif
 
 	mdfld_dsi_dsr_enable(dsi_config);
 

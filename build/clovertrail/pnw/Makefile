@@ -61,15 +61,10 @@ $(DRIVER_NAME)-objs += $(FBDEVDIR)/drmlfb_displayclass.o \
 	$(MEDIA_COMMON_DIR)/psb_irq.o \
 	$(MEDIA_COMMON_DIR)/psb_gtt.o \
 	$(DISPLAYDIR)/psb_bl.o \
-	$(DISPLAYDIR)/psb_dpst.o \
-	$(DISPLAYDIR)/psb_dpst_func.o \
-	$(DISPLAYDIR)/dispmgrnl.o \
 	$(DISPLAYDIR)/psb_fb.o \
 	$(DISPLAYDIR)/psb_intel_display.o \
 	$(DISPLAYDIR)/mdfld_csc.o \
-	$(DISPLAYDIR)/psb_socket.o \
 	$(DISPLAYDIR)/psb_pvr_glue.o \
-	$(DISPLAYDIR)/psb_umevents.o \
 	$(DISPLAYDIR)/mdfld_dsi_dbi.o \
 	$(DISPLAYDIR)/mdfld_dsi_dpi.o \
 	$(DISPLAYDIR)/mdfld_dsi_output.o \
@@ -84,10 +79,10 @@ $(DRIVER_NAME)-objs += $(FBDEVDIR)/drmlfb_displayclass.o \
 	$(DISPLAYDIR)/mdfld_dsi_dbi_dsr.o \
 	$(DISPLAYDIR)/tc35876x_vid.o \
 	$(DISPLAYDIR)/gi_renesas_cmd.o \
-	$(DISPLAYDIR)/yb_cmi_vid.o \
 	$(DISPLAYDIR)/mdfld_hdmi_audio.o \
-	$(VIDEO_COMMON_DIR)/psb_ttm_glue.o \
-	$(ENCODE_DIR)/pnw_topaz.o \
+
+ifeq ($(CONFIG_MDFD_VIDEO_DECODE), y)
+$(DRIVER_NAME)-objs += $(ENCODE_DIR)/pnw_topaz.o \
 	$(ENCODE_DIR)/pnw_topazinit.o \
 	$(VIDEO_COMMON_DIR)/psb_cmdbuf.o \
 	$(VIDEO_COMMON_DIR)/psb_buffer.o \
@@ -99,7 +94,12 @@ $(DRIVER_NAME)-objs += $(FBDEVDIR)/drmlfb_displayclass.o \
 	$(VIDEO_COMMON_DIR)/psb_ttm_glue.o \
 	$(VIDEO_COMMON_DIR)/psb_ttm_fence.o \
 	$(VIDEO_COMMON_DIR)/psb_ttm_fence_user.o \
-	$(VIDEO_COMMON_DIR)/psb_ttm_placement_user.o \
+	$(VIDEO_COMMON_DIR)/psb_ttm_placement_user.o
+endif
+
+ifeq ($(CONFIG_SUPPORT_HDMI), y)
+$(DRIVER_NAME)-objs += $(DISPLAYDIR)/psb_umevents.o \
+	$(DISPLAYDIR)/psb_socket.o \
 	$(OTM_HDMI_SRC)/pil/common/otm_hdmi.o \
 	$(OTM_HDMI_SRC)/pil/common/mode_info.o \
 	$(OTM_HDMI_SRC)/pil/common/hdcp.o \
@@ -113,6 +113,17 @@ $(DRIVER_NAME)-objs += $(FBDEVDIR)/drmlfb_displayclass.o \
 	$(OTM_HDMI_SRC)/ipil/specific/mfld/ips_hdcp.o \
 	$(OTM_HDMI_SRC)/ipil/specific/ctp/ips_hdmi_priv.o \
 	$(OTM_HDMI_SRC)/pil/specific/ctp/ps_hdmi.o
+endif
+
+ifeq ($(CONFIG_SUPPORT_YB_MIPI_DISPLAY), y)
+	$(DRIVER_NAME)-objs += $(DISPLAYDIR)/yb_cmi_vid.o
+endif
+
+ifeq ($(CONFIG_CTP_DPST), y)
+$(DRIVER_NAME)-objs += $(DISPLAYDIR)/psb_dpst.o \
+	$(DISPLAYDIR)/psb_dpst_func.o \
+	$(DISPLAYDIR)/dispmgrnl.o
+endif
 
 ifeq ($(CONFIG_SUPPORT_TMD_MIPI_600X1024_DISPLAY), y)
 $(DRIVER_NAME)-objs += $(DISPLAYDIR)/tmd_6x10_vid.o

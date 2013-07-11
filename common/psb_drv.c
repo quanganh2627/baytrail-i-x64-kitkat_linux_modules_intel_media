@@ -104,7 +104,9 @@ int gamma_setting[129] = {0};
 int csc_setting[6] = {0};
 int gamma_number = 129;
 int csc_number = 6;
+#ifdef CONFIG_CTP_DPST
 int dpst_level = 3;
+#endif
 
 int drm_psb_msvdx_tiling = 1;
 int drm_msvdx_bottom_half;
@@ -152,7 +154,9 @@ MODULE_PARM_DESC(enable_color_conversion, "Enable display side color conversion"
 MODULE_PARM_DESC(enable_gamma, "Enable display side gamma");
 MODULE_PARM_DESC(use_cases_control, "Use to enable and disable use cases");
 MODULE_PARM_DESC(pm_history, "whether to dump pm history when SGX HWR");
+#ifdef CONFIG_CTP_DPST
 MODULE_PARM_DESC(dpst_level, "dpst aggressive level: 0~5");
+#endif
 
 
 module_param_named(debug, drm_psb_debug, int, 0600);
@@ -183,7 +187,9 @@ module_param_named(psb_use_cases_control, drm_psb_use_cases_control, int, 0600);
 module_param_named(pm_history, drm_psb_dump_pm_history, int, 0600);
 module_param_array_named(gamma_adjust, gamma_setting, int, &gamma_number, 0600);
 module_param_array_named(csc_adjust, csc_setting, int, &csc_number, 0600);
+#ifdef CONFIG_CTP_DPST
 module_param_named(dpst_level, dpst_level, int, 0600);
+#endif
 
 #ifndef MODULE
 /* Make ospm configurable via cmdline firstly, and others can be enabled if needed. */
@@ -489,6 +495,7 @@ static int psb_get_dc_info_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
+#ifdef CONFIG_CTP_DPST
 static int psb_hist_enable_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 static int psb_hist_status_ioctl(struct drm_device *dev, void *data,
@@ -503,6 +510,7 @@ static int psb_gamma_ioctl(struct drm_device *dev, void *data,
 			   struct drm_file *file_priv);
 static int psb_dpst_bl_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file_priv);
+#endif
 static int psb_dpu_query_ioctl(struct drm_device *dev, void *data,
 			       struct drm_file *file_priv);
 static int psb_dpu_dsr_on_ioctl(struct drm_device *dev, void *data,
@@ -543,8 +551,10 @@ static int psb_enable_ied_session_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 static int psb_disable_ied_session_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
+#ifdef CONFIG_CTP_DPST
 extern int psb_dpst_get_level_ioctl(struct drm_device *dev, void *data,
 		struct drm_file *file_priv);
+#endif
 
 /* wrapper for PVR ioctl functions to avoid direct call */
 int PVRDRM_Dummy_ioctl2(struct drm_device *dev, void *arg,
@@ -644,6 +654,7 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(PVR_DRM_DISP_IOCTL, PVRDRM_Dummy_ioctl2, 0),
 	PSB_IOCTL_DEF(PVR_DRM_IS_MASTER_IOCTL, PVRDRMIsMaster2, DRM_MASTER),
 	PSB_IOCTL_DEF(PVR_DRM_UNPRIV_IOCTL, PVRDRMUnprivCmd2, DRM_UNLOCKED),
+#ifdef CONFIG_CTP_DPST
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_HIST_ENABLE,
 	psb_hist_enable_ioctl,
 	DRM_AUTH),
@@ -656,6 +667,7 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_GAMMA, psb_gamma_ioctl, DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_DPST_BL, psb_dpst_bl_ioctl, DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_DPST_LEVEL, psb_dpst_get_level_ioctl, DRM_AUTH),
+#endif
 #if defined(PDUMP)
 	PSB_IOCTL_DEF(PVR_DRM_DBGDRV_IOCTL, SYSPVRDBGDrivIoctl2, 0),
 #endif
@@ -2393,6 +2405,7 @@ static int psb_dc_state_ioctl(struct drm_device *dev, void * data,
 	return -EINVAL;
 }
 
+#ifdef CONFIG_CTP_DPST
 static int psb_dpst_bl_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file_priv)
 {
@@ -2407,6 +2420,7 @@ static int psb_dpst_bl_ioctl(struct drm_device *dev, void *data,
 #endif
 	return 0;
 }
+#endif
 
 static int psb_adb_ioctl(struct drm_device *dev, void *data,
 			 struct drm_file *file_priv)
@@ -2423,6 +2437,7 @@ static int psb_adb_ioctl(struct drm_device *dev, void *data,
 	return 0;
 }
 
+#ifdef CONFIG_CTP_DPST
 static int psb_hist_enable_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv)
 {
@@ -2639,6 +2654,7 @@ static int psb_update_guard_ioctl(struct drm_device *dev, void *data,
 
 	return 0;
 }
+#endif
 
 static int psb_mode_operation_ioctl(struct drm_device *dev, void *data,
 				    struct drm_file *file_priv)
@@ -4819,7 +4835,9 @@ static int __init psb_init(void)
 	int ret;
 
 #if defined(MODULE) && defined(CONFIG_NET)
+#ifdef CONFIG_SUPPORT_HDMI
 	psb_kobject_uevent_init();
+#endif
 #endif
 
 #if 0

@@ -486,11 +486,13 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	for (i = 0; i < 256; i++)
 		REG_WRITE(regs->palette_reg + (i<<2), ctx->palette[i]);
 
+#ifdef CONFIG_CTP_DPST
 	/* restore dpst setting */
 	if (dev_priv->psb_dpst_state) {
 		dpstmgr_reg_restore_locked(dsi_config);
 		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
 	}
+#endif
 
 	/*Setup plane*/
 	REG_WRITE(regs->dspsize_reg, ctx->dspsize);
