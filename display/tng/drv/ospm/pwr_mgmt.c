@@ -189,19 +189,31 @@ static void ospm_resume_pci(struct drm_device *dev)
 
 	pci_set_power_state(pdev, PCI_D0);
 	pci_restore_state(pdev);
-	pci_write_config_dword(pdev, 0x70, dev_priv->saveBGSM);
-	pci_write_config_dword(pdev, 0x5c, dev_priv->saveBSM);
-	pci_write_config_dword(pdev, 0xFC, dev_priv->saveVBT);
+
+	if (dev_priv->saveBGSM != 0)
+		pci_write_config_dword(pdev, 0x70, dev_priv->saveBGSM);
+
+	if (dev_priv->saveBSM != 0)
+		pci_write_config_dword(pdev, 0x5c, dev_priv->saveBSM);
+
+	if (dev_priv->saveVBT != 0)
+		pci_write_config_dword(pdev, 0xFC, dev_priv->saveVBT);
 
 	/* retoring MSI address and data in PCIx space */
-	pci_write_config_dword(pdev, PSB_PCIx_MSI_ADDR_LOC, dev_priv->msi_addr);
-	pci_write_config_dword(pdev, PSB_PCIx_MSI_DATA_LOC, dev_priv->msi_data);
+	if (dev_priv->msi_addr != 0)
+		pci_write_config_dword(pdev, PSB_PCIx_MSI_ADDR_LOC,
+				dev_priv->msi_addr);
+
+	if (dev_priv->msi_data != 0)
+		pci_write_config_dword(pdev, PSB_PCIx_MSI_DATA_LOC,
+				dev_priv->msi_data);
+
 	ret = pci_enable_device(pdev);
 
 	/* FixMe, Change should be removed Once bz 115181 is fixed */
 	pci_read_config_dword(pdev, 0x10, &mmadr);
-	if (mmadr ==0 ) {
-		pr_err("GFX OSPM : Bad PCI config \n");
+	if (mmadr == 0) {
+		pr_err("GFX OSPM : Bad PCI config\n");
 		BUG();
 	}
 
@@ -323,6 +335,24 @@ power_down_err:
 	return ret;
 }
 
+static bool any_island_on(void)
+{
+	struct ospm_power_island *p_island = NULL;
+	u32 i = 0;
+	bool ret = false;
+
+	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
+		p_island = &island_list[i];
+
+		if (atomic_read(&p_island->ref_count) > 0) {
+			ret = true;
+			break;
+		}
+	}
+
+	return ret;
+}
+
 /**
  * power_island_get
  *
@@ -338,16 +368,16 @@ bool power_island_get(u32 hw_island)
 	struct ospm_power_island *p_island;
 	struct drm_psb_private *dev_priv = g_ospm_data->dev->dev_private;
 
+	mutex_lock(&g_ospm_data->ospm_lock);
+
 #ifdef CONFIG_GFX_RTPM
 	pm_runtime_get(&g_ospm_data->dev->pdev->dev);
 #endif
 
-	if (dev_priv->early_suspended) {
+	if (!any_island_on()) {
 		OSPM_DPF("Resuming PCI\n");
 		ospm_resume_pci(g_ospm_data->dev);
 	}
-
-	mutex_lock(&g_ospm_data->ospm_lock);
 
 	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
 		if (hw_island & island_list[i].island) {
@@ -380,7 +410,6 @@ bool power_island_put(u32 hw_island)
 	u32 i = 0;
 	struct drm_psb_private *dev_priv = g_ospm_data->dev->dev_private;
 	struct ospm_power_island *p_island;
-	u32 pwr_count = 0;
 
 	mutex_lock(&g_ospm_data->ospm_lock);
 
@@ -395,16 +424,11 @@ bool power_island_put(u32 hw_island)
 				goto out_err;
 			}
 		}
-
-		/* if all the islands are down we can suspend PCI */
-		pwr_count += atomic_read(&island_list[i].ref_count);
 	}
 
 out_err:
-	mutex_unlock(&g_ospm_data->ospm_lock);
-
 	/* Check to see if we need to suspend PCI */
-	if ((dev_priv->early_suspended) && (!pwr_count)) {
+	if (!any_island_on()) {
 		OSPM_DPF("Suspending PCI\n");
 		ospm_suspend_pci(g_ospm_data->dev);
 	}
@@ -412,6 +436,7 @@ out_err:
 #ifdef CONFIG_GFX_RTPM
 	pm_runtime_put(&g_ospm_data->dev->pdev->dev);
 #endif
+	mutex_unlock(&g_ospm_data->ospm_lock);
 
 	return ret;
 }
@@ -493,23 +518,11 @@ void ospm_power_init(struct drm_device *dev)
 	/* register early_suspend runtime pm */
 	intel_media_early_suspend_init(dev);
 
-	power_island_get(OSPM_VIDEO_DEC_ISLAND);
-
-out_err:
-	return;
-}
-
-/*
-* ospm_post_init
-*
-* Description: Power gate unused GFX & Display islands.
-*/
-void ospm_post_init(struct drm_device *dev)
-{
-	power_island_put(OSPM_VIDEO_DEC_ISLAND);
 #ifdef CONFIG_GFX_RTPM
 	rtpm_init(dev);
 #endif
+out_err:
+	return;
 }
 
 /**
@@ -551,9 +564,6 @@ bool ospm_power_suspend(void)
 	if (!PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_OFF))
 		return false;
 
-	/* FIXME: try to turn off PCI in power_island_put(). */
-	ospm_suspend_pci(g_ospm_data->dev);
-
 	return true;
 }
 
@@ -565,8 +575,6 @@ bool ospm_power_suspend(void)
 void ospm_power_resume(void)
 {
 	OSPM_DPF("%s\n", __func__);
-
-	ospm_resume_pci(g_ospm_data->dev);
 
 	OSPM_DPF("pci resumed.\n");
 

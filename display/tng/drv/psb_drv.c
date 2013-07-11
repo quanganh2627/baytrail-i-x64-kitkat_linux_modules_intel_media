@@ -1365,7 +1365,10 @@ static int psb_do_init(struct drm_device *dev)
 	}
 
 	PSB_DEBUG_INIT("Init MSVDX\n");
+	power_island_get(OSPM_VIDEO_DEC_ISLAND);
 	psb_msvdx_init(dev);
+	power_island_put(OSPM_VIDEO_DEC_ISLAND);
+
 #ifdef SUPPORT_VSP
 	VSP_DEBUG("Init VSP\n");
 	vsp_init(dev);
@@ -1778,12 +1781,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	PSB_DEBUG_INIT("Begin to init MSVDX/Topaz\n");
 
-	ret = psb_do_init(dev);
-	if (ret)
-		return ret;
-
-	ospm_post_init(dev);
-
 	/*initialize the MSI for MRST */
 	if (IS_MID(dev)) {
 		if (pci_enable_msi(dev->pdev)) {
@@ -1807,6 +1804,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	dev_priv->pipestat[0] = 0;
 	dev_priv->pipestat[1] = 0;
 	dev_priv->pipestat[2] = 0;
+	spin_lock_init(&dev_priv->irqmask_lock);
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 	PSB_WVDC32(0x00000000, PSB_INT_ENABLE_R);
 	PSB_WVDC32(0xFFFFFFFF, PSB_INT_MASK_R);
@@ -1851,6 +1849,10 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	/*must be after mrst_get_fuse_settings() */
 	ret = psb_backlight_init(dev);
+	if (ret)
+		return ret;
+
+	ret = psb_do_init(dev);
 	if (ret)
 		return ret;
 
