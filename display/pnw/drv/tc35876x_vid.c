@@ -303,7 +303,7 @@ struct i2c_driver tc35876x_bridge_i2c_driver = {
 	},
 	.id_table = tc35876x_bridge_id,
 	.probe = tc35876x_bridge_probe,
-	.remove = __devexit_p(tc35876x_bridge_remove),
+	.remove = tc35876x_bridge_remove,
 };
 
 static
@@ -355,7 +355,7 @@ static struct i2c_driver cmi_lcd_i2c_driver = {
 	},
 	.id_table = cmi_lcd_i2c_id,
 	.probe = cmi_lcd_i2c_probe,
-	.remove = __devexit_p(cmi_lcd_i2c_remove),
+	.remove = cmi_lcd_i2c_remove,
 };
 
 static

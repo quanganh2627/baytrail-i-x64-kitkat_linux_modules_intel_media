@@ -404,7 +404,7 @@ static int ps_hdmi_hpd_resume(struct device *dev)
 }
 
 /* PCI probe function */
-static int __devinit ps_hdmi_hpd_probe(struct pci_dev *pdev,
+static int ps_hdmi_hpd_probe(struct pci_dev *pdev,
 				       const struct pci_device_id *id)
 {
 	int result = 0;

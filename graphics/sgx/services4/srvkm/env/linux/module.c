@@ -277,7 +277,7 @@ static int PVRSRVDriverResume(LDM_DEV *device);
 
 #if defined(PVR_LDM_PCI_MODULE)
 /* This structure is used by the Linux module code */
-struct pci_device_id powervr_id_table[] __devinitdata = {
+struct pci_device_id powervr_id_table[] = {
 	{PCI_DEVICE(SYS_SGX_DEV_VENDOR_ID, SYS_SGX_DEV_DEVICE_ID)},
 #if defined (SYS_SGX_DEV1_DEVICE_ID)
 	{PCI_DEVICE(SYS_SGX_DEV_VENDOR_ID, SYS_SGX_DEV1_DEVICE_ID)},
@@ -289,7 +289,7 @@ MODULE_DEVICE_TABLE(pci, powervr_id_table);
 #endif
 
 #if defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
-static struct platform_device_id powervr_id_table[] __devinitdata = {
+static struct platform_device_id powervr_id_table[] = {
 	{SYS_SGX_DEV_NAME, 0},
 	{}
 };
@@ -312,7 +312,7 @@ static LDM_DRV powervr_driver = {
 	.remove		= PVRSRVDriverRemove,
 #endif
 #if defined(PVR_LDM_PCI_MODULE)
-	.remove		= __devexit_p(PVRSRVDriverRemove),
+	.remove		= PVRSRVDriverRemove,
 #endif
 	.suspend	= PVRSRVDriverSuspend,
 	.resume		= PVRSRVDriverResume,
@@ -356,7 +356,7 @@ static struct platform_device powervr_device = {
 static int PVRSRVDriverProbe(LDM_DEV *pDevice)
 #endif
 #if defined(PVR_LDM_PCI_MODULE)
-static int __devinit PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *id)
+static int PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *id)
 #endif
 {
 	SYS_DATA *psSysData;
@@ -415,7 +415,7 @@ static int __devinit PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device
 static int PVRSRVDriverRemove(LDM_DEV *pDevice)
 #endif
 #if defined(PVR_LDM_PCI_MODULE)
-static void __devexit PVRSRVDriverRemove(LDM_DEV *pDevice)
+static void PVRSRVDriverRemove(LDM_DEV *pDevice)
 #endif
 {
 	SYS_DATA *psSysData;

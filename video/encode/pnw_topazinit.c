@@ -1440,10 +1440,15 @@ void release_mtx_control_from_dash(struct drm_psb_private *dev_priv,
 		      F_ENCODE(1, TOPAZ_CR_MTX_DBG_IS_SLAVE), core);
 }
 
+/* When width or height is bigger than 1280. Encode will
+   treat TTM_PL_TT buffers as tilied memory */
+#define PSB_TOPAZ_TILING_THRESHOLD (1280)
 void pnw_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv, uint32_t core_id)
 {
 	uint32_t pd_addr = psb_get_default_pd_addr(dev_priv->mmu);
+	struct pnw_topaz_private *topaz_priv = dev_priv->topaz_private;
 	u32 val;
+	bool is_src_tiled = false;
 
 	PSB_DEBUG_GENERAL("TOPAZ: core (%d) MMU set up.\n", core_id);
 
@@ -1462,10 +1467,16 @@ void pnw_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv, uint32_t core_id)
 	/* setup index register, all pointing to directory bank 0 */
 	TOPAZ_WRITE32(TOPAZ_CR_MMU_BANK_INDEX, 0, core_id);
 
-	if (drm_psb_msvdx_tiling && dev_priv->have_mem_mmu_tiling) {
+	if ((topaz_priv->frame_w > PSB_TOPAZ_TILING_THRESHOLD) ||
+			(topaz_priv->frame_h > PSB_TOPAZ_TILING_THRESHOLD))
+		is_src_tiled = true;
+
+	if (drm_psb_msvdx_tiling && dev_priv->have_mem_mmu_tiling &&
+		is_src_tiled) {
 		uint32_t tile_start =
-			dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].gpu_offset;
-		uint32_t tile_end = tile_start +
+			dev_priv->bdev.man[TTM_PL_TT].gpu_offset;
+		uint32_t tile_end =
+			dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].gpu_offset +
 			(dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].size
 			<< PAGE_SHIFT);
 

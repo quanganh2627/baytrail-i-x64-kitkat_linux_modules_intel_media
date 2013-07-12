@@ -943,20 +943,26 @@ int tng_topaz_uninit(struct drm_device *dev)
 int tng_topaz_init_fw(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+
+	const unsigned int ui_align = SECURE_ALING - 1;
 	const struct firmware *raw = NULL;
-	unsigned char *ptr;
-	int n;
-	struct tng_fwinfo *cur_fw;
-	int cur_size, total_size;
-	struct tng_topaz_codec_fw *cur_codec;
+
+	struct tng_secure_fw *cur_sec_fw;
 	struct ttm_buffer_object **cur_drm_obj;
 	struct ttm_bo_kmap_obj tmp_kmap;
 	bool is_iomem;
-	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+
+	int cur_size, total_size;
+	unsigned char *uc_ptr;
+	unsigned char *uc_header;
+	unsigned int  *ui_ptr;
+	uint32_t ret = 0;
+	int n;
+
 #ifdef VERIFYFW_INIT
 	uint32_t i, *p_buf;
 #endif
-	uint32_t ret = 0;
 	/* # get firmware */
 	ret = request_firmware(&raw, FIRMWARE_NAME, &dev->pdev->dev);
 	if (ret) {
@@ -964,7 +970,7 @@ int tng_topaz_init_fw(struct drm_device *dev)
 		return ret;
 	}
 
-	if ((NULL == raw) || (raw->size < sizeof(struct tng_fwinfo))) {
+	if ((NULL == raw) || (raw->size < sizeof(struct tng_secure_fw))) {
 		DRM_ERROR("TOPAZ: Firmware file size is not correct.\n");
 		ret = -1;
 		goto out;
@@ -973,8 +979,8 @@ int tng_topaz_init_fw(struct drm_device *dev)
 	total_size = raw->size;
 	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size %d\n", raw->size);
 
-	ptr = (unsigned char *) raw->data;
-	if (!ptr) {
+	uc_ptr = (unsigned char *) raw->data;
+	if (!uc_ptr) {
 		DRM_ERROR("TOPAZ: Failed to load firmware.\n");
 		ret = -1;
 		goto out;
@@ -982,45 +988,35 @@ int tng_topaz_init_fw(struct drm_device *dev)
 
 	/* # load fw from file */
 	PSB_DEBUG_TOPAZ("TOPAZ: Load firmware......\n");
-	cur_fw = NULL;
-	for (n = 0; n < IMG_CODEC_NUM; ++n) {
-		if (total_size < sizeof(struct tng_fwinfo)) {
-			DRM_ERROR("TOPAZ: WARNING: Rearch end of" \
-				"firmware. Have loaded %d firmwares.", n);
-			break;
-		}
+	cur_sec_fw = NULL;
 
-		total_size -=  sizeof(struct tng_fwinfo);
-		cur_fw = (struct tng_fwinfo *) ptr;
+	uc_header = uc_ptr;
+	uc_ptr += SECURE_VRL_HEADER + SECURE_FIP_HEADER;
+	ui_ptr = (unsigned int*)uc_ptr;
+	cur_sec_fw = topaz_priv->topaz_fw;
 
-		cur_codec = &topaz_priv->topaz_fw[cur_fw->codec];
-		cur_codec->ver = cur_fw->ver;
-		cur_codec->codec = cur_fw->codec;
-		cur_codec->text_size = cur_fw->text_size;
-		cur_codec->data_size = cur_fw->data_size;
-		cur_codec->data_location = cur_fw->data_location;
+	for (n = 0; n < IMG_CODEC_NUM; ++n, ++cur_sec_fw) {
+		cur_sec_fw->codec_idx = n;
+		cur_sec_fw->addr_data = *ui_ptr++;
+		cur_sec_fw->text_size = *ui_ptr++;
+		cur_sec_fw->data_size = *ui_ptr++;
+		cur_sec_fw->data_loca = *ui_ptr++;
 
-		total_size -= cur_fw->text_size;
-		total_size -= cur_fw->data_size;
+		PSB_DEBUG_TOPAZ("TOPAZ: load codec %d\n",
+			cur_sec_fw->codec_idx);
 
-		if (total_size < 0) {
-			DRM_ERROR("TOPAZ: WARNING: wrong size number " \
-				"of data or text. Have loaded " \
-				"%d firmwares.", n);
-			break;
-		}
-
-		PSB_DEBUG_TOPAZ("TOPAZ: load firemware %s.\n",
-				  codec_to_string(cur_fw->codec));
+		PSB_DEBUG_TOPAZ("TOPAZ: address 0x%08x, text size: 0x%08x\n",
+			cur_sec_fw->addr_data, cur_sec_fw->text_size);
+		PSB_DEBUG_TOPAZ("TOPAZ: data size 0x%08x, data loca 08%x\n",
+			cur_sec_fw->data_size, cur_sec_fw->data_loca);
 
 		/* handle text section */
-		ptr += sizeof(struct tng_fwinfo);
-		cur_drm_obj = &cur_codec->text;
-		cur_size = cur_fw->text_size;
+		cur_drm_obj = &(cur_sec_fw->text);
+		cur_size = cur_sec_fw->text_size;
 
 		/* fill DRM object with firmware data */
-		ret = ttm_bo_kmap(*cur_drm_obj, 0, (*cur_drm_obj)->num_pages,
-				  &tmp_kmap);
+		ret = ttm_bo_kmap(*cur_drm_obj, 0,
+			(*cur_drm_obj)->num_pages, &tmp_kmap);
 		if (ret) {
 			DRM_ERROR("drm_bo_kmap failed: %d\n", ret);
 			ttm_bo_unref(cur_drm_obj);
@@ -1028,13 +1024,12 @@ int tng_topaz_init_fw(struct drm_device *dev)
 			goto out;
 		}
 
-		PSB_DEBUG_TOPAZ("TOPAZ: load codec %d, text size: %d," \
-			"data size %d, data location 08%x\n",
-			cur_codec->codec, cur_codec->text_size,
-			cur_codec->data_size, cur_codec->data_location);
+		uc_ptr = uc_header + cur_sec_fw->addr_data;
+		PSB_DEBUG_TOPAZ("TOPAZ: data size 0x%08x, data loca 08%x\n",
+			cur_sec_fw->data_size, cur_sec_fw->data_loca);
 
-		memcpy(ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem), ptr,
-		       cur_size);
+		memcpy(ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem),
+			uc_ptr, cur_size);
 #ifdef VERIFYFW_INIT
 		PSB_DEBUG_TOPAZ("TOPAZ: ###Firmware text section(FW)###\n");
 		p_buf = (unsigned int *)ttm_kmap_obj_virtual(
@@ -1046,13 +1041,13 @@ int tng_topaz_init_fw(struct drm_device *dev)
 		ttm_bo_kunmap(&tmp_kmap);
 
 		/* handle data section */
-		ptr += cur_fw->text_size;
-		cur_drm_obj = &cur_codec->data;
-		cur_size = cur_fw->data_size;
+		uc_ptr += (cur_sec_fw->text_size + ui_align) & (~ui_align);
+		cur_drm_obj = &cur_sec_fw->data;
+		cur_size = cur_sec_fw->data_size;
 
 		/* fill DRM object with firmware data */
-		ret = ttm_bo_kmap(*cur_drm_obj, 0, (*cur_drm_obj)->num_pages,
-				  &tmp_kmap);
+		ret = ttm_bo_kmap(*cur_drm_obj, 0,
+			(*cur_drm_obj)->num_pages, &tmp_kmap);
 		if (ret) {
 			DRM_ERROR("drm_bo_kmap failed: %d\n", ret);
 			ttm_bo_unref(cur_drm_obj);
@@ -1060,8 +1055,8 @@ int tng_topaz_init_fw(struct drm_device *dev)
 			goto out;
 		}
 
-		memcpy(ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem), ptr,
-		       cur_size);
+		memcpy(ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem),
+			uc_ptr, cur_size);
 #ifdef VERIFYFW_INIT
 		PSB_DEBUG_TOPAZ("TOPAZ: ###Firmware data section(FW)###\n");
 		p_buf = (unsigned int *)ttm_kmap_obj_virtual(
@@ -1071,9 +1066,6 @@ int tng_topaz_init_fw(struct drm_device *dev)
 			PSB_DEBUG_TOPAZ("%08x ,", p_buf[i]);
 #endif
 		ttm_bo_kunmap(&tmp_kmap);
-
-		/* update ptr */
-		ptr += cur_fw->data_size;
 	}
 
 	release_firmware(raw);
@@ -1176,7 +1168,7 @@ static void tng_get_bank_size(
 			video_ctx->mtx_bank_size, video_ctx->mtx_ram_size);
 
 	video_ctx->fw_data_dma_offset =
-		topaz_priv->topaz_fw[codec].data_location &
+		topaz_priv->topaz_fw[codec].data_loca &
 		~(MTX_DMA_BURSTSIZE_BYTES - 1);
 
 	video_ctx->fw_data_dma_size = video_ctx->mtx_ram_size -
@@ -1395,7 +1387,7 @@ int mtx_upload_fw(struct drm_device *dev,
 		  uint32_t is_restore)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
-	const struct tng_topaz_codec_fw *cur_codec_fw;
+	const struct tng_secure_fw *cur_codec_fw;
 	uint32_t text_size, data_size;
 	uint32_t data_location;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
@@ -1421,7 +1413,7 @@ int mtx_upload_fw(struct drm_device *dev,
 	PSB_DEBUG_TOPAZ("TOPAZ: Upload firmware, text_location = %08x," \
 		"text_size = %d, data_location = %08x, data_size = %d\n",
 		MTX_DMA_MEMORY_BASE, cur_codec_fw->text_size,
-		cur_codec_fw->data_location, cur_codec_fw->data_size);
+		cur_codec_fw->data_loca, cur_codec_fw->data_size);
 
 	/* upload text. text_size is byte size*/
 	text_size = cur_codec_fw->text_size / 4;
@@ -1471,7 +1463,7 @@ int mtx_upload_fw(struct drm_device *dev,
 	data_size = ((data_size * 4 + (MTX_DMA_BURSTSIZE_BYTES - 1)) &
 			~(MTX_DMA_BURSTSIZE_BYTES - 1)) / 4;
 
-	data_location = cur_codec_fw->data_location;
+	data_location = cur_codec_fw->data_loca;
 
 	/* transfer the codec */
 	/* Context restore has different DMA size and offset */

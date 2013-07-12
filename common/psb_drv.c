@@ -1234,18 +1234,13 @@ static int psb_do_init(struct drm_device *dev)
 		dev_priv->have_tt = 1;
 
 	/* MMU region managed by TTM */
-	if (IS_MSVDX_MEM_TILE(dev))
-		tmp = PSB_MEM_MMU_TILING_START >> PAGE_SHIFT;
-	else
-		tmp =
-		PSB_MEM_IMR_START >> PAGE_SHIFT; /* MMU region size:MMU->IMR */
+	tmp = PSB_MEM_IMR_START >> PAGE_SHIFT; /* MMU region size:MMU->IMR */
 	if (!ttm_bo_init_mm(bdev, DRM_PSB_MEM_MMU, tmp))
 		dev_priv->have_mem_mmu = 1;
 
 	if (IS_MSVDX_MEM_TILE(dev)) {
 		/* Create tiling MMU region managed by TTM */
-		tmp = (PSB_MEM_IMR_START -
-			PSB_MEM_MMU_TILING_START) >> PAGE_SHIFT;
+		tmp = (0x10000000) >> PAGE_SHIFT;
 		printk(KERN_INFO "init tiling heap, size is 0x%08x pages\n", tmp);
 		if (!ttm_bo_init_mm(bdev, DRM_PSB_MEM_MMU_TILING, tmp))
 			dev_priv->have_mem_mmu_tiling = 1;

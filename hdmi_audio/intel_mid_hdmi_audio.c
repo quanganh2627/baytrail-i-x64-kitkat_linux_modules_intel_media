@@ -1590,7 +1590,7 @@ struct snd_pcm_ops snd_intelhad_playback_ops = {
  *
  * This function is called when the hdmi cable is plugged in
  */
-static int __devinit snd_intelhad_create(
+static int snd_intelhad_create(
 		struct snd_intelhad *intelhaddata,
 		struct snd_card *card)
 {
@@ -1713,7 +1713,7 @@ static struct had_ops had_ops_v2 = {
  * This function is called when the hdmi cable is plugged in. This function
  * creates and registers the sound card with ALSA
  */
-static int __devinit hdmi_audio_probe(struct platform_device *devptr)
+static int hdmi_audio_probe(struct platform_device *devptr)
 {
 
 	int retval;
@@ -1877,7 +1877,7 @@ free_haddata:
  * This function is called when the hdmi cable is un-plugged. This function
  * free the sound card.
  */
-static int __devexit hdmi_audio_remove(struct platform_device *devptr)
+static int hdmi_audio_remove(struct platform_device *devptr)
 {
 	struct snd_intelhad *intelhaddata = had_data;
 	int caps;
@@ -1922,7 +1922,7 @@ const struct dev_pm_ops had_pm_ops = {
 
 static struct platform_driver had_driver = {
 	.probe =        hdmi_audio_probe,
-	.remove		= __devexit_p(hdmi_audio_remove),
+	.remove		= hdmi_audio_remove,
 	.suspend =      NULL,
 	.resume =       NULL,
 	.driver		= {

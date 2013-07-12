@@ -191,7 +191,7 @@ enum vsp_irq_reg {
 
 enum vsp_context_num {
 	VSP_CONTEXT_NUM_VPP = 0,
-	VSP_CONTEXT_NUM_VP8 = 0,
+	VSP_CONTEXT_NUM_VP8 = 1,
 	VSP_CONTEXT_NUM_MAX
 };
 
