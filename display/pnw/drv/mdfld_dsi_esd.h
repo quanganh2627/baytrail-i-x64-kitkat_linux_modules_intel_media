@@ -26,6 +26,11 @@
 #include <linux/freezer.h>
 #include <linux/kthread.h>
 #include <linux/wait.h>
+#include <linux/sched.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,8,0))
+#include <linux/sched/rt.h>
+#endif
 
 #include "psb_drv.h"
 #include "mdfld_dsi_output.h"

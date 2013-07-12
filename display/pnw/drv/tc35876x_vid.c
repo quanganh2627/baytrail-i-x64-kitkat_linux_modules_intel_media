@@ -27,7 +27,12 @@
 #include "mdfld_dsi_dbi.h"
 #include "mdfld_dsi_pkg_sender.h"
 #include "mdfld_dsi_esd.h"
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #include <asm/intel_scu_pmic.h>
+#else
+#include <asm/intel_scu_ipc.h>
+#endif
 #include <linux/gpio.h>
 
 /* HACK to create I2C device while it's not created by platform code */

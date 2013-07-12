@@ -25,7 +25,12 @@
 #include <linux/notifier.h>
 #include <linux/spinlock.h>
 #include <drm/drm_pciids.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #include <asm/intel_scu_pmic.h>
+#else
+#include <asm/intel_scu_ipc.h>
+#endif
 #include <asm/intel-mid.h>
 #include "psb_drm.h"
 #include "psb_drv.h"
