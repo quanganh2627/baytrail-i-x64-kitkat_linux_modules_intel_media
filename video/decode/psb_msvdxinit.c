@@ -551,6 +551,66 @@ void msvdx_init_test(struct drm_device *dev)
 }
 #endif
 
+#ifdef MERRIFIELD
+
+/* FW + FIP + VRL */
+#define PSB_MSVDX_FW_SIZE (84 * 1024 + 296 + 728)
+
+static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
+{
+	struct firmware **fw;
+	uint8_t *fw_io_base;
+	void *ptr = NULL;
+	int rc, fw_size;
+	uint32_t imrl, imrh;
+	uint64_t imr_base, imr_end;
+
+	intel_mid_msgbus_write32(TNG_IMR_MSG_PORT,
+			TNG_IMR5L_MSG_REGADDR, imrl);
+	intel_mid_msgbus_write32(TNG_IMR_MSG_PORT,
+			TNG_IMR5H_MSG_REGADDR, imrh);
+
+	imr_base = (imrl & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
+	imr_end = (imrh & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
+
+	printk(KERN_INFO "IMR5 ranges 0x%12lx - 0x%12lx\n", imr_base, imr_end);
+
+	if ((imr_end - imr_base) < PSB_MSVDX_FW_SIZE) {
+		DRM_ERROR("MSVDX: IMR5 size not enough for fw\n");
+		return 1;
+	}
+
+	rc = request_firmware(fw, name, &dev->pdev->dev);
+	if (*fw == NULL || rc < 0) {
+		DRM_ERROR("MSVDX: %s request_firmware failed: Reason %d\n",
+			  name, rc);
+		return 1;
+	}
+
+	ptr = (int *)((*fw))->data;
+	fw_size =  (int *)((*fw))->size;
+	if (0 == ptr || fw_size != PSB_MSVDX_FW_SIZE) {
+		DRM_ERROR("MSVDX: Failed to load %s, fw_size is %d\n", name, fw_size);
+		release_firmware(*fw);
+		return 1;
+	}
+
+       fw_io_base = ioremap(imr_base, PSB_MSVDX_FW_SIZE);
+
+       if (!fw_io_base) {
+		release_firmware(*fw);
+		DRM_ERROR("MSVDX_FW_PHADDRESS ioremap failed in function msvdx_fw_initialize\r\n");
+		return 1;
+	} else {
+		memcpy(fw_io_base, ptr, fw_size);
+		DRM_INFO("MSVDX_FW successfully intialize \r\n");
+		iounmap(fw_io_base);
+		release_firmware(*fw);
+		return 0;
+	}
+}
+#endif
+
 static int msvdx_startup_init(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
@@ -630,6 +690,10 @@ static int msvdx_startup_init(struct drm_device *dev)
 	else
 #endif
 		drm_msvdx_bottom_half = PSB_BOTTOM_HALF_WQ;
+
+#ifdef MERRIFIELD_B0
+	return tng_msvdx_fw_init("signed_msvdx_fw_mrfld.bin", dev);
+#endif
 
 	return 0;
 
