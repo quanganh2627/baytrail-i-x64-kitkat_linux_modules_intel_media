@@ -864,24 +864,36 @@ void mdfld_dsi_dpi_save(struct drm_encoder *encoder)
 	dev = dsi_config->dev;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
+	__mdfld_dsi_dpi_set_power(encoder, false);
+
 	/* Turn off vsync interrupt. */
 	drm_vblank_off(dev, pipe);
 
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
-
-	__mdfld_dsi_dpi_set_power(encoder, false);
 }
 
 static
 void mdfld_dsi_dpi_restore(struct drm_encoder *encoder)
 {
+	struct mdfld_dsi_encoder *dsi_encoder;
+	struct mdfld_dsi_config *dsi_config;
+	struct drm_device *dev;
+	int pipe;
+
 	if (!encoder)
 		return;
 
 	PSB_DEBUG_ENTRY("\n");
 
+	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
+	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
+	dev = dsi_config->dev;
+	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
+
 	__mdfld_dsi_dpi_set_power(encoder, true);
+
+	DCAttachPipe(pipe);
 }
 
 static const
