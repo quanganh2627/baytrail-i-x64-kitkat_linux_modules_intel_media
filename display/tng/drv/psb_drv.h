@@ -359,7 +359,6 @@ struct drm_psb_private {
 	int vsync_pipe;
 
 	struct mutex vsync_lock;
-	wait_queue_head_t vsync_queue;
 	atomic_t *vblank_count;
 
 	/*
@@ -946,7 +945,6 @@ struct drm_psb_private {
 	bool b_is_in_idle;
 	void (*exit_idle) (struct drm_device * dev, u32 update_src,
 			   void *p_surfaceAddr, bool check_hw_on_only);
-	bool b_vblank_enable;
 
 	bool b_async_flip_enable;
 	/*
@@ -1068,6 +1066,10 @@ void psb_disable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask);
 void mid_enable_pipe_event(struct drm_psb_private *dev_priv, int pipe);
 
 extern u32 psb_get_vblank_counter(struct drm_device *dev, int crtc);
+extern int intel_get_vblank_timestamp(struct drm_device *dev, int pipe,
+		int *max_error, struct timeval *vblank_time, unsigned flags);
+extern int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
+		int *vpos, int *hpos);
 extern int mdfld_enable_te(struct drm_device *dev, int pipe);
 extern void mdfld_disable_te(struct drm_device *dev, int pipe);
 extern int mdfld_irq_enable_hdmi_audio(struct drm_device *dev);
@@ -1141,7 +1143,6 @@ struct backlight_device *psb_get_backlight_device(void);
 
 extern int drm_psb_debug;
 extern int drm_psb_no_fb;
-extern int drm_psb_disable_vsync;
 extern int drm_idle_check_interval;
 extern int drm_topaz_sbuswa;
 
