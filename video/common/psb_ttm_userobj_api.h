@@ -31,6 +31,7 @@
 #include "ttm/ttm_object.h"
 #include "psb_ttm_fence_api.h"
 #include "ttm/ttm_bo_api.h"
+#include <linux/version.h>
 
 struct ttm_lock;
 
@@ -70,6 +71,7 @@ extern int
 ttm_pl_verify_access(struct ttm_buffer_object *bo,
 		     struct ttm_object_file *tfile);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 extern int ttm_buffer_object_create(struct ttm_bo_device *bdev,
 				    unsigned long size,
 				    enum ttm_bo_type type,
@@ -79,6 +81,16 @@ extern int ttm_buffer_object_create(struct ttm_bo_device *bdev,
 				    bool interruptible,
 				    struct file *persistant_swap_storage,
 				    struct ttm_buffer_object **p_bo);
+#else
+extern int ttm_buffer_object_create(struct ttm_bo_device *bdev,
+				    unsigned long size,
+				    enum ttm_bo_type type,
+				    uint32_t flags,
+				    uint32_t page_alignment,
+				    bool interruptible,
+				    struct file *persistant_swap_storage,
+				    struct ttm_buffer_object **p_bo);
+#endif
 
 extern int psb_ttm_bo_check_placement(struct ttm_buffer_object *bo,
 				      struct ttm_placement *placement);

@@ -90,7 +90,11 @@ static int psb_move_flip(struct ttm_buffer_object *bo,
 	placement.num_busy_placement = 0; /* FIXME */
 	placement.busy_placement = NULL;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_bo_mem_space(bo, &placement, &tmp_mem, interruptible, false, no_wait);
+#else
+	ret = ttm_bo_mem_space(bo, &placement, &tmp_mem, interruptible, no_wait);
+#endif
 	if (ret)
 		return ret;
 	ret = ttm_tt_bind(bo->ttm, &tmp_mem);
@@ -100,7 +104,11 @@ static int psb_move_flip(struct ttm_buffer_object *bo,
 	if (ret)
 		goto out_cleanup;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_bo_move_ttm(bo, evict, false, no_wait, new_mem);
+#else
+	ret = ttm_bo_move_ttm(bo, evict, no_wait, new_mem);
+#endif
 out_cleanup:
 	if (tmp_mem.mm_node) {
 		/*spin_lock(&bdev->lru_lock);*/ /* lru_lock is removed from upstream TTM */
@@ -611,7 +619,11 @@ static int psb_move(struct ttm_buffer_object *bo,
 	} else
 #endif
 	if (old_mem->mem_type == TTM_PL_SYSTEM) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		return ttm_bo_move_memcpy(bo, evict, false, no_wait, new_mem);
+#else
+		return ttm_bo_move_memcpy(bo, evict, no_wait, new_mem);
+#endif
 	} else if (new_mem->mem_type == TTM_PL_SYSTEM) {
 		int ret = psb_move_flip(bo, evict, interruptible,
 					no_wait, new_mem);
@@ -619,12 +631,20 @@ static int psb_move(struct ttm_buffer_object *bo,
 			if (ret == -ERESTART)
 				return ret;
 			else
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 				return ttm_bo_move_memcpy(bo, evict, false, no_wait,
+#else
+				return ttm_bo_move_memcpy(bo, evict, no_wait,
+#endif
 							  new_mem);
 		}
 	} else {
 		if (psb_move_blit(bo, evict, no_wait, new_mem))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 			return ttm_bo_move_memcpy(bo, evict, false, no_wait,
+#else
+			return ttm_bo_move_memcpy(bo, evict, no_wait,
+#endif
 						  new_mem);
 	}
 	return 0;

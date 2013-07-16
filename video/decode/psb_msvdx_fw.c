@@ -76,10 +76,18 @@ int32_t psb_msvdx_alloc_fw_bo(struct drm_psb_private *dev_priv)
 	PSB_DEBUG_INIT("MSVDX: MTX mem size is 0x%08x bytes, allocate firmware BO size 0x%08x\n", msvdx_priv->mtx_mem_size,
 		       msvdx_priv->mtx_mem_size + 4096);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(&dev_priv->bdev, msvdx_priv->mtx_mem_size + 4096, /* DMA may run over a page */
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &msvdx_priv->fw);
+#else
+	ret = ttm_buffer_object_create(&dev_priv->bdev, msvdx_priv->mtx_mem_size + 4096, /* DMA may run over a page */
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &msvdx_priv->fw);
+#endif
+
 	if (ret) {
 		DRM_ERROR("MSVDX: allocate firmware BO fail\n");
 	}

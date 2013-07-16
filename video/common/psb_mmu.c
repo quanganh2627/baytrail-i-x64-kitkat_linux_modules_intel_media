@@ -134,14 +134,22 @@ static void psb_page_clflush(struct psb_mmu_driver *driver, struct page* page)
 	int i;
 	uint8_t *clf;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	clf = kmap_atomic(page, KM_USER0);
+#else
+	clf = kmap_atomic(page);
+#endif
 	mb();
 	for (i = 0; i < clflush_count; ++i) {
 		psb_clflush(clf);
 		clf += clflush_add;
 	}
 	mb();
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	kunmap_atomic(clf, KM_USER0);
+#else
+	kunmap_atomic(clf);
+#endif
 }
 
 static void psb_pages_clflush(struct psb_mmu_driver *driver, struct page *page[], unsigned long num_pages)
@@ -419,7 +427,11 @@ static struct psb_mmu_pt *psb_mmu_alloc_pt(struct psb_mmu_pd *pd)
 
 	spin_lock(lock);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	v = kmap_atomic(pt->p, KM_USER0);
+#else
+	v = kmap_atomic(pt->p);
+#endif
 	clf = (uint8_t *) v;
 	ptes = (uint32_t *) v;
 	for (i = 0; i < (PAGE_SIZE / sizeof(uint32_t)); ++i)
@@ -436,7 +448,11 @@ static struct psb_mmu_pt *psb_mmu_alloc_pt(struct psb_mmu_pd *pd)
 		mb();
 	}
 #endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	kunmap_atomic(v, KM_USER0);
+#else
+	kunmap_atomic(v);
+#endif
 	spin_unlock(lock);
 
 	pt->count = 0;
@@ -471,7 +487,11 @@ struct psb_mmu_pt *psb_mmu_pt_alloc_map_lock(struct psb_mmu_pd *pd,
 			continue;
 		}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		v = kmap_atomic(pd->p, KM_USER0);
+#else
+		v = kmap_atomic(pd->p);
+#endif
 		pd->tables[index] = pt;
 		if (driver->mmu_type == IMG_MMU)
 			v[index] = (page_to_pfn(pt->p) << 12) |
@@ -485,14 +505,22 @@ struct psb_mmu_pt *psb_mmu_pt_alloc_map_lock(struct psb_mmu_pd *pd,
 				  driver->mmu_type);
 
 		pt->index = index;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		kunmap_atomic((void *) v, KM_USER0);
+#else
+		kunmap_atomic((void *) v);
+#endif
 
 		if (pd->hw_context != -1) {
 			psb_mmu_clflush(pd->driver, (void *) &v[index]);
 			atomic_set(&pd->driver->needs_tlbflush, 1);
 		}
 	}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	pt->v = kmap_atomic(pt->p, KM_USER0);
+#else
+	pt->v = kmap_atomic(pt->p);
+#endif
 	return pt;
 }
 
@@ -508,7 +536,11 @@ static struct psb_mmu_pt *psb_mmu_pt_map_lock(struct psb_mmu_pd *pd,
 		spin_unlock(lock);
 		return NULL;
 	}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	pt->v = kmap_atomic(pt->p, KM_USER0);
+#else
+	pt->v = kmap_atomic(pt->p);
+#endif
 	return pt;
 }
 
@@ -517,9 +549,17 @@ static void psb_mmu_pt_unmap_unlock(struct psb_mmu_pt *pt)
 	struct psb_mmu_pd *pd = pt->pd;
 	uint32_t *v;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	kunmap_atomic(pt->v, KM_USER0);
+#else
+	kunmap_atomic(pt->v);
+#endif
 	if (pt->count == 0) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		v = kmap_atomic(pd->p, KM_USER0);
+#else
+		v = kmap_atomic(pd->p);
+#endif
 		v[pt->index] = pd->invalid_pde;
 		pd->tables[pt->index] = NULL;
 
@@ -528,7 +568,11 @@ static void psb_mmu_pt_unmap_unlock(struct psb_mmu_pt *pt)
 					(void *) &v[pt->index]);
 			atomic_set(&pd->driver->needs_tlbflush, 1);
 		}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		kunmap_atomic(pt->v, KM_USER0);
+#else
+		kunmap_atomic(pt->v);
+#endif
 		spin_unlock(&pd->driver->lock);
 		psb_mmu_free_pt(pt);
 		return;

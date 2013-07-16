@@ -709,9 +709,15 @@ int tng_topaz_init(struct drm_device *dev)
 	}
 
 	/* # gain write back structure,we may only need 32+4=40DW */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev, 4096, ttm_bo_type_kernel,
 		DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
 		0, 0, 0, NULL, &(topaz_priv->topaz_bo));
+#else
+	ret = ttm_buffer_object_create(bdev, 4096, ttm_bo_type_kernel,
+		DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
+		0, 0, NULL, &(topaz_priv->topaz_bo));
+#endif
 	if (ret || (NULL==topaz_priv->topaz_bo)) {
 		DRM_ERROR("TOPAZ: failed to allocate topaz BO.\n");
 		if (topaz_priv->topaz_bo)
@@ -742,20 +748,35 @@ int tng_topaz_init(struct drm_device *dev)
 	/* create firmware storage */
 	for (n = 0; n < IMG_CODEC_NUM; ++n) {
 		/* FIXME: 12*4096 wast mem? */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		ret = ttm_buffer_object_create(bdev, 12 * 4096,
 			ttm_bo_type_kernel,
 			DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
 			0, 0, 0, NULL, &topaz_priv->topaz_fw[n].text);
+#else
+		ret = ttm_buffer_object_create(bdev, 12 * 4096,
+			ttm_bo_type_kernel,
+			DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
+			0, 0, NULL, &topaz_priv->topaz_fw[n].text);
+#endif
+
 		if (ret) {
 			DRM_ERROR("Failed to allocate memory " \
 				"for firmware text section.\n");
 			goto out;
 		}
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		ret = ttm_buffer_object_create(bdev, 12 * 4096,
 			ttm_bo_type_kernel,
 			DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
 			0, 0, 0, NULL, &topaz_priv->topaz_fw[n].data);
+#else
+		ret = ttm_buffer_object_create(bdev, 12 * 4096,
+			ttm_bo_type_kernel,
+			DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
+			0, 0, NULL, &topaz_priv->topaz_fw[n].data);
+#endif
 		if (ret) {
 			DRM_ERROR("Failed to allocate memory " \
 				"for firmware data section.\n");

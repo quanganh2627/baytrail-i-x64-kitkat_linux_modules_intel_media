@@ -97,11 +97,19 @@ int vsp_init(struct drm_device *dev)
 	VSP_DEBUG("allocate buffer for fw\n");
 	/* FIXME: assume 1 page, will modify to a proper value */
 	vsp_priv->firmware_sz = FW_SZ;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &vsp_priv->firmware);
+#else
+	ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &vsp_priv->firmware);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate VSP buffer for firmware\n");
 		goto out_clean;
@@ -109,12 +117,21 @@ int vsp_init(struct drm_device *dev)
 
 	vsp_priv->cmd_queue_sz = VSP_CMD_QUEUE_SIZE *
 		sizeof(struct vss_command_t);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev,
 				       vsp_priv->cmd_queue_sz,
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &vsp_priv->cmd_queue_bo);
+#else
+	ret = ttm_buffer_object_create(bdev,
+				       vsp_priv->cmd_queue_sz,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &vsp_priv->cmd_queue_bo);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate VSP cmd queue\n");
 		goto out_clean;
@@ -122,24 +139,42 @@ int vsp_init(struct drm_device *dev)
 
 	vsp_priv->ack_queue_sz = VSP_ACK_QUEUE_SIZE *
 		sizeof(struct vss_response_t);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev,
 				       vsp_priv->ack_queue_sz,
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &vsp_priv->ack_queue_bo);
+#else
+	ret = ttm_buffer_object_create(bdev,
+				       vsp_priv->ack_queue_sz,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &vsp_priv->ack_queue_bo);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate VSP cmd ack queue\n");
 		goto out_clean;
 	}
 
 	/* Create setting buffer */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret =  ttm_buffer_object_create(bdev,
 				       sizeof(struct vsp_settings_t),
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &vsp_priv->setting_bo);
+#else
+	ret =  ttm_buffer_object_create(bdev,
+				       sizeof(struct vsp_settings_t),
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &vsp_priv->setting_bo);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate VSP setting buffer\n");
 		goto out_clean;
@@ -148,6 +183,7 @@ int vsp_init(struct drm_device *dev)
 	/* Create context buffer */
 	context_size = VSP_CONTEXT_NUM_MAX *
 			sizeof(struct vsp_context_settings_t);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret =  ttm_buffer_object_create(bdev,
 				       context_size,
 				       ttm_bo_type_kernel,
@@ -155,6 +191,15 @@ int vsp_init(struct drm_device *dev)
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL,
 				       &vsp_priv->context_setting_bo);
+#else
+	ret =  ttm_buffer_object_create(bdev,
+				       context_size,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL,
+				       &vsp_priv->context_setting_bo);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate context setting buffer\n");
 		goto out_clean;
@@ -385,13 +430,23 @@ int vsp_init_fw(struct drm_device *dev)
 		VSP_DEBUG("allocate a new bo from size %d to size %d\n",
 			  vsp_priv->firmware_sz, raw->size);
 
-		vsp_priv->firmware_sz = raw->size;
+		vsp_priv->firmware_sz = raw->size + VSP_FIRMWARE_MEM_ALIGNMENT;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
 					       ttm_bo_type_kernel,
 					       DRM_PSB_FLAG_MEM_MMU |
 					       TTM_PL_FLAG_NO_EVICT,
 					       0, 0, 0, NULL,
 					       &vsp_priv->firmware);
+#else
+		ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
+					       ttm_bo_type_kernel,
+					       DRM_PSB_FLAG_MEM_MMU |
+					       TTM_PL_FLAG_NO_EVICT,
+					       0, 0, NULL,
+					       &vsp_priv->firmware);
+#endif
+
 		if (ret != 0) {
 			DRM_ERROR("VSP: failed to allocate firmware buffer\n");
 			return -1;
