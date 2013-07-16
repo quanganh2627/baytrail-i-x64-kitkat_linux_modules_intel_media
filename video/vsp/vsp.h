@@ -254,14 +254,16 @@ struct vsp_private {
 	int vsp_cmd_num;
 
 	unsigned int fw_type;
+	struct VssProcPictureVP8 ref_frame_buffers[4];
+	int available_recon_buffer;
+	int rec_surface_id;
 
-#ifdef VP8_ENC_DEBUG
 	/* save the address of vp8 cmd_buffer for now */
 	struct VssVp8encPictureParameterBuffer *vp8_encode_frame_cmd;
+	struct ttm_bo_kmap_obj vp8_encode_frame__kmap;
 
 	void *coded_buf;
 	struct ttm_bo_kmap_obj coded_buf_kmap;
-#endif
 };
 
 extern int vsp_init(struct drm_device *dev);

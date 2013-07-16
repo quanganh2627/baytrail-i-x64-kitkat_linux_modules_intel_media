@@ -91,6 +91,8 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 	vsp_priv->dev = dev;
 
+	vsp_priv->available_recon_buffer = 0;
+
 	dev_priv->vsp_private = vsp_priv;
 
 	VSP_DEBUG("allocate buffer for fw\n");
@@ -246,12 +248,12 @@ int vsp_deinit(struct drm_device *dev)
 		vsp_priv->ack_queue = NULL;
 	}
 	if (vsp_priv->setting) {
-		ttm_bo_kunmap(&vsp_priv->setting);
+		ttm_bo_kunmap(&vsp_priv->setting_kmap);
 		vsp_priv->setting = NULL;
 	}
 
 	if (vsp_priv->context_setting) {
-		ttm_bo_kunmap(&vsp_priv->context_setting);
+		ttm_bo_kunmap(&vsp_priv->context_setting_kmap);
 		vsp_priv->context_setting = NULL;
 	}
 
@@ -295,6 +297,7 @@ void vsp_enableirq(struct drm_device *dev)
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_CLR, clear);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_ENB, enable);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_MASK, mask);
+	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_LEVEL_PULSE, 1);
 }
 
 void vsp_disableirq(struct drm_device *dev)
@@ -332,6 +335,7 @@ int vsp_init_fw(struct drm_device *dev)
 	PSB_DEBUG_GENERAL("read firmware into buffer\n");
 
 	/* read firmware img */
+	VSP_DEBUG("load fw\n");
 	if (vsp_priv->fw_type == VSP_FW_TYPE_VP8) {
 		VSP_DEBUG("load vp8 fw\n");
 		ret = request_firmware(&raw, FW_VP8_NAME, &dev->pdev->dev);
@@ -340,7 +344,7 @@ int vsp_init_fw(struct drm_device *dev)
 		ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
 	} else {
 		DRM_ERROR("Don't support this fw type=%d!\n",
-			vsp_priv->fw_type);
+				vsp_priv->fw_type);
 		ret = -1;
 	}
 
@@ -476,8 +480,14 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 	/* Set power-saving mode */
 	if (drm_vsp_pmpolicy == PSB_PMPOLICY_NOPM)
 		vsp_priv->ctrl->power_saving_mode = vsp_always_on;
-	else
+	else if (drm_vsp_pmpolicy == PSB_PMPOLICY_POWERDOWN ||
+			drm_vsp_pmpolicy == PSB_PMPOLICY_CLOCKGATING)
 		vsp_priv->ctrl->power_saving_mode = vsp_suspend_on_empty_queue;
+	else if (drm_vsp_pmpolicy == PSB_PMPOLICY_HWIDLE)
+		vsp_priv->ctrl->power_saving_mode = vsp_hw_idle_on_empty_queue;
+	else
+		vsp_priv->ctrl->power_saving_mode =
+			vsp_suspend_and_hw_idle_on_empty_queue;
 
 	/* communicate the type of init
 	 * this is the last value to write
@@ -518,7 +528,8 @@ unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
 
 	/* config icache */
 	VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_INVALID_FLAG);
-	VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_PREFETCH_FLAG);
+	/* disable ICACHE_PREFETCH_FLAG from v2.3 */
+	/* VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_PREFETCH_FLAG); */
 	SP_REG_WRITE32(SP_STAT_AND_CTRL_REG, reg, processor);
 
 	/* set icache base address: point to instructions in DDR */

@@ -98,6 +98,7 @@ static void psb_fence_poll(struct ttm_fence_device *fdev,
 	struct drm_device *dev = dev_priv->dev;
 	uint32_t sequence = 0;
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 
 	if (unlikely(!dev_priv))
 		return;
@@ -125,7 +126,7 @@ static void psb_fence_poll(struct ttm_fence_device *fdev,
 		break;
 	case VSP_ENGINE_VPP:
 #ifdef SUPPORT_VSP
-		sequence = vsp_fence_poll(dev_priv);
+		sequence = vsp_priv->current_sequence;
 		break;
 #endif
 #endif
@@ -197,6 +198,7 @@ static void psb_fence_lockup(struct ttm_fence_object *fence,
 				  -EBUSY);
 		write_unlock(&fc->lock);
 
+		psb_vsp_dump_info(dev_priv);
 		vsp_priv->vsp_state = VSP_STATE_DOWN;
 #endif
 	} else {
