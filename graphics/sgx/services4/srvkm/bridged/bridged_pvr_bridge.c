@@ -88,7 +88,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 #include <linux/file.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 #include <linux/sync.h>
+#else
+#include <sync.h>
+#endif
 #endif
 
 #include "srvkm.h"
