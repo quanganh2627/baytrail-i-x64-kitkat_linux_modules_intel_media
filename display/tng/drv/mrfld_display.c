@@ -507,7 +507,6 @@ static int mrfld_crtc_mode_set(struct drm_crtc *crtc,
 		return mdfld_crtc_dsi_mode_set(crtc, dsi_config, mode,
 				adjusted_mode, x, y, old_fb);
 	} else {
-		power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI);
 		android_hdmi_crtc_mode_set(crtc, mode, adjusted_mode,
 				x, y, old_fb);
 

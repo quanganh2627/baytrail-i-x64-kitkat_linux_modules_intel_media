@@ -2085,8 +2085,6 @@ static int psb_disp_ioctl(struct drm_device *dev, void *data,
 						hdmi_export_handle);
 	} else if (dp_ctrl->cmd == DRM_PSB_DISP_GET_HDMI_FB_HANDLE) {
 		dp_ctrl->u.data = hdmi_export_handle;
-		/*DRM_COPY_TO_USER(data, &dp_ctrl,
-		sizeof(struct drm_psb_disp_ctrl)); */
 		DRM_INFO("retrive hdmi export handle:%d\n", hdmi_export_handle);
 	}
 	return 0;

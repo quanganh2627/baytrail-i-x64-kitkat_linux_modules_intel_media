@@ -33,6 +33,7 @@
 #include "dc_server.h"
 #include "dc_mrfld.h"
 #include "pwr_mgmt.h"
+#include "psb_drv.h"
 
 #if !defined(SUPPORT_DRM)
 #error "SUPPORT_DRM must be set"
@@ -159,10 +160,16 @@ static void _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	IMG_UINT32 ulAddr;
 	IMG_PIXFMT eFormat;
 	IMG_UINT32 ulStride;
+	struct drm_psb_private *dev_priv;
 	int i, j;
 
 	if (!gpsDevice || !psFlip) {
 		DRM_ERROR("%s: Invalid Flip\n", __func__);
+		return;
+	}
+
+	if (!gpsDevice->psDrmDevice || !gpsDevice->psDrmDevice->dev_private) {
+		DRM_ERROR("%s: Invalid DrmDevice\n", __func__);
 		return;
 	}
 
@@ -182,6 +189,11 @@ static void _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 		DRM_ERROR("%s: Invalid buffer list\n", __func__);
 		return;
 	}
+
+	/* skip HW flip if HDMI cable is unplugged */
+	dev_priv = (struct drm_psb_private *) gpsDevice->psDrmDevice->dev_private;
+	if (iPipe == DC_PIPE_B && !dev_priv->bhdmiconnected)
+		goto skip_HW_flip;
 
 	/*turn on required power islands*/
 	if (!power_island_get(psFlip->uiPowerIslands))
@@ -252,6 +264,12 @@ static void _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	gpsDevice->psLastFlip = psFlip;
 
 	power_island_put(psFlip->uiPowerIslands);
+	return;
+
+skip_HW_flip:
+	/*change the flip state to DC_UPDATED*/
+	psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DC_UPDATED;
+	gpsDevice->psLastFlip = psFlip;
 }
 
 static DC_MRFLD_FLIP *_Next_Queued_Flip(int iPipe)

@@ -877,21 +877,15 @@ bool otm_hdmi_power_rails_off(void)
 }
 
 /* turn HDMI power islands on */
-bool otm_hdmi_power_islands_on(int hw_island)
+bool otm_hdmi_power_islands_on()
 {
-	return ps_hdmi_power_islands_on(hw_island);
+	return ps_hdmi_power_islands_on();
 }
 
 /* turn HDMI power islands off */
-void otm_hdmi_power_islands_off(int hw_island)
+void otm_hdmi_power_islands_off()
 {
-	ps_hdmi_power_islands_off(hw_island);
-}
-
-/* control HDMI power islands */
-void otm_hdmi_pmu_nc_set_power_state(int islands, int state_type, int reg)
-{
-	ps_hdmi_pmu_nc_set_power_state(islands, state_type, reg);
+	ps_hdmi_power_islands_off();
 }
 
 /* control HDMI vblank interrupt */

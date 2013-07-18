@@ -339,9 +339,6 @@ exit:
 			edid_ready_in_hpd = 0;
 			uevent_string = "HOTPLUG_OUT=1";
 			psb_sysfs_uevent(hdmi_priv->dev, uevent_string);
-
-			/* Keep DSPB & HDMIO islands off after plug out. */
-			otm_hdmi_power_islands_off(0);
 		}
 
 		drm_helper_hpd_irq_event(hdmi_priv->dev);
@@ -1589,14 +1586,14 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 
 	otm_disable_hdmi(hdmi_priv->context);
 
-	otm_hdmi_power_rails_off();
-
 	/* power island is turnned off by IRQ handler if device is disconnected */
 	if (is_connected && !hdmi_priv->hdmi_suspended) {
 		/* Keep DSPB & HDMIO islands off after suspending. */
-		otm_hdmi_power_islands_off(OSPM_DISPLAY_ISLAND);
+		otm_hdmi_power_islands_off();
 	}
 	hdmi_priv->hdmi_suspended = true;
+
+	otm_hdmi_power_rails_off();
 
 	return;
 }
@@ -1693,7 +1690,7 @@ void android_hdmi_resume_display(struct drm_device *dev)
 	was_connected = ctx->is_connected;
 	if (was_connected && hdmi_priv->hdmi_suspended) {
 		/* Keep DSPB & HDMIO islands on after resuming. */
-		if (!otm_hdmi_power_islands_on(OSPM_DISPLAY_ISLAND)) {
+		if (!otm_hdmi_power_islands_on()) {
 			pr_err("Unable to power on display island!");
 			return;
 		}
@@ -2164,6 +2161,7 @@ android_hdmi_detect(struct drm_connector *connector,
 	struct android_hdmi_priv *hdmi_priv = NULL;
 	bool data = 0;
 	static bool first_boot = true;
+	static int prev_connection_status = connector_status_disconnected;
 	struct i2c_adapter *adapter = i2c_get_adapter(OTM_HDMI_I2C_ADAPTER_NUM);
 
 	if (NULL == connector || NULL == adapter)
@@ -2189,26 +2187,25 @@ android_hdmi_detect(struct drm_connector *connector,
 			first_boot = false;
 		}
 
-		if (connector->status == connector_status_connected)
+		if (prev_connection_status == connector_status_connected)
 			return connector_status_connected;
-		/*
-		 * Handle Hot-plug of HDMI. Display B would be power-gated
-		 * by ospm_post_init if HDMI is not detected during driver load.
-		 * This will power-up Display B if HDMI is
-		 * connected post driver load.
-		 */
-		/*
-		 * If pmu_nc_set_power_state fails then accessing HW
-		 * reg would result in a crash - IERR/Fabric error.
-		 */
-		otm_hdmi_pmu_nc_set_power_state(OSPM_DISPLAY_B_ISLAND,
-				OSPM_ISLAND_UP, OSPM_REG_TYPE);
+
+		prev_connection_status = connector_status_connected;
+
+		/* Turn on power islands and hold ref count */
+		if (!otm_hdmi_power_islands_on())
+			pr_err("otm_hdmi_power_islands_on failed!");
 
 		dev_priv->panel_desc |= DISPLAY_B;
-
 		dev_priv->bhdmiconnected = true;
+
 		return connector_status_connected;
 	} else {
+		if (prev_connection_status == connector_status_disconnected)
+			return connector_status_disconnected;
+
+		prev_connection_status = connector_status_disconnected;
+
 #ifdef OTM_HDMI_HDCP_ENABLE
 #ifdef OTM_HDMI_HDCP_ALWAYS_ENC
 		if (otm_hdmi_hdcp_disable(hdmi_priv->context))
@@ -2217,7 +2214,14 @@ android_hdmi_detect(struct drm_connector *connector,
 			pr_debug("failed to disable hdcp\n");
 #endif
 #endif
+		dev_priv->panel_desc &= ~DISPLAY_B;
+		dev_priv->bhdmiconnected = false;
+
+		/* Turn off power islands and decrement ref count */
+		otm_hdmi_power_islands_off();
+
 		otm_hdmi_power_rails_off();
+
 		return connector_status_disconnected;
 	}
 }
