@@ -174,11 +174,24 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 	sSysConfig.pasDevices[0].hSysData = (IMG_HANDLE) psPlatData;
 
 	/* Save private data for the physical memory heap */
-	gsPhysHeapConfig.hPrivData = (IMG_HANDLE) psPlatData;
+	gsPhysHeapConfig[0].hPrivData = (IMG_HANDLE) psPlatData;
+
+#if defined(TDMETACODE)
+	#error "Not supported services/3rdparty/intel_drm/sysconfig.c"
+	gsPhysHeapConfig[1].hPrivData = IMG_NULL;
+#endif
 
 	*ppsSysConfig = &sSysConfig;
 
 	gpsPlatData = psPlatData;
+
+
+	/* Setup other system specific stuff */
+#if defined(SUPPORT_ION)
+	#error "Need to check this function call"
+	IonInit(NULL);
+#endif
+
 	return PVRSRV_OK;
 e0:
 	return eError;
@@ -191,6 +204,11 @@ IMG_VOID SysDestroyConfigData(PVRSRV_SYSTEM_CONFIG *psSysConfig)
 	PVR_UNREFERENCED_PARAMETER(psSysConfig);
 	PCIDeInitDev(psPlatData);
 	OSFreeMem(psPlatData);
+
+#if defined(SUPPORT_ION)
+	#error "Need to check this function call"
+	IonDeinit(NULL);
+#endif
 }
 
 PVRSRV_ERROR SysDebugInfo(PVRSRV_SYSTEM_CONFIG *psSysConfig)

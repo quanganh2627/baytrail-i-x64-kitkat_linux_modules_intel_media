@@ -78,6 +78,16 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 									  IMG_UINT32			ui32DeviceFlags,
 									  RGX_ACTIVEPM_CONF		eActivePMConf);
 
+IMG_EXPORT
+PVRSRV_ERROR PVRSRVRGXInitAllocFWImgMemKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
+										  IMG_DEVMEM_SIZE_T 			ui32FWCodeLen,
+									 	  IMG_DEVMEM_SIZE_T 			ui32FWDataLen,
+									 	  DEVMEM_EXPORTCOOKIE		**ppsFWCodeAllocServerExportCookie,
+									 	  IMG_DEV_VIRTADDR			*psFWCodeDevVAddrBase,
+									 	  DEVMEM_EXPORTCOOKIE		**ppsFWDataAllocServerExportCookie,
+									 	  IMG_DEV_VIRTADDR			*psFWDataDevVAddrBase);
+
+
 
 /*!
 *******************************************************************************
@@ -95,18 +105,48 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 ******************************************************************************/
 IMG_IMPORT
 PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode, 
-									 IMG_DEVMEM_SIZE_T 			ui32FWMemAllocSize,
-									 DEVMEM_EXPORTCOOKIE		**ppsFWMemAllocServerExportCookie,
-									 IMG_DEV_VIRTADDR			*psFWMemDevVAddrBase,
-									 IMG_UINT64					*pui64FWHeapBase,
-									 RGXFWIF_DEV_VIRTADDR		*psRGXFwInit,
-									 IMG_BOOL					bEnableSignatureChecks,
-									 IMG_UINT32					ui32SignatureChecksBufSize,
-									 IMG_UINT32					ui32RGXFWAlignChecksSize,
-									 IMG_UINT32					*pui32RGXFWAlignChecks,
-									 IMG_UINT32					ui32ConfigFlags,
-									 IMG_UINT32					ui32LogType,
-									 RGXFWIF_COMPCHECKS_BVNC	*psClientBVNC);
+									    RGXFWIF_DEV_VIRTADDR		*psRGXFwInit,
+									    IMG_BOOL					bEnableSignatureChecks,
+									    IMG_UINT32					ui32SignatureChecksBufSize,
+									    IMG_UINT32					ui32HWPerfFWBufSizeKB,
+									    IMG_UINT64					ui64HWPerfFilter,
+									    IMG_UINT32					ui32RGXFWAlignChecksSize,
+									    IMG_UINT32					*pui32RGXFWAlignChecks,
+									    IMG_UINT32					ui32ConfigFlags,
+									    IMG_UINT32					ui32LogType,
+									    RGXFWIF_COMPCHECKS_BVNC     *psClientBVNC);
+
+
+/*!
+*******************************************************************************
+
+ @Function	PVRSRVRGXInitLoadFWImageKM
+
+ @Description
+
+ Load the firmware image into place.
+
+ @Input psFWImgDestPMR - PMR holding destination memory buffer for firmware
+
+ @input psFWImgSrcPMR - PMR holding firmware image data to load
+
+ @input ui64FWImgLen - number of bytes in Src/Dst memory buffers
+
+ @input psFWImgSigPMR - a buffer holding a signature for Src, which is used for validation
+
+ @input ui64FWSigLen - number of bytes contained in the signature buffer.
+
+ @Return   PVRSRV_ERROR
+
+******************************************************************************/
+
+IMG_EXPORT
+PVRSRV_ERROR PVRSRVRGXInitLoadFWImageKM(PMR *psFWImgDestPMR,
+                                        PMR *psFWImgSrcPMR,
+                                        IMG_UINT64 ui64FWImgLen,
+										PMR *psFWImgSigPMR,
+                                        IMG_UINT64 ui64FWSigLen);
+
 
 /*!
 *******************************************************************************
@@ -141,27 +181,5 @@ PVRSRV_ERROR RGXRegisterDevice(PVRSRV_DEVICE_NODE *psDeviceNode);
 ******************************************************************************/
 PVRSRV_ERROR DevDeInitRGX(PVRSRV_DEVICE_NODE *psDeviceNode);
 
-
-/* FIXME move RGXPanic and RGXDumpDebugInfo somewhere more appropriate */
-IMG_VOID RGXPanic(PVRSRV_RGXDEV_INFO	*psDevInfo);
-
-/*!
-*******************************************************************************
-
- @Function	RGXDumpDebugInfo
-
- @Description
-
- Dump useful debugging info
-
- @Input psDevInfo	 - RGX device info
- @Input bDumpRGXRegs - Whether to dump RGX debug registers. Must not be done
- 						when RGX is not powered.
-
- @Return   IMG_VOID
-
-******************************************************************************/
-IMG_VOID RGXDumpDebugInfo(PVRSRV_RGXDEV_INFO	*psDevInfo,
-						  IMG_BOOL				bDumpRGXRegs);
 
 #endif /* __RGXINIT_H__ */

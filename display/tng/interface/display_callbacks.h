@@ -62,7 +62,7 @@ void DCCBUnblankDisplay(struct drm_device *dev);
 int DCCBgttMapMemory(struct drm_device *dev,
 		     unsigned int hHandle,
 		     unsigned int ui32TaskId,
-		     uintptr_t *pPages,
+		     IMG_SYS_PHYADDR *pPages,
 		     unsigned int ui32PagesNum, unsigned int *ui32Offset);
 int DCCBgttUnmapMemory(struct drm_device *dev,
 		       unsigned int hHandle, unsigned int ui32TaskId);

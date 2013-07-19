@@ -480,9 +480,10 @@ int psb_gtt_insert_pages(struct psb_gtt *pg, struct page **pages,
 	return 0;
 }
 
-int psb_gtt_insert_phys_addresses(struct psb_gtt *pg, uintptr_t * pPhysFrames,
-				  unsigned offset_pages, unsigned num_pages,
-				  int type)
+int psb_gtt_insert_phys_addresses(struct psb_gtt *pg,
+		IMG_SYS_PHYADDR *pPhysFrames,
+		unsigned offset_pages, unsigned num_pages,
+		int type)
 {
 	unsigned j;
 	uint32_t *cur_page = NULL;
@@ -493,7 +494,8 @@ int psb_gtt_insert_phys_addresses(struct psb_gtt *pg, uintptr_t * pPhysFrames,
 
 	cur_page = pg->gtt_map + offset_pages;
 	for (j = 0; j < num_pages; ++j) {
-		pte = psb_gtt_mask_pte(*(pPhysFrames++) >> PAGE_SHIFT, type);
+		pte = psb_gtt_mask_pte((u32)pPhysFrames[j].uiAddr >> PAGE_SHIFT,
+				type);
 		iowrite32(pte, cur_page++);
 		//printk("PTE %d: %x/%x\n",j,(pPhysFrames-1)->uiAddr,pte);
 	}
@@ -1382,7 +1384,7 @@ int psb_gtt_unmap_meminfo_ioctl(struct drm_device *dev, void *data,
 int DCCBgttMapMemory(struct drm_device *dev,
 		     unsigned int hHandle,
 		     unsigned int ui32TaskId,
-		     uintptr_t * pPages,
+		     IMG_SYS_PHYADDR *pPages,
 		     unsigned int ui32PagesNum, unsigned int *ui32Offset)
 {
 	struct drm_psb_private *dev_priv =

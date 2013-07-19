@@ -45,6 +45,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef COMMON_PDUMP_BRIDGE_H
 #define COMMON_PDUMP_BRIDGE_H
 
+#include "services.h"
 
 
 /* FIXME: need to create pvrbridge_common.h" */

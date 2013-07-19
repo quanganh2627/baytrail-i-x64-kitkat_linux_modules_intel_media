@@ -47,6 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "rgx_bridge.h"
 #include "rgxscript.h"
+#include "devicemem_typedefs.h"
 #include "rgx_fwif_shared.h"
 #include "rgx_fwif.h"
 
@@ -55,10 +56,35 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_bridge.h"
 
 #define PVRSRV_BRIDGE_RGXINIT_CMD_FIRST			(PVRSRV_BRIDGE_RGXINIT_START)
-#define PVRSRV_BRIDGE_RGXINIT_RGXINITFIRMWARE			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXINIT_CMD_FIRST+0)
-#define PVRSRV_BRIDGE_RGXINIT_RGXINITDEVPART2			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXINIT_CMD_FIRST+1)
-#define PVRSRV_BRIDGE_RGXINIT_CMD_LAST			(PVRSRV_BRIDGE_RGXINIT_CMD_FIRST+1)
+#define PVRSRV_BRIDGE_RGXINIT_RGXINITALLOCFWIMGMEM			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXINIT_CMD_FIRST+0)
+#define PVRSRV_BRIDGE_RGXINIT_RGXINITFIRMWARE			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXINIT_CMD_FIRST+1)
+#define PVRSRV_BRIDGE_RGXINIT_RGXINITLOADFWIMAGE			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXINIT_CMD_FIRST+2)
+#define PVRSRV_BRIDGE_RGXINIT_RGXINITDEVPART2			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXINIT_CMD_FIRST+3)
+#define PVRSRV_BRIDGE_RGXINIT_CMD_LAST			(PVRSRV_BRIDGE_RGXINIT_CMD_FIRST+3)
 
+
+/*******************************************
+            RGXInitAllocFWImgMem          
+ *******************************************/
+
+/* Bridge in structure for RGXInitAllocFWImgMem */
+typedef struct PVRSRV_BRIDGE_IN_RGXINITALLOCFWIMGMEM_TAG
+{
+	IMG_HANDLE hDevNode;
+	IMG_DEVMEM_SIZE_T uiFWCodeLen;
+	IMG_DEVMEM_SIZE_T uiFWDataLen;
+} PVRSRV_BRIDGE_IN_RGXINITALLOCFWIMGMEM;
+
+
+/* Bridge out structure for RGXInitAllocFWImgMem */
+typedef struct PVRSRV_BRIDGE_OUT_RGXINITALLOCFWIMGMEM_TAG
+{
+	DEVMEM_SERVER_EXPORTCOOKIE hFWCodeAllocServerExportCookie;
+	IMG_DEV_VIRTADDR sFWCodeDevVAddrBase;
+	DEVMEM_SERVER_EXPORTCOOKIE hFWDataAllocServerExportCookie;
+	IMG_DEV_VIRTADDR sFWDataDevVAddrBase;
+	PVRSRV_ERROR eError;
+} PVRSRV_BRIDGE_OUT_RGXINITALLOCFWIMGMEM;
 
 /*******************************************
             RGXInitFirmware          
@@ -68,9 +94,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 typedef struct PVRSRV_BRIDGE_IN_RGXINITFIRMWARE_TAG
 {
 	IMG_HANDLE hDevNode;
-	IMG_DEVMEM_SIZE_T uiFWMemAllocSize;
 	IMG_BOOL bEnableSignatureChecks;
 	IMG_UINT32 ui32SignatureChecksBufSize;
+	IMG_UINT32 ui32HWPerfFWBufSizeKB;
+	IMG_UINT64 ui64HWPerfFilter;
 	IMG_UINT32 ui32RGXFWAlignChecksSize;
 	IMG_UINT32 * pui32RGXFWAlignChecks;
 	IMG_UINT32 ui32ConfigFlags;
@@ -82,12 +109,30 @@ typedef struct PVRSRV_BRIDGE_IN_RGXINITFIRMWARE_TAG
 /* Bridge out structure for RGXInitFirmware */
 typedef struct PVRSRV_BRIDGE_OUT_RGXINITFIRMWARE_TAG
 {
-	DEVMEM_SERVER_EXPORTCOOKIE hFWMemAllocServerExportCookie;
-	IMG_DEV_VIRTADDR sFWMemDevVAddrBase;
-	IMG_UINT64 ui32FWHeapBase;
 	RGXFWIF_DEV_VIRTADDR spsRGXFwInit;
 	PVRSRV_ERROR eError;
 } PVRSRV_BRIDGE_OUT_RGXINITFIRMWARE;
+
+/*******************************************
+            RGXInitLoadFWImage          
+ *******************************************/
+
+/* Bridge in structure for RGXInitLoadFWImage */
+typedef struct PVRSRV_BRIDGE_IN_RGXINITLOADFWIMAGE_TAG
+{
+	IMG_HANDLE hImgDestImport;
+	IMG_HANDLE hImgSrcImport;
+	IMG_UINT64 ui64ImgLen;
+	IMG_HANDLE hSigImport;
+	IMG_UINT64 ui64SigLen;
+} PVRSRV_BRIDGE_IN_RGXINITLOADFWIMAGE;
+
+
+/* Bridge out structure for RGXInitLoadFWImage */
+typedef struct PVRSRV_BRIDGE_OUT_RGXINITLOADFWIMAGE_TAG
+{
+	PVRSRV_ERROR eError;
+} PVRSRV_BRIDGE_OUT_RGXINITLOADFWIMAGE;
 
 /*******************************************
             RGXInitDevPart2          

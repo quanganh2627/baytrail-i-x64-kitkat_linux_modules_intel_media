@@ -46,6 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define COMMON_PDUMPCMM_BRIDGE_H
 
 #include "devicemem_typedefs.h"
+#include "pdumpdefs.h"
 
 
 /* FIXME: need to create pvrbridge_common.h" */

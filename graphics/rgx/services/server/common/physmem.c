@@ -81,12 +81,6 @@ PhysmemNewRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
 		return PVRSRV_ERROR_UNSUPPORTED_CACHE_MODE;
 	}
 
-	/*
-		FIXME:
-
-		Systems might have their own restrictions which we should also check.
-	*/
-
 	return psDevNode->pfnCreateRamBackedPMR(psDevNode,
 											uiSize,
 											uiChunkSize,

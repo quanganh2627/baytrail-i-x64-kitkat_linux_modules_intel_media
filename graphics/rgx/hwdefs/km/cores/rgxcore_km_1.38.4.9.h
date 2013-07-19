@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.38.4.9
+@Title          RGX Core BVNC 1.38.4.9
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,21 +39,21 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_38_4_9_H_
-#define _RGXCONFIG_KM_1_38_4_9_H_
+#ifndef _RGXCORE_KM_1_38_4_9_H_
+#define _RGXCORE_KM_1_38_4_9_H_
 
-/***** Automatically generated file (4/8/2013 10:23:28 AM): Do not edit manually ********************/
-/***** Timestamp:  (4/8/2013 10:23:28 AM)************************************************************/
+/***** Automatically generated file (6/17/2013 9:48:09 AM): Do not edit manually ********************/
+/***** Timestamp:  (6/17/2013 9:48:09 AM)************************************************************/
 /***** CS: @2160803 ******************************************************************/
 
 
 /******************************************************************************
  * BVNC = 1.38.4.9 
  *****************************************************************************/
-#define RGX_BVNC_B 1
-#define RGX_BVNC_V 38
-#define RGX_BVNC_N 4
-#define RGX_BVNC_C 9
+#define RGX_BVNC_KM_B 1
+#define RGX_BVNC_KM_V 38
+#define RGX_BVNC_KM_N 4
+#define RGX_BVNC_KM_C 9
 
 /******************************************************************************
  * Errata 
@@ -66,13 +66,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * Enhancements 
  *****************************************************************************/
 
-/******************************************************************************
-* DDK Defines
-*****************************************************************************/
 
-#define RGX_FEATURE_SLC_SIZE_IN_BYTES (256*1024)
-#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
-#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
-#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 
-#endif /* _RGXCONFIG_KM_1_38_4_9_H_ */
+#endif /* _RGXCORE_KM_1_38_4_9_H_ */

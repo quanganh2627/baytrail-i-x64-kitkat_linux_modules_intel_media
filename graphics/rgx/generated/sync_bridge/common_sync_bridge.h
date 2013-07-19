@@ -47,6 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "pdump.h"
 #include "pdumpdefs.h"
+#include "devicemem_typedefs.h"
 
 
 /* FIXME: need to create pvrbridge_common.h" */
@@ -214,6 +215,14 @@ typedef struct PVRSRV_BRIDGE_IN_SERVERSYNCGETSTATUS_TAG
 {
 	IMG_UINT32 ui32SyncCount;
 	IMG_HANDLE * phSyncHandle;
+	/* Output pointer pui32UID is also an implied input */
+	IMG_UINT32 * pui32UID;
+	/* Output pointer pui32FWAddr is also an implied input */
+	IMG_UINT32 * pui32FWAddr;
+	/* Output pointer pui32CurrentOp is also an implied input */
+	IMG_UINT32 * pui32CurrentOp;
+	/* Output pointer pui32NextOp is also an implied input */
+	IMG_UINT32 * pui32NextOp;
 } PVRSRV_BRIDGE_IN_SERVERSYNCGETSTATUS;
 
 
@@ -413,9 +422,9 @@ typedef struct PVRSRV_BRIDGE_IN_SYNCPRIMPDUMPCBP_TAG
 {
 	IMG_HANDLE hSyncHandle;
 	IMG_UINT32 ui32Offset;
-	IMG_UINT32 ui32WriteOffset;
-	IMG_UINT32 ui32PacketSize;
-	IMG_UINT32 ui32BufferSize;
+	IMG_DEVMEM_OFFSET_T uiWriteOffset;
+	IMG_DEVMEM_SIZE_T uiPacketSize;
+	IMG_DEVMEM_SIZE_T uiBufferSize;
 } PVRSRV_BRIDGE_IN_SYNCPRIMPDUMPCBP;
 
 

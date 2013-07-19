@@ -35,7 +35,6 @@ ccflags-y += \
 	-I$(RGXINC)/generated/rgxinit_bridge \
 	-I$(RGXINC)/generated/pdumpmm_bridge \
 	-I$(RGXINC)/generated/rgxta3d_bridge \
-	-I$(RGXINC)/generated/rgxccb_bridge \
 	-I$(RGXINC)/generated/srvcore_bridge \
 	-I$(RGXINC)/generated/breakpoint_bridge \
 	-I$(RGXINC)/generated/pvrtl_bridge \
@@ -73,6 +72,7 @@ ccflags-y += \
 	-DSUPPORT_RGX=1 \
 	-DPVR_SECURE_HANDLES \
 	-DRGX_BVNC_CORE_KM_HEADER="\"cores/rgxcore_km_1.14.4.4.h\"" \
+	-DRGX_BNC_CONFIG_KM_HEADER="\"configs/rgxconfig_km_1.V.4.4.h\"" \
 	-DDISPLAY_CONTROLLER=pvrlfb \
 	-DSUPPORT_RENDER_TARGET_ARRAYS \
 	-DSUPPORT_LINUX_X86_WRITECOMBINE \
@@ -91,6 +91,33 @@ ccflags-y += \
 	-DSUPPORT_RGXFW_LOG \
 	-DLMA \
 	-DTC_MEMORY_CONFIG=TC_MEMORY_LOCAL
+	-DPVR_ANDROID_HAS_HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED=1 \
+	-DEGL_EXTENSION_ANDROID_FRAMEBUFFER_TARGET=1 \
+	-DPVR_ANDROID_HAS_CORKSCREW_API=1 \
+	$(NULL)
+
+ccflags-y += \
+	-DCLIENT_DRIVER_DEFAULT_WAIT_RETRIES=50 \
+	-DEGL_BASENAME_SUFFIX=_POWERVR_ROGUE\
+	-DEGL_EXTENSION_ANDROID_RECORDABLE=1 \
+	-DEGL_EXTENSION_ANDROID_BLOB_CACHE=1 \
+	$(NULL)
+
+
+ccflags-y += \
+	-DSUPPORT_OPENGLES1_V1_ONLY=1 \
+	-DSUPPORT_DISPLAY_CLASS \
+	$(NULL)
+
+# NEED TO CHECK
+#	-DPVR_ANDROID_HAS_SW_INCOMPATIBLE_FRAMEBUFFER=1 \
+
+# MR2 feature
+#	PVR_ANDROID_HAS_GRALLOC_USAGE_HW_CAMERA=1 \
+	PVR_ANDROID_HAS_HAL_PIXEL_FORMAT_RAW_SENSOR=1 \
+	PVR_ANDROID_HAS_HAL_PIXEL_FORMAT_BLOB=1 \
+	PVR_ANDROID_HAS_HAL_PIXEL_FORMAT_Y8=1 \
+	PVR_ANDROID_HAS_HAL_PIXEL_FORMAT_Y16=1 \
 
 # Skip the following dependencies on Merrifield Virtual Platform
 ifneq ($(CONFIG_BOARD_MRFLD_VP),y)
@@ -146,10 +173,12 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/common/srvcore.o \
 	$(RGXDIR)/services/server/common/lists.o \
 	$(RGXDIR)/services/server/common/handle.o \
+	$(RGXDIR)/services/server/common/handle_generic.o \
 	$(RGXDIR)/services/server/common/physmem.o \
 	$(RGXDIR)/services/server/env/linux/allocmem.o \
 	$(RGXDIR)/services/server/env/linux/mm.o \
 	$(RGXDIR)/services/server/env/linux/physmem_osmem_linux.o \
+	$(RGXDIR)/services/server/env/linux/physmem_tdmetacode_linux.o \
 	$(RGXDIR)/services/server/env/linux/osfunc_x86.o \
 	$(RGXDIR)/services/server/env/linux/mutils.o \
 	$(RGXDIR)/services/server/env/linux/proc.o \
@@ -174,10 +203,14 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/shared/devices/rgx/rgx_compat_bvnc.o \
 	$(RGXDIR)/services/server/common/tlintern.o \
 	$(RGXDIR)/services/server/common/tlstream.o \
-	$(RGXDIR)/services/server/common/tltest.o \
+	$(RGXDIR)/services/server/common/tlutils.o \
 	$(RGXDIR)/services/server/common/tlserver.o
 
 #	$(RGXDIR)/services/server/env/linux/physmem_ion.o
+
+# WINDOW_HAS_SYNC
+merrifield_gfx-y += \
+	$(RGXDIR)/services/server/env/linux/pvr_sync.o
 
 # for PDUMP
 $(DRIVER_NAME)-$(CONFIG_PDUMP) += \
@@ -221,7 +254,6 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/pdumpmm_bridge/server_pdumpmm_bridge.o \
 	$(RGXDIR)/generated/rgxcmp_bridge/server_rgxcmp_bridge.o \
 	$(RGXDIR)/generated/debugmisc_bridge/server_debugmisc_bridge.o \
-	$(RGXDIR)/generated/rgxccb_bridge/server_rgxccb_bridge.o \
 	$(RGXDIR)/generated/sync_bridge/server_sync_bridge.o \
 	$(RGXDIR)/generated/rgxtq_bridge/server_rgxtq_bridge.o \
 	$(RGXDIR)/generated/dmm_bridge/client_mm_bridge.o \
@@ -239,6 +271,18 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/syncsexport_bridge/server_syncsexport_bridge.o
 ccflags-y += \
 	-I$(RGXINC)/generated/smm_bridge
+
+##ifeq ($(SUPPORT_ION),1)
+#merrifield_gfx-y += generated/ion_bridge/server_ion_bridge.o \
+	services/system/common/env/linux/ion_support.o \
+	services/system/common/env/linux/ion_interrupt_support.o \
+	services/system/common/env/linux/ion_lma_heap.o
+##ifeq ($(SUPPORT_OLD_ION_API),1)
+##merrifield_gfx-y += services/server/env/linux/physmem_ion_omap.o
+##else
+#merrifield_gfx-y += services/server/env/linux/physmem_ion.o
+##endif
+##endif # SUPPORT_ION
 
 # buffer class video
 $(DRIVER_NAME)-y += \

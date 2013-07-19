@@ -42,12 +42,15 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
+#ifndef _ION_SYS_H_
+#define _ION_SYS_H_
+
 #include "pvrsrv_error.h"
 #include "img_types.h"
 #include <linux/ion.h>
 
 
-PVRSRV_ERROR IonInit(IMG_VOID);
+PVRSRV_ERROR IonInit(void *phPrivateData);
 
 struct ion_device *IonDevAcquire(IMG_VOID);
 
@@ -69,3 +72,5 @@ IMG_DEV_PHYADDR IonCPUPhysToDevPhys(IMG_CPU_PHYADDR sCPUPhysAddr,
 #endif
 
 IMG_VOID IonDeinit(IMG_VOID);
+
+#endif /* _ION_SYS_H_ */

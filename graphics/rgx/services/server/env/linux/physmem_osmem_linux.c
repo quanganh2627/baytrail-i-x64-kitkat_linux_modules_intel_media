@@ -55,6 +55,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pdump_km.h"
 #include "pmr.h"
 #include "pmr_impl.h"
+#include "devicemem_server_utils.h"
 
 /* ourselves */
 #include "physmem_osmem.h"
@@ -69,7 +70,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if defined(CONFIG_X86)
 #include <asm/cacheflush.h>
 #endif
-#if defined(__arm__)
+#if defined(__arm__) || defined (__metag__)
 #include "osfunc.h"
 #endif
 
@@ -116,7 +117,7 @@ struct _PMR_OSPAGEARRAY_DATA_ {
     /*
 	 The cache mode of the PMR (required at free time)
 	*/
-    IMG_UINT32 ui32CacheMode;
+    IMG_UINT32 ui32CPUCacheFlags;
 	IMG_BOOL bUnsetMemoryType;
 };
 
@@ -181,7 +182,7 @@ _AllocOSPageArray(PMR_SIZE_T uiSize,
         IMG_BOOL bPoisonOnAlloc,
         IMG_BOOL bPoisonOnFree,
         IMG_BOOL bOnDemand,
-        IMG_UINT32 ui32CacheMode,
+        IMG_UINT32 ui32CPUCacheFlags,
 		struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 {
     PVRSRV_ERROR eError;
@@ -210,7 +211,7 @@ _AllocOSPageArray(PMR_SIZE_T uiSize,
     /* Use of cast below is justified by the assertion that follows to
        prove that no significant bits have been truncated */
     uiNumPages = (IMG_UINT32)(((uiSize-1)>>uiLog2PageSize) + 1);
-    PVR_ASSERT((uiNumPages << uiLog2PageSize) == uiSize);
+    PVR_ASSERT(((PMR_SIZE_T)uiNumPages << uiLog2PageSize) == uiSize);
 
     pvData = kmalloc(sizeof(struct _PMR_OSPAGEARRAY_DATA_) +
                      sizeof(struct page *) * uiNumPages,
@@ -230,7 +231,7 @@ _AllocOSPageArray(PMR_SIZE_T uiSize,
     psPageArrayData->uiLog2PageSize = uiLog2PageSize;
     psPageArrayData->uiNumPages = uiNumPages;
     psPageArrayData->bZero = bZero;
-    psPageArrayData->ui32CacheMode = ui32CacheMode;
+    psPageArrayData->ui32CPUCacheFlags = ui32CPUCacheFlags;
  	psPageArrayData->bPoisonOnAlloc = bPoisonOnAlloc;
  	psPageArrayData->bPoisonOnFree = bPoisonOnFree;
  	psPageArrayData->bHasOSPages = IMG_FALSE;
@@ -260,20 +261,20 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
     PVRSRV_ERROR eError;
     IMG_UINT32 uiOrder;
     IMG_UINT32 uiPageIndex;
-    IMG_UINT32 ui32CacheMode;
+	IMG_UINT32 ui32CPUCacheFlags;
 
     struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData = *ppsPageArrayDataPtr;
     struct page **ppsPageArray = psPageArrayData->pagearray;
 
     unsigned int gfp_flags;
-#if defined (CONFIG_X86) || defined(__arm__)
+#if defined (CONFIG_X86) || defined(__arm__) || defined (__metag__)
 	IMG_PVOID pvPageVAddr;
 #endif
 
     PVR_ASSERT(!psPageArrayData->bHasOSPages);
 
     uiOrder = psPageArrayData->uiLog2PageSize - PAGE_SHIFT;
-    ui32CacheMode = psPageArrayData->ui32CacheMode;
+    ui32CPUCacheFlags = psPageArrayData->ui32CPUCacheFlags;
 
     gfp_flags = GFP_KERNEL | __GFP_NOWARN | __GFP_NOMEMALLOC;
 
@@ -301,9 +302,7 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
          uiPageIndex < psPageArrayData->uiNumPages;
          uiPageIndex++)
     {
-        /* FIXME: Compound page stuff hasn't had a
-           great deal of testing.  Remove this check once we know it
-           works, or if you're feeling brave */
+        /* For now we don't support compound pages */
         PVR_ASSERT(uiOrder == 0);
 
         DisableOOMKiller();
@@ -321,10 +320,9 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 			if (pvPageVAddr != NULL)
 			{
 				int ret;
-				switch (ui32CacheMode & PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK)
+
+				switch (ui32CPUCacheFlags)
 				{
-					/* FIXME: What do we do for cache coherent? For now make uncached*/
-					case PVRSRV_MEMALLOCFLAG_CPU_CACHE_COHERENT:
 					case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
 							ret = set_memory_uc((unsigned long)pvPageVAddr, 1);
 							if (ret)
@@ -347,7 +345,7 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 							psPageArrayData->bUnsetMemoryType = IMG_TRUE;
 							break;
 
-					case PVRSRV_MEMALLOCFLAG_CPU_CACHE_INCOHERENT:
+					case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
 							break;
 
 					default:
@@ -356,7 +354,7 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 			}
 		}
 #endif
-#if defined (__arm__)
+#if defined (__arm__) || defined (__metag__)
 		/*
 		On ARM kernels we can be given pages which still remain in the cache.
 		In order to make sure that the data we write through our mappings
@@ -370,9 +368,8 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 		if (ppsPageArray[uiPageIndex] != IMG_NULL)
 		{
 			pvPageVAddr = kmap(ppsPageArray[uiPageIndex]);
-			/* For now we treat coherent memory as uncached */
-			if ((ui32CacheMode & PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK)
-				 != PVRSRV_MEMALLOCFLAG_CPU_CACHE_INCOHERENT)
+
+			if (ui32CPUCacheFlags != PVRSRV_MEMALLOCFLAG_CPU_CACHED)
 			{
 				IMG_CPU_PHYADDR sCPUPhysAddrStart, sCPUPhysAddrEnd;
 
@@ -514,56 +511,6 @@ _FreeOSPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData)
     return eError;
 }
 
-#if defined(PDUMP)
-static IMG_VOID
-_PDumpPMRMalloc(const PMR *psPMR,
-                IMG_DEVMEM_SIZE_T uiSize,
-                IMG_DEVMEM_ALIGN_T uiBlockSize,
-                IMG_HANDLE *phPDumpAllocInfoPtr)
-{
-    PVRSRV_ERROR eError;
-    IMG_HANDLE hPDumpAllocInfo;
-    IMG_CHAR aszMemspaceName[30];
-    IMG_CHAR aszSymbolicName[30];
-    IMG_DEVMEM_OFFSET_T uiOffset;
-    IMG_DEVMEM_OFFSET_T uiNextSymName;
-
-    uiOffset = 0;
-    eError = PMR_PDumpSymbolicAddr(psPMR,
-                                   uiOffset,
-                                   sizeof(aszMemspaceName),
-                                   &aszMemspaceName[0],
-                                   sizeof(aszSymbolicName),
-                                   &aszSymbolicName[0],
-                                   &uiOffset,
-				   &uiNextSymName);
-    PVR_ASSERT(eError == PVRSRV_OK);
-    PVR_ASSERT(uiOffset == 0);
-    PVR_ASSERT((uiOffset + uiSize) <= uiNextSymName);
-
-	PDumpPMRMalloc(aszMemspaceName,
-				   aszSymbolicName,
-				   uiSize,
-				   uiBlockSize,
-				   IMG_FALSE,
-				   &hPDumpAllocInfo);
-
-	*phPDumpAllocInfoPtr = hPDumpAllocInfo;
-}
-#else	/* PDUMP */
-static IMG_VOID
-_PDumpPMRMalloc(const PMR *psPMR,
-                IMG_DEVMEM_SIZE_T uiSize,
-                IMG_DEVMEM_ALIGN_T uiBlockSize,
-                IMG_HANDLE *phPDumpAllocInfoPtr)
-{
-	PVR_UNREFERENCED_PARAMETER(psPMR);
-	PVR_UNREFERENCED_PARAMETER(uiSize);
-	PVR_UNREFERENCED_PARAMETER(uiBlockSize);
-	PVR_UNREFERENCED_PARAMETER(phPDumpAllocInfoPtr);
-}
-#endif	/* PDUMP */
-
 /*
  *
  * Implementation of callback functions
@@ -691,7 +638,7 @@ PMRSysPhysAddrOSMem(PMR_IMPL_PRIVDATA pvPriv,
     uiPageSize = 1U << psOSPageArrayData->uiLog2PageSize;
 
     uiPageIndex = uiOffset >> psOSPageArrayData->uiLog2PageSize;
-    uiInPageOffset = uiOffset - (uiPageIndex << psOSPageArrayData->uiLog2PageSize);
+    uiInPageOffset = uiOffset - ((IMG_DEVMEM_OFFSET_T)uiPageIndex << psOSPageArrayData->uiLog2PageSize);
     PVR_ASSERT(uiPageIndex < uiNumPages);
     PVR_ASSERT(uiInPageOffset < uiPageSize);
 
@@ -714,8 +661,10 @@ PMRAcquireKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
     struct _PMR_OSPAGEARRAY_DATA_ *psOSPageArrayData;
     IMG_VOID *pvAddress;
     pgprot_t prot = PAGE_KERNEL;
+    IMG_UINT32 ui32CPUCacheFlags;
 
     psOSPageArrayData = pvPriv;
+	ui32CPUCacheFlags = DevmemCPUCacheMode(ulFlags);
 
     if (psOSPageArrayData->uiLog2PageSize != PAGE_SHIFT)
     {
@@ -726,10 +675,8 @@ PMRAcquireKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
         goto e0;
     }
 
-	switch (ulFlags & PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK)
+	switch (ui32CPUCacheFlags)
 	{
-		/* FIXME: What do we do for cache coherent? For now make uncached*/
-		case PVRSRV_MEMALLOCFLAG_CPU_CACHE_COHERENT:
 		case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
 				prot = pgprot_noncached(prot);
 				break;
@@ -738,7 +685,7 @@ PMRAcquireKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
 				prot = pgprot_writecombine(prot);
 				break;
 
-		case PVRSRV_MEMALLOCFLAG_CPU_CACHE_INCOHERENT:
+		case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
 				break;
 
 		default:
@@ -772,80 +719,14 @@ static IMG_VOID PMRReleaseKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
     vm_unmap_ram(hHandle, psOSPageArrayData->uiNumPages);
 }
 
-#if !defined(__arm__)
-
-static PVRSRV_ERROR
-PMRReadBytesOSMem(PMR_IMPL_PRIVDATA pvPriv,
-                  IMG_DEVMEM_OFFSET_T uiOffset,
-                  IMG_UINT8 *pcBuffer,
-                  IMG_SIZE_T uiBufSz,
-                  IMG_SIZE_T *puiNumBytes)
-{
-    struct _PMR_OSPAGEARRAY_DATA_ *psOSPageArrayData;
-    IMG_SIZE_T uiBytesCopied;
-    IMG_SIZE_T uiBytesToCopy;
-    IMG_SIZE_T uiBytesCopyableFromPage;
-    IMG_VOID *pvMapping;
-    const IMG_UINT8 *pcKernelPointer;
-    IMG_UINT32 uiBufferOffset;
-    IMG_UINT32 uiPageIndex;
-    IMG_UINT32 uiInPageOffset;
-
-    psOSPageArrayData = pvPriv;
-
-    uiBytesCopied = 0;
-    uiBytesToCopy = uiBufSz;
-    uiBufferOffset = 0;
-
-    while (uiBytesToCopy > 0)
-    {
-        /* we have to kmap one page in at a time */
-        uiPageIndex = uiOffset >> psOSPageArrayData->uiLog2PageSize;
-
-        /* this code is untested (i.e. doesn't work!) with "macro pages" (or whatever they're called) */
-        PVR_ASSERT(psOSPageArrayData->uiLog2PageSize == PAGE_SHIFT);
-
-        uiInPageOffset = uiOffset - (uiPageIndex << psOSPageArrayData->uiLog2PageSize);
-        uiBytesCopyableFromPage = uiBytesToCopy;
-        if (uiBytesCopyableFromPage + uiInPageOffset > (1<<psOSPageArrayData->uiLog2PageSize))
-        {
-            uiBytesCopyableFromPage = (1 << psOSPageArrayData->uiLog2PageSize)-uiInPageOffset;
-        }
-        pvMapping = kmap(psOSPageArrayData->pagearray[uiPageIndex]);
-        PVR_ASSERT(pvMapping != IMG_NULL);
-        pcKernelPointer = pvMapping;
-        memcpy(&pcBuffer[uiBufferOffset], &pcKernelPointer[uiInPageOffset], uiBytesCopyableFromPage);
-        kunmap(psOSPageArrayData->pagearray[uiPageIndex]);
-
-        uiBufferOffset += uiBytesCopyableFromPage;
-        uiBytesToCopy -= uiBytesCopyableFromPage;
-        uiOffset += uiBytesCopyableFromPage;
-        uiBytesCopied += uiBytesCopyableFromPage;
-    }
-
-    *puiNumBytes = uiBytesCopied;
-    return PVRSRV_OK;
-}
-
-#endif /* !defined(__arm__) */
-
 static PMR_IMPL_FUNCTAB _sPMROSPFuncTab = {
     .pfnLockPhysAddresses = &PMRLockSysPhysAddressesOSMem,
     .pfnUnlockPhysAddresses = &PMRUnlockSysPhysAddressesOSMem,
     .pfnDevPhysAddr = &PMRSysPhysAddrOSMem,
     .pfnAcquireKernelMappingData = &PMRAcquireKernelMappingDataOSMem,
     .pfnReleaseKernelMappingData = &PMRReleaseKernelMappingDataOSMem,
-/*
-	Note
-	On arm system's we can't use kmap as this will make the page cached
-	regardless of it's actual cache mode. On X86 the PAT ensures that
-	the right thing happens.
-*/
-#if defined(__arm__)
     .pfnReadBytes = IMG_NULL,
-#else
-	.pfnReadBytes = &PMRReadBytesOSMem,
-#endif
+    .pfnWriteBytes = IMG_NULL,
     .pfnFinalize = &PMRFinalizeOSMem
 };
 
@@ -870,9 +751,7 @@ _NewOSAllocPagesPMR(PVRSRV_DEVICE_NODE *psDevNode,
     IMG_BOOL bPoisonOnAlloc;
     IMG_BOOL bPoisonOnFree;
     IMG_BOOL bOnDemand = ((uiFlags & PVRSRV_MEMALLOCFLAG_NO_OSPAGES_ON_ALLOC) > 0);
-    IMG_UINT32 ui32CacheMode = (IMG_UINT32) (uiFlags & PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK);
-
-	PVR_ASSERT(ui32CacheMode == (uiFlags & PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK));
+    IMG_UINT32 ui32CPUCacheFlags = (IMG_UINT32) DevmemCPUCacheMode(uiFlags);
 
     if (uiFlags & PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC)
     {
@@ -923,7 +802,7 @@ _NewOSAllocPagesPMR(PVRSRV_DEVICE_NODE *psDevNode,
 						   bPoisonOnAlloc,
 						   bPoisonOnFree,
 						   bOnDemand,
-						   ui32CacheMode,
+						   ui32CPUCacheFlags,
 						   &psPrivData);
 	if (eError != PVRSRV_OK)
 	{
@@ -973,12 +852,10 @@ _NewOSAllocPagesPMR(PVRSRV_DEVICE_NODE *psDevNode,
         goto errorOnCreate;
     }
 
-    _PDumpPMRMalloc(psPMR,
+    PDumpPMRMallocPMR(psPMR,
                     uiChunkSize * ui32NumPhysChunks,
-                    /* alignment is alignment of start of buffer _and_
-                       minimum contiguity - i.e. smallest allowable
-                       page-size.  FIXME: review this decision. */
                     1U<<uiLog2PageSize,
+	                IMG_FALSE,
                     &hPDumpAllocInfo);
 
 	psPrivData->hPDumpAllocInfo = hPDumpAllocInfo;

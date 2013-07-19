@@ -49,8 +49,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "handle.h"
 
+#include "pvr_debug.h"
+
 #if defined(SUPPORT_ION)
 #include <linux/ion.h>
+#include "ion_sys.h"
+#include "allocmem.h"
 #endif
 
 #if defined(SUPPORT_DRM)
@@ -61,6 +65,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define ION_CLIENT_NAME_SIZE	50
 #endif
 
+#if defined(SUPPORT_ION)
+typedef struct _ENV_ION_CONNECTION_DATA_
+{
+	IMG_CHAR azIonClientName[ION_CLIENT_NAME_SIZE];
+	struct ion_device *psIonDev;
+	struct ion_client *psIonClient;
+	IMG_UINT32 ui32IonClientRefCount;
+} ENV_ION_CONNECTION_DATA;
+#endif
+
 typedef struct _ENV_CONNECTION_DATA_
 {
 #if defined(SUPPORT_DRM)
@@ -69,21 +83,38 @@ typedef struct _ENV_CONNECTION_DATA_
 	struct file *psFile;
 #endif
 	struct proc_dir_entry *psProcDir;
-#if defined(SUPPORT_DRM) && defined(PVR_DRM_SECURE_AUTH_EXPORT)
-	struct list_head sDRMAuthListHead;
-#endif
 #if defined(SUPPORT_ION)
-	IMG_CHAR azIonClientName[ION_CLIENT_NAME_SIZE];
-	struct ion_device *psIonDev;
-	struct ion_client *psIonClient;
+	ENV_ION_CONNECTION_DATA *psIonData;
+#endif
+#if defined(SUPPORT_DRM)
+	IMG_BOOL bAuthenticated;
 #endif
 } ENV_CONNECTION_DATA;
 
 #if defined(SUPPORT_ION)
-static inline struct ion_client *EnvDataIonClientGet(ENV_CONNECTION_DATA *psEnvData)
+static inline struct ion_client *EnvDataIonClientAcquire(ENV_CONNECTION_DATA *psEnvData)
 {
-	PVR_ASSERT(psEnvData->psIonClient != IMG_NULL);
-	return psEnvData->psIonClient;
+	PVR_ASSERT(psEnvData->psIonData != IMG_NULL);
+	PVR_ASSERT(psEnvData->psIonData->psIonClient != IMG_NULL);
+	PVR_ASSERT(psEnvData->psIonData->ui32IonClientRefCount > 0);
+	psEnvData->psIonData->ui32IonClientRefCount++;
+	return psEnvData->psIonData->psIonClient;
+}
+#endif
+
+#if defined(SUPPORT_ION)
+static inline IMG_VOID EnvDataIonClientRelease(ENV_ION_CONNECTION_DATA *psIonData)
+{
+	PVR_ASSERT(psIonData != IMG_NULL);
+	PVR_ASSERT(psIonData->psIonClient != IMG_NULL);
+	PVR_ASSERT(psIonData->ui32IonClientRefCount > 0);
+	if (--psIonData->ui32IonClientRefCount == 0)
+	{
+		ion_client_destroy(psIonData->psIonClient);
+		IonDevRelease(psIonData->psIonDev);
+		OSFreeMem(psIonData);
+		psIonData = IMG_NULL;
+	}
 }
 #endif
 

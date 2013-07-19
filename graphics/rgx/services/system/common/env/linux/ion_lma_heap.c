@@ -1,6 +1,6 @@
 /*************************************************************************/ /*!
-@File           ion_tc_heap.c
-@Title          Ion heap for TC local memory
+@File           ion_lma_heap.c
+@Title          Ion heap for local memory
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -47,10 +47,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/vmalloc.h>
 #include "../drivers/gpu/ion/ion_priv.h"
 
-#include "ion_tc_heap.h"
+#include "ion_lma_heap.h"
 #include "pvr_debug.h"
 
-struct tc_heap
+struct lma_heap
 {
 	struct ion_heap heap;
 	/* Base address in local physical memory to start allocating from. */
@@ -61,18 +61,18 @@ struct tc_heap
 	struct gen_pool *pool;
 };
 
-static int tc_heap_allocate(struct ion_heap *heap,
-							struct ion_buffer *buffer,
-							unsigned long len, unsigned long align,
-							unsigned long flags)
+static int lma_heap_allocate(struct ion_heap *heap,
+							 struct ion_buffer *buffer,
+							 unsigned long len, unsigned long align,
+							 unsigned long flags)
 {
-	struct tc_heap *psHeap = container_of(heap, struct tc_heap, heap);
+	struct lma_heap *psHeap = container_of(heap, struct lma_heap, heap);
 	int err = 0;
 
 	buffer->priv_phys = gen_pool_alloc(psHeap->pool, len);
 	if (!buffer->priv_phys)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Out of space in TC local memory pool",
+		PVR_DPF((PVR_DBG_ERROR, "%s: Out of space in local memory pool",
 				 __func__));
 		err = -ENOMEM;
 	}
@@ -80,23 +80,23 @@ static int tc_heap_allocate(struct ion_heap *heap,
 	return err;
 }
 
-static void tc_heap_free(struct ion_buffer *buffer)
+static void lma_heap_free(struct ion_buffer *buffer)
 {
-	struct tc_heap *psHeap =
-		container_of(buffer->heap, struct tc_heap, heap);
+	struct lma_heap *psHeap =
+		container_of(buffer->heap, struct lma_heap, heap);
 	gen_pool_free(psHeap->pool, buffer->priv_phys, buffer->size);
 }
 
-static int tc_heap_phys(struct ion_heap *heap, struct ion_buffer *buffer,
-						ion_phys_addr_t *addr, size_t *len)
+static int lma_heap_phys(struct ion_heap *heap, struct ion_buffer *buffer,
+						 ion_phys_addr_t *addr, size_t *len)
 {
 	*addr = buffer->priv_phys;
 	*len = buffer->size;
 	return 0;
 }
 
-static struct sg_table *tc_heap_map_dma(struct ion_heap *heap,
-										struct ion_buffer *buffer)
+static struct sg_table *lma_heap_map_dma(struct ion_heap *heap,
+										 struct ion_buffer *buffer)
 {
 	struct sg_table *psTable;
 
@@ -110,32 +110,40 @@ static struct sg_table *tc_heap_map_dma(struct ion_heap *heap,
 		return NULL;
 	}
 
+	/* FIXME: pfn_to_page() is being called here on an address in PCI
+	   memory, which doesn't make sense. Without a better way to do this, we
+	   have to come up with a struct page, even if it's not completely
+	   valid. This definitely doesn't work without CONFIG_FLATMEM. */
+#if defined(CONFIG_FLATMEM)
 	sg_set_page(psTable->sgl, pfn_to_page(PFN_DOWN(buffer->priv_phys)),
 				buffer->size, 0);
+#else
+#error ion_lma_heap requires CONFIG_FLATMEM
+#endif
 
 	return psTable;
 }
 
-static void tc_heap_unmap_dma(struct ion_heap *heap,
-							  struct ion_buffer *buffer)
+static void lma_heap_unmap_dma(struct ion_heap *heap,
+							   struct ion_buffer *buffer)
 {
 	sg_free_table(buffer->sg_table);
 }
 
-static void *tc_heap_map_kernel(struct ion_heap *heap,
-								struct ion_buffer *buffer)
+static void *lma_heap_map_kernel(struct ion_heap *heap,
+								 struct ion_buffer *buffer)
 {
 	return ioremap_wc(buffer->priv_phys, buffer->size);
 }
 
-static void tc_heap_unmap_kernel(struct ion_heap *heap,
-								 struct ion_buffer *buffer)
+static void lma_heap_unmap_kernel(struct ion_heap *heap,
+								  struct ion_buffer *buffer)
 {
 	iounmap(buffer->vaddr);
 }
 
-static int tc_heap_map_user(struct ion_heap *mapper, struct ion_buffer *buffer,
-							struct vm_area_struct *vma)
+static int lma_heap_map_user(struct ion_heap *mapper, struct ion_buffer *buffer,
+							 struct vm_area_struct *vma)
 {
 	return remap_pfn_range(vma, vma->vm_start,
 						   PFN_DOWN(buffer->priv_phys) + vma->vm_pgoff,
@@ -143,21 +151,21 @@ static int tc_heap_map_user(struct ion_heap *mapper, struct ion_buffer *buffer,
 						   pgprot_writecombine(vma->vm_page_prot));
 }
 
-static struct ion_heap_ops tc_heap_ops =
+static struct ion_heap_ops lma_heap_ops =
 {
-	.allocate = tc_heap_allocate,
-	.free = tc_heap_free,
-	.phys = tc_heap_phys,
-	.map_dma = tc_heap_map_dma,
-	.unmap_dma = tc_heap_unmap_dma,
-	.map_kernel = tc_heap_map_kernel,
-	.unmap_kernel = tc_heap_unmap_kernel,
-	.map_user = tc_heap_map_user
+	.allocate = lma_heap_allocate,
+	.free = lma_heap_free,
+	.phys = lma_heap_phys,
+	.map_dma = lma_heap_map_dma,
+	.unmap_dma = lma_heap_unmap_dma,
+	.map_kernel = lma_heap_map_kernel,
+	.unmap_kernel = lma_heap_unmap_kernel,
+	.map_user = lma_heap_map_user
 };
 
-struct ion_heap *tc_heap_create(struct ion_platform_heap *data)
+struct ion_heap *lma_heap_create(struct ion_platform_heap *data)
 {
-	struct tc_heap *psHeap;
+	struct lma_heap *psHeap;
 	struct gen_pool *psPool;
 
 	/* Check that sysconfig.c filled out the information we need. */
@@ -168,7 +176,7 @@ struct ion_heap *tc_heap_create(struct ion_platform_heap *data)
 		goto err_out;
 	}
 
-	psHeap = kzalloc(sizeof(struct tc_heap), GFP_KERNEL);
+	psHeap = kzalloc(sizeof(struct lma_heap), GFP_KERNEL);
 	if (!psHeap)
 		goto err_out;
 
@@ -177,7 +185,7 @@ struct ion_heap *tc_heap_create(struct ion_platform_heap *data)
 		goto err_free;
 
 	psHeap->heap.type = ION_HEAP_TYPE_CUSTOM;
-	psHeap->heap.ops = &tc_heap_ops;
+	psHeap->heap.ops = &lma_heap_ops;
 	psHeap->heap.name = data->name;
 	psHeap->heap.id = data->id;
 	psHeap->base = data->base;

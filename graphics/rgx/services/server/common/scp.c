@@ -96,15 +96,6 @@ ErrorPutFd:
 
 	goto ErrorOut;
 }
-
-static void FreeReleaseFence(int iFenceFd)
-{
-	struct sync_fence *psFence = sync_fence_fdget(iFenceFd);
-	if (psFence)
-	{
-		sync_fence_put(psFence);
-	}
-}
 #endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 
 struct _SCP_CONTEXT_
@@ -163,7 +154,7 @@ typedef struct _SCP_COMMAND_
 #if defined(SCP_DEBUG)
 #define SCP_DEBUG_PRINT(fmt, ...) \
 	PVRSRVDebugPrintf(PVR_DBG_WARNING, \
-					   __FILE__, __LINE__, \
+					  __FILE__, __LINE__, \
 					  fmt, \
 					  __VA_ARGS__)
 #else
@@ -380,6 +371,40 @@ IMG_VOID _SCPCommandDo(SCP_COMMAND *psCommand)
 	}
 }
 
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+static void _SCPDumpFence(const char *psczName, struct sync_fence *psFence)
+{
+	struct list_head *psEntry;
+	char szTime[16] = { '\0' };
+	char szVal1[20] = { '\0' };
+	char szVal2[20] = { '\0' };
+	char szVal3[44] = { '\0' };
+
+	PVR_LOG(("\t  %s: [%p] %s: %s", psczName, psFence, psFence->name,
+			 (psFence->status >  0 ? "signaled" :
+			  psFence->status == 0 ? "active" : "error")));
+	list_for_each(psEntry, &psFence->pt_list_head)
+	{
+		struct sync_pt *psPt = container_of(psEntry, struct sync_pt, pt_list);
+		struct timeval tv = ktime_to_timeval(psPt->timestamp);
+		snprintf(szTime, sizeof(szTime), "@%ld.%06ld", tv.tv_sec, tv.tv_usec);
+		if (psPt->parent->ops->pt_value_str &&
+			psPt->parent->ops->timeline_value_str)
+		{
+			psPt->parent->ops->pt_value_str(psPt, szVal1, sizeof(szVal1));
+			psPt->parent->ops->timeline_value_str(psPt->parent, szVal2, sizeof(szVal2));
+			snprintf(szVal3, sizeof(szVal3), ": %s / %s", szVal1, szVal2);
+		}
+		PVR_LOG(("\t    %s %s%s%s", psPt->parent->name,
+				 (psPt->status >  0 ? "signaled" :
+				  psPt->status == 0 ? "active" : "error"),
+				 (psPt->status >  0 ? szTime : ""),
+				 szVal3));
+	}
+
+}
+#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
+
 /*****************************************************************************
  *                    Public interface functions                             *
  *****************************************************************************/
@@ -487,22 +512,6 @@ PVRSRV_ERROR IMG_CALLCONV SCPAllocCommand(SCP_CONTEXT *psContext,
 	IMG_UINT32 ui32SyncOpSize;
 	IMG_UINT32 i;
 
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	if (pi32ReleaseFenceFd)
-	{
-		/* Create a release sync for the caller. We do it before the alloc,
-		 * cause its easier to roll back in an error case. */
-		eError = AllocReleaseFence(psContext->pvTimeline, "pvr_scp_retire", ++psContext->ui32TimelineVal, pi32ReleaseFenceFd);
-		if (eError != PVRSRV_OK)
-		{
-			return eError;
-		}
-	}
-#else /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
-	PVR_UNREFERENCED_PARAMETER(i32AcquireFenceFd);
-	PVR_UNREFERENCED_PARAMETER(pi32ReleaseFenceFd);
-#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
-
 	/* Round up the incoming data sizes to be pointer granular */
 	ui32ReadyDataByteSize = (ui32ReadyDataByteSize & (~(sizeof(IMG_PVOID)-1))) + sizeof(IMG_PVOID);
 	ui32CompleteDataByteSize = (ui32CompleteDataByteSize & (~(sizeof(IMG_PVOID)-1))) + sizeof(IMG_PVOID);
@@ -519,14 +528,25 @@ PVRSRV_ERROR IMG_CALLCONV SCPAllocCommand(SCP_CONTEXT *psContext,
 	if(eError != PVRSRV_OK)
 	{
 		SCP_DEBUG_PRINT("%s: Failed to allocate command of size %d for ctx %p (%d)", __FUNCTION__, ui32CommandSize, psContext, eError);
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-		if (pi32ReleaseFenceFd)
-		{
-			FreeReleaseFence(*pi32ReleaseFenceFd);
-		}
-#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 		return eError;
 	}
+
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+	if (pi32ReleaseFenceFd)
+	{
+		/* Create a release sync for the caller. */
+		eError = AllocReleaseFence(psContext->pvTimeline, "pvr_scp_retire",
+								   ++psContext->ui32TimelineVal,
+								   pi32ReleaseFenceFd);
+		if (eError != PVRSRV_OK)
+		{
+			return eError;
+		}
+	}
+#else /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
+	PVR_UNREFERENCED_PARAMETER(i32AcquireFenceFd);
+	PVR_UNREFERENCED_PARAMETER(pi32ReleaseFenceFd);
+#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 
 	SCP_DEBUG_PRINT("%s: New Command %p for ctx %p of size %d, syncCount: %d", 
 			__FUNCTION__, psCommand, psContext, ui32CommandSize, ui32SyncPrimCount);
@@ -720,11 +740,13 @@ IMG_VOID SCPCommandComplete(SCP_CONTEXT *psContext)
 			for (i=0;i<psCommand->ui32SyncCount;i++)
 			{
 				SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
+				IMG_BOOL bUpdate = (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_UPDATE);
 	
-				if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_UPDATE)
+				ServerSyncCompleteOp(psSCPSyncData->psSync, bUpdate, psSCPSyncData->ui32Update);
+
+				if (bUpdate)
 				{
 					psSCPSyncData->ui32Flags = 0; /* Stop future interaction with this sync prim. */
-					ServerSyncCompleteOp(psSCPSyncData->psSync, psSCPSyncData->ui32Update);
 					psSCPSyncData->psSync = NULL; /* Clear psSync as it is no longer referenced. */
 				}
 			}
@@ -735,6 +757,7 @@ IMG_VOID SCPCommandComplete(SCP_CONTEXT *psContext)
 				sw_sync_timeline_inc(psContext->pvTimeline, 1);
 				/* Decrease the ref to this fence */
 				sync_fence_put(psCommand->psReleaseFence);
+				psCommand->psReleaseFence = IMG_NULL;
 			}
 #endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 
@@ -795,6 +818,16 @@ IMG_VOID IMG_CALLCONV SCPDumpStatus(SCP_CONTEXT *psContext)
 							ServerSyncGetValue(psSCPSyncData->psSync)));
 				}
 			}
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+			if (psCommand->psAcquireFence)
+			{
+				_SCPDumpFence("Acquire Fence", psCommand->psAcquireFence);
+			}
+			if (psCommand->psReleaseFence)
+			{
+				_SCPDumpFence("Release Fence", psCommand->psReleaseFence);
+			}
+#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 		}
 	}
 	OSLockRelease(psContext->hLock);

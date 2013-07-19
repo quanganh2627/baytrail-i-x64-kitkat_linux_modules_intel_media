@@ -62,7 +62,7 @@ IMG_VOID rgx_bvnc_packed(IMG_UINT32 *pui32OutBNC, IMG_CHAR *pszOutV, IMG_UINT32 
 	*pui32OutBNC = (((ui32B & 0xFF) << 16) | ((ui32N & 0xFF) << 8) |
 												(ui32C & 0xFF));
 
-#if 1 /* Using dword accesses instead of byte accesses when forming V part of BVNC */
+	/* Using dword accesses instead of byte accesses when forming V part of BVNC */
 	ui32OutVMaxLen = ui32OutVMaxLen;
 	pszPointer = pszV;
 	while (*pszPointer)
@@ -85,7 +85,6 @@ IMG_VOID rgx_bvnc_packed(IMG_UINT32 *pui32OutBNC, IMG_CHAR *pszOutV, IMG_UINT32 
 	}
 
 	*((IMG_UINT32 *)pszOutV) = ui32V;
-#endif
 
 #if 0
 	for (i = 0; i < (ui32OutVMaxLen + 1); i++)

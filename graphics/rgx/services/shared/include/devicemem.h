@@ -112,7 +112,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 typedef IMG_UINT32 DEVMEM_HEAPCFGID;
 #define DEVMEM_HEAPCFG_FORCLIENTS 0
 #define DEVMEM_HEAPCFG_META 1
-/* FIXME: For now, PMMIF uses the same heap config as normal clients */
 #define DEVMEM_HEAPCFG_PMMIF 0
 
 /*
@@ -203,9 +202,6 @@ DevmemDestroyContext(DEVMEM_CONTEXT *psCtx);
  * will be made from a "sub alloc RA" and will "import" chunks
  * according to this quantum)
  *
- * FIXME: decide whether there's a need to distinguish between the
- * quantum and the device mmu page size?  I think not.
- *
  * Where imported PMRs (or, for example, PMRs created by device class
  * buffers) are mapped into this heap, it is important that the
  * physical contiguity guarantee offered by the PMR is greater than or
@@ -260,12 +256,6 @@ DevmemExportalignAdjustSizeAndAlign(DEVMEM_HEAP *psHeap, IMG_DEVMEM_SIZE_T *puiS
  * be mapped into GPU virtual memory and the physical memory to back
  * it will exist, by the time this call successfully completes.
  * 
- * FIXME: The mapping of the PMR to the GPU is optional and controlled
- * by the flags passed in. This leads to the interesting question as
- * to if the allocation requests a GPU mapping should we map it in here
- * or do that as a 2nd to DevmemAcquireDevVirtAddr request same way we
- * do for CPU mapping.
- *
  * The size must be a positive integer multiple of the alignment.
  * (i.e. the aligment specifies the alignment of both the start and
  * the end of the resulting allocation.)
@@ -280,26 +270,27 @@ DevmemExportalignAdjustSizeAndAlign(DEVMEM_HEAP *psHeap, IMG_DEVMEM_SIZE_T *puiS
  * Such suballocations cause many allocations to share the same "PMR".
  * This happens only when the flags match exactly.
  *
- * Note that we don't currently have a flag to determine that an
- * allocation is to be marked as "exportable" - FIXME: should we have
- * such a flag?  In general it is assumed that the caller may make
- * small allocations (suballocations) _or_ export allocations to other
- * processes but not both.
  */
 
-PVRSRV_ERROR DevmemAllocate(DEVMEM_HEAP *psHeap,
-                            IMG_DEVMEM_SIZE_T uiSize,
-                            IMG_DEVMEM_ALIGN_T uiAlign,
-                            DEVMEM_FLAGS_T uiFlags,
-                            DEVMEM_MEMDESC **ppsMemDescPtr);
+PVRSRV_ERROR DevmemAllocateEx(DEVMEM_HEAP *psHeap,
+                             IMG_DEVMEM_SIZE_T uiSize,
+                             IMG_DEVMEM_ALIGN_T uiAlign,
+                             DEVMEM_FLAGS_T uiFlags,
+                             DEVMEM_MEMDESC **ppsMemDescPtr,
+                             IMG_PCHAR pszText);
+#define DevmemAllocate(psHeap, uiSize, uiAlign, uiFlags, ppsMemDescPtr) \
+		DevmemAllocateEx(psHeap, uiSize, uiAlign, uiFlags, ppsMemDescPtr, "DevmemAllocate");
 
 PVRSRV_ERROR
-DevmemAllocateExportable(IMG_HANDLE hBridge,
-						 IMG_HANDLE hDeviceNode,
-						 IMG_DEVMEM_SIZE_T uiSize,
-						 IMG_DEVMEM_ALIGN_T uiAlign,
-						 DEVMEM_FLAGS_T uiFlags,
-						 DEVMEM_MEMDESC **ppsMemDescPtr);
+DevmemAllocateExportableEx(IMG_HANDLE hBridge,
+						   IMG_HANDLE hDeviceNode,
+						   IMG_DEVMEM_SIZE_T uiSize,
+						   IMG_DEVMEM_ALIGN_T uiAlign,
+						   DEVMEM_FLAGS_T uiFlags,
+						   DEVMEM_MEMDESC **ppsMemDescPtr,
+						   IMG_CHAR *pszText);
+#define DevmemAllocateExportable(hBridge, hDeviceNode, uiSize, uiAlign, uiFlags, ppsMemDescPtr) \
+		DevmemAllocateExportableEx(hBridge, hDeviceNode, uiSize, uiAlign, uiFlags, ppsMemDescPtr, "DevmemAllocExp");
 
 PVRSRV_ERROR
 DevmemAllocateSparse(IMG_HANDLE hBridge,
@@ -386,13 +377,12 @@ DevmemReleaseCpuVirtAddr(DEVMEM_MEMDESC *psMemDesc);
 /*
  * DevmemExport()
  *
- * Given a memory allocation allocated with Devmem_Allocate() (N.B.
- * mustn't be a suballocated one, for security reasons... FIXME:
- * enforce by flag, perhaps?) create a "cookie" that can be passed
- * intact by the caller's own choice of secure IPC to another process
- * and used as the argument to "map" to map this memory into a heap in
- * the target processes.  N.B.  This can also be used to map into
- * multiple heaps in one process, though that's not the intention.
+ * Given a memory allocation allocated with DevmemAllocateExportable()
+ * create a "cookie" that can be passed intact by the caller's own choice
+ * of secure IPC to another process and used as the argument to "map"
+ * to map this memory into a heap in the target processes.  N.B.  This can
+ * also be used to map into multiple heaps in one process, though that's not
+ * the intention.
  *
  * Note, the caller must later call Unexport before freeing the
  * memory.
@@ -405,10 +395,13 @@ IMG_VOID DevmemUnexport(DEVMEM_MEMDESC *psMemDesc,
 						DEVMEM_EXPORTCOOKIE *psExportCookie);
 
 PVRSRV_ERROR
-DevmemImport(IMG_HANDLE hBridge,
-			 DEVMEM_EXPORTCOOKIE *psCookie,
-			 DEVMEM_FLAGS_T uiFlags,
-			 DEVMEM_MEMDESC **ppsMemDescPtr);
+DevmemImportEx(IMG_HANDLE hBridge,
+			   DEVMEM_EXPORTCOOKIE *psCookie,
+			   DEVMEM_FLAGS_T uiFlags,
+			   DEVMEM_MEMDESC **ppsMemDescPtr,
+			   IMG_CHAR *pszText);
+#define DevmemImport(hBridge, psCookie, uiFlags, ppsMemDescPtr) \
+		DevmemImportEx(hBridge, psCookie, uiFlags, ppsMemDescPtr, "DevmemImport");
 
 /*
  * DevmemIsValidExportCookie()
@@ -532,4 +525,10 @@ DevmemGetPMRData(DEVMEM_MEMDESC *psMemDesc,
 		IMG_HANDLE *hPMR,
 		IMG_DEVMEM_OFFSET_T *puiPMROffset);
 
+PVRSRV_ERROR
+DevmemLocalImport(IMG_HANDLE hBridge,
+				  IMG_HANDLE hExtHandle,
+				  DEVMEM_FLAGS_T uiFlags,
+				  DEVMEM_MEMDESC **ppsMemDescPtr,
+				  IMG_DEVMEM_SIZE_T *puiSizePtr);
 #endif /* #ifndef SRVCLIENT_DEVICEMEM_CLIENT_H */

@@ -47,81 +47,96 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem.h"
 #include "device.h"
 #include "sync_server.h"
+#include "connection_server.h"
+#include "rgx_fwif_shared.h"
 
 #if defined (__cplusplus)
 extern "C" {
 #endif
 
-typedef struct {
-	DEVMEM_MEMDESC *psClientCCBMemDesc;
-	DEVMEM_MEMDESC *psClientCCBCtlMemDesc;
-	DEVMEM_EXPORTCOOKIE sClientCCBExportCookie;
-	DEVMEM_EXPORTCOOKIE sClientCCBCtlExportCookie;
-} RGX_CCB_CLEANUP_DATA;
+#define MAX_CLIENT_CCB_NAME	30
 
+typedef struct _RGX_CLIENT_CCB_ RGX_CLIENT_CCB;
+
+/*
+	This structure is declared here as it's allocated on the heap by
+	the callers
+*/
+
+typedef struct _RGX_CCB_CMD_HELPER_DATA_ {
+	/* Data setup at command init time */
+	RGX_CLIENT_CCB  		*psClientCCB;
+	IMG_CHAR 				*pszCommandName;
+	IMG_BOOL 				bPDumpContinuous;
+	IMG_UINT32				ui32ClientFenceCount;
+	PRGXFWIF_UFO_ADDR		*pauiFenceUFOAddress;
+	IMG_UINT32				*paui32FenceValue;
+	IMG_UINT32				ui32ClientUpdateCount;
+	PRGXFWIF_UFO_ADDR		*pauiUpdateUFOAddress;
+	IMG_UINT32				*paui32UpdateValue;
+	IMG_UINT32				ui32ServerSyncCount;
+	IMG_UINT32				*paui32ServerSyncFlags;
+	SERVER_SYNC_PRIMITIVE	**papsServerSyncs;
+	RGXFWIF_KCCB_CMD_TYPE	eType;
+	IMG_UINT32				ui32CmdSize;
+	IMG_UINT8				*pui8DMCmd;
+	IMG_UINT32				ui32FenceCmdSize;
+	IMG_UINT32				ui32DMCmdSize;
+	IMG_UINT32				ui32UpdateCmdSize;
+
+	/* Data setup at command acquire time */
+	IMG_UINT8				*pui8StartPtr;
+	IMG_UINT8				*pui8ServerUpdateStart;
+	IMG_UINT8				*pui8ServerFenceStart;
+	IMG_UINT32				ui32ServerFenceCount;
+	IMG_UINT32				ui32ServerUpdateCount;
+} RGX_CCB_CMD_HELPER_DATA;
 
 #define PADDING_COMMAND_SIZE	(sizeof(RGXFWIF_CCB_CMD_HEADER))
 
-/*!
-*******************************************************************************
+PVRSRV_ERROR RGXCreateCCB(PVRSRV_DEVICE_NODE	*psDeviceNode,
+						  IMG_UINT32			ui32CCBSizeLog2,
+						  CONNECTION_DATA		*psConnectionData,
+						  const IMG_CHAR		*pszName,
+						  RGX_CLIENT_CCB		**ppsClientCCB,
+						  DEVMEM_MEMDESC 		**ppsClientCCBMemDesc,
+						  DEVMEM_MEMDESC 		**ppsClientCCBCtlMemDesc);
 
- @Function	PVRSRVRGXCreateCCBKM
+IMG_VOID RGXDestroyCCB(RGX_CLIENT_CCB *psClientCCB);
 
- @Description
-	Server-side implementation of RGXCreateCCB
-
- @Input pvDeviceNode - device node
-
-FIXME fill this in
-
- @Return   PVRSRV_ERROR
-
-******************************************************************************/
-IMG_IMPORT
-PVRSRV_ERROR PVRSRVRGXCreateCCBKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
-								  IMG_UINT32			ui32AllocSize,
-								  IMG_UINT32			ui32AllocAlignment,
-								  RGX_CCB_CLEANUP_DATA	**ppsCleanupData,
-								  DEVMEM_MEMDESC 		**ppsClientCCBMemDesc,
-								  DEVMEM_MEMDESC 		**ppsClientCCBCtlMemDesc,
-								  DEVMEM_EXPORTCOOKIE 	**psClientCCBExportCookie,
-								  DEVMEM_EXPORTCOOKIE 	**psClientCCBCtlExportCookie);
-
-
-/*!
-*******************************************************************************
-
- @Function	PVRSRVRGXDestroyCCBKM
-
- @Description
-	Server-side implementation of RGXDestroyCCB
-
- @Input pvDeviceNode - device node
-
-FIXME fill this in
-
- @Return   PVRSRV_ERROR
-
-******************************************************************************/
-IMG_IMPORT
-PVRSRV_ERROR PVRSRVRGXDestroyCCBKM(RGX_CCB_CLEANUP_DATA *psCleanupData);
-
-
-PVRSRV_ERROR RGXAcquireCCB(volatile RGXFWIF_CCCB_CTL	*psCCBCtl,
-										IMG_UINT32		*pui32Woff,
-										DEVMEM_MEMDESC 		*pscCCBMemDesc,
+PVRSRV_ERROR RGXAcquireCCB(RGX_CLIENT_CCB *psClientCCB,
 										IMG_UINT32		ui32CmdSize,
 										IMG_PVOID		*ppvBufferSpace,
-										IMG_BOOL		bDumpedCCBCtlAlready,
 										IMG_BOOL		bPDumpContinuous);
 
-PVRSRV_ERROR RGXReleaseCCB(PVRSRV_DEVICE_NODE	*psDevNode,
-										volatile RGXFWIF_CCCB_CTL	*psCCBCtl,
-										DEVMEM_MEMDESC 		*pscCCBMemDesc,
-										DEVMEM_MEMDESC 		*pscCCBCtlMemDesc,
-										IMG_BOOL		*pbDumpedCCBCtlAlready,
-										IMG_UINT32		*pui32Woff,
-										IMG_UINT32		ui32CmdSize,
-										IMG_BOOL		bPDumpContinuous,
-										SYNC_CONNECTION_DATA 	*psSyncConnectionData);
+IMG_INTERNAL IMG_VOID RGXReleaseCCB(RGX_CLIENT_CCB *psClientCCB,
+									IMG_UINT32		ui32CmdSize,
+									IMG_BOOL		bPDumpContinuous);
+
+IMG_UINT32 RGXGetHostWriteOffsetCCB(RGX_CLIENT_CCB *psClientCCB);
+
+PVRSRV_ERROR RGXCmdHelperInitCmdCCB(RGX_CLIENT_CCB 			*psClientCCB,
+								    IMG_UINT32				ui32ClientFenceCount,
+								    PRGXFWIF_UFO_ADDR		*pauiFenceUFOAddress,
+								    IMG_UINT32				*paui32FenceValue,
+								    IMG_UINT32				ui32ClientUpdateCount,
+								    PRGXFWIF_UFO_ADDR		*pauiUpdateUFOAddress,
+								    IMG_UINT32				*paui32UpdateValue,
+								    IMG_UINT32				ui32ServerSyncCount,
+								    IMG_UINT32				*paui32ServerSyncFlags,
+								    SERVER_SYNC_PRIMITIVE	**pasServerSyncs,
+								    IMG_UINT32				ui32CmdSize,
+								    IMG_UINT8				*pui8DMCmd,
+								    RGXFWIF_CCB_CMD_TYPE	eType,
+								    IMG_BOOL				bPDumpContinuous,
+								    IMG_CHAR				*pszCommandName,
+								    RGX_CCB_CMD_HELPER_DATA	*psCmdHelperData);
+
+PVRSRV_ERROR RGXCmdHelperAcquireCmdCCB(IMG_UINT32 ui32CmdCount,
+									   RGX_CCB_CMD_HELPER_DATA *asCmdHelperData,
+									   IMG_BOOL *pbKickRequired);
+
+IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
+								   RGX_CCB_CMD_HELPER_DATA *asCmdHelperData);
+
 #endif /* __RGXCCB_H__ */

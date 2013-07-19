@@ -77,7 +77,7 @@ typedef struct _SYNC_PRIM_BLOCK_
 	DEVMEM_MEMDESC		*hMemDesc;				/*!< Host mapping handle */
 	IMG_UINT32			*pui32LinAddr;			/*!< User CPU mapping */
 	IMG_UINT64			uiSpanBase;				/*!< Base of this import in the span RA */
-	DLLIST_NODE			sListNode;				/*!< Listnide for the sync block list */
+	DLLIST_NODE			sListNode;				/*!< List node for the sync block list */
 } SYNC_PRIM_BLOCK;
 
 typedef enum _SYNC_PRIM_TYPE_

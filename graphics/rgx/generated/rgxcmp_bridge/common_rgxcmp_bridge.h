@@ -47,6 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "rgx_bridge.h"
 #include "sync_external.h"
+#include "rgx_fwif_shared.h"
 
 
 /* FIXME: need to create pvrbridge_common.h" */
@@ -57,7 +58,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define PVRSRV_BRIDGE_RGXCMP_RGXDESTROYCOMPUTECONTEXT			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXCMP_CMD_FIRST+1)
 #define PVRSRV_BRIDGE_RGXCMP_RGXKICKCDM			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXCMP_CMD_FIRST+2)
 #define PVRSRV_BRIDGE_RGXCMP_RGXFLUSHCOMPUTEDATA			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXCMP_CMD_FIRST+3)
-#define PVRSRV_BRIDGE_RGXCMP_CMD_LAST			(PVRSRV_BRIDGE_RGXCMP_CMD_FIRST+3)
+#define PVRSRV_BRIDGE_RGXCMP_RGXSETCOMPUTECONTEXTPRIORITY			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXCMP_CMD_FIRST+4)
+#define PVRSRV_BRIDGE_RGXCMP_CMD_LAST			(PVRSRV_BRIDGE_RGXCMP_CMD_FIRST+4)
 
 
 /*******************************************
@@ -68,8 +70,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 typedef struct PVRSRV_BRIDGE_IN_RGXCREATECOMPUTECONTEXT_TAG
 {
 	IMG_HANDLE hDevNode;
-	IMG_HANDLE hCmpCCBMemDesc;
-	IMG_HANDLE hCmpCCBCtlMemDesc;
 	IMG_UINT32 ui32Priority;
 	IMG_DEV_VIRTADDR sMCUFenceAddr;
 	IMG_UINT32 ui32FrameworkCmdize;
@@ -81,8 +81,7 @@ typedef struct PVRSRV_BRIDGE_IN_RGXCREATECOMPUTECONTEXT_TAG
 /* Bridge out structure for RGXCreateComputeContext */
 typedef struct PVRSRV_BRIDGE_OUT_RGXCREATECOMPUTECONTEXT_TAG
 {
-	IMG_HANDLE hCleanupCookie;
-	IMG_HANDLE hFWComputeContext;
+	IMG_HANDLE hComputeContext;
 	PVRSRV_ERROR eError;
 } PVRSRV_BRIDGE_OUT_RGXCREATECOMPUTECONTEXT;
 
@@ -93,7 +92,7 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXCREATECOMPUTECONTEXT_TAG
 /* Bridge in structure for RGXDestroyComputeContext */
 typedef struct PVRSRV_BRIDGE_IN_RGXDESTROYCOMPUTECONTEXT_TAG
 {
-	IMG_HANDLE hCleanupCookie;
+	IMG_HANDLE hComputeContext;
 } PVRSRV_BRIDGE_IN_RGXDESTROYCOMPUTECONTEXT;
 
 
@@ -110,20 +109,19 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXDESTROYCOMPUTECONTEXT_TAG
 /* Bridge in structure for RGXKickCDM */
 typedef struct PVRSRV_BRIDGE_IN_RGXKICKCDM_TAG
 {
-	IMG_HANDLE hDevNode;
-	IMG_HANDLE hFWComputeContext;
-	IMG_PVOID pvcCCBWoffUpdate;
-	IMG_HANDLE hcCCB;
-	IMG_HANDLE hcCCBCtl;
-	IMG_UINT32 ui32NumServerSyncs;
-	PVRSRV_CLIENT_SYNC_PRIM_OP* * psSyncOp;
-	IMG_HANDLE * phSyncHandle;
+	IMG_HANDLE hComputeContext;
+	IMG_UINT32 ui32ClientFenceCount;
+	PRGXFWIF_UFO_ADDR * psClientFenceUFOAddress;
+	IMG_UINT32 * pui32ClientFenceValue;
+	IMG_UINT32 ui32ClientUpdateCount;
+	PRGXFWIF_UFO_ADDR * psClientUpdateUFOAddress;
+	IMG_UINT32 * pui32ClientUpdateValue;
+	IMG_UINT32 ui32ServerSyncCount;
+	IMG_UINT32 * pui32ServerSyncFlags;
+	IMG_HANDLE * phServerSyncs;
 	IMG_UINT32 ui32CmdSize;
-	IMG_BYTE * psCmd;
-	IMG_UINT32 ui32FenceOffset;
-	IMG_UINT32 ui32UpdateOffset;
+	IMG_BYTE * psDMCmd;
 	IMG_BOOL bbPDumpContinuous;
-	IMG_HANDLE hCleanupCookie;
 } PVRSRV_BRIDGE_IN_RGXKICKCDM;
 
 
@@ -140,8 +138,7 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXKICKCDM_TAG
 /* Bridge in structure for RGXFlushComputeData */
 typedef struct PVRSRV_BRIDGE_IN_RGXFLUSHCOMPUTEDATA_TAG
 {
-	IMG_HANDLE hDevNode;
-	IMG_HANDLE hFWComputeContext;
+	IMG_HANDLE hComputeContext;
 } PVRSRV_BRIDGE_IN_RGXFLUSHCOMPUTEDATA;
 
 
@@ -150,5 +147,23 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXFLUSHCOMPUTEDATA_TAG
 {
 	PVRSRV_ERROR eError;
 } PVRSRV_BRIDGE_OUT_RGXFLUSHCOMPUTEDATA;
+
+/*******************************************
+            RGXSetComputeContextPriority          
+ *******************************************/
+
+/* Bridge in structure for RGXSetComputeContextPriority */
+typedef struct PVRSRV_BRIDGE_IN_RGXSETCOMPUTECONTEXTPRIORITY_TAG
+{
+	IMG_HANDLE hComputeContext;
+	IMG_UINT32 ui32Priority;
+} PVRSRV_BRIDGE_IN_RGXSETCOMPUTECONTEXTPRIORITY;
+
+
+/* Bridge out structure for RGXSetComputeContextPriority */
+typedef struct PVRSRV_BRIDGE_OUT_RGXSETCOMPUTECONTEXTPRIORITY_TAG
+{
+	PVRSRV_ERROR eError;
+} PVRSRV_BRIDGE_OUT_RGXSETCOMPUTECONTEXTPRIORITY;
 
 #endif /* COMMON_RGXCMP_BRIDGE_H */

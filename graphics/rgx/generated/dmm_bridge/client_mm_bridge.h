@@ -47,31 +47,31 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRExportPMR(IMG_HANDLE hBridge,
 							  IMG_HANDLE hPMR,
 							  IMG_HANDLE *phPMRExport,
-							  IMG_UINT64 *pui32Size,
+							  IMG_UINT64 *pui64Size,
 							  IMG_UINT32 *pui32Log2Contig,
-							  IMG_UINT64 *pui32Password);
+							  IMG_UINT64 *pui64Password);
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnexportPMR(IMG_HANDLE hBridge,
 							    IMG_HANDLE hPMRExport);
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRGetUID(IMG_HANDLE hBridge,
 						       IMG_HANDLE hPMR,
-						       IMG_UINT64 *pui32UID);
+						       IMG_UINT64 *pui64UID);
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRMakeServerExportClientExport(IMG_HANDLE hBridge,
 									     DEVMEM_SERVER_EXPORTCOOKIE hPMRServerExport,
 									     IMG_HANDLE *phPMRExportOut,
-									     IMG_UINT64 *pui32Size,
+									     IMG_UINT64 *pui64Size,
 									     IMG_UINT32 *pui32Log2Contig,
-									     IMG_UINT64 *pui32Password);
+									     IMG_UINT64 *pui64Password);
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnmakeServerExportClientExport(IMG_HANDLE hBridge,
 									       IMG_HANDLE hPMRExport);
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRImportPMR(IMG_HANDLE hBridge,
 							  IMG_HANDLE hPMRExport,
-							  IMG_UINT64 ui32uiPassword,
-							  IMG_UINT64 ui32uiSize,
+							  IMG_UINT64 ui64uiPassword,
+							  IMG_UINT64 ui64uiSize,
 							  IMG_UINT32 ui32uiLog2Contig,
 							  IMG_HANDLE *phPMR);
 
@@ -122,6 +122,12 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePhysmemNewRamBackedPMR(IMG_HANDLE h
 								    IMG_UINT32 ui32Log2PageSize,
 								    PVRSRV_MEMALLOCFLAGS_T uiFlags,
 								    IMG_HANDLE *phPMRPtr);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRLocalImportPMR(IMG_HANDLE hBridge,
+							       IMG_HANDLE hExtHandle,
+							       IMG_HANDLE *phPMR,
+							       IMG_DEVMEM_SIZE_T *puiSize,
+							       IMG_DEVMEM_ALIGN_T *psAlign);
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnrefPMR(IMG_HANDLE hBridge,
 							 IMG_HANDLE hPMR);

@@ -46,6 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sync_external.h"
 #include "pdumpdefs.h"
 #include "dllist.h"
+#include "pvr_debug.h"
 
 #ifndef _SYNC_
 #define _SYNC_
@@ -153,7 +154,8 @@ SyncPrimNoHwUpdate(PVRSRV_CLIENT_SYNC_PRIM *psSync, IMG_UINT32 ui32Value);
 PVRSRV_ERROR
 SyncPrimServerAlloc(SYNC_BRIDGE_HANDLE	hBridge,
 					IMG_HANDLE			hDeviceNode,
-					PVRSRV_CLIENT_SYNC_PRIM **ppsSync);
+					PVRSRV_CLIENT_SYNC_PRIM **ppsSync
+					PVR_DBG_FILELINE_PARAM);
 
 PVRSRV_ERROR
 SyncPrimServerGetStatus(IMG_UINT32 ui32SyncCount,
@@ -282,9 +284,9 @@ SyncPrimOpPDumpPol(PSYNC_OP_COOKIE psCookie,
 /*****************************************************************************/
 IMG_VOID 
 SyncPrimPDumpCBP(PVRSRV_CLIENT_SYNC_PRIM *psSync,
-				 IMG_UINT32 uiWriteOffset,
-				 IMG_UINT32 uiPacketSize,
-				 IMG_UINT32 uiBufferSize);
+				 IMG_UINT64 uiWriteOffset,
+				 IMG_UINT64 uiPacketSize,
+				 IMG_UINT64 uiBufferSize);
 
 #else
 
@@ -342,9 +344,9 @@ SyncPrimServerPDumpPol(PVRSRV_CLIENT_SYNC_PRIM *psSync,
 #endif
 static INLINE IMG_VOID 
 SyncPrimPDumpCBP(PVRSRV_CLIENT_SYNC_PRIM *psSync,
-				 IMG_UINT32 uiWriteOffset,
-				 IMG_UINT32 uiPacketSize,
-				 IMG_UINT32 uiBufferSize)
+				 IMG_UINT64 uiWriteOffset,
+				 IMG_UINT64 uiPacketSize,
+				 IMG_UINT64 uiBufferSize)
 {
 	PVR_UNREFERENCED_PARAMETER(psSync);
 	PVR_UNREFERENCED_PARAMETER(uiWriteOffset);

@@ -40,6 +40,8 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /***************************************************************************/
+
+#if defined(PDUMP)
 #include "pdump_physmem.h"
 
 #include "img_types.h"
@@ -50,7 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pdump.h"
 
 #include "pdump_km.h"
-#include "pdump_osfunc.h" // << ugly circular dependency! FIXME FIXME
+#include "pdump_osfunc.h"
 
 #include "allocmem.h"
 #include "osfunc.h"
@@ -59,8 +61,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* static IMG_UINT32 guiPDumpMMUContextAvailabilityMask = (1<<MAX_PDUMP_MMU_CONTEXTS)-1; */
 
 
-/* arbitrary buffer length here.  FIXME: store this data in the MD
-   rather than construct it on the fly on everyone's stacks */
+/* arbitrary buffer length here. */
 #define MAX_SYMBOLIC_ADDRESS_LENGTH 40
 
 struct _PDUMP_PHYSMEM_INFO_T_
@@ -82,12 +83,7 @@ struct _PDUMP_PHYSMEM_INFO_T_
 PVRSRV_ERROR PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
                             const IMG_CHAR *pszSymbolicAddress,
                             IMG_UINT64 ui64Size,
-                            /* alignment is alignment of start
-                               of buffer _and_ minimum
-                               contiguity - i.e. smallest
-                               allowable page-size.  FIXME:
-                               review this decision. */
-                            IMG_UINT32 ui32Align,  /* FIXME: should this be IMG_DEVMEM_ALIGN_T? */
+                            IMG_DEVMEM_ALIGN_T uiAlign,
                             IMG_BOOL bForcePersistent,
                             IMG_HANDLE *phHandlePtr)
 {
@@ -99,7 +95,7 @@ PVRSRV_ERROR PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
 	PDUMP_GET_SCRIPT_STRING()
 
     psPDumpAllocationInfo = OSAllocMem(sizeof*psPDumpAllocationInfo);
-    PVR_ASSERT(psPDumpAllocationInfo != IMG_NULL); /* FIXME: handle error */
+    PVR_ASSERT(psPDumpAllocationInfo != IMG_NULL);
 
 	if (bForcePersistent)
 	{
@@ -123,10 +119,10 @@ PVRSRV_ERROR PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
 	/*
 		Write to the MMU script stream indicating the memory allocation
 	*/
-	eError = PDumpOSBufprintf(hScript, ui32MaxLen, "MALLOC %s 0x%llX 0x%X\n",
+	eError = PDumpOSBufprintf(hScript, ui32MaxLen, "MALLOC %s 0x%llX 0x%llX\n",
                             psPDumpAllocationInfo->aszSymbolicAddress,
                             ui64Size,
-                            ui32Align);
+                            uiAlign);
 	if(eError != PVRSRV_OK)
 	{
 		return eError;
@@ -137,7 +133,7 @@ PVRSRV_ERROR PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
 	PDUMP_UNLOCK();
 
     psPDumpAllocationInfo->ui64Size = ui64Size;
-    psPDumpAllocationInfo->ui32Align = ui32Align;
+    psPDumpAllocationInfo->ui32Align = TRUNCATE_64BITS_TO_32BITS(uiAlign);
 
     *phHandlePtr = (IMG_HANDLE)psPDumpAllocationInfo;
 
@@ -406,12 +402,7 @@ PDumpPMRCBP(const IMG_CHAR *pszMemspaceName,
 }
 
 PVRSRV_ERROR
-PDumpWriteBuffer(/* const */ IMG_UINT8 *pcBuffer,
-                 /* FIXME:
-                    pcBuffer above ought to be :
-                    const IMG_UINT8 *pcBuffer
-                    but, PDumpOSWriteString takes pointer to non-const data.
-                 */
+PDumpWriteBuffer(IMG_UINT8 *pcBuffer,
                  IMG_SIZE_T uiNumBytes,
                  PDUMP_FLAGS_T uiPDumpFlags,
                  IMG_CHAR *pszFilenameOut,
@@ -486,3 +477,41 @@ PDumpWriteBuffer(/* const */ IMG_UINT8 *pcBuffer,
     PVR_ASSERT(eError != PVRSRV_OK);
     return eError;
 }
+
+IMG_INTERNAL IMG_VOID
+PDumpPMRMallocPMR(const PMR *psPMR,
+                  IMG_DEVMEM_SIZE_T uiSize,
+                  IMG_DEVMEM_ALIGN_T uiBlockSize,
+                  IMG_BOOL bForcePersistent,
+                  IMG_HANDLE *phPDumpAllocInfoPtr)
+{
+    PVRSRV_ERROR eError;
+    IMG_HANDLE hPDumpAllocInfo;
+    IMG_CHAR aszMemspaceName[30];
+    IMG_CHAR aszSymbolicName[30];
+    IMG_DEVMEM_OFFSET_T uiOffset;
+    IMG_DEVMEM_OFFSET_T uiNextSymName;
+
+    uiOffset = 0;
+    eError = PMR_PDumpSymbolicAddr(psPMR,
+                                   uiOffset,
+                                   sizeof(aszMemspaceName),
+                                   &aszMemspaceName[0],
+                                   sizeof(aszSymbolicName),
+                                   &aszSymbolicName[0],
+                                   &uiOffset,
+				   &uiNextSymName);
+    PVR_ASSERT(eError == PVRSRV_OK);
+    PVR_ASSERT(uiOffset == 0);
+    PVR_ASSERT((uiOffset + uiSize) <= uiNextSymName);
+
+	PDumpPMRMalloc(aszMemspaceName,
+				   aszSymbolicName,
+				   uiSize,
+				   uiBlockSize,
+				   bForcePersistent,
+				   &hPDumpAllocInfo);
+
+	*phPDumpAllocInfoPtr = hPDumpAllocInfo;
+}
+#endif /* PDUMP */

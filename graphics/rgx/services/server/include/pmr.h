@@ -61,11 +61,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pdumpdefs.h"
 #include "pvrsrv_error.h"
 #include "pvrsrv_memallocflags.h"
-#include "devicemem_typedefs.h"		/* FIXME? Not sure I like having this
-									 * here. Might want to split this
-									 * make serverexportclientexport into
-									 * another file :/
-									 */
+#include "devicemem_typedefs.h"			/* Required for export DEVMEM_EXPORTCOOKIE */
 
 /* services/include */
 #include "pdump.h"
@@ -100,11 +96,6 @@ typedef struct _PMR_EXPORT_ PMR_EXPORT;
 
 typedef struct _PMR_PAGELIST_ PMR_PAGELIST;
 
-/* FIXME: Circler dependency somewhere here.
- * We really need to split up the device node
- * into sub-structures, there is too much
- * cross-domain information in it
- */
 struct _PVRSRV_DEVICE_NODE_;
 
 /*
@@ -258,10 +249,6 @@ PMRLockSysPhysAddresses(PMR *psPMR,
  *
  * the reverse of PMRLockSysPhysAddresses()
  */
-/*
-   FIXME: shouldn't return error, surely this should
-   never fail assuming API has not been abused
-*/
 extern PVRSRV_ERROR
 PMRUnlockSysPhysAddresses(PMR *psPMR);
 
@@ -283,18 +270,6 @@ PMRUnlockSysPhysAddresses(PMR *psPMR);
  * about the size and contiguity guarantee for the PMR, and also the
  * PMRs secret password, in order to authenticate the subsequent
  * import.
- *
- * Note that the call can free (unref) the PMR before it is mapped in
- * the target process, as long as the PMR Export object is still live.
- * [[ er... hang on - that's not quite right...  you still need the
- * psPMR in order to later call PMRUnexportPMR(), so conceptually
- * it would be illegal to unreference the PMR before calling
- * PMRUnexportPMR(), as the unreference would revoke your licence
- * to use the psPMR "handle"...  FIXME: What was meant here?  It's
- * certainly legal to unexport and free the PMR _after_ the receiving
- * process has "import"ed it (to get his own reference to the PMR
- * handle) before the target process has _mapped_ it.  Perhaps this is
- * what I meant. ]]
  *
  * N.B.  If you call PMRExportPMR() (and it succeeds), you are
  * promising to later call PMRUnexportPMR()
@@ -407,6 +382,26 @@ PMR_ReadBytes(PMR *psPMR,
               IMG_UINT8 *pcBuffer,
               IMG_SIZE_T uiBufSz,
               IMG_SIZE_T *puiNumBytes);
+
+/*
+ * PMR_WriteBytes()
+ *
+ * calls into the PMR implementation to write up to uiBufSz bytes,
+ * returning the actual number read in *puiNumBytes
+ *
+ * this will write up to the end of the PMR, or the next symbolic name
+ * boundary, or until the requested number of bytes is written, whichever
+ * comes first
+ *
+ * In the case of sparse PMR's the caller doesn't know what offsets are
+ * valid and which ones aren't so we will just ignore data at invalid offsets
+ */
+extern PVRSRV_ERROR
+PMR_WriteBytes(PMR *psPMR,
+			   IMG_DEVMEM_OFFSET_T uiLogicalOffset,
+               IMG_UINT8 *pcBuffer,
+               IMG_SIZE_T uiBufSz,
+               IMG_SIZE_T *puiNumBytes);
 
 /*
  * PMRRefPMR()
@@ -573,13 +568,6 @@ PMRPDumpLoadMem(PMR *psPMR,
  * providing a means to dump the PMR directly by symbolic address
  * also.
  */
-/* FIXME:
-
-   we don't like this "arraysize" thing.  Why does this function need
-   to know the maximum length of the filename string?  This is here
-   just to support the bridge gen, though I argue that this function
-   ought not to know or care that it is being bridged.
-*/
 extern PVRSRV_ERROR
 PMRPDumpSaveToFile(const PMR *psPMR,
                    IMG_DEVMEM_OFFSET_T uiLogicalOffset,
@@ -681,9 +669,6 @@ PMRPDumpSaveToFile(const PMR *psPMR,
 }
 
 #endif	/* PDUMP */
-/*
-   FIXME:  There must be a better way
- */
 
 /* This function returns the private data that a pmr subtype
    squirrelled in here. We use the function table pointer as
@@ -726,11 +711,6 @@ PMRWriteVFPPageList(/* Target PMR, offset, and length */
                    IMG_UINT32				ui32TableBase,
                    IMG_DEVMEM_LOG2ALIGN_T 	uiLog2PageSize);
 
-/*
-  FIXME:
-
-  Should this function exist, or should we clients use the PDump function directly?
-*/
 #if defined(PDUMP)
 extern PVRSRV_ERROR
 PMRPDumpPol32(const PMR *psPMR,

@@ -105,7 +105,6 @@ PVRSRV_ERROR RGXRunScript(PVRSRV_RGXDEV_INFO	*psDevInfo,
 						   ui32PdumpFlags);
 				break;
 			}
-#if defined(PDUMP)
 			case RGX_INIT_OP_PDUMP_HW_REG:
 			{
 				PDUMPCOMMENT("RGXRunScript: Dump HW reg operation");
@@ -113,7 +112,6 @@ PVRSRV_ERROR RGXRunScript(PVRSRV_RGXDEV_INFO	*psDevInfo,
 						   psComm->sPDumpHWReg.ui32Value, ui32PdumpFlags);
 				break;
 			}
-#endif
 			case RGX_INIT_OP_POLL_HW_REG:
 			{
 				if (PVRSRVPollForValueKM((IMG_UINT32 *)((IMG_UINT8*)psDevInfo->pvRegsBaseKM + psComm->sPollHWReg.ui32Offset),

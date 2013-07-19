@@ -59,8 +59,7 @@ enum {
 	RESMAN_TYPE_SHARED_PB_DESC = 1,					/*!< Parameter buffer kernel stubs */
 	RESMAN_TYPE_SHARED_PB_DESC_CREATE_LOCK,			/*!< Shared parameter buffer creation lock */
 
-	/* MSVDX: */
-	/* FIXME: TBD */
+	/* MSVDX: TBD */
 	
 	/* DISPLAY CLASS: */
 	RESMAN_TYPE_DISPLAYCLASS_SWAPCHAIN_REF,			/*!< Display Class Swapchain Reference Resource */
@@ -103,23 +102,26 @@ enum {
 	RESMAN_TYPE_SHARED_EVENT_OBJECT,				/*!< Shared event object resource */
 
 	/* RGX: */
-	RESMAN_TYPE_RGX_RENDER_CONTEXT,					/*!< RGX Render Context Resource */
-	RESMAN_TYPE_RGX_TQ3D_CONTEXT,					/*!< RGX Transfer Queue 3D Context Resource */
-	RESMAN_TYPE_RGX_TQ2D_CONTEXT,					/*!< RGX Transfer Queue 2D Context Resource */
-	RESMAN_TYPE_RGX_COMPUTE_CONTEXT,				/*!< RGX Compute Context Resource */
+	RESMAN_TYPE_RGX_SERVER_RENDER_CONTEXT,			/*!< RGX Render Context Resource */
+	RESMAN_TYPE_RGX_SERVER_TQ_CONTEXT,				/*!< RGX Transfer Queue Context Resource */
+	RESMAN_TYPE_RGX_SERVER_COMPUTE_CONTEXT,			/*!< RGX Compute Context Resource */
+	RESMAN_TYPE_RGX_SERVER_RAY_CONTEXT,				/*!< RGX Ray Context Resource */
 	RESMAN_TYPE_RGX_MEMORY_BLOCK,					/*!< RGX Freelist Memory Block Resource */
-	RESMAN_TYPE_RGX_CCB,							/*!< RGX Circular Command Buffer Resource */
 	RESMAN_TYPE_RGX_FWIF_HWRTDATA,					/*! < FW HWRTDATA structure */
 	RESMAN_TYPE_RGX_FWIF_RENDERTARGET,					/*! < FW RENDER_TARGET structure */
 	RESMAN_TYPE_RGX_FWIF_ZSBUFFER,					/*!< FW ZS-Buffer structure */
 	RESMAN_TYPE_RGX_POPULATION,						/*!< ZS-Buffer population structure */
 	RESMAN_TYPE_RGX_FWIF_FREELIST,					/*! < FW FREELIST structure */
+	RESMAN_TYPE_RGX_RAY_CONTEXT,					/*!< RGX Ray Context Resource */
 
 	/* KERNEL: */
 	RESMAN_TYPE_KERNEL_DEVICEMEM_ALLOCATION,		/*!< Device Memory Allocation Resource */
 
 	/* TRANSPORT LAYER: */
-	RESMAN_TYPE_TL_STREAM_DESC						/*!< Transport Layer stream descriptor resource */
+	RESMAN_TYPE_TL_STREAM_DESC,						/*!< Transport Layer stream descriptor resource */
+
+	/* RI: */
+	RESMAN_TYPE_RI_HANDLE							/*!< RI resource */
 };
 
 #define RESMAN_CRITERIA_ALL				0x00000000	/*!< match by criteria all */
@@ -178,9 +180,10 @@ PVRSRV_ERROR PVRSRVResManConnect(PRESMAN_DEFER_CONTEXT hDeferContext,
 
 IMG_VOID PVRSRVResManDisconnect(PRESMAN_CONTEXT hResManContext);
 
-PVRSRV_ERROR PVRSRVResManCreateDeferContext(PRESMAN_DEFER_CONTEXT *phDeferContext);
+PVRSRV_ERROR PVRSRVResManCreateDeferContext(IMG_HANDLE hEventObj,
+										    PRESMAN_DEFER_CONTEXT *phDeferContext);
 
-IMG_VOID PVRSRVResManFlushDeferContext(PRESMAN_DEFER_CONTEXT hDeferContext);
+IMG_BOOL PVRSRVResManFlushDeferContext(PRESMAN_DEFER_CONTEXT hDeferContext);
 
 IMG_VOID PVRSRVResManDestroyDeferContext(PRESMAN_DEFER_CONTEXT hDeferContext);
 

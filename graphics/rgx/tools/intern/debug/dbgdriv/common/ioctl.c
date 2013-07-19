@@ -38,6 +38,11 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
+#if defined(UNDER_CE)
+#include <windows.h>
+#include <ceddk.h>
+#else
+
 #if defined(_WIN32)
 #pragma  warning(disable:4201)
 #pragma  warning(disable:4214)
@@ -48,6 +53,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <windef.h>
 
 #endif /* _WIN32 */
+#endif /* UNDER_CE */
 
 #ifdef LINUX
 #include <asm/uaccess.h>

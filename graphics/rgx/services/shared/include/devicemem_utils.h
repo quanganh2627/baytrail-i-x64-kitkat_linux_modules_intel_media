@@ -55,7 +55,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "lock.h"
 #include "devicemem_mmap.h"
 #include "devicemem_utils.h"
-#include "client_mm_bridge.h"
 
 #define DEVMEM_HEAPNAME_MAXLENGTH 160
 
@@ -203,6 +202,10 @@ struct _DEVMEM_MEMDESC_ {
 
 	DEVMEM_DEVICE_MEMDESC sDeviceMemDesc;	/*!< Device specifics of the memdesc */
 	DEVMEM_CPU_MEMDESC sCPUMemDesc;		/*!< CPU specifics of the memdesc */
+
+#if defined(PVR_RI_DEBUG)
+    IMG_HANDLE hRIHandle;					/*!< Handle to RI information */
+#endif
 };
 
 PVRSRV_ERROR _DevmemValidateParams(IMG_DEVMEM_SIZE_T uiSize,
@@ -233,209 +236,22 @@ IMG_VOID _DevmemImportStructCPUUnmap(DEVMEM_IMPORT *psImport);
 
 
 
-/*
-	The Devmem import structure is the structure we use
-	to manage memory that is "imported" (which is page
-	granular) from the server into our process, this
-	includes allocations.
+IMG_VOID _DevmemImportStructAcquire(DEVMEM_IMPORT *psImport);
 
-	This allows memory to be imported without requiring
-	any CPU or device mapping. Memory can then be mapped
-	into the device or CPU on demand, but neither is
-	required.
-*/
+IMG_VOID _DevmemImportStructRelease(DEVMEM_IMPORT *psImport);
 
-static INLINE IMG_VOID _DevmemImportStructAcquire(DEVMEM_IMPORT *psImport)
-{
-	OSLockAcquire(psImport->hLock);
-	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
-					__FUNCTION__,
-					psImport,
-					psImport->ui32RefCount,
-					psImport->ui32RefCount+1);
+IMG_VOID _DevmemImportDiscard(DEVMEM_IMPORT *psImport);
 
-	psImport->ui32RefCount++;
-	OSLockRelease(psImport->hLock);
-}
+PVRSRV_ERROR _DevmemMemDescAlloc(DEVMEM_MEMDESC **ppsMemDesc);
 
-static INLINE IMG_VOID _DevmemImportStructRelease(DEVMEM_IMPORT *psImport)
-{
-	PVR_ASSERT(psImport->ui32RefCount != 0);
+IMG_VOID _DevmemMemDescInit(DEVMEM_MEMDESC *psMemDesc,
+						  	IMG_DEVMEM_OFFSET_T uiOffset,
+						  	DEVMEM_IMPORT *psImport);
 
-	OSLockAcquire(psImport->hLock);
-	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
-					__FUNCTION__,
-					psImport,
-					psImport->ui32RefCount,
-					psImport->ui32RefCount-1);
+IMG_VOID _DevmemMemDescAcquire(DEVMEM_MEMDESC *psMemDesc);
 
-	if (--psImport->ui32RefCount == 0)
-	{
-		OSLockRelease(psImport->hLock);
+IMG_VOID _DevmemMemDescRelease(DEVMEM_MEMDESC *psMemDesc);
 
-		BridgePMRUnrefPMR(psImport->hBridge,
-						  psImport->hPMR);
-		OSLockDestroy(psImport->sCPUImport.hLock);
-		OSLockDestroy(psImport->sDeviceImport.hLock);
-		OSLockDestroy(psImport->hLock);
-		OSFreeMem(psImport);
-	}
-	else
-	{
-		OSLockRelease(psImport->hLock);
-	}
-}
-
-/*
-	Discard a created, but unitilised import structure.
-	This must only be called before _DevmemImportStructInit
-	after which _DevmemImportStructRelease must be used to
-	"free" the import structure
-*/
-static INLINE IMG_VOID _DevmemImportDiscard(DEVMEM_IMPORT *psImport)
-{
-	PVR_ASSERT(psImport->ui32RefCount == 0);
-	OSLockDestroy(psImport->sCPUImport.hLock);
-	OSLockDestroy(psImport->sDeviceImport.hLock);
-	OSLockDestroy(psImport->hLock);
-	OSFreeMem(psImport);
-}
-
-static INLINE PVRSRV_ERROR _DevmemMemDescAlloc(DEVMEM_MEMDESC **ppsMemDesc)
-{
-	DEVMEM_MEMDESC *psMemDesc;
-	PVRSRV_ERROR eError;
-
-	psMemDesc = OSAllocMem(sizeof(DEVMEM_MEMDESC));
-
-	if (psMemDesc == IMG_NULL)
-	{
-		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-		goto failAlloc;
-	}
-	
-	/* Structure must be zero'd incase it needs to be freed before it is initialised! */
-	OSMemSet(psMemDesc, 0, sizeof(DEVMEM_MEMDESC));
-
-	eError = OSLockCreate(&psMemDesc->hLock, LOCK_TYPE_PASSIVE);
-	if (eError != PVRSRV_OK)
-	{
-		goto failMDLock;
-	}
-
-	eError = OSLockCreate(&psMemDesc->sDeviceMemDesc.hLock, LOCK_TYPE_PASSIVE);
-	if (eError != PVRSRV_OK)
-	{
-		goto failDMDLock;
-	}
-
-	eError = OSLockCreate(&psMemDesc->sCPUMemDesc.hLock, LOCK_TYPE_PASSIVE);
-	if (eError != PVRSRV_OK)
-	{
-		goto failCMDLock;
-	}
-
-	*ppsMemDesc = psMemDesc;
-
-	return PVRSRV_OK;
-
-failCMDLock:
-	OSLockDestroy(psMemDesc->sDeviceMemDesc.hLock);
-failDMDLock:
-	OSLockDestroy(psMemDesc->hLock);
-failMDLock:
-	OSFreeMem(psMemDesc);
-failAlloc:
-	PVR_ASSERT(eError != PVRSRV_OK);
-
-	return eError;
-}
-
-/*
-	Init the MemDesc structure
-*/
-static INLINE IMG_VOID _DevmemMemDescInit(DEVMEM_MEMDESC *psMemDesc,
-										  IMG_DEVMEM_OFFSET_T uiOffset,
-										  DEVMEM_IMPORT *psImport)
-{
-	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
-					__FUNCTION__,
-					psMemDesc,
-					0,
-					1);
-
-	psMemDesc->psImport = psImport;
-	psMemDesc->uiOffset = uiOffset;
-
-	psMemDesc->sDeviceMemDesc.ui32RefCount = 0;
-	psMemDesc->sCPUMemDesc.ui32RefCount = 0;
-	psMemDesc->ui32RefCount = 1;
-}
-
-static INLINE IMG_VOID _DevmemMemDescAcquire(DEVMEM_MEMDESC *psMemDesc)
-{
-	OSLockAcquire(psMemDesc->hLock);
-	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
-					__FUNCTION__,
-					psMemDesc,
-					psMemDesc->ui32RefCount,
-					psMemDesc->ui32RefCount+1);
-
-	psMemDesc->ui32RefCount++;
-	OSLockRelease(psMemDesc->hLock);
-}
-
-static INLINE IMG_VOID _DevmemMemDescRelease(DEVMEM_MEMDESC *psMemDesc)
-{
-	PVR_ASSERT(psMemDesc->ui32RefCount != 0);
-
-	OSLockAcquire(psMemDesc->hLock);
-	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
-					__FUNCTION__,
-					psMemDesc,
-					psMemDesc->ui32RefCount,
-					psMemDesc->ui32RefCount-1);
-
-	if (--psMemDesc->ui32RefCount == 0)
-	{
-		OSLockRelease(psMemDesc->hLock);
-
-		if (!psMemDesc->psImport->bExportable)
-		{
-			RA_Free(psMemDesc->psImport->sDeviceImport.psHeap->psSubAllocRA,
-					psMemDesc->psImport->sDeviceImport.sDevVAddr.uiAddr +
-					psMemDesc->uiOffset);
-		}
-		else
-		{
-			_DevmemImportStructRelease(psMemDesc->psImport);
-		}
-
-		OSLockDestroy(psMemDesc->sCPUMemDesc.hLock);
-		OSLockDestroy(psMemDesc->sDeviceMemDesc.hLock);
-		OSLockDestroy(psMemDesc->hLock);
-		OSFreeMem(psMemDesc);
-	}
-	else
-	{
-		OSLockRelease(psMemDesc->hLock);
-	}
-}
-
-/*
-	Discard a created, but unitilised MemDesc structure.
-	This must only be called before _DevmemMemDescInit
-	after which _DevmemMemDescRelease must be used to
-	"free" the MemDesc structure
-*/
-static INLINE IMG_VOID _DevmemMemDescDiscard(DEVMEM_MEMDESC *psMemDesc)
-{
-	PVR_ASSERT(psMemDesc->ui32RefCount == 0);
-
-	OSLockDestroy(psMemDesc->sCPUMemDesc.hLock);
-	OSLockDestroy(psMemDesc->sDeviceMemDesc.hLock);
-	OSLockDestroy(psMemDesc->hLock);
-	OSFreeMem(psMemDesc);
-}
+IMG_VOID _DevmemMemDescDiscard(DEVMEM_MEMDESC *psMemDesc);
 
 #endif /* _DEVICEMEM_UTILS_H_ */

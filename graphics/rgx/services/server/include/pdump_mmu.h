@@ -74,16 +74,6 @@ typedef struct _PDUMP_MMU_ATTRIB_HEAP_
 {
 	/* data page info */
 	IMG_UINT32 ui32DataPageMask;
-#if 0
- 	/* page table info */
- 	IMG_UINT32 ui32PTEValid;
- 	IMG_UINT32 ui32PTSize;
- 	IMG_UINT32 ui32PTEAlignShift;
-
- 	/* page directory info */
- 	IMG_UINT32 ui32PDEMask;
- 	IMG_UINT32 ui32PDEAlignShift;
-#endif
 } PDUMP_MMU_ATTRIB_HEAP;
 
 typedef struct _PDUMP_MMU_ATTRIB_
@@ -209,32 +199,32 @@ PDumpMMUSAB(const IMG_CHAR *pszPDumpMemNamespace,
         PDumpMMUFreeMMUContext(pszPDumpMemDevName, uiPDumpCtxID)
 #else
     #define PDUMP_MMU_MALLOC_PC(pszPDumpMemDevName, pszDevPAddr, ui32Size, ui32Align) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_DUMP_PC_ENTRIES(pszPDumpMemDevName, pvPCMem, sPCDevPAddr, uiFirstEntry, uiNumEntries, uiBytesPerEntry, uiPDAddrAlignShift, uiPDAddrShift, uiPDAddrMask, uiPCEProtMask, ui32Flags) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_FREE_PC(pszPDumpMemDevName, psDevPAddr) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_MALLOC_PD(pszPDumpMemDevName, pszDevPAddr, ui32Size, ui32Align) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_DUMP_PD_ENTRIES(pszPDumpMemDevName, pvPDMem, sPDDevPAddr, uiFirstEntry, uiNumEntries, uiBytesPerEntry, uiPTAddrAlignShift, uiPTAddrShift, uiPTAddrMask, uiPDEProtMask, ui32Flags) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_FREE_PD(pszPDumpMemDevName, psDevPAddr) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_MALLOC_PT(pszPDumpMemDevName, pszDevPAddr, ui32Size, ui32Align) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_DUMP_PT_ENTRIES(pszPDumpMemDevName, pvPCMem, sPCDevPAddr, uiFirstEntry, uiNumEntries, pszDPMemspaceName, pszDPSymbolicAddr, uiDPSymbolicAddrOffset, uiBytesPerEntry, uiDPAddrAlignShift, uiDPAddrShift, uiDPAddrMask, uiPCEProtMask, ui32Flags) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_FREE_PT(pszPDumpMemDevName, psDevPAddr) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_MALLOC_DP(pszPDumpMemDevName, pszDevPAddr, ui32Size, ui32Align) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_FREE_DP(pszPDumpMemDevName, psDevPAddr) \
-        ((void)0)
+        ((IMG_VOID)0)
 
     #define PDUMP_MMU_ALLOC_MMUCONTEXT(pszPDumpMemDevName, sPCDevPAddr, puiPDumpCtxID) \
-        ((void)0)
+        ((IMG_VOID)0)
     #define PDUMP_MMU_FREE_MMUCONTEXT(pszPDumpMemDevName, uiPDumpCtxID) \
-        ((void)0)
+        ((IMG_VOID)0)
 #endif // defined(PDUMP)
 
 #endif

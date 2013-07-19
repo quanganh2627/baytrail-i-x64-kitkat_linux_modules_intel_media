@@ -99,23 +99,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "allocmem.h"
 #include "lock.h"
 
-/*
- *
- * Allow debugging via procfs -- linux only
- *
- */
-#if defined(DEBUG) && defined(__linux__) && defined(CONFIG_PROC_FS) && defined(FIXME_PERPROC)
-/* For this we need a bunch of extra include files. */
-/* NB: really we shouldn't be having to include these here - FIXME
-   perhaps abstract the debug stuff and make a callback? */
-#include <linux/kernel.h>
-/* services5/srvkm/include/ */
-#include "power.h"
-/* services5/srvkm/env/linux/ */
-#include "proc.h"
-#endif
-
-
 /* The initial, and minimum size of the live address -> boundary tag
    structure hash table. The value 64 is a fairly arbitrary
    choice. The hash table resizes on demand so the value choosen is
@@ -247,15 +230,6 @@ struct _RA_ARENA_
 #ifdef RA_STATS
 	RA_STATISTICS sStatistics;
 #endif
-
-#if defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC)
-#define PROC_NAME_SIZE		160
-
-	struct proc_dir_entry* pProcInfo;
-	struct proc_dir_entry* pProcSegs;
-
-	IMG_BOOL bInitProcEntry;
-#endif
 };
 /* #define ENABLE_RA_DUMP	1 */
 #if defined(ENABLE_RA_DUMP)
@@ -266,33 +240,6 @@ IMG_VOID RA_Dump (RA_ARENA *pArena);
 #define RA_LIST_ASSERT(cond)    PVR_ASSERT(cond)
 #else
 #define RA_LIST_ASSERT(cond)
-#endif
-
-#if defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC)
-
-static void RA_ProcSeqShowInfo(struct seq_file *sfile, void* el);
-static void* RA_ProcSeqOff2ElementInfo(struct seq_file * sfile, loff_t off);
-
-static void RA_ProcSeqShowRegs(struct seq_file *sfile, void* el);
-static void* RA_ProcSeqOff2ElementRegs(struct seq_file * sfile, loff_t off);
-
-#endif /* defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC) */
-
-#if defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC)
-static IMG_CHAR *ReplaceSpaces(IMG_CHAR * const pS)
-{
-	IMG_CHAR *pT;
-
-	for(pT = pS; *pT != 0; pT++)
-	{
-		if (*pT == ' ' || *pT == '\t')
-		{
-			*pT = '_';
-		}
-	}
-
-	return pS;
-}
 #endif
 
 /*************************************************************************/ /*!
@@ -1234,51 +1181,6 @@ RA_Create (IMG_CHAR *name,
 	pArena->sStatistics.uExportCount = 0;
 #endif
 
-#if defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC)
-	if(strcmp(pArena->name,"") != 0)
-	{
-		IMG_INT ret;
-		IMG_CHAR szProcInfoName[PROC_NAME_SIZE];
-		IMG_CHAR szProcSegsName[PROC_NAME_SIZE];
-		struct proc_dir_entry* (*pfnCreateProcEntrySeq)(const IMG_CHAR *,
-										 IMG_VOID*,
-										 pvr_next_proc_seq_t,
-										 pvr_show_proc_seq_t,
-										 pvr_off2element_proc_seq_t,
-										 pvr_startstop_proc_seq_t,
-										 write_proc_t);
-
-		pArena->bInitProcEntry = !PVRSRVGetInitServerState(PVRSRV_INIT_SERVER_SUCCESSFUL);
-
-		/* Don't put shared heap info into a per process /proc subdirectory */
-		pfnCreateProcEntrySeq = pArena->bInitProcEntry ? CreateProcEntrySeq : CreatePerProcessProcEntrySeq;
-
-		ret = snprintf(szProcInfoName, sizeof(szProcInfoName), "ra_info_%s", pArena->name);
-		if (ret > 0 && ret < sizeof(szProcInfoName))
-		{
-			pArena->pProcInfo =  pfnCreateProcEntrySeq(ReplaceSpaces(szProcInfoName), pArena, NULL,
-											 RA_ProcSeqShowInfo, RA_ProcSeqOff2ElementInfo, NULL, NULL);
-		}
-		else
-		{
-			pArena->pProcInfo = 0;
-			PVR_DPF((PVR_DBG_ERROR, "RA_Create: couldn't create ra_info proc entry for arena %s", pArena->name));
-		}
-
-		ret = snprintf(szProcSegsName, sizeof(szProcSegsName), "ra_segs_%s", pArena->name);
-		if (ret > 0 && ret < sizeof(szProcInfoName))
-		{
-			pArena->pProcSegs = pfnCreateProcEntrySeq(ReplaceSpaces(szProcSegsName), pArena, NULL,
-											 RA_ProcSeqShowRegs, RA_ProcSeqOff2ElementRegs, NULL, NULL);
-		}
-		else
-		{
-			pArena->pProcSegs = 0;
-			PVR_DPF((PVR_DBG_ERROR, "RA_Create: couldn't create ra_segs proc entry for arena %s", pArena->name));
-		}
-	}
-#endif /* defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC) */
-
 	pArena->pSegmentHash = HASH_Create_Extended(MINIMUM_HASH_SIZE, sizeof(RA_BASE_T), HASH_Func_Default, HASH_Key_Comp_Default);
 
 	if (pArena->pSegmentHash==IMG_NULL)
@@ -1352,23 +1254,6 @@ RA_Delete (RA_ARENA *pArena)
 		pArena->sStatistics.uSpanCount--;
 #endif
 	}
-#if defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC)
-	{
-		IMG_VOID (*pfnRemoveProcEntrySeq)(struct proc_dir_entry*);
-
-		pfnRemoveProcEntrySeq = pArena->bInitProcEntry ? RemoveProcEntrySeq : RemovePerProcessProcEntrySeq;
-
-		if (pArena->pProcInfo != 0)
-		{
-			pfnRemoveProcEntrySeq( pArena->pProcInfo );
-		}
-
-		if (pArena->pProcSegs != 0)
-		{
-			pfnRemoveProcEntrySeq( pArena->pProcSegs );
-		}
-	}
-#endif
 	HASH_Delete (pArena->pSegmentHash);
 	OSLockDestroy(pArena->hLock);
 	OSFreeMem(pArena);
@@ -1853,7 +1738,7 @@ IMG_VOID CheckBMFreespace(IMG_VOID)
 #endif
 
 
-#if (defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC)) || defined (RA_STATS)
+#if (defined(CONFIG_PROC_FS) && defined(DEBUG)) || defined (RA_STATS)
 static IMG_CHAR *
 _BTType (IMG_INT eType)
 {
@@ -1905,105 +1790,6 @@ RA_Dump (RA_ARENA *pArena)
 	OSLockRelease(pArena->hLock);
 }
 #endif /* #if defined(ENABLE_RA_DUMP) */
-
-
-#if defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC)
-
-
-static void RA_ProcSeqShowInfo(struct seq_file *sfile, void* el)
-{
-	PVR_PROC_SEQ_HANDLERS *handlers = (PVR_PROC_SEQ_HANDLERS*)sfile->private;
-	RA_ARENA *pArena = (RA_ARENA *)handlers->data;
-	IMG_INT off = (IMG_INT)el;
-
-	switch (off)
-	{
-	case 1:
-		seq_printf(sfile, "quantum\t\t\t%llu\n", pArena->uQuantum);
-		break;
-	case 2:
-		seq_printf(sfile, "import_handle\t\t%08X\n", (IMG_UINT)pArena->pImportHandle);
-		break;
-#ifdef RA_STATS
-	case 3:
-		seq_printf(sfile,"span count\t\t%u\n", pArena->sStatistics.uSpanCount);
-		break;
-	case 4:
-		seq_printf(sfile, "live segment count\t%u\n", pArena->sStatistics.uLiveSegmentCount);
-		break;
-	case 5:
-		seq_printf(sfile, "free segment count\t%u\n", pArena->sStatistics.uFreeSegmentCount);
-		break;
-	case 6:
-		seq_printf(sfile, "free resource count\t%u (0x%x)\n",
-							pArena->sStatistics.uFreeResourceCount,
-							(IMG_UINT)pArena->sStatistics.uFreeResourceCount);
-		break;
-	case 7:
-		seq_printf(sfile, "total allocs\t\t%u\n", pArena->sStatistics.uCumulativeAllocs);
-		break;
-	case 8:
-		seq_printf(sfile, "total frees\t\t%u\n", pArena->sStatistics.uCumulativeFrees);
-		break;
-	case 9:
-		seq_printf(sfile, "import count\t\t%u\n", pArena->sStatistics.uImportCount);
-		break;
-	case 10:
-		seq_printf(sfile, "export count\t\t%u\n", pArena->sStatistics.uExportCount);
-		break;
-#endif
-	}
-
-}
-
-static void* RA_ProcSeqOff2ElementInfo(struct seq_file * sfile, loff_t off)
-{
-    PVR_UNREFERENCED_PARAMETER(sfile);
-
-#ifdef RA_STATS
-	if(off <= 9)
-#else
-	if(off <= 1)
-#endif
-		return (void*)(IMG_INT)(off+1);
-	return 0;
-}
-
-static void RA_ProcSeqShowRegs(struct seq_file *sfile, void* el)
-{
-	PVR_PROC_SEQ_HANDLERS *handlers = (PVR_PROC_SEQ_HANDLERS*)sfile->private;
-	RA_ARENA *pArena = (RA_ARENA *)handlers->data;
-	BT *pBT = (BT*)el;
-
-	if (el == PVR_PROC_SEQ_START_TOKEN)
-	{
-		seq_printf(sfile, "Arena \"%s\"\nBase         Size Type Ref\n", pArena->name);
-		return;
-	}
-
-	if (pBT)
-	{
-		seq_printf(sfile, RA_BASE_FMTSPEC " " RA_LENGTH_FMTSPEC " %4s %08x\n",
-				   pBT->base, pBT->uSize, _BTType (pBT->type),
-			       (IMG_UINT)pBT->hPriv);
-	}
-}
-
-static void* RA_ProcSeqOff2ElementRegs(struct seq_file * sfile, loff_t off)
-{
-	PVR_PROC_SEQ_HANDLERS *handlers = (PVR_PROC_SEQ_HANDLERS*)sfile->private;
-	RA_ARENA *pArena = (RA_ARENA *)handlers->data;
-	BT *pBT = 0;
-
-	if(off == 0)
-		return PVR_PROC_SEQ_START_TOKEN;
-
-	for (pBT=pArena->pHeadSegment; --off && pBT; pBT=pBT->pNextSegment);
-
-	return (void*)pBT;
-}
-
-#endif /* defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC) */
 
 
 #ifdef RA_STATS

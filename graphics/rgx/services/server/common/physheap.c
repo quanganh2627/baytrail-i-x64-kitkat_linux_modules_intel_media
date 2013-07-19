@@ -78,7 +78,7 @@ struct _PHYS_HEAP_
 
 PHYS_HEAP *g_psPhysHeapList;
 
-#if defined(PHYSHEAP_DEBUG) || defined(REFCOUNT_DEBUG)
+#if defined(REFCOUNT_DEBUG)
 #define PHYSHEAP_REFCOUNT_PRINT(fmt, ...)	\
 	PVRSRVDebugPrintf(PVR_DBG_WARNING,	\
 			  __FILE__,		\
@@ -95,6 +95,8 @@ PVRSRV_ERROR PhysHeapRegister(PHYS_HEAP_CONFIG *psConfig,
 {
 	PHYS_HEAP *psNew;
 	PHYS_HEAP *psTmp;
+
+	PVR_DPF_ENTERED;
 
 	if (psConfig->eType == PHYS_HEAP_TYPE_UNKNOWN)
 	{
@@ -127,20 +129,20 @@ PVRSRV_ERROR PhysHeapRegister(PHYS_HEAP_CONFIG *psConfig,
 	psNew->ui32RefCount = 0;
 	psNew->pszPDumpMemspaceName = psConfig->pszPDumpMemspaceName;
 
-	/* FIXME: Lock */
 	psNew->psNext = g_psPhysHeapList;
 	g_psPhysHeapList = psNew;
-	/* FIXME: Unlock */
 
 	*ppsPhysHeap = psNew;
-	return PVRSRV_OK;
+
+	PVR_DPF_RETURN_RC1(PVRSRV_OK, *ppsPhysHeap);
 }
 
 IMG_VOID PhysHeapUnregister(PHYS_HEAP *psPhysHeap)
 {
+	PVR_DPF_ENTERED1(psPhysHeap);
+
 	PVR_ASSERT(psPhysHeap->ui32RefCount == 0);
 
-	/* FIXME: Lock */
 	if (g_psPhysHeapList == psPhysHeap)
 	{
 		g_psPhysHeapList = psPhysHeap->psNext;
@@ -156,8 +158,9 @@ IMG_VOID PhysHeapUnregister(PHYS_HEAP *psPhysHeap)
 		psTmp->psNext = psPhysHeap->psNext;
 	}
 
-	/* FIXME: Unlock */
 	OSFreeMem(psPhysHeap);
+
+	PVR_DPF_RETURN;
 }
 
 PVRSRV_ERROR PhysHeapAcquire(IMG_UINT32 ui32PhysHeapID,
@@ -166,7 +169,8 @@ PVRSRV_ERROR PhysHeapAcquire(IMG_UINT32 ui32PhysHeapID,
 	PHYS_HEAP *psTmp = g_psPhysHeapList;
 	PVRSRV_ERROR eError = PVRSRV_OK;
 
-	/* FIXME: Lock */
+	PVR_DPF_ENTERED1(ui32PhysHeapID);
+
 	while (psTmp)
 	{
 		if (psTmp->ui32PhysHeapID == ui32PhysHeapID)
@@ -186,15 +190,18 @@ PVRSRV_ERROR PhysHeapAcquire(IMG_UINT32 ui32PhysHeapID,
 		PHYSHEAP_REFCOUNT_PRINT("%s: Heap %p, refcount = %d", __FUNCTION__, psTmp, psTmp->ui32RefCount);
 	}
 
-	/* FIXME: Unlock */
 	*ppsPhysHeap = psTmp;
-	return eError;
+	PVR_DPF_RETURN_RC1(eError, *ppsPhysHeap);
 }
 
 IMG_VOID PhysHeapRelease(PHYS_HEAP *psPhysHeap)
 {
+	PVR_DPF_ENTERED1(psPhysHeap);
+
 	psPhysHeap->ui32RefCount--;
 	PHYSHEAP_REFCOUNT_PRINT("%s: Heap %p, refcount = %d", __FUNCTION__, psPhysHeap, psPhysHeap->ui32RefCount);
+
+	PVR_DPF_RETURN;
 }
 
 PHYS_HEAP_TYPE PhysHeapGetType(PHYS_HEAP *psPhysHeap)
@@ -214,7 +221,7 @@ PVRSRV_ERROR PhysHeapGetAddress(PHYS_HEAP *psPhysHeap,
 	return PVRSRV_ERROR_INVALID_PARAMS;
 }
 
-PHYS_HEAP_TYPE PhysHeapGetSize(PHYS_HEAP *psPhysHeap,
+PVRSRV_ERROR PhysHeapGetSize(PHYS_HEAP *psPhysHeap,
 							   IMG_UINT64 *puiSize)
 {
 	if (psPhysHeap->eType == PHYS_HEAP_TYPE_LMA)

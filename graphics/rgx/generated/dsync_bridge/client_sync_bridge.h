@@ -139,9 +139,9 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimOpPDumpPol(IMG_HANDLE hBrid
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimPDumpCBP(IMG_HANDLE hBridge,
 							      IMG_HANDLE hSyncHandle,
 							      IMG_UINT32 ui32Offset,
-							      IMG_UINT32 ui32WriteOffset,
-							      IMG_UINT32 ui32PacketSize,
-							      IMG_UINT32 ui32BufferSize);
+							      IMG_DEVMEM_OFFSET_T uiWriteOffset,
+							      IMG_DEVMEM_SIZE_T uiPacketSize,
+							      IMG_DEVMEM_SIZE_T uiBufferSize);
 
 
 #endif /* CLIENT_SYNC_BRIDGE_H */

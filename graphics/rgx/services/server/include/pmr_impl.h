@@ -55,11 +55,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 typedef IMG_VOID *PMR_IMPL_PRIVDATA;
 
-/*
-  FIXME:
-  is it right that PMR flags takes the same type as memallocflags?
-  Strictly, it would only need to be a subset.
-*/
 typedef PVRSRV_MEMALLOCFLAGS_T PMR_FLAGS_T;
 
 typedef struct {
@@ -153,6 +148,24 @@ typedef struct {
                                  IMG_UINT8 *pcBuffer,
                                  IMG_SIZE_T uiBufSz,
                                  IMG_SIZE_T *puiNumBytes);
+
+    /*
+     * Write up to uiBufSz bytes into the PMR.
+     * The pmr will be already locked.
+     *
+     * Overriding this is optional.  The default implementation will
+     * acquire a kernel virtual address with
+     * pfnAcquireKernelMappingData and OSMemCopy the data directly
+     *
+     * Note:
+     * This function callback is optional and unlike pfnReadBytes
+     * isn't required if pfnAcquireKernelMappingData isn't provided
+     */
+    PVRSRV_ERROR (*pfnWriteBytes)(PMR_IMPL_PRIVDATA pvPriv,
+                                  IMG_DEVMEM_OFFSET_T uiOffset,
+                                  IMG_UINT8 *pcBuffer,
+                                  IMG_SIZE_T uiBufSz,
+                                  IMG_SIZE_T *puiNumBytes);
     /*
      * Finalize()
      *

@@ -50,6 +50,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define EMU_RGX_CLOCK_FREQ		(400000000)
 #define RESERVE_DC_MEM_SIZE		(16 * 1024 * 1024)
 
+#define SYS_RGX_ACTIVE_POWER_LATENCY_MS (500)
+
 static IMG_UINT32 EmuRGXClockFreq(IMG_HANDLE hSysData);
 
 static IMG_VOID EmuCpuPAddrToDevPAddr(IMG_HANDLE hPrivData,
@@ -60,7 +62,7 @@ static IMG_VOID EmuDevPAddrToCpuPAddr(IMG_HANDLE hPrivData,
 										IMG_CPU_PHYADDR *psCpuPAddr,
 										IMG_DEV_PHYADDR *psDevPAddr);
 
-static RGX_TIMING_INFORMATION sRGXTimingInfo = { 0, IMG_FALSE, IMG_FALSE };
+static RGX_TIMING_INFORMATION sRGXTimingInfo = { 0, IMG_FALSE, IMG_FALSE, SYS_RGX_ACTIVE_POWER_LATENCY_MS};
 
 static RGX_DATA sRGXData = { &sRGXTimingInfo };
 
@@ -158,6 +160,16 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig = {
 	IMG_NULL,
 };
 #endif
+
+/* default BIF tiling heap x-stride configurations. */
+static IMG_UINT32 gauiBIFTilingHeapXStrides[RGXFWIF_NUM_BIF_TILING_CONFIGS] =
+{
+	0, /* BIF tiling heap 1 x-stride */
+	1, /* BIF tiling heap 2 x-stride */
+	2, /* BIF tiling heap 3 x-stride */
+	3  /* BIF tiling heap 4 x-stride */
+};
+
 static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 	/* uiSysFlags */
 	0,
@@ -171,8 +183,8 @@ static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 	IMG_NULL,
 	/* pfnSysPostPowerState */
 	IMG_NULL,
-	/* bHasCacheSnooping */
-	IMG_FALSE,
+	/* eCacheSnoopingMode */
+	PVRSRV_SYSTEM_SNOOP_NONE,
 #if defined(LMA)
 	/* pasPhysHeaps */
 	&gsPhysHeapConfig[0],
@@ -182,6 +194,10 @@ static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 	/* Physcial memory heaps */
 	/* ui32PhysHeapCount */
 	sizeof(gsPhysHeapConfig) / sizeof(PHYS_HEAP_CONFIG),
+
+	/* BIF tiling heap config */
+	gauiBIFTilingHeapXStrides,
+	IMG_ARR_NUM_ELEMS(gauiBIFTilingHeapXStrides),
 };
 
 /*****************************************************************************

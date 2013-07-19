@@ -1,9 +1,6 @@
 /*************************************************************************/ /*!
-@File
-@Title          Common bridge header for rgxccb
+@Title          RGX Config BVNC 1.V.4.15
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    Declares common defines and structures that are used by both
-                the client and sever side of the bridge for rgxccb
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -42,61 +39,24 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef COMMON_RGXCCB_BRIDGE_H
-#define COMMON_RGXCCB_BRIDGE_H
+#ifndef _RGXCONFIG_KM_1_V_4_15_H_
+#define _RGXCONFIG_KM_1_V_4_15_H_
 
-#include "rgx_bridge.h"
-#include "devicemem_typedefs.h"
+/***** Automatically generated file (6/17/2013 9:49:09 AM): Do not edit manually ********************/
+/***** Timestamp:  (6/17/2013 9:49:09 AM)************************************************************/
 
+#define RGX_BNC_KM_B 1
+#define RGX_BNC_KM_N 4
+#define RGX_BNC_KM_C 15
 
-/* FIXME: need to create pvrbridge_common.h" */
-#include "pvr_bridge.h"
-
-#define PVRSRV_BRIDGE_RGXCCB_CMD_FIRST			(PVRSRV_BRIDGE_RGXCCB_START)
-#define PVRSRV_BRIDGE_RGXCCB_RGXCREATECCB			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXCCB_CMD_FIRST+0)
-#define PVRSRV_BRIDGE_RGXCCB_RGXDESTROYCCB			PVRSRV_IOWR(PVRSRV_BRIDGE_RGXCCB_CMD_FIRST+1)
-#define PVRSRV_BRIDGE_RGXCCB_CMD_LAST			(PVRSRV_BRIDGE_RGXCCB_CMD_FIRST+1)
-
-
-/*******************************************
-            RGXCreateCCB          
- *******************************************/
-
-/* Bridge in structure for RGXCreateCCB */
-typedef struct PVRSRV_BRIDGE_IN_RGXCREATECCB_TAG
-{
-	IMG_HANDLE hDevNode;
-	IMG_UINT32 ui32AllocSize;
-	IMG_UINT32 ui32AllocAlignment;
-} PVRSRV_BRIDGE_IN_RGXCREATECCB;
+/******************************************************************************
+ * DDK Defines
+ *****************************************************************************/
+#define RGX_FEATURE_SLC_SIZE_IN_BYTES (256*1024)
+#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
+#define RGX_FEATURE_AXI_ACELITE 
+#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
+#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 
 
-/* Bridge out structure for RGXCreateCCB */
-typedef struct PVRSRV_BRIDGE_OUT_RGXCREATECCB_TAG
-{
-	IMG_HANDLE hCleanupCookie;
-	IMG_HANDLE hClientCCBMemDesc;
-	IMG_HANDLE hClientCCBCtlMemDesc;
-	DEVMEM_SERVER_EXPORTCOOKIE hClientCCBExportCookie;
-	DEVMEM_SERVER_EXPORTCOOKIE hClientCCBCtlExportCookie;
-	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_RGXCREATECCB;
-
-/*******************************************
-            RGXDestroyCCB          
- *******************************************/
-
-/* Bridge in structure for RGXDestroyCCB */
-typedef struct PVRSRV_BRIDGE_IN_RGXDESTROYCCB_TAG
-{
-	IMG_HANDLE hCleanupCookie;
-} PVRSRV_BRIDGE_IN_RGXDESTROYCCB;
-
-
-/* Bridge out structure for RGXDestroyCCB */
-typedef struct PVRSRV_BRIDGE_OUT_RGXDESTROYCCB_TAG
-{
-	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_RGXDESTROYCCB;
-
-#endif /* COMMON_RGXCCB_BRIDGE_H */
+#endif /* _RGXCONFIG_1_V_4_15_H_ */

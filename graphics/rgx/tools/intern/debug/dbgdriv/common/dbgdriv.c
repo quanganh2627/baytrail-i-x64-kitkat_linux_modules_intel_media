@@ -40,6 +40,11 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
+#if defined(UNDER_CE)
+#include <windows.h>
+#include <ceddk.h>
+
+#else
 #if defined(_WIN32)
 #pragma  warning(disable:4201)
 #pragma  warning(disable:4214)
@@ -51,6 +56,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <windef.h>
 #include <winerror.h>
 #endif /* _WIN32 */
+#endif /* UNDER_CE */
 
 #ifdef LINUX
 #include <linux/string.h>
@@ -2701,6 +2707,16 @@ IMG_UINT32 IMG_CALLCONV DBGDrivWriteLF(PDBG_STREAM psStream, IMG_UINT8 * pui8InB
 			Append the data to the end of the buffer
 		*/
 		ui32InBuffSize = ((psLFBuffer->ui32BufLen + ui32InBuffSize) > LAST_FRAME_BUF_SIZE) ? (LAST_FRAME_BUF_SIZE - psLFBuffer->ui32BufLen) : ui32InBuffSize;
+		
+		/*
+		 	No room in the buffer?
+		 */
+		if(ui32InBuffSize == 0)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "DBGDrivWriteLF: No more space available in the LF buffer."));
+			return(0xFFFFFFFFUL);
+		}
+		
 		HostMemCopy((IMG_VOID *)(&psLFBuffer->ui8Buffer[psLFBuffer->ui32BufLen]), (IMG_VOID *)pui8InBuf, ui32InBuffSize);
 		psLFBuffer->ui32BufLen += ui32InBuffSize;
 	}

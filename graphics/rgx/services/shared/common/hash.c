@@ -592,6 +592,40 @@ HASH_Retrieve (HASH_TABLE *pHash, IMG_UINTPTR_T k)
 	return HASH_Retrieve_Extended(pHash, &k);
 }
 
+/*************************************************************************/ /*!
+@Function       HASH_Iterate
+@Description    Iterate over every entry in the hash table
+@Input          pHash - Hash table to iterate
+@Input          pfnCallback - Callback to call with the key and data for each
+							  entry in the hash table
+@Return         Callback error if any, otherwise PVRSRV_OK
+*/ /**************************************************************************/
+IMG_INTERNAL PVRSRV_ERROR
+HASH_Iterate(HASH_TABLE *pHash, HASH_pfnCallback pfnCallback)
+{
+    IMG_UINT32 uIndex;
+    for (uIndex=0; uIndex < pHash->uSize; uIndex++)
+    {
+        BUCKET *pBucket;
+        pBucket = pHash->ppBucketTable[uIndex];
+        while (pBucket != IMG_NULL)
+        {
+            PVRSRV_ERROR eError;
+            BUCKET *pNextBucket = pBucket->pNext;
+
+            eError = pfnCallback((IMG_UINTPTR_T) ((IMG_VOID *) *(pBucket->k)), (IMG_UINTPTR_T) pBucket->v);
+
+            /* The callback might want us to break out early */
+            if (eError != PVRSRV_OK)
+                return eError;
+
+            pBucket = pNextBucket;
+        }
+    }
+    return PVRSRV_OK;
+}
+
+
 #ifdef HASH_TRACE
 /*************************************************************************/ /*!
 @Function       HASH_Dump

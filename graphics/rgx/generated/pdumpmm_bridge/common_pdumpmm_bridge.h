@@ -115,7 +115,7 @@ typedef struct PVRSRV_BRIDGE_IN_PMRPDUMPLOADMEMVALUE64_TAG
 {
 	IMG_HANDLE hPMR;
 	IMG_DEVMEM_OFFSET_T uiOffset;
-	IMG_UINT64 ui32Value;
+	IMG_UINT64 ui64Value;
 	IMG_UINT32 ui32PDumpFlags;
 } PVRSRV_BRIDGE_IN_PMRPDUMPLOADMEMVALUE64;
 
@@ -158,6 +158,10 @@ typedef struct PVRSRV_BRIDGE_IN_PMRPDUMPSYMBOLICADDR_TAG
 	IMG_DEVMEM_OFFSET_T uiOffset;
 	IMG_UINT32 ui32MemspaceNameLen;
 	IMG_UINT32 ui32SymbolicAddrLen;
+	/* Output pointer puiMemspaceName is also an implied input */
+	IMG_CHAR * puiMemspaceName;
+	/* Output pointer puiSymbolicAddr is also an implied input */
+	IMG_CHAR * puiSymbolicAddr;
 } PVRSRV_BRIDGE_IN_PMRPDUMPSYMBOLICADDR;
 
 

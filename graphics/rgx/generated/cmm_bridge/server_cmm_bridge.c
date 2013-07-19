@@ -51,6 +51,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_cmm_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -58,7 +59,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
+
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
 
 static PVRSRV_ERROR
 PMRUnwritePMPageListResManProxy(IMG_HANDLE hResmanItem)
@@ -74,130 +83,71 @@ PMRUnwritePMPageListResManProxy(IMG_HANDLE hResmanItem)
 }
 
 
-static IMG_INT
-PVRSRVBridgePMRLocalImportPMR(IMG_UINT32 ui32BridgeID,
-					 PVRSRV_BRIDGE_IN_PMRLOCALIMPORTPMR *psPMRLocalImportPMRIN,
-					 PVRSRV_BRIDGE_OUT_PMRLOCALIMPORTPMR *psPMRLocalImportPMROUT,
-					 CONNECTION_DATA *psConnection)
-{
-	PMR * psExtHandleInt;
-	IMG_HANDLE hExtHandleInt2;
-	PMR * psPMRInt;
-	IMG_HANDLE hPMRInt2;
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_CMM_PMRLOCALIMPORTPMR);
-
-
-	NEW_HANDLE_BATCH_OR_ERROR(psPMRLocalImportPMROUT->eError, psConnection, 1);
-
-	/* Look up the address from the handle */
-	psPMRLocalImportPMROUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hExtHandleInt2,
-						   psPMRLocalImportPMRIN->hExtHandle,
-						   PVRSRV_HANDLE_TYPE_DEVMEM_MEM_IMPORT);
-	if(psPMRLocalImportPMROUT->eError != PVRSRV_OK)
-	{
-		goto PMRLocalImportPMR_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psPMRLocalImportPMROUT->eError = ResManFindPrivateDataByPtr(hExtHandleInt2, (IMG_VOID **) &psExtHandleInt);
-	if(psPMRLocalImportPMROUT->eError != PVRSRV_OK)
-	{
-		goto PMRLocalImportPMR_exit;
-	}
-
-	psPMRLocalImportPMROUT->eError =
-		PMRLocalImportPMR(
-					psExtHandleInt,
-					&psPMRInt,
-					&psPMRLocalImportPMROUT->uiSize,
-					&psPMRLocalImportPMROUT->sAlign);
-	/* Exit early if bridged call fails */
-	if(psPMRLocalImportPMROUT->eError != PVRSRV_OK)
-	{
-		goto PMRLocalImportPMR_exit;
-	}
-
-	/* Create a resman item and overwrite the handle with it */
-	hPMRInt2 = ResManRegisterRes(psConnection->hResManContext,
-												RESMAN_TYPE_PMR,
-												psPMRInt,
-												/* FIXME: how can we avoid this cast? */
-												(RESMAN_FREE_FN)&PMRUnrefPMR);
-	if (hPMRInt2 == IMG_NULL)
-	{
-		psPMRLocalImportPMROUT->eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_RESOURCE;
-		goto PMRLocalImportPMR_exit;
-	}
-	PVRSRVAllocHandleNR(psConnection->psHandleBase,
-					  &psPMRLocalImportPMROUT->hPMR,
-					  (IMG_HANDLE) hPMRInt2,
-					  PVRSRV_HANDLE_TYPE_PHYSMEM_PMR,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
-	COMMIT_HANDLE_BATCH_OR_ERROR(psPMRLocalImportPMROUT->eError, psConnection);
-
-
-
-PMRLocalImportPMR_exit:
-
-	return 0;
-}
-
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
 PVRSRVBridgePMRWritePMPageList(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_PMRWRITEPMPAGELIST *psPMRWritePMPageListIN,
 					 PVRSRV_BRIDGE_OUT_PMRWRITEPMPAGELIST *psPMRWritePMPageListOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psPageListPMRInt;
-	IMG_HANDLE hPageListPMRInt2;
-	PMR * psReferencePMRInt;
-	IMG_HANDLE hReferencePMRInt2;
-	PMR_PAGELIST * psPageListInt;
-	IMG_HANDLE hPageListInt2;
+	PMR * psPageListPMRInt = IMG_NULL;
+	IMG_HANDLE hPageListPMRInt2 = IMG_NULL;
+	PMR * psReferencePMRInt = IMG_NULL;
+	IMG_HANDLE hReferencePMRInt2 = IMG_NULL;
+	PMR_PAGELIST * psPageListInt = IMG_NULL;
+	IMG_HANDLE hPageListInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_CMM_PMRWRITEPMPAGELIST);
 
 
-	NEW_HANDLE_BATCH_OR_ERROR(psPMRWritePMPageListOUT->eError, psConnection, 1);
 
-	/* Look up the address from the handle */
-	psPMRWritePMPageListOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPageListPMRInt2,
-						   psPMRWritePMPageListIN->hPageListPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
-	{
-		goto PMRWritePMPageList_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psPMRWritePMPageListOUT->eError = ResManFindPrivateDataByPtr(hPageListPMRInt2, (IMG_VOID **) &psPageListPMRInt);
-	if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
-	{
-		goto PMRWritePMPageList_exit;
-	}
-	/* Look up the address from the handle */
-	psPMRWritePMPageListOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hReferencePMRInt2,
-						   psPMRWritePMPageListIN->hReferencePMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
-	{
-		goto PMRWritePMPageList_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psPMRWritePMPageListOUT->eError = ResManFindPrivateDataByPtr(hReferencePMRInt2, (IMG_VOID **) &psReferencePMRInt);
-	if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
-	{
-		goto PMRWritePMPageList_exit;
-	}
+				{
+					/* Look up the address from the handle */
+					psPMRWritePMPageListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPageListPMRInt2,
+											psPMRWritePMPageListIN->hPageListPMR,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
+					{
+						goto PMRWritePMPageList_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psPMRWritePMPageListOUT->eError = ResManFindPrivateDataByPtr(hPageListPMRInt2, (IMG_VOID **) &psPageListPMRInt);
+
+					if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
+					{
+						goto PMRWritePMPageList_exit;
+					}
+				}
+
+				{
+					/* Look up the address from the handle */
+					psPMRWritePMPageListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hReferencePMRInt2,
+											psPMRWritePMPageListIN->hReferencePMR,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
+					{
+						goto PMRWritePMPageList_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psPMRWritePMPageListOUT->eError = ResManFindPrivateDataByPtr(hReferencePMRInt2, (IMG_VOID **) &psReferencePMRInt);
+
+					if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
+					{
+						goto PMRWritePMPageList_exit;
+					}
+				}
 
 	psPMRWritePMPageListOUT->eError =
 		PMRWritePMPageList(
@@ -207,7 +157,7 @@ PVRSRVBridgePMRWritePMPageList(IMG_UINT32 ui32BridgeID,
 					psReferencePMRInt,
 					psPMRWritePMPageListIN->ui32Log2PageSize,
 					&psPageListInt,
-					&psPMRWritePMPageListOUT->ui32CheckSum);
+					&psPMRWritePMPageListOUT->ui64CheckSum);
 	/* Exit early if bridged call fails */
 	if(psPMRWritePMPageListOUT->eError != PVRSRV_OK)
 	{
@@ -225,17 +175,35 @@ PVRSRVBridgePMRWritePMPageList(IMG_UINT32 ui32BridgeID,
 		psPMRWritePMPageListOUT->eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_RESOURCE;
 		goto PMRWritePMPageList_exit;
 	}
-	PVRSRVAllocHandleNR(psConnection->psHandleBase,
-					  &psPMRWritePMPageListOUT->hPageList,
-					  (IMG_HANDLE) hPageListInt2,
-					  PVRSRV_HANDLE_TYPE_PHYSMEM_PMR_PAGELIST,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
-	COMMIT_HANDLE_BATCH_OR_ERROR(psPMRWritePMPageListOUT->eError, psConnection);
-
+	psPMRWritePMPageListOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
+							&psPMRWritePMPageListOUT->hPageList,
+							(IMG_HANDLE) hPageListInt2,
+							PVRSRV_HANDLE_TYPE_PHYSMEM_PMR_PAGELIST,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							);
+	if (psPMRWritePMPageListOUT->eError != PVRSRV_OK)
+	{
+		goto PMRWritePMPageList_exit;
+	}
 
 
 PMRWritePMPageList_exit:
+	if (psPMRWritePMPageListOUT->eError != PVRSRV_OK)
+	{
+		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
+		if (hPageListInt2)
+		{
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hPageListInt2);
+
+			/* Freeing a resource should never fail... */
+			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
+		}
+		else if (psPageListInt)
+		{
+			PMRUnwritePMPageList(psPageListInt);
+		}
+	}
+
 
 	return 0;
 }
@@ -246,29 +214,35 @@ PVRSRVBridgePMRWriteVFPPageList(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PMRWRITEVFPPAGELIST *psPMRWriteVFPPageListOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	PMR * psFreeListPMRInt;
-	IMG_HANDLE hFreeListPMRInt2;
+	PMR * psFreeListPMRInt = IMG_NULL;
+	IMG_HANDLE hFreeListPMRInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_CMM_PMRWRITEVFPPAGELIST);
 
 
-	/* Look up the address from the handle */
-	psPMRWriteVFPPageListOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hFreeListPMRInt2,
-						   psPMRWriteVFPPageListIN->hFreeListPMR,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
-	if(psPMRWriteVFPPageListOUT->eError != PVRSRV_OK)
-	{
-		goto PMRWriteVFPPageList_exit;
-	}
 
-	/* Look up the data from the resman address */
-	psPMRWriteVFPPageListOUT->eError = ResManFindPrivateDataByPtr(hFreeListPMRInt2, (IMG_VOID **) &psFreeListPMRInt);
-	if(psPMRWriteVFPPageListOUT->eError != PVRSRV_OK)
-	{
-		goto PMRWriteVFPPageList_exit;
-	}
+
+
+				{
+					/* Look up the address from the handle */
+					psPMRWriteVFPPageListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hFreeListPMRInt2,
+											psPMRWriteVFPPageListIN->hFreeListPMR,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR);
+					if(psPMRWriteVFPPageListOUT->eError != PVRSRV_OK)
+					{
+						goto PMRWriteVFPPageList_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psPMRWriteVFPPageListOUT->eError = ResManFindPrivateDataByPtr(hFreeListPMRInt2, (IMG_VOID **) &psFreeListPMRInt);
+
+					if(psPMRWriteVFPPageListOUT->eError != PVRSRV_OK)
+					{
+						goto PMRWriteVFPPageList_exit;
+					}
+				}
 
 	psPMRWriteVFPPageListOUT->eError =
 		PMRWriteVFPPageList(
@@ -291,21 +265,27 @@ PVRSRVBridgePMRUnwritePMPageList(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_OUT_PMRUNWRITEPMPAGELIST *psPMRUnwritePMPageListOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hPageListInt2;
+	IMG_HANDLE hPageListInt2 = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_CMM_PMRUNWRITEPMPAGELIST);
 
 
-	/* Look up the address from the handle */
-	psPMRUnwritePMPageListOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPageListInt2,
-						   psPMRUnwritePMPageListIN->hPageList,
-						   PVRSRV_HANDLE_TYPE_PHYSMEM_PMR_PAGELIST);
-	if(psPMRUnwritePMPageListOUT->eError != PVRSRV_OK)
-	{
-		goto PMRUnwritePMPageList_exit;
-	}
+
+
+
+				{
+					/* Look up the address from the handle */
+					psPMRUnwritePMPageListOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPageListInt2,
+											psPMRUnwritePMPageListIN->hPageList,
+											PVRSRV_HANDLE_TYPE_PHYSMEM_PMR_PAGELIST);
+					if(psPMRUnwritePMPageListOUT->eError != PVRSRV_OK)
+					{
+						goto PMRUnwritePMPageList_exit;
+					}
+
+				}
 
 	psPMRUnwritePMPageListOUT->eError = PMRUnwritePMPageListResManProxy(hPageListInt2);
 	/* Exit early if bridged call fails */
@@ -326,6 +306,11 @@ PMRUnwritePMPageList_exit:
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterCMMFunctions(IMG_VOID);
 IMG_VOID UnregisterCMMFunctions(IMG_VOID);
 
@@ -334,7 +319,6 @@ IMG_VOID UnregisterCMMFunctions(IMG_VOID);
  */
 PVRSRV_ERROR RegisterCMMFunctions(IMG_VOID)
 {
-	SetDispatchTableEntry(PVRSRV_BRIDGE_CMM_PMRLOCALIMPORTPMR, PVRSRVBridgePMRLocalImportPMR);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_CMM_PMRWRITEPMPAGELIST, PVRSRVBridgePMRWritePMPageList);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_CMM_PMRWRITEVFPPAGELIST, PVRSRVBridgePMRWriteVFPPageList);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_CMM_PMRUNWRITEPMPAGELIST, PVRSRVBridgePMRUnwritePMPageList);

@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 2.7.6.3
+@File
+@Title          RGX transfer queue shared
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    Shared definations between client and server
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,41 +41,23 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_2_7_6_3_H_
-#define _RGXCONFIG_KM_2_7_6_3_H_
+#ifndef __RGX_TQ_SHARED_H__
+#define __RGX_TQ_SHARED_H__
 
-/***** Automatically generated file (4/8/2013 10:23:32 AM): Do not edit manually ********************/
-/***** Timestamp:  (4/8/2013 10:23:32 AM)************************************************************/
-/***** CS: @2200583 ******************************************************************/
+#define TQ_MAX_PREPARES_PER_SUBMIT		16
 
+#define TQ_PREP_FLAGS_COMMAND_3D		0x0
+#define TQ_PREP_FLAGS_COMMAND_2D		0x1
+#define TQ_PREP_FLAGS_COMMAND_MASK		(0xf)
+#define TQ_PREP_FLAGS_COMMAND_SHIFT		0
+#define TQ_PREP_FLAGS_PDUMPCONTINUOUS	(1 << 4)
+#define TQ_PREP_FLAGS_START				(1 << 5)
+#define TQ_PREP_FLAGS_END				(1 << 6)
 
-/******************************************************************************
- * BVNC = 2.7.6.3 
- *****************************************************************************/
-#define RGX_BVNC_B 2
-#define RGX_BVNC_V 7
-#define RGX_BVNC_N 6
-#define RGX_BVNC_C 3
+#define TQ_PREP_FLAGS_COMMAND_SET(m) \
+	((TQ_PREP_FLAGS_COMMAND_##m << TQ_PREP_FLAGS_COMMAND_SHIFT) & TQ_PREP_FLAGS_COMMAND_MASK)
 
-/******************************************************************************
- * Errata 
- *****************************************************************************/
+#define TQ_PREP_FLAGS_COMMAND_IS(m,n) \
+	(((m & TQ_PREP_FLAGS_COMMAND_MASK) >> TQ_PREP_FLAGS_COMMAND_SHIFT)  == TQ_PREP_FLAGS_COMMAND_##n)
 
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-/******************************************************************************
-* DDK Defines
-*****************************************************************************/
-
-#define RGX_FEATURE_SLC_SIZE_IN_BYTES (256*1024)
-#define RGX_FEATURE_OCPBUS 
-#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (1024)
-#define RGX_FEATURE_PHYS_BUS_WIDTH (36)
-#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
-
-#endif /* _RGXCONFIG_KM_2_7_6_3_H_ */
+#endif /* __RGX_TQ_SHARED_H__ */

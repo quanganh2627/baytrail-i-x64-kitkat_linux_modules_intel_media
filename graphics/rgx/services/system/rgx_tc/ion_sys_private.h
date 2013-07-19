@@ -1,5 +1,6 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.31.4.9
+@File           ion_sys_private.h
+@Title          System-specific private data for ion support code
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,45 +40,12 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_31_4_9_H_
-#define _RGXCONFIG_KM_1_31_4_9_H_
+#include <linux/ion.h>
 
-/***** Automatically generated file (1/9/2013 5:43:26 PM): Do not edit manually ********************/
-/***** Timestamp:  (1/9/2013 5:43:26 PM)************************************************************/
-/***** CS: @949011 ******************************************************************/
-
-
-/******************************************************************************
- * BVNC = 1.31.4.9 
- *****************************************************************************/
-#define RGX_BVNC_B 1
-#define RGX_BVNC_V 31
-#define RGX_BVNC_N 4
-#define RGX_BVNC_C 9
-
-/******************************************************************************
- * Errata 
- *****************************************************************************/
-
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-
-
-/******************************************************************************
- * DDK Defines
- *****************************************************************************/
-#define RGX_FEATURE_SLC_SIZE_IN_BYTES (256*1024)
-#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
-#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
-#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
-
-
-#endif /* _RGXCONFIG_KM_1_31_4_9_H_ */
-
-
-
+typedef struct
+{
+	ion_phys_addr_t uiHeapBase;
+	size_t uiHeapSize;
+	IMG_UINT32 ui32IonPhysHeapID;
+	IMG_CPU_PHYADDR sPCIAddrRangeStart;
+} ION_TC_PRIVATE_DATA;

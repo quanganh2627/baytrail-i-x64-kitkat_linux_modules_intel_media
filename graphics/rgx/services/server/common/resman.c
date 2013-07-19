@@ -44,8 +44,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "resman.h"
 #include "allocmem.h"
 #include "pvr_debug.h"
+#include "pvrsrv.h"
+#include "osfunc.h"
 
-/* FIXME: use mutex here if required */
+/* use mutex here if required */
 #define ACQUIRE_SYNC_OBJ
 #define RELEASE_SYNC_OBJ
 
@@ -87,8 +89,9 @@ typedef struct _RESMAN_CONTEXT_
 typedef struct _RESMAN_DEFER_CONTEXT_
 {
 	IMG_UINT32					ui32Signature;
+	IMG_HANDLE					hCleanupEventObject;      /*!< used to trigger deferred clean-up when it is required */
 
-	RESMAN_CONTEXT				*psDeferResManContextList;
+	RESMAN_CONTEXT				*psDeferResManContextList; /*!< list of contexts for deferred clean-up */
 } RESMAN_DEFER_CONTEXT;
 
 /* resman list structure */
@@ -254,9 +257,12 @@ IMG_VOID PVRSRVResManDisconnect(PRESMAN_CONTEXT psResManContext)
  @Return	IMG_VOID
 
 ******************************************************************************/
-PVRSRV_ERROR PVRSRVResManCreateDeferContext(PRESMAN_DEFER_CONTEXT *phDeferContext)
+PVRSRV_ERROR PVRSRVResManCreateDeferContext(IMG_HANDLE hCleanupEventObject,
+		PRESMAN_DEFER_CONTEXT *phDeferContext)
 {
 	PRESMAN_DEFER_CONTEXT psDeferContext;
+
+	PVR_ASSERT(hCleanupEventObject);
 
 	psDeferContext = OSAllocMem(sizeof(RESMAN_DEFER_CONTEXT));
 	if (psDeferContext == IMG_NULL)
@@ -264,7 +270,13 @@ PVRSRV_ERROR PVRSRVResManCreateDeferContext(PRESMAN_DEFER_CONTEXT *phDeferContex
 		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
 
+	/* Remember the handle of the clean up event object so that it may be
+	 * signal when deferredclean is required. Stored as a global RESMAN 
+	 * member since the point where deferred clean up is detected involves 
+	 * a deep call stack.
+	 */
 	psDeferContext->ui32Signature = RESMAN_SIGNATURE;
+	psDeferContext->hCleanupEventObject = hCleanupEventObject;
 	psDeferContext->psDeferResManContextList = IMG_NULL;
 
 	*phDeferContext = psDeferContext;
@@ -291,6 +303,14 @@ static IMG_VOID FlushDeferResManContext(PRESMAN_CONTEXT psResManContext)
 		List_RESMAN_CONTEXT_Remove(psResManContext);
 		PVRSRVResManDisconnect(psResManContext);
 	}
+	else
+	{
+		PVR_DPF((PVR_DBG_MESSAGE, "PVRSRVResManDisconnect: Resman context (%p) still has pending resources", psResManContext));
+		PVR_DPF((PVR_DBG_MESSAGE, "PVRSRVResManDisconnect: psResManContext->psResItemList = %p", psResManContext->psResItemList));
+		PVR_DPF((PVR_DBG_MESSAGE, "PVRSRVResManDisconnect: type = %d, pvParam = %p",
+				psResManContext->psResItemList->ui32ResType,
+				psResManContext->psResItemList->pvParam));
+	}
 }
 
 /*!
@@ -304,10 +324,11 @@ static IMG_VOID FlushDeferResManContext(PRESMAN_CONTEXT psResManContext)
 
  @input 	psResManDeferContext - Defer context
 
- @Return	IMG_VOID
+ @Return	IMG_BOOL - true when resources still need deferred cleanup
+                       false otherwise, the deferred context list is empty
 
 ******************************************************************************/
-IMG_VOID PVRSRVResManFlushDeferContext(PRESMAN_DEFER_CONTEXT psDeferContext)
+IMG_BOOL PVRSRVResManFlushDeferContext(PRESMAN_DEFER_CONTEXT psDeferContext)
 {
 	/* Acquire resource list sync object */
 	ACQUIRE_SYNC_OBJ;
@@ -317,6 +338,8 @@ IMG_VOID PVRSRVResManFlushDeferContext(PRESMAN_DEFER_CONTEXT psDeferContext)
 
 	/* Release resource list sync object */
 	RELEASE_SYNC_OBJ;
+
+	PVR_DPF_RETURN_VAL((psDeferContext->psDeferResManContextList != IMG_NULL) ? IMG_TRUE : IMG_FALSE);
 }
 
 /*!
@@ -334,13 +357,62 @@ IMG_VOID PVRSRVResManFlushDeferContext(PRESMAN_DEFER_CONTEXT psDeferContext)
 IMG_VOID PVRSRVResManDestroyDeferContext(PRESMAN_DEFER_CONTEXT psDeferContext)
 {
 	/*
-		FIXME:
-
-		What do we do if there are still items waiting on the
-		defer list?
+	  If there are still items waiting on the defer list then we must try
+	  and free them now.
 	*/
-	PVR_ASSERT(psDeferContext->psDeferResManContextList == IMG_NULL);
+	if (psDeferContext->psDeferResManContextList != IMG_NULL)
+	{
+		/* Useful to know how many contexts are waiting at this point... */
+		IMG_UINT32  ui32DeferedCount = 0;
+		RESMAN_CONTEXT*  psItem = psDeferContext->psDeferResManContextList;
+	
+		while (psItem != IMG_NULL)
+		{
+			ui32DeferedCount++;
+			psItem = psItem->psNext;
+		}
+		
+		PVR_DPF((PVR_DBG_WARNING, "PVRSRVResManDestroyDeferContext: %d resman context(s) waiting to be freed!", ui32DeferedCount));
 
+		/* Attempt to free more resources... */
+		LOOP_UNTIL_TIMEOUT(MAX_HW_TIME_US)
+		{
+			PVRSRVResManFlushDeferContext(psDeferContext);
+			
+			/* If the driver is not in a okay state then don't try again... */
+			if (PVRSRVGetPVRSRVData()->eServicesState != PVRSRV_SERVICES_STATE_OK)
+			{
+				break;
+			}
+			
+			/* Break out if we have freed them all... */
+			if (psDeferContext->psDeferResManContextList == IMG_NULL)
+			{
+				break;
+			}
+		
+			OSSleepms((MAX_HW_TIME_US / 1000) / 10);
+		} END_LOOP_UNTIL_TIMEOUT();
+
+		/* Once more for luck and then force the issue... */
+		PVRSRVResManFlushDeferContext(psDeferContext);
+		if (psDeferContext->psDeferResManContextList != IMG_NULL)
+		{
+			ui32DeferedCount = 0;
+			psItem           = psDeferContext->psDeferResManContextList;
+			while (psItem != IMG_NULL)
+			{
+				PVR_DPF((PVR_DBG_ERROR, "PVRSRVResManDestroyDeferContext: Resman context (%p) has not been freed!", psItem));
+				ui32DeferedCount++;
+				psItem = psItem->psNext;
+			}
+			PVR_DPF((PVR_DBG_ERROR, "PVRSRVResManDestroyDeferContext: %d resman context(s) still waiting!", ui32DeferedCount));
+
+			PVR_ASSERT(psDeferContext->psDeferResManContextList == IMG_NULL);
+		}
+	}
+
+	/* Free the defer context... */
 	OSFreeMem(psDeferContext);
 }
 
@@ -452,11 +524,6 @@ PVRSRV_ERROR ResManFreeResByPtr(RESMAN_ITEM	*psResItem)
 }
 
 
-/*
-  FIXME:
-   
-  following comment should be in .h file
-*/
 /*!
 ******************************************************************************
  @Function	 	ResManFindPrivateDataByPtr
@@ -676,7 +743,6 @@ IMG_INTERNAL PVRSRV_ERROR ResManFindResourceByPtr(PRESMAN_CONTEXT	psResManContex
 	/* Release resource list sync object */
 	RELEASE_SYNC_OBJ;
 
-/*	return PVRSRV_ERROR_NOT_OWNER;*/
 	return eResult;
 }
 
@@ -849,8 +915,10 @@ static PVRSRV_ERROR FreeResourceByCriteria(PRESMAN_CONTEXT	psResManContext,
 		*/
 		if ((eError == PVRSRV_ERROR_RETRY) && bDefer)
 		{
+			PVRSRV_ERROR ret;
+
 			PVR_ASSERT(psResManContext->psDeferContext);
-			PVR_DPF((PVR_DBG_WARNING, "FreeResourceByCriteria: Resource %p returned retry. Moving resman context to defer context", psCurItem));
+			PVR_DPF((PVR_DBG_WARNING, "FreeResourceByCriteria: Resource %p (type %d) returned retry. Moving resman context to defer context", psCurItem, ui32ResType));
 
 			/*
 				Due to the fact the not all resources are refcounted against each
@@ -862,6 +930,10 @@ static PVRSRV_ERROR FreeResourceByCriteria(PRESMAN_CONTEXT	psResManContext,
 			*/
 			List_RESMAN_CONTEXT_Insert(&psResManContext->psDeferContext->psDeferResManContextList, psResManContext);
 			bContinue = IMG_FALSE;
+
+			/* Now signal clean up thread */
+			ret = OSEventObjectSignal(psResManContext->psDeferContext->hCleanupEventObject);
+			PVR_LOG_IF_ERROR(ret, "OSEventObjectSignal");
 		}
 		else
 		{
@@ -900,16 +972,15 @@ static IMG_UINT32 g_ui32OrderedFreeList [] = {
 	RESMAN_TYPE_SHARED_EVENT_OBJECT,
 
 	/* RGX types */
-	RESMAN_TYPE_RGX_RENDER_CONTEXT,
 	RESMAN_TYPE_RGX_POPULATION,
 	RESMAN_TYPE_RGX_FWIF_HWRTDATA,
 	RESMAN_TYPE_RGX_FWIF_FREELIST,
 	RESMAN_TYPE_RGX_FWIF_ZSBUFFER,
 	RESMAN_TYPE_RGX_FWIF_RENDERTARGET,
-	RESMAN_TYPE_RGX_TQ3D_CONTEXT,
-	RESMAN_TYPE_RGX_TQ2D_CONTEXT,
-	RESMAN_TYPE_RGX_COMPUTE_CONTEXT,
-	RESMAN_TYPE_RGX_CCB,
+	RESMAN_TYPE_RGX_SERVER_RENDER_CONTEXT,
+	RESMAN_TYPE_RGX_SERVER_TQ_CONTEXT,
+	RESMAN_TYPE_RGX_SERVER_COMPUTE_CONTEXT,
+	RESMAN_TYPE_RGX_RAY_CONTEXT,
 	RESMAN_TYPE_SHARED_PB_DESC_CREATE_LOCK,
 	RESMAN_TYPE_SHARED_PB_DESC,
 
@@ -950,6 +1021,9 @@ static IMG_UINT32 g_ui32OrderedFreeList [] = {
 
 	/* TRANSPORT LAYER types: */
 	RESMAN_TYPE_TL_STREAM_DESC,
+
+	/* RI types: */
+	RESMAN_TYPE_RI_HANDLE,
 };
 
 /*!

@@ -49,34 +49,125 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxfwutils.h"
 #include "osfunc.h"
 #include "rgxccb.h"
+#include "rgx_memallocflags.h"
 #include "devicemem_pdump.h"
+#include "pvr_debug.h"
+#include "dllist.h"
 
+struct _RGX_CLIENT_CCB_ {
+	volatile RGXFWIF_CCCB_CTL	*psClientCCBCtrl;			/*!< CPU mapping of the CCB control structure used by the fw */
+	IMG_UINT8					*pui8ClientCCB;				/*!< CPU mapping of the CCB */
+	DEVMEM_MEMDESC 				*psClientCCBMemDesc;		/*!< MemDesc for the CCB */
+	DEVMEM_MEMDESC 				*psClientCCBCtrlMemDesc;		/*!< MemDesc for the CCB control */
+	IMG_UINT32					ui32HostWriteOffset;		/*!< CCB write offset from the driver side */
+	IMG_UINT32					ui32LastPDumpWriteOffset;			/*!< CCB write offset from the last time we submitted a command in capture range */
+	IMG_UINT32					ui32Size;					/*!< Size of the CCB */
+	DLLIST_NODE					sNode;						/*!< Node used to store this CCB on the per connection list */
+	PDUMP_CONNECTION_DATA		*psPDumpConnectionData;		/*!< Pointer to the per connection data in which we reside */
+	IMG_PVOID					hTransition;				/*!< Handle for Transition callback */
+	IMG_CHAR					szName[MAX_CLIENT_CCB_NAME];/*!< Name of this client CCB */
+};
 
-static
-PVRSRV_ERROR RGXDestroyCCB(DEVMEM_MEMDESC 		*psClientCCBMemDesc,
-						   DEVMEM_MEMDESC 		*psClientCCBCtlMemDesc,
-						   DEVMEM_EXPORTCOOKIE 	*psClientCCBExportCookie,
-						   DEVMEM_EXPORTCOOKIE 	*psClientCCBCtlExportCookie);
-
-IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXCreateCCBKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
-								  IMG_UINT32			ui32AllocSize,
-								  IMG_UINT32			ui32AllocAlignment,
-								  RGX_CCB_CLEANUP_DATA	**ppsCleanupData,
-								  DEVMEM_MEMDESC 		**ppsClientCCBMemDesc,
-								  DEVMEM_MEMDESC 		**ppsClientCCBCtlMemDesc,
-								  DEVMEM_EXPORTCOOKIE 	**psClientCCBExportCookie,
-								  DEVMEM_EXPORTCOOKIE 	**psClientCCBCtlExportCookie)
+static PVRSRV_ERROR _RGXCCBPDumpTransition(IMG_PVOID *pvData, IMG_BOOL bInto, IMG_BOOL bContinuous)
 {
-	PVRSRV_ERROR			eError;
-	DEVMEM_FLAGS_T			uiClientCCBMemAllocFlags, uiClientCCBCtlMemAllocFlags;
-	RGX_CCB_CLEANUP_DATA	*psTmpCleanup;
+	RGX_CLIENT_CCB *psClientCCB = (RGX_CLIENT_CCB *) pvData;
+	
+	IMG_UINT32 ui32PDumpFlags = bContinuous ? PDUMP_FLAGS_CONTINUOUS:0;
 
-	psTmpCleanup = OSAllocMem(sizeof(RGX_CCB_CLEANUP_DATA));
-	if (psTmpCleanup == IMG_NULL)
-		return PVRSRV_ERROR_OUT_OF_MEMORY;
+	/*
+		We're about to Transition into capture range and we've submitted
+		new commands since the last time we entered capture range so drain
+		the CCB as required
+	*/
+	if (bInto)
+	{
+		volatile RGXFWIF_CCCB_CTL *psCCBCtl = psClientCCB->psClientCCBCtrl;
+		PVRSRV_ERROR eError;
 
-	OSMemSet(psTmpCleanup, 0, sizeof(RGX_CCB_CLEANUP_DATA));
+		/*
+			Wait for the FW to catchup (retry will get pushed back out services
+			client where we wait on the event object and try again later)
+		*/
+		if (psClientCCB->psClientCCBCtrl->ui32ReadOffset != psClientCCB->ui32HostWriteOffset)
+		{
+			return PVRSRV_ERROR_RETRY;
+		}
+
+		/*
+			If new command(s) have been written out of cpature range then drain
+			the previous set of operations.
+		*/
+		if (psClientCCB->ui32LastPDumpWriteOffset != psClientCCB->ui32HostWriteOffset)
+		{
+			/*
+				Drain all the previous commands from the last capture range
+				before we Transition into the new capture range so when we
+				fastforward the commands that aren't PDumped we don't skip
+				comands we should be running
+			*/
+			PDUMPCOMMENTWITHFLAGS(ui32PDumpFlags,
+								  "cCCB(%s@%p): Draining rgxfw_roff == woff (%d)",
+								  psClientCCB->szName,
+								  psClientCCB,
+								  psClientCCB->ui32LastPDumpWriteOffset);
+
+			eError = DevmemPDumpDevmemPol32(psClientCCB->psClientCCBCtrlMemDesc,
+											offsetof(RGXFWIF_CCCB_CTL, ui32ReadOffset),
+											psClientCCB->ui32LastPDumpWriteOffset,
+											0xffffffff,
+											PDUMP_POLL_OPERATOR_EQUAL,
+											ui32PDumpFlags);
+			if (eError != PVRSRV_OK)
+			{
+				PVR_DPF((PVR_DBG_WARNING, "RGXReleaseCCB: problem pdumping POL for cCCBCtl (%d)", eError));
+			}
+			PVR_ASSERT(eError == PVRSRV_OK);
+
+			/*
+				There are commands that where not captured so after the
+				simulation drain (above) we also need to fast-forward pass
+				those commands so the FW can start with the 1st command
+				which is in the new capture range
+			 */
+			psCCBCtl->ui32ReadOffset = psClientCCB->ui32HostWriteOffset;
+			psCCBCtl->ui32DepOffset = psClientCCB->ui32HostWriteOffset;
+			psCCBCtl->ui32WriteOffset = psClientCCB->ui32HostWriteOffset;
+	
+			PDUMPCOMMENTWITHFLAGS(ui32PDumpFlags,
+								  "cCCB(%s@%p): Fast-forward from %d to %d",
+								  psClientCCB->szName,
+								  psClientCCB,
+								  psClientCCB->ui32LastPDumpWriteOffset,
+								  psClientCCB->ui32HostWriteOffset);
+	
+			DevmemPDumpLoadMem(psClientCCB->psClientCCBCtrlMemDesc,
+							   0,
+							   sizeof(RGXFWIF_CCCB_CTL),
+							   ui32PDumpFlags);
+		}
+	}
+	return PVRSRV_OK;
+}
+
+PVRSRV_ERROR RGXCreateCCB(PVRSRV_DEVICE_NODE	*psDeviceNode,
+						  IMG_UINT32			ui32CCBSizeLog2,
+						  CONNECTION_DATA		*psConnectionData,
+						  const IMG_CHAR		*pszName,
+						  RGX_CLIENT_CCB		**ppsClientCCB,
+						  DEVMEM_MEMDESC 		**ppsClientCCBMemDesc,
+						  DEVMEM_MEMDESC 		**ppsClientCCBCtrlMemDesc)
+{
+	PVRSRV_ERROR	eError;
+	DEVMEM_FLAGS_T	uiClientCCBMemAllocFlags, uiClientCCBCtlMemAllocFlags;
+	IMG_UINT32		ui32AllocSize = (1U << ui32CCBSizeLog2);
+	RGX_CLIENT_CCB	*psClientCCB;
+
+	psClientCCB = OSAllocMem(sizeof(*psClientCCB));
+	if (psClientCCB == IMG_NULL)
+	{
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto fail_alloc;
+	}
 
 	uiClientCCBMemAllocFlags = PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
 								PVRSRV_MEMALLOCFLAG_GPU_READABLE |
@@ -101,241 +192,144 @@ PVRSRV_ERROR PVRSRVRGXCreateCCBKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	eError = DevmemFwAllocateExportable(psDeviceNode,
 										ui32AllocSize,
 										uiClientCCBMemAllocFlags,
-										ppsClientCCBMemDesc);
+										&psClientCCB->psClientCCBMemDesc);
 
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateCCBKM: Failed to allocate RGX client CCB (%u)",
-				eError));
-		goto e0;
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateCCBKM: Failed to allocate RGX client CCB (%s)",
+				PVRSRVGetErrorStringKM(eError)));
+		goto fail_alloc_ccb;
 	}
-	psTmpCleanup->psClientCCBMemDesc = *ppsClientCCBMemDesc;
 
-	/*
-	 * Export the CCB allocation so it can be mapped client-side.
-	 */
-	eError = DevmemExport(*ppsClientCCBMemDesc,
-                          &psTmpCleanup->sClientCCBExportCookie);
+	eError = DevmemAcquireCpuVirtAddr(psClientCCB->psClientCCBMemDesc,
+									  (IMG_VOID **) &psClientCCB->pui8ClientCCB);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateCCBKM: Failed to export RGX client CCB (%u)",
-				eError));
-		goto e1;
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateCCBKM: Failed to map RGX client CCB (%s)",
+				PVRSRVGetErrorStringKM(eError)));
+		goto fail_map_ccb;
 	}
-	*psClientCCBExportCookie = &psTmpCleanup->sClientCCBExportCookie;
 
 	PDUMPCOMMENT("Allocate RGXFW cCCB control");
 	eError = DevmemFwAllocateExportable(psDeviceNode,
 										sizeof(RGXFWIF_CCCB_CTL),
 										uiClientCCBCtlMemAllocFlags,
-										ppsClientCCBCtlMemDesc);
+										&psClientCCB->psClientCCBCtrlMemDesc);
 
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateCCBKM: Failed to allocate RGX client CCB control (%u)",
-				eError));
-		goto e2;
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateCCBKM: Failed to allocate RGX client CCB control (%s)",
+				PVRSRVGetErrorStringKM(eError)));
+		goto fail_alloc_ccbctrl;
 	}
-	psTmpCleanup->psClientCCBCtlMemDesc = *ppsClientCCBCtlMemDesc;
 
+	eError = DevmemAcquireCpuVirtAddr(psClientCCB->psClientCCBCtrlMemDesc,
+									  (IMG_VOID **) &psClientCCB->psClientCCBCtrl);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateCCBKM: Failed to map RGX client CCB (%s)",
+				PVRSRVGetErrorStringKM(eError)));
+		goto fail_map_ccbctrl;
+	}
+
+	psClientCCB->psClientCCBCtrl->ui32WriteOffset = 0;
+	psClientCCB->psClientCCBCtrl->ui32ReadOffset = 0;
+	psClientCCB->psClientCCBCtrl->ui32DepOffset = 0;
+	psClientCCB->psClientCCBCtrl->ui32WrapMask = ui32AllocSize - 1;
+	OSStringCopy(psClientCCB->szName, pszName);
+
+	PDUMPCOMMENT("cCCB control");
+	DevmemPDumpLoadMem(psClientCCB->psClientCCBCtrlMemDesc,
+					   0,
+					   sizeof(RGXFWIF_CCCB_CTL),
+					   PDUMP_FLAGS_CONTINUOUS);
+	PVR_ASSERT(eError == PVRSRV_OK);
+
+	psClientCCB->ui32HostWriteOffset = 0;
+	psClientCCB->ui32LastPDumpWriteOffset = 0;
+	psClientCCB->ui32Size = ui32AllocSize;
+
+	eError = PDumpRegisterTransitionCallback(psConnectionData->psPDumpConnectionData,
+											  _RGXCCBPDumpTransition,
+											  psClientCCB,
+											  &psClientCCB->hTransition);
+	if (eError != PVRSRV_OK)
+	{
+		goto fail_pdumpreg;
+	}
 	/*
-	 * Export the CCB control allocation so it can be mapped client-side.
-	 */
-	eError = DevmemExport(*ppsClientCCBCtlMemDesc,
-                          &psTmpCleanup->sClientCCBCtlExportCookie);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXCreateCCBKM: Failed to export RGX client CCB control (%u)",
-				eError));
-		goto e3;
-	}
-	*psClientCCBCtlExportCookie = &psTmpCleanup->sClientCCBCtlExportCookie;
+		Note:
+		Due to resman the connection structure could be freed before the client
+		CCB so rather then saving off the connection structure save the PDump
+		specific memory which is refcounted to ensure it's not freed too early
+	*/
+	psClientCCB->psPDumpConnectionData = psConnectionData->psPDumpConnectionData;
+	PDUMPCOMMENT("New RGXFW cCCB(%s@%p) created",
+				 psClientCCB->szName,
+				 psClientCCB);
 
-	*ppsCleanupData = psTmpCleanup;
-
+	*ppsClientCCB = psClientCCB;
+	*ppsClientCCBMemDesc = psClientCCB->psClientCCBMemDesc;
+	*ppsClientCCBCtrlMemDesc = psClientCCB->psClientCCBCtrlMemDesc;
 	return PVRSRV_OK;
 
-e3:
-	DevmemFwFree(*ppsClientCCBCtlMemDesc);
-e2:
-	DevmemUnexport(*ppsClientCCBMemDesc,
-					&psTmpCleanup->sClientCCBExportCookie);
-e1:
-	DevmemFwFree(*ppsClientCCBMemDesc);
-e0:
-	OSFreeMem(psTmpCleanup);
+fail_pdumpreg:
+	DevmemReleaseCpuVirtAddr(psClientCCB->psClientCCBCtrlMemDesc);
+fail_map_ccbctrl:
+	DevmemFwFree(psClientCCB->psClientCCBCtrlMemDesc);
+fail_alloc_ccbctrl:
+	DevmemReleaseCpuVirtAddr(psClientCCB->psClientCCBMemDesc);
+fail_map_ccb:
+	DevmemFwFree(psClientCCB->psClientCCBMemDesc);
+fail_alloc_ccb:
+	OSFreeMem(psClientCCB);
+fail_alloc:
+	PVR_ASSERT(eError != PVRSRV_OK);
 	return eError;
 }
 
-IMG_EXPORT
-PVRSRV_ERROR PVRSRVRGXDestroyCCBKM(RGX_CCB_CLEANUP_DATA *psCleanupData)
+IMG_VOID RGXDestroyCCB(RGX_CLIENT_CCB *psClientCCB)
 {
-	PVRSRV_ERROR eError;
-
-	PDUMPCOMMENT("Free RGXFW cCCB");
-	eError = RGXDestroyCCB(psCleanupData->psClientCCBMemDesc,
-							psCleanupData->psClientCCBCtlMemDesc,
-							&psCleanupData->sClientCCBExportCookie,
-							&psCleanupData->sClientCCBCtlExportCookie);
-	OSFreeMem(psCleanupData);
-	return eError;
-}
-
-static
-PVRSRV_ERROR RGXDestroyCCB(DEVMEM_MEMDESC 		*psClientCCBMemDesc,
-						   DEVMEM_MEMDESC 		*psClientCCBCtlMemDesc,
-						   DEVMEM_EXPORTCOOKIE 	*psClientCCBExportCookie,
-						   DEVMEM_EXPORTCOOKIE 	*psClientCCBCtlExportCookie)
-{
-	if (psClientCCBCtlMemDesc != IMG_NULL)
-	{
-		DevmemUnexport(psClientCCBCtlMemDesc, psClientCCBCtlExportCookie);
-		DevmemFwFree(psClientCCBCtlMemDesc);
-	}
-
-	if (psClientCCBMemDesc != IMG_NULL)
-	{
-		DevmemUnexport(psClientCCBMemDesc, psClientCCBExportCookie);
-		DevmemFwFree(psClientCCBMemDesc);
-	}
-	
-	return PVRSRV_OK;
+	PDumpUnregisterTransitionCallback(psClientCCB->hTransition);
+	DevmemReleaseCpuVirtAddr(psClientCCB->psClientCCBCtrlMemDesc);
+	DevmemFwFree(psClientCCB->psClientCCBCtrlMemDesc);
+	DevmemReleaseCpuVirtAddr(psClientCCB->psClientCCBMemDesc);
+	DevmemFwFree(psClientCCB->psClientCCBMemDesc);
+	OSFreeMem(psClientCCB);
 }
 
 
-static PVRSRV_ERROR _RGXAcquireCCB(volatile RGXFWIF_CCCB_CTL	*psCCBCtl,
-								   IMG_UINT32		ui32Woff,
-								   IMG_PVOID		pvCCB,
+static PVRSRV_ERROR _RGXAcquireCCB(RGX_CLIENT_CCB	*psClientCCB,
 								   IMG_UINT32		ui32CmdSize,
-								   IMG_PVOID			*ppvBufferSpace)
+								   IMG_PVOID		*ppvBufferSpace)
 {
-	/* For now the client does the wait for space so we don't need to */
-#if 0
-	IMG_UINT32 ui32FreeSpace;
-	IMG_UINT32	uiStart;
-	IMG_HANDLE hOSEvent = IMG_NULL;
-
-	PVRSRV_ERROR eError;
-	PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();
-
-
-	uiStart = OSClockus();
-
-	eError = OSEventObjectOpen(psPVRSRVData->hGlobalEventObject, &hOSEvent);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVWaitForValueKM: Failed to setup EventObject with error (%d)", eError));
-		return eError;
-	}
-
-	for (;;)
-	{
-		ui32FreeSpace = GET_CCB_SPACE(ui32Woff,
-									  psCCBCtl->ui32ReadOffset,
-									  (1 << RGX_CCB_SIZE_LOG2));
-		if (ui32FreeSpace >= ui32CmdSize)
-		{
-			*ppvBufferSpace = (pvCCB + ui32Woff);
-			if (hOSEvent)
-			{
-				OSEventObjectClose(hOSEvent);
-			}
-			return PVRSRV_OK;
-		}
-
-		if ((OSClockus() - uiStart) >= MAX_HW_TIME_US)
-		{
-			/* FIXME: We should decide if Services or Client Drivers should retry to get CCB space.
-			 * For the moment it is Services that does the retry
-			 */
-			PVR_DPF((PVR_DBG_WARNING, "_RGXAcquireCCB: Timeout, insufficient space in CCB: Required=0x%x, available=0x%x. (woff=%d, roff=%d) Keep trying...",
-					ui32CmdSize,
-					ui32FreeSpace,
-					ui32Woff,
-					psCCBCtl->ui32ReadOffset));
-			uiStart = OSClockus();
-/*			break;*/
-
-		}
-		
-		if (hOSEvent)
-		{
-			if(OSEventObjectWait(hOSEvent) != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_MESSAGE, "RGXAcquireCCB: PVRSRVEventObjectWait failed"));
-			}
-		}
-		else
-		{
-			OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
-		}
-	}
-#else
 	IMG_UINT32 ui32FreeSpace;
 
-	ui32FreeSpace = GET_CCB_SPACE(ui32Woff,
-								  psCCBCtl->ui32ReadOffset,
-								  (1 << RGX_CCB_SIZE_LOG2));
-	if (ui32FreeSpace >= ui32CmdSize)
+#if defined(PDUMP)
+	/* Wait for sufficient CCB space to become available */
+	PDUMPCOMMENTWITHFLAGS(0, "Wait for %u bytes to become available according cCCB Ctl (woff=%x) for %s",
+							ui32CmdSize, psClientCCB->ui32HostWriteOffset,
+							psClientCCB->szName);
+	DevmemPDumpCBP(psClientCCB->psClientCCBCtrlMemDesc,
+	               offsetof(RGXFWIF_CCCB_CTL, ui32ReadOffset),
+	               psClientCCB->ui32HostWriteOffset,
+	               ui32CmdSize,
+	               psClientCCB->ui32Size);
+#endif
+
+	ui32FreeSpace = GET_CCB_SPACE(psClientCCB->ui32HostWriteOffset,
+								  psClientCCB->psClientCCBCtrl->ui32ReadOffset,
+								  psClientCCB->ui32Size);
+
+	/* Don't allow all the space to be used */
+	if (ui32FreeSpace > ui32CmdSize)
 	{
-		*ppvBufferSpace = (pvCCB + ui32Woff);
+		*ppvBufferSpace = (IMG_PVOID) (psClientCCB->pui8ClientCCB +
+									   psClientCCB->ui32HostWriteOffset);
 		return PVRSRV_OK;
 	}
 
-	/* If we get here there is nothing we can do to recover */
-	PVR_ASSERT(0);
-	return PVRSRV_ERROR_OUT_OF_MEMORY;
-#endif
-}
-
-
-static IMG_VOID _WaitForFWtoDrainCCB(volatile RGXFWIF_CCCB_CTL		*psCCBCtl, 
-									 IMG_UINT32			ui32Woff)
-{
-	PVRSRV_ERROR eError;
-	IMG_HANDLE hOSEvent;
-	PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();
-
-	/*
-		Note:
-		This means that we block all other calls across the bridge which
-		can cause performance issues, but as this code only runs when
-		PDump is active then this isn't an issue
-	*/
-	OSSetKeepPVRLock();
-	eError = OSEventObjectOpen(psPVRSRVData->hGlobalEventObject, &hOSEvent);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVWaitForValueKM: Failed to setup EventObject with error (%d)", eError));
-	}
-
-
-	while (psCCBCtl->ui32ReadOffset != ui32Woff)
-	{
-		PVR_DPF((PVR_DBG_WARNING, "_WaitForCCBToDrain: Waiting on CCB(%p) for readoff (%d) == wroff (%d)", 
-					psCCBCtl,
-					psCCBCtl->ui32ReadOffset,
-					ui32Woff));
-
-		/* wait */
-		if (hOSEvent)
-		{
-			if(OSEventObjectWait(hOSEvent) != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_MESSAGE, "RGXAcquireCCB: PVRSRVEventObjectWait failed"));
-			}
-		}
-		else
-		{
-			OSWaitus(MAX_HW_TIME_US/WAIT_TRY_COUNT);
-		}
-
-	}
-
-	if (hOSEvent)
-	{
-		OSEventObjectClose(hOSEvent);
-	}
+	return PVRSRV_ERROR_RETRY;
 }
 
 /******************************************************************************
@@ -343,96 +337,93 @@ static IMG_VOID _WaitForFWtoDrainCCB(volatile RGXFWIF_CCCB_CTL		*psCCBCtl,
 
  PURPOSE	: Obtains access to write some commands to a CCB
 
- PARAMETERS	: psDevData			- device data
-  			  psCCB				- the CCB
+ PARAMETERS	: psClientCCB		- The client CCB
 			  ui32CmdSize		- How much space is required
-			  hOSEvent			- Event object handle
 			  ppvBufferSpace	- Pointer to space in the buffer
+			  bPDumpContinuous  - Should this be PDump continuous?
 
  RETURNS	: PVRSRV_ERROR
 ******************************************************************************/
-IMG_INTERNAL PVRSRV_ERROR RGXAcquireCCB(volatile RGXFWIF_CCCB_CTL	*psCCBCtl,
-										IMG_UINT32		*pui32Woff,
-										DEVMEM_MEMDESC 		*pscCCBMemDesc,
+IMG_INTERNAL PVRSRV_ERROR RGXAcquireCCB(RGX_CLIENT_CCB *psClientCCB,
 										IMG_UINT32		ui32CmdSize,
 										IMG_PVOID		*ppvBufferSpace,
-										IMG_BOOL		bDumpedCCBCtlAlready,
 										IMG_BOOL		bPDumpContinuous)
 {
 	PVRSRV_ERROR eError;
 	IMG_UINT32	ui32PDumpFlags	= bPDumpContinuous ? PDUMP_FLAGS_CONTINUOUS : 0;
 	IMG_BOOL	bInCaptureRange;
 	IMG_BOOL	bPdumpEnabled;
-	IMG_PVOID	pvCCB;
-	
+
 	PDumpIsCaptureFrameKM(&bInCaptureRange);
 	bPdumpEnabled = (bInCaptureRange || bPDumpContinuous);
-		
-	/* need to dump initial state */
-	if (bPdumpEnabled && !bDumpedCCBCtlAlready)
-	{
-		/* wait for the firmware to catch up (in nohw this is a noop) */
-		_WaitForFWtoDrainCCB(psCCBCtl, *pui32Woff);
 
+	/*
+		PDumpSetFrame will detect as we Transition into capture range for
+		frame based data but if we are PDumping continuous data then we
+		need to inform the PDump layer ourselfs
+	*/
+	if (bPDumpContinuous && !bInCaptureRange)
+	{
+		eError = PDumpTransition(psClientCCB->psPDumpConnectionData, IMG_TRUE, IMG_TRUE);
+		if (eError != PVRSRV_OK)
+		{
+			return eError;
+		}
 	}
 
-	/* FIXME: Once the PR-3Ds are removed, the 2*ui32CmdSize has to change to ui32CmdSize */
-	/* Check that the CCB can hold this command + padding (the CCBSize/2 is to allow
-	   previous commands to be swallowed for the roff to advance */
-	if ((2*ui32CmdSize + PADDING_COMMAND_SIZE + 1) > ((1 << RGX_CCB_SIZE_LOG2)/2))
+	/* Check that the CCB can hold this command + padding */
+	if ((ui32CmdSize + PADDING_COMMAND_SIZE + 1) > psClientCCB->ui32Size)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "Command size (%d bytes) too big for CCB (%d bytes)\n", ui32CmdSize, (1 << RGX_CCB_SIZE_LOG2)));
+		PVR_DPF((PVR_DBG_ERROR, "Command size (%d bytes) too big for CCB (%d bytes)\n",
+								ui32CmdSize, psClientCCB->ui32Size));
 		return PVRSRV_ERROR_CMD_TOO_BIG;
 	}
-	
-	eError = DevmemAcquireCpuVirtAddr(pscCCBMemDesc,
-									  &pvCCB);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"CreateCCB: Failed to map client CCB (0x%x)", eError));
-		return eError;
-	}
-	
 
 	/*
 		Check we don't overflow the end of the buffer and make sure we have
 		enough for the padding command.
 	*/
-	if ((*pui32Woff + ui32CmdSize + PADDING_COMMAND_SIZE) > (1 << RGX_CCB_SIZE_LOG2))
+	if ((psClientCCB->ui32HostWriteOffset + ui32CmdSize + PADDING_COMMAND_SIZE) >
+		psClientCCB->ui32Size)
 	{
 		RGXFWIF_CCB_CMD_HEADER *psHeader;
 		IMG_VOID *pvHeader;
 		PVRSRV_ERROR eError;
-		IMG_UINT32 ui32Remain = (1 << RGX_CCB_SIZE_LOG2) - *pui32Woff;
+		IMG_UINT32 ui32Remain = psClientCCB->ui32Size - psClientCCB->ui32HostWriteOffset;
 
 		/* We're at the end of the buffer without enough contiguous space */
-		eError = _RGXAcquireCCB(psCCBCtl, *pui32Woff, pvCCB, ui32Remain,
+		eError = _RGXAcquireCCB(psClientCCB,
+								ui32Remain,
 								&pvHeader);
 		if (eError != PVRSRV_OK)
 		{
-
-			/* We should never get here */
-			PVR_DPF((PVR_DBG_ERROR, "Failed to get space for padding command\n"));
-			PVR_ASSERT(0);
-			return PVRSRV_ERROR_CMD_TOO_BIG;
+			/*
+				It's possible no commands have been processed in which case as we
+				can fail the padding allocation due to that fact we never allow
+				the client CCB to be full
+			*/
+			return eError;
 		}
 		psHeader = pvHeader;
 		psHeader->eCmdType = RGXFWIF_CCB_CMD_TYPE_PADDING;
 		psHeader->ui32CmdSize = ui32Remain - sizeof(RGXFWIF_CCB_CMD_HEADER);
 
-		//PDUMPCOMMENT("cCCB(%p): Padding cmd %d", psCCB, psHeader->ui32CmdSize);
+		PDUMPCOMMENTWITHFLAGS(ui32PDumpFlags, "cCCB(%p): Padding cmd %d", psClientCCB, psHeader->ui32CmdSize);
 		if (bPdumpEnabled)
 		{
-			DevmemPDumpLoadMem(pscCCBMemDesc,
-						   *pui32Woff,
-						   ui32Remain,
-						   ui32PDumpFlags);
+			DevmemPDumpLoadMem(psClientCCB->psClientCCBMemDesc,
+							   psClientCCB->ui32HostWriteOffset,
+							   ui32Remain,
+							   ui32PDumpFlags);
 		}
 				
-		UPDATE_CCB_OFFSET(*pui32Woff, ui32Remain, (1 << RGX_CCB_SIZE_LOG2));
+		UPDATE_CCB_OFFSET(psClientCCB->ui32HostWriteOffset,
+						  ui32Remain,
+						  psClientCCB->ui32Size);
 	}
 
-	return _RGXAcquireCCB(psCCBCtl, *pui32Woff, pvCCB, ui32CmdSize,
+	return _RGXAcquireCCB(psClientCCB,
+						  ui32CmdSize,
 						  ppvBufferSpace);
 }
 
@@ -444,111 +435,542 @@ IMG_INTERNAL PVRSRV_ERROR RGXAcquireCCB(volatile RGXFWIF_CCCB_CTL	*psCCBCtl,
  PARAMETERS	: psDevData			- device data
   			  psCCB				- the CCB
 
- RETURNS	: PVRSRV_ERROR
+ RETURNS	: None
 ******************************************************************************/
-IMG_INTERNAL PVRSRV_ERROR RGXReleaseCCB(PVRSRV_DEVICE_NODE	*psDevNode,
-										volatile RGXFWIF_CCCB_CTL	*psCCBCtl,
-										DEVMEM_MEMDESC 		*pscCCBMemDesc,
-										DEVMEM_MEMDESC 		*pscCCBCtlMemDesc,
-										IMG_BOOL		*pbDumpedCCBCtlAlready,
-										IMG_UINT32		*pui32Woff,
-										IMG_UINT32		ui32CmdSize,
-										IMG_BOOL		bPDumpContinuous,
-										SYNC_CONNECTION_DATA 	*psSyncConnectionData)
+IMG_INTERNAL IMG_VOID RGXReleaseCCB(RGX_CLIENT_CCB *psClientCCB,
+									IMG_UINT32		ui32CmdSize,
+									IMG_BOOL		bPDumpContinuous)
 {
-	PVRSRV_ERROR				eError		= PVRSRV_OK;
-
 	IMG_UINT32	ui32PDumpFlags	= bPDumpContinuous ? PDUMP_FLAGS_CONTINUOUS : 0;
 	IMG_BOOL	bInCaptureRange;
 	IMG_BOOL	bPdumpEnabled;
-	
+
 	PDumpIsCaptureFrameKM(&bInCaptureRange);
 	bPdumpEnabled = (bInCaptureRange || bPDumpContinuous);
-		
-	/* Entering a pdumped perido: CCB ctl state at the start of the day */
-	if (bPdumpEnabled)
-	{
-		/* FIXME: For this to work properly, the CCB flush should happen for all the CCBs */
-
-		/* This function will only PDump the syncs is required */
-		SyncConnectionPDumpSyncBlocks(psSyncConnectionData);
-
-		/* check if we need to pdump ccb state */
-		if (!(*pbDumpedCCBCtlAlready))
-		{
-
-			/* fw should have reach this point, therefore it's safe to modify this value */
-			psCCBCtl->ui32WriteOffset = *pui32Woff;
-
-			PDUMPCOMMENT("cCCB: Dump initial state woff: 0x%x roff: 0x%x",
-								   psCCBCtl->ui32WriteOffset, psCCBCtl->ui32ReadOffset);
-
-			DevmemPDumpLoadMem(pscCCBCtlMemDesc,
-							   0,
-							   sizeof(RGXFWIF_CCCB_CTL),
-							   ui32PDumpFlags);
-							   
-			*pbDumpedCCBCtlAlready = IMG_TRUE;
-		}
-	}
-
-	/* Exiting a pdumped period: need to sync to this point */
-	if (!bPdumpEnabled)
-	{
-		/* SyncPrim needs to be re-pdump next time we enter in the pdump */
-		SyncConnectionPDumpExit(psSyncConnectionData);
-
-		if (*pbDumpedCCBCtlAlready)
-		{
-			/* CCB needs to be re-pdump next time we enter in the pdump */
-			*pbDumpedCCBCtlAlready = IMG_FALSE;
-
-			/* make sure previous cmds are drained in pdump in case we will 'jump' over some future cmds */
-			PDUMPCOMMENT("cCCB: Draining rgxfw_roff (0x%x) == woff (0x%x)",
-							psCCBCtl->ui32ReadOffset,
-							*pui32Woff);
-
-			eError = DevmemPDumpDevmemPol32(pscCCBMemDesc,
-											offsetof(RGXFWIF_CCCB_CTL, ui32ReadOffset),
-											*pui32Woff,
-											0xffffffff,
-											PDUMP_POLL_OPERATOR_EQUAL,
-											PDUMP_FLAGS_CONTINUOUS);
-			if (eError != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_WARNING, "RGXReleaseCCB: problem pdumping POL for cCCBCtl (%d)", eError));
-				return eError;
-			}
-		}
-	}
 
 	/* Dump the CCB data */
 	if (bPdumpEnabled)
 	{
-		DevmemPDumpLoadMem(pscCCBMemDesc,
-						   *pui32Woff,
+		DevmemPDumpLoadMem(psClientCCB->psClientCCBMemDesc,
+						   psClientCCB->ui32HostWriteOffset,
 						   ui32CmdSize,
 						   ui32PDumpFlags);
 	}
 	/*
 	 * Update the CCB write offset.
 	 */
-	UPDATE_CCB_OFFSET(*pui32Woff,
+	UPDATE_CCB_OFFSET(psClientCCB->ui32HostWriteOffset,
 					  ui32CmdSize,
-					  (1 << RGX_CCB_SIZE_LOG2));
+					  psClientCCB->ui32Size);
+
+	/*
+		PDumpSetFrame will detect as we Transition out of capture range for
+		frame based data but if we are PDumping continuous data then we
+		need to inform the PDump layer ourselfs
+	*/
+	if (bPDumpContinuous && !bInCaptureRange)
+	{
+		PVRSRV_ERROR eError;
+
+		/* Only Transitioning into capture range can cause an error */
+		eError = PDumpTransition(psClientCCB->psPDumpConnectionData, IMG_FALSE, IMG_TRUE);
+		PVR_ASSERT(eError == PVRSRV_OK);
+	}
+
+	if (bPdumpEnabled)
+	{
+		/* Update the PDump write offset to show we PDumped this command */
+		psClientCCB->ui32LastPDumpWriteOffset = psClientCCB->ui32HostWriteOffset;
+	}
 
 #if defined(NO_HARDWARE)
 	/*
 		The firmware is not running, it cannot update these; we do here instead.
 	*/
-	psCCBCtl->ui32ReadOffset = *pui32Woff;
-	psCCBCtl->ui32DepOffset = *pui32Woff;
+	psClientCCB->psClientCCBCtrl->ui32ReadOffset = psClientCCB->ui32HostWriteOffset;
+	psClientCCB->psClientCCBCtrl->ui32DepOffset = psClientCCB->ui32HostWriteOffset;
 #endif
-
-	DevmemReleaseCpuVirtAddr(pscCCBMemDesc);
-	
-	return eError;
 }
+
+IMG_UINT32 RGXGetHostWriteOffsetCCB(RGX_CLIENT_CCB *psClientCCB)
+{
+	return psClientCCB->ui32HostWriteOffset;
+}
+
+#define SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL PVR_DBG_ERROR
+#define CHECK_COMMAND(cmd, fenceupdate) \
+				case RGXFWIF_CCB_CMD_TYPE_##cmd: \
+						PVR_DPF((SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL, #cmd " command (%d bytes)", psHeader->ui32CmdSize)); \
+						bFenceUpdate = fenceupdate; \
+						break
+
+static IMG_VOID _RGXClientCCBDumpCommands(RGX_CLIENT_CCB *psClientCCB,
+										  IMG_UINT32 ui32Offset,
+										  IMG_UINT32 ui32ByteCount)
+{
+#if defined(SUPPORT_DUMP_CLIENT_CCB_COMMANDS)
+	IMG_UINT8 *pui8Ptr = psClientCCB->pui8ClientCCB + ui32Offset;
+	IMG_UINT32 ui32ConsumeSize = ui32ByteCount;
+
+	while (ui32ConsumeSize)
+	{
+		RGXFWIF_CCB_CMD_HEADER *psHeader = (RGXFWIF_CCB_CMD_HEADER *) pui8Ptr;
+		IMG_BOOL bFenceUpdate = IMG_FALSE;
+
+		PVR_DPF((SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL, "@offset 0x%08x", pui8Ptr - psClientCCB->pui8ClientCCB));
+		switch(psHeader->eCmdType)
+		{
+			CHECK_COMMAND(TA, IMG_FALSE);
+			CHECK_COMMAND(3D, IMG_FALSE);
+			CHECK_COMMAND(CDM, IMG_FALSE);
+			CHECK_COMMAND(TQ_3D, IMG_FALSE);
+			CHECK_COMMAND(TQ_2D, IMG_FALSE);
+			CHECK_COMMAND(3D_PR, IMG_FALSE);
+			CHECK_COMMAND(NULL, IMG_FALSE);
+			CHECK_COMMAND(SHG, IMG_FALSE);
+			CHECK_COMMAND(RTU, IMG_FALSE);
+			CHECK_COMMAND(FENCE, IMG_TRUE);
+			CHECK_COMMAND(UPDATE, IMG_TRUE);
+			CHECK_COMMAND(FENCE_PR, IMG_TRUE);
+			CHECK_COMMAND(PADDING, IMG_FALSE);
+			default:
+				PVR_DPF((SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL, "Unknown command!"));
+				break;
+		}
+		pui8Ptr += sizeof(*psHeader);
+		if (bFenceUpdate)
+		{
+			IMG_UINT32 j;
+			RGXFWIF_UFO *psUFOPtr = (RGXFWIF_UFO *) pui8Ptr;
+			for (j=0;j<psHeader->ui32CmdSize/sizeof(RGXFWIF_UFO);j++)
+			{
+				PVR_DPF((SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL, "Addr = 0x%08x, value = 0x%08x",
+							psUFOPtr[j].puiAddrUFO.ui32Addr, psUFOPtr[j].ui32Value));
+			}
+		}
+		else
+		{
+			IMG_UINT32 *pui32Ptr = (IMG_UINT32 *) pui8Ptr;
+			IMG_UINT32 ui32Remain = psHeader->ui32CmdSize/sizeof(IMG_UINT32);
+			while(ui32Remain)
+			{
+				if (ui32Remain >= 4)
+				{
+					PVR_DPF((SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL, "0x%08x 0x%08x 0x%08x 0x%08x",
+							pui32Ptr[0], pui32Ptr[1], pui32Ptr[2], pui32Ptr[3]));
+					pui32Ptr += 4;
+					ui32Remain -= 4;
+				}
+				if (ui32Remain == 3)
+				{
+					PVR_DPF((SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL, "0x%08x 0x%08x 0x%08x",
+							pui32Ptr[0], pui32Ptr[1], pui32Ptr[2]));
+					pui32Ptr += 3;
+					ui32Remain -= 3;
+				}
+				if (ui32Remain == 2)
+				{
+					PVR_DPF((SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL, "0x%08x 0x%08x",
+							pui32Ptr[0], pui32Ptr[1]));
+					pui32Ptr += 2;
+					ui32Remain -= 2;
+				}
+				if (ui32Remain == 1)
+				{
+					PVR_DPF((SUPPORT_DUMP_CLIENT_CCB_COMMANDS_DBG_LEVEL, "0x%08x",
+							pui32Ptr[0]));
+					pui32Ptr += 1;
+					ui32Remain -= 1;
+				}
+			}
+		}
+		pui8Ptr += psHeader->ui32CmdSize;
+		ui32ConsumeSize -= sizeof(*psHeader) + psHeader->ui32CmdSize;
+	}
+#else
+	PVR_UNREFERENCED_PARAMETER(psClientCCB);
+	PVR_UNREFERENCED_PARAMETER(ui32Offset);
+	PVR_UNREFERENCED_PARAMETER(ui32ByteCount);
+#endif
+}
+
+/*
+	Workout how much space this command will require
+*/
+PVRSRV_ERROR RGXCmdHelperInitCmdCCB(RGX_CLIENT_CCB 			*psClientCCB,
+								    IMG_UINT32				ui32ClientFenceCount,
+								    PRGXFWIF_UFO_ADDR		*pauiFenceUFOAddress,
+								    IMG_UINT32				*paui32FenceValue,
+								    IMG_UINT32				ui32ClientUpdateCount,
+								    PRGXFWIF_UFO_ADDR		*pauiUpdateUFOAddress,
+								    IMG_UINT32				*paui32UpdateValue,
+								    IMG_UINT32				ui32ServerSyncCount,
+								    IMG_UINT32				*paui32ServerSyncFlags,
+								    SERVER_SYNC_PRIMITIVE	**papsServerSyncs,
+								    IMG_UINT32				ui32CmdSize,
+								    IMG_PBYTE				pui8DMCmd,
+								    RGXFWIF_CCB_CMD_TYPE	eType,
+								    IMG_BOOL				bPDumpContinuous,
+								    IMG_CHAR				*pszCommandName,
+								    RGX_CCB_CMD_HELPER_DATA	*psCmdHelperData)
+{
+	IMG_UINT32 ui32FenceCount;
+	IMG_UINT32 ui32UpdateCount;
+	IMG_UINT32 i;
+
+	/* Save the data we require in the submit call */
+	psCmdHelperData->psClientCCB = psClientCCB;
+	psCmdHelperData->bPDumpContinuous = bPDumpContinuous;
+	psCmdHelperData->pszCommandName = pszCommandName;
+
+	/* Client sync data */
+	psCmdHelperData->ui32ClientFenceCount = ui32ClientFenceCount;
+	psCmdHelperData->pauiFenceUFOAddress = pauiFenceUFOAddress;
+	psCmdHelperData->paui32FenceValue = paui32FenceValue;
+	psCmdHelperData->ui32ClientUpdateCount = ui32ClientUpdateCount;
+	psCmdHelperData->pauiUpdateUFOAddress = pauiUpdateUFOAddress;
+	psCmdHelperData->paui32UpdateValue = paui32UpdateValue;
+
+	/* Server sync data */
+	psCmdHelperData->ui32ServerSyncCount = ui32ServerSyncCount;
+	psCmdHelperData->paui32ServerSyncFlags = paui32ServerSyncFlags;
+	psCmdHelperData->papsServerSyncs = papsServerSyncs;
+
+	/* Command data */
+	psCmdHelperData->ui32CmdSize = ui32CmdSize;
+	psCmdHelperData->pui8DMCmd = pui8DMCmd;
+	psCmdHelperData->eType = eType;
+
+	/* Init the generated data memembers */
+	psCmdHelperData->ui32ServerFenceCount = 0;
+	psCmdHelperData->ui32ServerUpdateCount = 0;
+
+	/* Workout how many fence and update's this command will have */
+	for (i = 0; i < ui32ServerSyncCount; i++)
+	{
+		if (paui32ServerSyncFlags[i] & PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK)
+		{
+			/* Server syncs must fence */
+			psCmdHelperData->ui32ServerFenceCount++;
+		}
+		if (paui32ServerSyncFlags[i] & PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE)
+		{
+			psCmdHelperData->ui32ServerUpdateCount++;
+		}
+	}
+
+	/* Total fence command size (header plus command data) */
+	ui32FenceCount = ui32ClientFenceCount + psCmdHelperData->ui32ServerFenceCount;
+	if (ui32FenceCount)
+	{
+		psCmdHelperData->ui32FenceCmdSize = RGX_CCB_FWALLOC_ALIGN((ui32FenceCount * sizeof(RGXFWIF_UFO)) +
+																  sizeof(RGXFWIF_CCB_CMD_HEADER));
+	}
+	else
+	{
+		psCmdHelperData->ui32FenceCmdSize = 0;
+	}
+
+	/* Total DM command size (header plus command data) */
+	psCmdHelperData->ui32DMCmdSize = RGX_CCB_FWALLOC_ALIGN(ui32CmdSize +
+														   sizeof(RGXFWIF_CCB_CMD_HEADER));
+
+	/* Total fence command size (header plus command data) */
+	ui32UpdateCount = ui32ClientUpdateCount + psCmdHelperData->ui32ServerUpdateCount;
+	if (ui32UpdateCount)
+	{
+		psCmdHelperData->ui32UpdateCmdSize = RGX_CCB_FWALLOC_ALIGN((ui32UpdateCount * sizeof(RGXFWIF_UFO)) +
+																   sizeof(RGXFWIF_CCB_CMD_HEADER));
+	}
+	else
+	{
+		psCmdHelperData->ui32UpdateCmdSize = 0;
+	}
+	return PVRSRV_OK;
+}
+
+/*
+	Reserve space in the CCB and fill in the command and client sync data
+*/
+PVRSRV_ERROR RGXCmdHelperAcquireCmdCCB(IMG_UINT32 ui32CmdCount,
+									   RGX_CCB_CMD_HELPER_DATA *asCmdHelperData,
+									   IMG_BOOL *pbKickRequired)
+{
+	IMG_UINT32 ui32BeforeWOff = asCmdHelperData[0].psClientCCB->ui32HostWriteOffset;
+	IMG_UINT32 ui32AllocSize = 0;
+	IMG_UINT32 i;
+	IMG_UINT8 *pui8StartPtr;
+	PVRSRV_ERROR eError;
+
+	*pbKickRequired = IMG_FALSE;
+
+	/*
+		Workout how much space we need for all the command(s)
+	*/
+	for (i=0;i<ui32CmdCount;i++)
+	{
+		if (asCmdHelperData[0].bPDumpContinuous != asCmdHelperData[i].bPDumpContinuous)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: PDump continuous is not consistent (%s != %s) for command %d",
+					 __FUNCTION__,
+					 asCmdHelperData[0].bPDumpContinuous?"IMG_TRUE":"IMG_FALSE",
+					 asCmdHelperData[i].bPDumpContinuous?"IMG_TRUE":"IMG_FALSE",
+					 ui32CmdCount));
+			return PVRSRV_ERROR_INVALID_PARAMS;
+		}
+		ui32AllocSize += asCmdHelperData[i].ui32FenceCmdSize +
+						 asCmdHelperData[i].ui32DMCmdSize +
+						 asCmdHelperData[i].ui32UpdateCmdSize;
+	}
+
+	/*
+		Acquire space in the CCB for all the command(s).
+	*/
+	eError = RGXAcquireCCB(asCmdHelperData[0].psClientCCB,
+						   ui32AllocSize,
+						   (IMG_PVOID *)&pui8StartPtr,
+						   asCmdHelperData[0].bPDumpContinuous);	
+	if (eError != PVRSRV_OK)
+	{
+		/* Failed so bail out and allow the client side to retry */
+		if (asCmdHelperData[0].psClientCCB->ui32HostWriteOffset != ui32BeforeWOff)
+		{
+			*pbKickRequired = IMG_TRUE;
+		}
+		return eError;
+	}
+
+	/*
+		For each command fill in the fence, DM, and update command
+
+		Note:
+		We only fill in the client fences here, the server fences (and updates)
+		will be filled in together at the end. This is because we might fail the
+		kernel CCB alloc and would then have to rollback the server syncs if
+		we took the operation here
+	*/
+	for (i=0;i<ui32CmdCount;i++)
+	{
+		RGX_CCB_CMD_HELPER_DATA *psCmdHelperData = &asCmdHelperData[i];
+		IMG_UINT8 *pui8CmdPtr;
+		IMG_UINT8 *pui8ServerFenceStart = 0;
+		IMG_UINT8 *pui8ServerUpdateStart = 0;
+		/*
+			Create the fence command.
+		*/
+		if (psCmdHelperData->ui32FenceCmdSize)
+		{
+			RGXFWIF_CCB_CMD_HEADER *psHeader;
+			IMG_UINT k;
+
+			/* Fences are at the start of the command */
+			pui8CmdPtr = pui8StartPtr;
+
+			psHeader = (RGXFWIF_CCB_CMD_HEADER *) pui8CmdPtr;
+			psHeader->eCmdType = RGXFWIF_CCB_CMD_TYPE_FENCE;
+			psHeader->ui32CmdSize = psCmdHelperData->ui32FenceCmdSize - sizeof(RGXFWIF_CCB_CMD_HEADER);
+			pui8CmdPtr += sizeof(RGXFWIF_CCB_CMD_HEADER);
+
+			/* Fill in the client fences */
+			for (k = 0; k < psCmdHelperData->ui32ClientFenceCount; k++)
+			{
+				RGXFWIF_UFO *psUFOPtr = (RGXFWIF_UFO *) pui8CmdPtr;
+	
+				psUFOPtr->puiAddrUFO = psCmdHelperData->pauiFenceUFOAddress[k];
+				psUFOPtr->ui32Value = psCmdHelperData->paui32FenceValue[k];
+				pui8CmdPtr += sizeof(RGXFWIF_UFO);
+			}
+			pui8ServerFenceStart = pui8CmdPtr;
+		}
+	
+		/*
+			Create the DM command
+		*/
+		if (psCmdHelperData->ui32DMCmdSize)
+		{
+			RGXFWIF_CCB_CMD_HEADER *psHeader;
+
+			/* The command is after any fences */
+			pui8CmdPtr = pui8StartPtr + psCmdHelperData->ui32FenceCmdSize;
+
+			psHeader = (RGXFWIF_CCB_CMD_HEADER *) pui8CmdPtr;
+			psHeader->eCmdType = psCmdHelperData->eType;
+			psHeader->ui32CmdSize = psCmdHelperData->ui32DMCmdSize - sizeof(RGXFWIF_CCB_CMD_HEADER);
+			pui8CmdPtr += sizeof(RGXFWIF_CCB_CMD_HEADER);
+
+			OSMemCopy(pui8CmdPtr, psCmdHelperData->pui8DMCmd, psCmdHelperData->ui32CmdSize);
+
+		}
+	
+		/*
+			Create the update command.
+			
+			Note:
+			We only fill in the client updates here, the server updates (and fences)
+			will be filled in together at the end
+		*/
+		if (psCmdHelperData->ui32UpdateCmdSize)
+		{
+			RGXFWIF_CCB_CMD_HEADER *psHeader;
+			IMG_UINT k;
+
+			/* And the update is after the DM command */
+			pui8CmdPtr = pui8StartPtr + psCmdHelperData->ui32FenceCmdSize + psCmdHelperData->ui32DMCmdSize;
+
+			psHeader = (RGXFWIF_CCB_CMD_HEADER *) pui8CmdPtr;
+			psHeader->eCmdType = RGXFWIF_CCB_CMD_TYPE_UPDATE;
+			psHeader->ui32CmdSize = psCmdHelperData->ui32UpdateCmdSize - sizeof(RGXFWIF_CCB_CMD_HEADER);
+			pui8CmdPtr += sizeof(RGXFWIF_CCB_CMD_HEADER);
+
+			/* Fill in the client updates */
+			for (k = 0; k < psCmdHelperData->ui32ClientUpdateCount; k++)
+			{
+				RGXFWIF_UFO *psUFOPtr = (RGXFWIF_UFO *) pui8CmdPtr;
+	
+				psUFOPtr->puiAddrUFO = psCmdHelperData->pauiUpdateUFOAddress[k];
+				psUFOPtr->ui32Value = psCmdHelperData->paui32UpdateValue[k];
+				pui8CmdPtr += sizeof(RGXFWIF_UFO);
+			}
+			pui8ServerUpdateStart = pui8CmdPtr;
+		}
+	
+		/* Save the server sync fence & update offsets for submit time */
+		psCmdHelperData->pui8ServerFenceStart = pui8ServerFenceStart;
+		psCmdHelperData->pui8ServerUpdateStart = pui8ServerUpdateStart;
+	
+		/* Save start for sanity checking at submit time */
+		psCmdHelperData->pui8StartPtr = pui8StartPtr;
+
+		/* Set the start pointer for the next iteration around the loop */
+		pui8StartPtr += psCmdHelperData->ui32FenceCmdSize +
+						psCmdHelperData->ui32DMCmdSize +
+						psCmdHelperData->ui32UpdateCmdSize;
+	}
+
+	*pbKickRequired = IMG_TRUE;
+	return PVRSRV_OK;
+}
+
+/*
+	Fill in the server syncs data and release the CCB space
+*/
+IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
+								   RGX_CCB_CMD_HELPER_DATA *asCmdHelperData)
+{
+	IMG_UINT32 ui32AllocSize = 0;
+	IMG_UINT32 i;
+
+	/*
+		Workout how much space we need for all the command(s)
+	*/
+	for (i=0;i<ui32CmdCount;i++)
+	{
+		ui32AllocSize += asCmdHelperData[i].ui32FenceCmdSize +
+						 asCmdHelperData[i].ui32DMCmdSize +
+						 asCmdHelperData[i].ui32UpdateCmdSize;
+	}
+
+	/*
+		For each command fill in the server sync info
+	*/
+	for (i=0;i<ui32CmdCount;i++)
+	{
+		RGX_CCB_CMD_HELPER_DATA *psCmdHelperData = &asCmdHelperData[i];
+		IMG_UINT8 *pui8ServerFenceStart = psCmdHelperData->pui8ServerFenceStart;
+		IMG_UINT8 *pui8ServerUpdateStart = psCmdHelperData->pui8ServerUpdateStart;
+		IMG_UINT32 j;
+
+		/* Now fill in the server fence and updates together */
+		for (j = 0; j < psCmdHelperData->ui32ServerSyncCount; j++)
+		{
+			RGXFWIF_UFO *psUFOPtr;
+			IMG_UINT32 ui32UpdateValue;
+			IMG_UINT32 ui32FenceValue;
+			PVRSRV_ERROR eError;
+			IMG_BOOL bFence = ((psCmdHelperData->paui32ServerSyncFlags[j] & PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK)!=0)?IMG_TRUE:IMG_FALSE;
+			IMG_BOOL bUpdate = ((psCmdHelperData->paui32ServerSyncFlags[j] & PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE)!=0)?IMG_TRUE:IMG_FALSE;
+
+			eError = PVRSRVServerSyncQueueHWOpKM(psCmdHelperData->papsServerSyncs[j],
+												 bUpdate,
+												 &ui32FenceValue,
+												 &ui32UpdateValue);
+			/* This function can't fail */
+			PVR_ASSERT(eError == PVRSRV_OK);
+	
+			/*
+				As server syncs always fence (we have a check in RGXCmcdHelperInitCmdCCB
+				which ensures the client is playing ball) the filling in of the fence
+				is unconditational.
+			*/
+			if (bFence)
+			{
+				PVR_ASSERT(pui8ServerFenceStart != 0);
+
+				psUFOPtr = (RGXFWIF_UFO *) pui8ServerFenceStart;
+				psUFOPtr->puiAddrUFO.ui32Addr = ServerSyncGetFWAddr(psCmdHelperData->papsServerSyncs[j]);
+				psUFOPtr->ui32Value = ui32FenceValue;
+				pui8ServerFenceStart += sizeof(RGXFWIF_UFO);
+			}
+	
+			/* If there is an update then fill that in as well */
+			if (bUpdate)
+			{
+				PVR_ASSERT(pui8ServerUpdateStart != 0);
+
+				psUFOPtr = (RGXFWIF_UFO *) pui8ServerUpdateStart;
+				psUFOPtr->puiAddrUFO.ui32Addr = ServerSyncGetFWAddr(psCmdHelperData->papsServerSyncs[j]);
+				psUFOPtr->ui32Value = ui32UpdateValue;
+				pui8ServerUpdateStart += sizeof(RGXFWIF_UFO);
+
+#if defined(NO_HARDWARE)
+				/*
+					There is no FW so the host has to do any Sync updates
+					(client sync updates are done in the client
+				*/
+				PVRSRVServerSyncPrimSetKM(psCmdHelperData->papsServerSyncs[j], ui32UpdateValue);
+#endif
+			}
+		}
+
+		if (psCmdHelperData->ui32ServerSyncCount)
+		{
+			/*
+				Do some sanity checks to ensure we did the point math right
+			*/
+			if (pui8ServerFenceStart != 0)
+			{
+				PVR_ASSERT(pui8ServerFenceStart ==
+						   (psCmdHelperData->pui8StartPtr +
+						   psCmdHelperData->ui32FenceCmdSize));
+			}
+
+			if (pui8ServerUpdateStart != 0)
+			{
+				PVR_ASSERT(pui8ServerUpdateStart ==
+						   (psCmdHelperData->pui8StartPtr +
+						   psCmdHelperData->ui32FenceCmdSize +
+						   psCmdHelperData->ui32DMCmdSize +
+						   psCmdHelperData->ui32UpdateCmdSize));
+			}
+		}
+	
+		/*
+			All the commands have been filled in so release the CCB space.
+			The FW still won't run this command until we kick it
+		*/
+		PDUMPCOMMENT("%s command", psCmdHelperData->pszCommandName);
+	}
+
+	_RGXClientCCBDumpCommands(asCmdHelperData[0].psClientCCB,
+							  asCmdHelperData[0].psClientCCB->ui32HostWriteOffset,
+							  ui32AllocSize);
+
+	RGXReleaseCCB(asCmdHelperData[0].psClientCCB, 
+				  ui32AllocSize,
+				  asCmdHelperData[0].bPDumpContinuous);
+}
+
+
 /******************************************************************************
  End of file (rgxccb.c)
 ******************************************************************************/

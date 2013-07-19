@@ -43,7 +43,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "img_types.h"
 #include "pvrsrv_device.h"
-#include "rgxsysinfo.h"
+#include "sysinfo.h"
 #include "syscommon.h"
 #include "sysconfig.h"
 #include "emu.h"
@@ -120,6 +120,18 @@ static PVRSRV_ERROR EmuReset(IMG_CPU_PHYADDR	sRegsCpuPBase)
 	}
 
 	/*
+		Set the memory latency. This needs to be done before the soft reset to ensure
+		it applies to all aspects of the emulator.
+	*/
+	ui32MemLatency = EmuMemLatencyGet();
+	if (ui32MemLatency != 0)
+	{
+		PVR_LOG(("EmuReset: Mem latency = 0x%X", ui32MemLatency));
+	}
+	OSWriteHWReg32(pvWrapperRegs, EMU_CR_MEMORY_LATENCY, ui32MemLatency);
+	(void) OSReadHWReg32(pvWrapperRegs, EMU_CR_MEMORY_LATENCY);
+
+	/*
 		Emu reset.
 	*/
 	OSWriteHWReg32(pvWrapperRegs, EMU_CR_SOFT_RESET, EMU_CR_SOFT_RESET_SYS_EN|EMU_CR_SOFT_RESET_MEM_EN|EMU_CR_SOFT_RESET_CORE_EN);
@@ -142,17 +154,6 @@ static PVRSRV_ERROR EmuReset(IMG_CPU_PHYADDR	sRegsCpuPBase)
 
 	/* Flush register write */
 	(void) OSReadHWReg32(pvWrapperRegs, EMU_CR_PCI_MASTER);
-
-	/*
-		Set the mem latency
-	*/
-	ui32MemLatency = EmuMemLatencyGet();
-	if (ui32MemLatency != 0)
-	{
-		PVR_LOG(("EmuReset: Mem latency = 0x%X", ui32MemLatency));
-	}
-	OSWriteHWReg32(pvWrapperRegs, EMU_CR_MEMORY_LATENCY, ui32MemLatency);
-	(void) OSReadHWReg32(pvWrapperRegs, EMU_CR_MEMORY_LATENCY);
 
 	/*
 		Remove the temporary register mapping.
@@ -416,7 +417,7 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 
 	/* Ion is only supported on UMA builds */
 #if (defined(SUPPORT_ION) && (!defined(LMA)))
-	IonInit();
+	IonInit(NULL);
 #endif
 
 	gpsPlatData = psPlatData;
@@ -442,6 +443,7 @@ IMG_VOID SysDestroyConfigData(PVRSRV_SYSTEM_CONFIG *psSysConfig)
 
 static IMG_UINT32 EmuRGXClockFreq(IMG_HANDLE hSysData)
 {
+	PVR_UNREFERENCED_PARAMETER(hSysData);
 	return EMU_RGX_CLOCK_FREQ;
 }
 

@@ -42,6 +42,8 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
+#if defined PDUMP
+
 #include "allocmem.h"
 #include "img_types.h"
 #include "pvrsrv_error.h"
@@ -289,4 +291,6 @@ e0:
 	PVR_ASSERT(eError != PVRSRV_OK);
 	return eError;
 }
+
+#endif /* PDUMP */
 

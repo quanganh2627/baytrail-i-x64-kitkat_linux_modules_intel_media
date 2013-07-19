@@ -65,7 +65,6 @@ static PVRSRV_ERROR SysDevicePrePowerState(
 		PVRSRV_DEV_POWER_STATE eCurrentPowerState,
 		IMG_BOOL bForced);
 
-
 static RGX_TIMING_INFORMATION sRGXTimingInfo =
 {
 	.ui32CoreClockSpeed        = 400000000, /* changed from 100000000, */
@@ -86,7 +85,7 @@ static PVRSRV_DEVICE_CONFIG sDevices[] =
 		.pszName                = "RGX",
 
 		/* Device setup information */
-		.sRegsCpuPBase.uiAddr   = 0,
+		.sRegsCpuPBase.uiAddr   = { 0 },
 		.ui32RegsSize           = 0,
 		.ui32IRQ                = 0,
 		.bIRQIsShared           = IMG_TRUE,
@@ -105,12 +104,27 @@ static PHYS_HEAP_FUNCTIONS gsPhysHeapFuncs = {
 	.pfnDevPAddrToCpuPAddr	= SysDevPAddrToCpuPAddr,
 };
 
-static PHYS_HEAP_CONFIG	gsPhysHeapConfig = {
+#if defined(TDMETACODE)
+#error "TDMETACODE Need to be implemented or not supported in services/3rdparty/intel_drm/sysconfig.h"
+#else
+static PHYS_HEAP_CONFIG	gsPhysHeapConfig[1] = {
+	{
 	.ui32PhysHeapID			= 0,
 	.eType					= PHYS_HEAP_TYPE_UMA,
 	.pszPDumpMemspaceName	= "SYSMEM",
 	.psMemFuncs				= &gsPhysHeapFuncs,
 	.hPrivData				= IMG_NULL,
+	}
+};
+#endif
+
+/* default BIF tiling heap x-stride configurations. */
+static IMG_UINT32 gauiBIFTilingHeapXStrides[RGXFWIF_NUM_BIF_TILING_CONFIGS] =
+{
+    0, /* BIF tiling heap 1 x-stride */
+    1, /* BIF tiling heap 2 x-stride */
+    2, /* BIF tiling heap 3 x-stride */
+    3  /* BIF tiling heap 4 x-stride */
 };
 
 
@@ -121,14 +135,17 @@ static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 
 	/* Physcial memory heaps */
 	.ui32PhysHeapCount = sizeof(gsPhysHeapConfig) / sizeof(PHYS_HEAP_CONFIG),
-	.pasPhysHeaps = &gsPhysHeapConfig,
+	.pasPhysHeaps = &(gsPhysHeapConfig[0]),
 
 	/* No power management on no HW system */
 	.pfnSysPrePowerState = NULL,
 	.pfnSysPostPowerState = NULL,
 
+	.pui32BIFTilingHeapConfigs = &gauiBIFTilingHeapXStrides[0],
+	.ui32BIFTilingHeapCount = IMG_ARR_NUM_ELEMS(gauiBIFTilingHeapXStrides),
+
 	/* no cache snooping */
-	.bHasCacheSnooping = IMG_FALSE,
+	.eCacheSnoopingMode = PVRSRV_SYSTEM_SNOOP_NONE,
 };
 
 #define VENDOR_ID_MERRIFIELD        0x8086

@@ -114,15 +114,14 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
  * N.B.  This flag has no relevance to the CPU's MMU mapping, if any,
  * and would therefore not enforce read-only mapping on CPU.
  */
-#define PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE (1U<<1)
+#define PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE       (1U<<1) /*!< mapped as writeable to the GPU */
+#define PVRSRV_MEMALLOCFLAG_GPU_READ_PERMITTED  (1U<<2) /*!< can be mapped is GPU readable in another GPU mem context */
+#define PVRSRV_MEMALLOCFLAG_GPU_WRITE_PERMITTED (1U<<3) /*!< can be mapped is GPU writable in another GPU mem context */
 
-#define PVRSRV_MEMALLOCFLAG_GPU_READ_PERMITTED  (1U<<2) /* DOXYGEN_FIXME */
-#define PVRSRV_MEMALLOCFLAG_GPU_WRITE_PERMITTED (1U<<3) /* DOXYGEN_FIXME */
-
-#define PVRSRV_MEMALLOCFLAG_CPU_READABLE        (1U<<4) /*!< CPU will be able to read the memory */
-#define PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE       (1U<<5) /*!< CPU will be able to write to the memory */
-#define PVRSRV_MEMALLOCFLAG_CPU_READ_PERMITTED  (1U<<6) /* DOXYGEN_FIXME */
-#define PVRSRV_MEMALLOCFLAG_CPU_WRITE_PERMITTED (1U<<7) /* DOXYGEN_FIXME */
+#define PVRSRV_MEMALLOCFLAG_CPU_READABLE        (1U<<4) /*!< mapped as readable to the CPU */
+#define PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE       (1U<<5) /*!< mapped as writeable to the CPU */
+#define PVRSRV_MEMALLOCFLAG_CPU_READ_PERMITTED  (1U<<6) /*!< can be mapped is CPU readable in another CPU mem context */
+#define PVRSRV_MEMALLOCFLAG_CPU_WRITE_PERMITTED (1U<<7) /*!< can be mapped is CPU writable in another CPU mem context */
 
 
 /*
@@ -133,7 +132,17 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
  *  **********************************************************
  */
 
-/* GPU domain */
+/*
+	GPU domain
+	==========
+
+	The following defines are used to control the GPU cache bit field.
+	The defines are mutually exclusive.
+	
+	A helper macro, GPU_CACHE_MODE, is provided to obtain just the GPU cache
+	bit field from the flags. This should be used whenever the GPU cache mode
+	needs to be determined.
+*/
 
 /*!
    GPU domain. Request uncached memory. This means that any writes to memory
@@ -148,8 +157,7 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
 */
 #define PVRSRV_MEMALLOCFLAG_GPU_WRITE_COMBINE    (1U<<8)
 /*!
-    GPU domain. This flag affects the device MMU protection flags.  FIXME: 
-    should it also affect CPU protection flags?  Probably.
+    GPU domain. This flag affects the device MMU protection flags.
  
     This flag ensures that the GPU and the CPU will always be coherent.
     This is done by either by snooping each others caches or, if this is
@@ -175,17 +183,42 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
     GPU domain.
  
 	Request cached cached coherent memory. This is like 
-	PVRSRV_MEMALLOCFLAG_CPU_CACHE_COHERENT but doesn't fall back on
+	PVRSRV_MEMALLOCFLAG_GPU_CACHE_COHERENT but doesn't fall back on
 	uncached memory if the system doesn't support cache-snooping
 	but rather returns an error.
 */
 #define PVRSRV_MEMALLOCFLAG_GPU_CACHED_CACHE_COHERENT   (4U<<8)
 
-/* DOXYGEN_FIXME */
+/*!
+	GPU domain.
+
+	This flag is for internal use only and is used to indicate
+	that the underlying allocation should be cached on the GPU
+	after all the snooping and coherent checks have been done
+*/
+#define PVRSRV_MEMALLOCFLAG_GPU_CACHED					(7U<<8)
+
+/*!
+	GPU domain.
+	
+	GPU cache mode mask
+*/
 #define PVRSRV_MEMALLOCFLAG_GPU_CACHE_MODE_MASK  (7U<<8)
 
 #define GPU_CACHE_MODE(n)	(n & PVRSRV_MEMALLOCFLAG_GPU_CACHE_MODE_MASK)
-/* CPU domain */
+
+
+/*
+	CPU domain
+	==========
+
+	The following defines are used to control the CPU cache bit field.
+	The defines are mutually exclusive.
+	
+	A helper macro, CPU_CACHE_MODE, is provided to obtain just the CPU cache
+	bit field from the flags. This should be used whenever the GPU cache mode
+	needs to be determined.
+*/
 
 /*!
    CPU domain. Request uncached memory. This means that any writes to memory
@@ -201,8 +234,7 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
 #define PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE    (1U<<11)
 
 /*!
-    CPU domain. This flag affects the device MMU protection flags.  FIXME: 
-    should it also affect CPU protection flags?  Probably.
+    CPU domain. This flag affects the device MMU protection flags.
  
     This flag ensures that the GPU and the CPU will always be coherent.
     This is done by either by snooping each others caches or, if this is
@@ -234,7 +266,21 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
 */
 #define PVRSRV_MEMALLOCFLAG_CPU_CACHED_CACHE_COHERENT   (4U<<11)
 
-/* DOXYGEN_FIXME */
+
+/*!
+	CPU domain.
+
+	This flag is for internal use only and is used to indicate
+	that the underlying allocation should be cached on the CPU
+	after all the snooping and coherent checks have been done
+*/
+#define PVRSRV_MEMALLOCFLAG_CPU_CACHED					(7U<<11)
+
+/*!
+	CPU domain.
+	
+	CPU cache mode mask
+*/
 #define PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK  (7U<<11)
 
 #define CPU_CACHE_MODE(n)	(n & PVRSRV_MEMALLOCFLAG_CPU_CACHE_MODE_MASK)

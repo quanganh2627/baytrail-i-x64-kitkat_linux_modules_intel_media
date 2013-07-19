@@ -56,8 +56,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrsrv.h"
 #include "debug_request_ids.h"
 
-#include <linux/kernel.h>
-
 struct _DC_DISPLAY_CONTEXT_
 {
 	DC_DEVICE		*psDevice;
@@ -591,15 +589,14 @@ static PVRSRV_ERROR _DCPMRDevPhysAddr(PMR_IMPL_PRIVDATA pvPriv,
     /* verify the cast */
     /* N.B.  Strictly... this could be triggered by an illegal
        uiOffset arg too. */
-    PVR_ASSERT(uiPageIndex << uiLog2PageSize == uiOffset);
+    PVR_ASSERT((IMG_DEVMEM_OFFSET_T)uiPageIndex << uiLog2PageSize == uiOffset);
 
-    uiInPageOffset = (IMG_UINT32)(uiOffset - (uiPageIndex << uiLog2PageSize));
-    PVR_ASSERT(uiOffset == (uiPageIndex << uiLog2PageSize) + uiInPageOffset);
+    uiInPageOffset = (IMG_UINT32)(uiOffset - ((IMG_DEVMEM_OFFSET_T)uiPageIndex << uiLog2PageSize));
+    PVR_ASSERT(uiOffset == ((IMG_DEVMEM_OFFSET_T)uiPageIndex << uiLog2PageSize) + uiInPageOffset);
 
     PVR_ASSERT(uiPageIndex < uiNumPages);
     PVR_ASSERT(uiInPageOffset < uiPageSize);
 
-	/* FIXME: Remove sysaddr */
     sDevAddr.uiAddr = psPMRPriv->pasDevPAddr[uiPageIndex].uiAddr;
 	PVR_ASSERT((sDevAddr.uiAddr & (uiPageSize - 1)) == 0);
 
@@ -608,55 +605,6 @@ static PVRSRV_ERROR _DCPMRDevPhysAddr(PMR_IMPL_PRIVDATA pvPriv,
 
     return PVRSRV_OK;
 }
-
-#if defined(PDUMP)
-static IMG_VOID _PDumpPMRMalloc(const PMR *psPMR,
-								IMG_DEVMEM_SIZE_T uiSize,
-								IMG_DEVMEM_ALIGN_T uiBlockSize,
-								IMG_HANDLE *phPDumpAllocInfoPtr)
-{
-	PVRSRV_ERROR eError;
-	IMG_HANDLE hPDumpAllocInfo;
-	IMG_CHAR aszMemspaceName[30];
-	IMG_CHAR aszSymbolicName[30];
-	IMG_DEVMEM_OFFSET_T uiOffset;
-	IMG_DEVMEM_OFFSET_T uiNextSymName;
-
-	uiOffset = 0;
-	eError = PMR_PDumpSymbolicAddr(psPMR,
-								   uiOffset,
-								   sizeof(aszMemspaceName),
-								   &aszMemspaceName[0],
-								   sizeof(aszSymbolicName),
-								   &aszSymbolicName[0],
-								   &uiOffset,
-								   &uiNextSymName);
-	PVR_ASSERT(eError == PVRSRV_OK);
-	PVR_ASSERT(uiOffset == 0);
-	PVR_ASSERT((uiOffset + uiSize) <= uiNextSymName);
-
-	PDumpPMRMalloc(aszMemspaceName,
-				   aszSymbolicName,
-				   uiSize,
-				   uiBlockSize,
-				   IMG_TRUE,
-				   &hPDumpAllocInfo);
-
-	*phPDumpAllocInfoPtr = hPDumpAllocInfo;
-}
-#else	/* PDUMP */
-static IMG_VOID
-_PDumpPMRMalloc(const PMR *psPMR,
-                IMG_DEVMEM_SIZE_T uiSize,
-                IMG_DEVMEM_ALIGN_T uiBlockSize,
-                IMG_HANDLE *phPDumpAllocInfoPtr)
-{
-	PVR_UNREFERENCED_PARAMETER(psPMR);
-	PVR_UNREFERENCED_PARAMETER(uiSize);
-	PVR_UNREFERENCED_PARAMETER(uiBlockSize);
-	PVR_UNREFERENCED_PARAMETER(phPDumpAllocInfoPtr);
-}
-#endif	/* PDUMP */
 
 static PVRSRV_ERROR _DCPMRFinalize(PMR_IMPL_PRIVDATA pvPriv)
 {
@@ -689,9 +637,9 @@ static PVRSRV_ERROR _DCPMRReadBytes(PMR_IMPL_PRIVDATA pvPriv,
     IMG_SIZE_T uiBytesCopyableFromPage;
     IMG_VOID *pvMapping;
     IMG_UINT8 *pcKernelPointer;
-    IMG_UINT32 uiBufferOffset = 0;
-    IMG_UINT32 uiPageIndex;
-    IMG_UINT32 uiInPageOffset;
+    IMG_SIZE_T uiBufferOffset = 0;
+    IMG_SIZE_T uiPageIndex;
+    IMG_SIZE_T uiInPageOffset;
 
 	/* If we already have a CPU mapping just us it */
 	if (psPMRPriv->pvLinAddr)
@@ -706,11 +654,11 @@ static PVRSRV_ERROR _DCPMRReadBytes(PMR_IMPL_PRIVDATA pvPriv,
     while (uiBytesToCopy > 0)
     {
         /* we have to kmap one page in at a time */
-        uiPageIndex = uiOffset >> psPMRPriv->uiLog2PageSize;
+        uiPageIndex = TRUNCATE_64BITS_TO_SIZE_T(uiOffset >> psPMRPriv->uiLog2PageSize);
 
-        uiInPageOffset = uiOffset - (uiPageIndex << psPMRPriv->uiLog2PageSize);
+        uiInPageOffset = TRUNCATE_64BITS_TO_SIZE_T(uiOffset - ((IMG_DEVMEM_OFFSET_T)uiPageIndex << psPMRPriv->uiLog2PageSize));
         uiBytesCopyableFromPage = uiBytesToCopy;
-        if (uiBytesCopyableFromPage + uiInPageOffset > (1<<psPMRPriv->uiLog2PageSize))
+        if (uiBytesCopyableFromPage + uiInPageOffset > (1U<<psPMRPriv->uiLog2PageSize))
         {
             uiBytesCopyableFromPage = (1 << psPMRPriv->uiLog2PageSize)-uiInPageOffset;
         }
@@ -736,11 +684,15 @@ static PVRSRV_ERROR _DCPMRReadBytes(PMR_IMPL_PRIVDATA pvPriv,
 }
 
 static PMR_IMPL_FUNCTAB sDCPMRFuncTab = {
-	.pfnLockPhysAddresses			= _DCPMRLockPhysAddresses,
-	.pfnUnlockPhysAddresses			= _DCPMRUnlockPhysAddresses,
-	.pfnDevPhysAddr					= _DCPMRDevPhysAddr,
-	.pfnReadBytes					= _DCPMRReadBytes,
-	.pfnFinalize					= _DCPMRFinalize,
+	_DCPMRLockPhysAddresses,	/* .pfnLockPhysAddresses */
+	_DCPMRUnlockPhysAddresses,	/* .pfnUnlockPhysAddresses */
+	_DCPMRDevPhysAddr,			/* .pfnDevPhysAddr */
+	IMG_NULL,					/* .pfnPDumpSymbolicAddr	*/
+	IMG_NULL,					/* .pfnAcquireKernelMappingData	*/
+	IMG_NULL,					/* .pfnReleaseKernelMappingData */
+	_DCPMRReadBytes,			/* .pfnReadBytes */
+	IMG_NULL,					/* .pfnWriteBytes */
+	_DCPMRFinalize				/* .pfnFinalize */
 };
 
 static PVRSRV_ERROR _DCCreatePMR(IMG_DEVMEM_LOG2ALIGN_T uiLog2PageSize,
@@ -810,10 +762,11 @@ static PVRSRV_ERROR _DCCreatePMR(IMG_DEVMEM_LOG2ALIGN_T uiLog2PageSize,
 		goto fail_pmrcreate;
 	}
 
-	_PDumpPMRMalloc(*ppsPMR,
-					uiBufferSize,
-					1U<<uiLog2PageSize,
-					&hPDumpAllocInfo);
+	PDumpPMRMallocPMR(*ppsPMR,
+					  uiBufferSize,
+					  1ULL<<uiLog2PageSize,
+	                  IMG_TRUE,
+					  &hPDumpAllocInfo);
 #if defined(PDUMP)
 	psPMRPriv->hPDumpAllocInfo = hPDumpAllocInfo;
 	psPMRPriv->bPDumpMalloced = IMG_TRUE;
@@ -986,8 +939,47 @@ PVRSRV_ERROR DCDimQuery(DC_DEVICE *psDevice,
 	return PVRSRV_OK;
 }
 
+
+PVRSRV_ERROR DCSetBlank(DC_DEVICE *psDevice,
+						IMG_BOOL bEnabled)
+{
+	PVRSRV_ERROR eError = PVRSRV_ERROR_NOT_IMPLEMENTED;
+	if (psDevice->psFuncTable->pfnSetBlank)
+	{
+		eError = psDevice->psFuncTable->pfnSetBlank(psDevice->hDeviceData,
+													bEnabled);
+	}
+
+	return eError;
+}
+
+PVRSRV_ERROR DCSetVSyncReporting(DC_DEVICE *psDevice,
+								 IMG_BOOL bEnabled)
+{
+	PVRSRV_ERROR eError = PVRSRV_ERROR_NOT_IMPLEMENTED;
+	if (psDevice->psFuncTable->pfnSetVSyncReporting)
+	{
+		eError = psDevice->psFuncTable->pfnSetVSyncReporting(psDevice->hDeviceData,
+															 bEnabled);
+	}
+
+	return eError;
+}
+
+PVRSRV_ERROR DCLastVSyncQuery(DC_DEVICE *psDevice,
+							  IMG_INT64 *pi64Timestamp)
+{
+	PVRSRV_ERROR eError = PVRSRV_ERROR_NOT_IMPLEMENTED;
+	if (psDevice->psFuncTable->pfnLastVSyncQuery)
+	{
+		eError = psDevice->psFuncTable->pfnLastVSyncQuery(psDevice->hDeviceData,
+														  pi64Timestamp);
+	}
+
+	return eError;
+}
+
 /*
-	FIXME:
 	The system buffer breaks the rule of only calling DC callbacks on first
 	ref and last deref. For the pfnBufferSystemAcquire this is expected
 	as each call could get back a different buffer, but calls to
@@ -1296,7 +1288,7 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 	IMG_UINT32 ui32CmdRdySize;
 	IMG_UINT32 ui32CmdCompSize;
 	IMG_UINT32 ui32CopySize;
-	IMG_PVOID pvReadyData;
+	IMG_PUINT8 pui8ReadyData;
 	IMG_PVOID pvCompleteData;
 	DC_CMD_RDY_DATA *psReadyData;
 	DC_CMD_COMP_DATA *psCompleteData;
@@ -1378,7 +1370,7 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 							 _DCDisplayContextConfigure,
 							 ui32CmdRdySize,
 							 ui32CmdCompSize,
-							 &pvReadyData,
+							 (IMG_PVOID *)&pui8ReadyData,
 							 &pvCompleteData,
 							 pi32ReleaseFenceFd);
 
@@ -1390,8 +1382,8 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 	/*
 		Set up command ready data
 	*/
-	psReadyData = pvReadyData;
-	pvReadyData += sizeof(DC_CMD_RDY_DATA);
+	psReadyData = (DC_CMD_RDY_DATA *)pui8ReadyData;
+	pui8ReadyData += sizeof(DC_CMD_RDY_DATA);
 
 	psReadyData->ui32DisplayPeriod = ui32DisplayPeriod;
 	psReadyData->psDisplayContext = psDisplayContext;
@@ -1400,10 +1392,10 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 	/* Copy over surface atrribute array */
 	if (ui32PipeCount != 0)
 	{
-		psReadyData->pasSurfAttrib = pvReadyData;
+		psReadyData->pasSurfAttrib = (PVRSRV_SURFACE_CONFIG_INFO *)pui8ReadyData;
 		ui32CopySize = sizeof(PVRSRV_SURFACE_CONFIG_INFO) * ui32PipeCount;
 		OSMemCopy(psReadyData->pasSurfAttrib, pasSurfAttrib, ui32CopySize);
-		pvReadyData += ui32CopySize;
+		pui8ReadyData = pui8ReadyData + ui32CopySize;
 	}
 	else
 	{
@@ -1413,7 +1405,7 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 	/* Copy over device buffer handle buffer array */
 	if (ui32PipeCount != 0)
 	{
-		psReadyData->pahBuffer = pvReadyData;
+		psReadyData->pahBuffer = (IMG_HANDLE)pui8ReadyData;
 		ui32CopySize = sizeof(IMG_HANDLE) * ui32PipeCount;
 		OSMemCopy(psReadyData->pahBuffer, ahBuffers, ui32CopySize);
 	}
@@ -1426,7 +1418,7 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 		Set up command complete data
 	*/
 	psCompleteData = pvCompleteData;
-	pvCompleteData += sizeof(DC_CMD_COMP_DATA);
+	pvCompleteData = (IMG_PUINT8)pvCompleteData + sizeof(DC_CMD_COMP_DATA);
 
 	psCompleteData->psDisplayContext = psDisplayContext;
 	psCompleteData->ui32Token = psDisplayContext->ui32TokenOut++;
@@ -1788,7 +1780,7 @@ PVRSRV_ERROR DCRegisterDevice(DC_DEVICE_FUNCTIONS *psFuncTable,
 	psNew->ui32RefCount = 1;
 	psNew->hSystemBuffer = IMG_NULL;
 	psNew->ui32Index = g_ui32DCNextIndex++;
-	eError = OSEventObjectCreate(IMG_NULL, &psNew->psEventList);
+	eError = OSEventObjectCreate("DC_EVENT_OBJ", &psNew->psEventList);
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
@@ -1930,7 +1922,7 @@ PVRSRV_ERROR DCImportBufferAcquire(IMG_HANDLE hImport,
 	PMR *psPMR = hImport;
 	IMG_DEV_PHYADDR *pasDevPAddr;
 	IMG_DEVMEM_SIZE_T uiLogicalSize;
-	IMG_UINT32 ui32PageCount;
+	IMG_SIZE_T uiPageCount;
 	IMG_DEVMEM_OFFSET_T uiOffset = 0;
 	IMG_UINT32 i;
 	PVRSRV_ERROR eError;
@@ -1941,16 +1933,16 @@ PVRSRV_ERROR DCImportBufferAcquire(IMG_HANDLE hImport,
 		goto fail_getsize;
 	}
 
-	ui32PageCount = uiLogicalSize >> uiLog2PageSize;
+	uiPageCount = TRUNCATE_64BITS_TO_SIZE_T(uiLogicalSize >> uiLog2PageSize);
 
-	pasDevPAddr = OSAllocMem(sizeof(IMG_DEV_PHYADDR) * ui32PageCount);
+	pasDevPAddr = OSAllocMem(sizeof(IMG_DEV_PHYADDR) * uiPageCount);
 	if (pasDevPAddr == IMG_NULL)
 	{
 		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
 		goto fail_alloc;
 	}
 
-	OSMemSet(pasDevPAddr, 0, sizeof(IMG_DEV_PHYADDR) * ui32PageCount);
+	OSMemSet(pasDevPAddr, 0, sizeof(IMG_DEV_PHYADDR) * uiPageCount);
 
 	/* Lock the pages */
 	eError = PMRLockSysPhysAddresses(psPMR, uiLog2PageSize);
@@ -1960,7 +1952,7 @@ PVRSRV_ERROR DCImportBufferAcquire(IMG_HANDLE hImport,
 	}
 
 	/* Get each page one by one */
-	for (i=0;i<ui32PageCount;i++)
+	for (i=0;i<uiPageCount;i++)
 	{
 		IMG_BOOL bValid;
 
@@ -1972,10 +1964,10 @@ PVRSRV_ERROR DCImportBufferAcquire(IMG_HANDLE hImport,
 
 		/* The DC import function doesn't support sparse allocations */
 		PVR_ASSERT(bValid);
-		uiOffset += 1 << uiLog2PageSize;
+		uiOffset += 1ULL << uiLog2PageSize;
 	}
 
-	*pui32PageCount = ui32PageCount;
+	*pui32PageCount = TRUNCATE_SIZE_T_TO_32BITS(uiPageCount);
 	*ppasDevPAddr = pasDevPAddr;
 	return PVRSRV_OK;
 
@@ -2014,7 +2006,6 @@ PVRSRV_ERROR DCDeInit()
 
 	if (psPVRSRVData->eServicesState == PVRSRV_SERVICES_STATE_OK)
 	{
-		/* FIXME: Should this be a blocking call? */
 		PVR_ASSERT(g_psDCDeviceList == IMG_NULL);
 	}
 

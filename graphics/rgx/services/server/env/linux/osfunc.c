@@ -67,6 +67,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/workqueue.h>
 #endif
 #include <linux/kthread.h>
+#include <asm/atomic.h>
 
 #include "osfunc.h"
 #include "img_types.h"
@@ -81,6 +82,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_uaccess.h"
 #include "pvr_debug.h"
 #include "driverlock.h"
+
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+#include "syscommon.h"
+#endif
 
 #if defined(EMULATOR)
 #define EVENT_OBJECT_TIMEOUT_MS		(2000)
@@ -131,7 +136,7 @@ PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_SIZE_T uiSize,
 		}
 	}
 #endif
-#if defined(__arm__)
+#if defined(__arm__) || defined (__metag__)
 	{
 		IMG_CPU_PHYADDR sCPUPhysAddrStart, sCPUPhysAddrEnd;
 		IMG_PVOID pvPageVAddr = kmap(psPage);
@@ -252,6 +257,10 @@ IMG_VOID OSMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T ui32Size)
 #endif
 }
 
+IMG_INT OSMemCmp(IMG_VOID *pvBufA, IMG_VOID *pvBufB, IMG_SIZE_T uiLen)
+{
+	return (IMG_INT) memcmp(pvBufA, pvBufB, uiLen);
+}
 
 /*************************************************************************/ /*!
 @Function       OSStringCopy
@@ -364,6 +373,22 @@ IMG_UINT32 OSClockus(IMG_VOID)
 }
 
 
+/*************************************************************************/ /*!
+@Function       OSClockms
+@Description    This function returns the clock in miliseconds
+@Return         clock (ms)
+*/ /**************************************************************************/ 
+IMG_UINT32 OSClockms(IMG_VOID)
+{
+    IMG_UINT64 time, j = (IMG_UINT32)jiffies;
+
+    time = j * (((1 << 16) * 1000) / HZ);
+	time >>= 16;
+
+    return (IMG_UINT32)time;
+}
+
+
 /*
 	OSWaitus
 */
@@ -374,7 +399,7 @@ IMG_VOID OSWaitus(IMG_UINT32 ui32Timeus)
 
 
 /*
-	OSWaitus
+	OSSleepms
 */
 IMG_VOID OSSleepms(IMG_UINT32 ui32Timems)
 {
@@ -405,6 +430,15 @@ IMG_PID OSGetCurrentProcessIDKM(IMG_VOID)
 #endif
 }
 
+/*************************************************************************/ /*!
+@Function       OSGetCurrentProcessNameKM
+@Description    gets name of current process
+@Return         none
+*****************************************************************************/
+IMG_VOID OSGetCurrentProcessNameKM(IMG_CHAR *pszProcName, IMG_UINT32 ui32Size)
+{
+	strncpy(pszProcName, current->comm, MIN(ui32Size,TASK_COMM_LEN));
+}
 
 /*************************************************************************/ /*!
 @Function       OSGetPageSize
@@ -436,6 +470,7 @@ IMG_SIZE_T OSGetPageMask(IMG_VOID)
     return (OSGetPageSize()-1);
 }
 
+#if !defined (SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 typedef struct _LISR_DATA_ {
 	PFN_LISR pfnLISR;
 	IMG_VOID *pvData;
@@ -456,14 +491,24 @@ static irqreturn_t DeviceISRWrapper(int irq, void *dev_id)
 
     return bStatus ? IRQ_HANDLED : IRQ_NONE;
 }
+#endif
 
 /*
 	OSInstallDeviceLISR
 */
 PVRSRV_ERROR OSInstallDeviceLISR(PVRSRV_DEVICE_CONFIG *psDevConfig,
-									IMG_HANDLE *hLISRData, PFN_LISR pfnLISR,
-									IMG_VOID *pvData)
+				 IMG_HANDLE *hLISRData, 
+				 PFN_LISR pfnLISR,
+				 IMG_VOID *pvData)
 {
+#if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+	return SysInstallDeviceLISR(psDevConfig->ui32IRQ,
+				    psDevConfig->bIRQIsShared,
+				    psDevConfig->pszName,
+				    pfnLISR,
+				    pvData,
+				    hLISRData);
+#else
 	LISR_DATA *psLISRData;
 	unsigned long flags = 0;
 
@@ -491,6 +536,7 @@ PVRSRV_ERROR OSInstallDeviceLISR(PVRSRV_DEVICE_CONFIG *psDevConfig,
 	*hLISRData = (IMG_HANDLE) psLISRData;
 
     return PVRSRV_OK;
+#endif
 }
 
 /*
@@ -498,6 +544,9 @@ PVRSRV_ERROR OSInstallDeviceLISR(PVRSRV_DEVICE_CONFIG *psDevConfig,
 */
 PVRSRV_ERROR OSUninstallDeviceLISR(IMG_HANDLE hLISRData)
 {
+#if defined (SUPPORT_SYSTEM_INTERRUPT_HANDLING)
+	return SysUninstallDeviceLISR(hLISRData);
+#else
 	LISR_DATA *psLISRData = (LISR_DATA *) hLISRData;
 
     PVR_TRACE(("Uninstalling device LISR on IRQ %d with cookie %p", psLISRData->ui32IRQ,  psLISRData->pvData));
@@ -506,6 +555,7 @@ PVRSRV_ERROR OSUninstallDeviceLISR(IMG_HANDLE hLISRData)
 	kfree(psLISRData);
 
     return PVRSRV_OK;
+#endif
 }
 
 #if defined(PVR_LINUX_MISR_USING_PRIVATE_WORKQUEUE)
@@ -801,7 +851,7 @@ fail_alloc:
 	return eError;
 }
 
-PVRSRV_ERROR OSThreadDestory(IMG_HANDLE hThread)
+PVRSRV_ERROR OSThreadDestroy(IMG_HANDLE hThread)
 {
 	OSThreadData *psOSThreadData = hThread;
 	int ret;
@@ -1067,11 +1117,11 @@ static void OSTimerCallbackBody(TIMER_CALLBACK_DATA *psTimerCBData)
 /*************************************************************************/ /*!
 @Function       OSTimerCallbackWrapper
 @Description    OS specific timer callback wrapper function
-@Input          ui32Data    Timer callback data
+@Input          uData    Timer callback data
 */ /**************************************************************************/
-static IMG_VOID OSTimerCallbackWrapper(IMG_UINT32 ui32Data)
+static IMG_VOID OSTimerCallbackWrapper(IMG_UINTPTR_T uData)
 {
-    TIMER_CALLBACK_DATA	*psTimerCBData = (TIMER_CALLBACK_DATA*)ui32Data;
+    TIMER_CALLBACK_DATA	*psTimerCBData = (TIMER_CALLBACK_DATA*)uData;
     
 #if defined(PVR_LINUX_TIMERS_USING_WORKQUEUES) || defined(PVR_LINUX_TIMERS_USING_SHARED_WORKQUEUE)
     int res;
@@ -1167,15 +1217,15 @@ IMG_HANDLE OSAddTimer(PFN_TIMER_FUNC pfnTimerFunc, IMG_VOID *pvData, IMG_UINT32 
     /* setup timer object */
     /* PRQA S 0307,0563 1 */ /* ignore warning about inconpartible ptr casting */
     psTimerCBData->sTimer.function = (IMG_VOID *)OSTimerCallbackWrapper;
-    psTimerCBData->sTimer.data = (IMG_UINT32)psTimerCBData;
+    psTimerCBData->sTimer.data = (IMG_UINTPTR_T)psTimerCBData;
     
-    return (IMG_HANDLE)(ui32i + 1);
+    return (IMG_HANDLE)(IMG_UINTPTR_T)(ui32i + 1);
 }
 
 
 static inline TIMER_CALLBACK_DATA *GetTimerStructure(IMG_HANDLE hTimer)
 {
-    IMG_UINT32 ui32i = ((IMG_UINT32)hTimer) - 1;
+    IMG_UINT32 ui32i = (IMG_UINT32)((IMG_UINTPTR_T)hTimer) - 1;
 
     PVR_ASSERT(ui32i < OS_MAX_TIMERS);
 
@@ -1467,7 +1517,7 @@ IMG_BOOL OSProcHasPrivSrvInit(IMG_VOID)
 */ /**************************************************************************/
 PVRSRV_ERROR OSCopyToUser(IMG_PVOID pvProcess, 
                           IMG_VOID *pvDest, 
-                          IMG_VOID *pvSrc, 
+                          const IMG_VOID *pvSrc,
                           IMG_SIZE_T ui32Bytes)
 {
     PVR_UNREFERENCED_PARAMETER(pvProcess);
@@ -1488,7 +1538,7 @@ PVRSRV_ERROR OSCopyToUser(IMG_PVOID pvProcess,
 */ /**************************************************************************/
 PVRSRV_ERROR OSCopyFromUser( IMG_PVOID pvProcess, 
                              IMG_VOID *pvDest, 
-                             IMG_VOID *pvSrc, 
+                             const IMG_VOID *pvSrc,
                              IMG_SIZE_T ui32Bytes)
 {
     PVR_UNREFERENCED_PARAMETER(pvProcess);
@@ -1633,21 +1683,14 @@ IMG_VOID PVROSFuncDeInit(IMG_VOID)
 #endif
 }
 
-/* FIXME: need to re-think pvrlock for server syncs */
 static IMG_BOOL gbDoRelease = IMG_TRUE;
 IMG_VOID OSSetReleasePVRLock(IMG_VOID){ gbDoRelease = IMG_TRUE; }
 IMG_VOID OSSetKeepPVRLock(IMG_VOID) { gbDoRelease = IMG_FALSE;}
 IMG_BOOL OSGetReleasePVRLock(IMG_VOID){ return gbDoRelease;}
-/* end FIXME */
 
 IMG_VOID OSDumpStack(IMG_VOID)
 {
 	dump_stack();
-}
-
-IMG_BOOL OSTryAcquireBridgeLock(IMG_VOID)
-{
-	return LinuxTryLockMutex(&gPVRSRVLock);
 }
 
 IMG_VOID OSAcquireBridgeLock(IMG_VOID)

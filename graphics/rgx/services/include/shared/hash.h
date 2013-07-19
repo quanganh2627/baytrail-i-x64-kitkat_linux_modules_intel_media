@@ -63,6 +63,11 @@ typedef IMG_BOOL HASH_KEY_COMP(IMG_SIZE_T uKeySize, IMG_VOID *pKey1, IMG_VOID *p
 
 typedef struct _HASH_TABLE_ HASH_TABLE;
 
+typedef PVRSRV_ERROR (*HASH_pfnCallback) (
+	IMG_UINTPTR_T k,
+	IMG_UINTPTR_T v
+);
+
 /*************************************************************************/ /*!
 @Function       HASH_Func_Default
 @Description    Hash function intended for hashing keys composed of
@@ -191,6 +196,16 @@ IMG_UINTPTR_T HASH_Retrieve_Extended (HASH_TABLE *pHash, IMG_VOID *pKey);
                 the key.
 */ /**************************************************************************/
 IMG_UINTPTR_T HASH_Retrieve (HASH_TABLE *pHash, IMG_UINTPTR_T k);
+
+/*************************************************************************/ /*!
+@Function       HASH_Iterate
+@Description    Iterate over every entry in the hash table
+@Input          pHash			Hash table to iterate
+@Input          pfnCallback		Callback to call with the key and data for
+								each entry in the hash table
+@Return         Callback error if any, otherwise PVRSRV_OK
+*/ /**************************************************************************/
+PVRSRV_ERROR HASH_Iterate(HASH_TABLE *pHash, HASH_pfnCallback pfnCallback);
 
 #ifdef HASH_TRACE
 /*************************************************************************/ /*!

@@ -58,22 +58,19 @@ typedef struct _CONNECTION_DATA_
 	PRESMAN_CONTEXT 	hResManContext;
 	PVRSRV_HANDLE_BASE 	*psHandleBase;
 	struct _SYNC_CONNECTION_DATA_ *psSyncConnectionData;
-#if defined (PVR_SECURE_HANDLES)
-	/* Handles are being allocated in batches */
-	IMG_BOOL			bHandlesBatched;
-#endif  /* PVR_SECURE_HANDLES */
+	struct _PDUMP_CONNECTION_DATA_ *psPDumpConnectionData;
 
 	/* True if the process is the initialisation server. */
-	IMG_BOOL			bInitProcess;
+	IMG_BOOL		bInitProcess;
 
 	/*
 	 * OS specific data can be stored via this handle.
 	 * See osconnection_server.h for a generic mechanism
 	 * for initialising this field.
 	 */
-	IMG_HANDLE			hOsPrivateData;
+	IMG_HANDLE		hOsPrivateData;
 
-	IMG_PVOID			hSecureData;
+	IMG_PVOID		hSecureData;
 } CONNECTION_DATA;
 
 PVRSRV_ERROR PVRSRVConnectionConnect(IMG_PVOID *ppvPrivData, IMG_PVOID pvOSData);

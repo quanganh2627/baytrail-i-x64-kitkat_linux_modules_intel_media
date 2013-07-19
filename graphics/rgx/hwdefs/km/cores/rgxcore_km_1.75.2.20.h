@@ -1,6 +1,5 @@
 /*************************************************************************/ /*!
-@File           ion_tc_heap.c
-@Title          Ion heap for TC local memory
+@Title          RGX Core BVNC 1.75.2.20
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -40,6 +39,33 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#include <linux/ion.h>
+#ifndef _RGXCORE_KM_1_75_2_20_H_
+#define _RGXCORE_KM_1_75_2_20_H_
 
-struct ion_heap *tc_heap_create(struct ion_platform_heap *data);
+/***** Automatically generated file (6/17/2013 9:49:10 AM): Do not edit manually ********************/
+/***** Timestamp:  (6/17/2013 9:49:10 AM)************************************************************/
+/***** CS: @2309075 ******************************************************************/
+
+
+/******************************************************************************
+ * BVNC = 1.75.2.20 
+ *****************************************************************************/
+#define RGX_BVNC_KM_B 1
+#define RGX_BVNC_KM_V 75
+#define RGX_BVNC_KM_N 2
+#define RGX_BVNC_KM_C 20
+
+/******************************************************************************
+ * Errata 
+ *****************************************************************************/
+
+
+
+ 
+/******************************************************************************
+ * Enhancements 
+ *****************************************************************************/
+
+
+
+#endif /* _RGXCORE_KM_1_75_2_20_H_ */

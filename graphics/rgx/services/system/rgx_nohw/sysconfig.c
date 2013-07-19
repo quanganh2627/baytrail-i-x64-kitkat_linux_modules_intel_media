@@ -55,7 +55,11 @@ static PVRSRV_DEVICE_CONFIG 	gsDevices[1];
 static PVRSRV_SYSTEM_CONFIG 	gsSysConfig;
 
 static PHYS_HEAP_FUNCTIONS	gsPhysHeapFuncs;
-static PHYS_HEAP_CONFIG		gsPhysHeapConfig;
+#if defined(TDMETACODE)
+static PHYS_HEAP_CONFIG		gsPhysHeapConfig[2];
+#else
+static PHYS_HEAP_CONFIG		gsPhysHeapConfig[1];
+#endif
 
 /*
 	CPU to Device physcial address translation
@@ -95,14 +99,25 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 	gsPhysHeapFuncs.pfnCpuPAddrToDevPAddr = UMAPhysHeapCpuPAddrToDevPAddr;
 	gsPhysHeapFuncs.pfnDevPAddrToCpuPAddr = UMAPhysHeapDevPAddrToCpuPAddr;
 
-	gsPhysHeapConfig.ui32PhysHeapID = 0;
-	gsPhysHeapConfig.pszPDumpMemspaceName = "SYSMEM";
-	gsPhysHeapConfig.eType = PHYS_HEAP_TYPE_UMA;
-	gsPhysHeapConfig.psMemFuncs = &gsPhysHeapFuncs;
-	gsPhysHeapConfig.hPrivData = IMG_NULL;
+	gsPhysHeapConfig[0].ui32PhysHeapID = 0;
+	gsPhysHeapConfig[0].pszPDumpMemspaceName = "SYSMEM";
+	gsPhysHeapConfig[0].eType = PHYS_HEAP_TYPE_UMA;
+	gsPhysHeapConfig[0].psMemFuncs = &gsPhysHeapFuncs;
+	gsPhysHeapConfig[0].hPrivData = IMG_NULL;
 
-	gsSysConfig.pasPhysHeaps = &gsPhysHeapConfig;
-	gsSysConfig.ui32PhysHeapCount = sizeof(gsPhysHeapConfig) / sizeof(PHYS_HEAP_CONFIG);
+#if defined(TDMETACODE)
+	gsPhysHeapConfig[1].ui32PhysHeapID = 1;
+	gsPhysHeapConfig[1].pszPDumpMemspaceName = "TDMETACODEMEM";
+	gsPhysHeapConfig[1].eType = PHYS_HEAP_TYPE_UMA;
+	gsPhysHeapConfig[1].psMemFuncs = &gsPhysHeapFuncs;
+	gsPhysHeapConfig[1].hPrivData = IMG_NULL;
+#endif
+
+	gsSysConfig.pasPhysHeaps = &(gsPhysHeapConfig[0]);
+	gsSysConfig.ui32PhysHeapCount = sizeof(gsPhysHeapConfig) / sizeof(gsPhysHeapConfig[0]);
+
+	gsSysConfig.pui32BIFTilingHeapConfigs = gauiBIFTilingHeapXStrides;
+	gsSysConfig.ui32BIFTilingHeapCount = IMG_ARR_NUM_ELEMS(gauiBIFTilingHeapXStrides);
 
 	/*
 	 * Setup RGX specific timing data
@@ -110,11 +125,16 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 	gsRGXTimingInfo.ui32CoreClockSpeed        = RGX_NOHW_CORE_CLOCK_SPEED;
 	gsRGXTimingInfo.bEnableActivePM           = IMG_FALSE;
 	gsRGXTimingInfo.bEnableRDPowIsland        = IMG_FALSE;
+	gsRGXTimingInfo.ui32ActivePMLatencyms     = SYS_RGX_ACTIVE_POWER_LATENCY_MS;
 
 	/*
 	 *Setup RGX specific data
 	 */
 	gsRGXData.psRGXTimingInfo = &gsRGXTimingInfo;
+#if defined(TDMETACODE)
+	gsRGXData.bHasTDMetaCodePhysHeap = IMG_TRUE;
+	gsRGXData.uiTDMetaCodePhysHeapID = 1;
+#endif
 
 	/*
 	 * Setup RGX device
@@ -152,11 +172,11 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 	gsSysConfig.pfnSysPostPowerState = IMG_NULL;
 
 	/* no cache snooping */
-	gsSysConfig.bHasCacheSnooping = IMG_FALSE;
+	gsSysConfig.eCacheSnoopingMode = PVRSRV_SYSTEM_SNOOP_NONE;
 
 	/* Setup other system specific stuff */
 #if defined(SUPPORT_ION)
-	IonInit();
+	IonInit(NULL);
 #endif
 
 	*ppsSysConfig = &gsSysConfig;

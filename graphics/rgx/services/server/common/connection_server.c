@@ -50,6 +50,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "allocmem.h"
 #include "pvr_debug.h"
 #include "sync_server.h"
+#include "pdump_km.h"
 
 /*!
 ******************************************************************************
@@ -131,6 +132,19 @@ PVRSRV_ERROR PVRSRVConnectionConnect(IMG_PVOID *ppvPrivData, IMG_PVOID pvOSData)
 		goto failure;
 	}	
 
+	/*
+		Register this connection with the pdump core.
+		Pass in the sync connection data as it will be needed later when we
+		only get passed in the PDump connection data.
+	*/
+	eError = PDumpRegisterConnection(psConnection->psSyncConnectionData,
+									 &psConnection->psPDumpConnectionData);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVConnectionConnect: Couldn't register the PDump data"));
+		goto failure;
+	}
+
 	/* Allocate handle base for this process */
 	eError = PVRSRVAllocHandleBase(&psConnection->psHandleBase);
 	if (eError != PVRSRV_OK)
@@ -175,6 +189,12 @@ IMG_VOID PVRSRVConnectionDisconnect(IMG_PVOID pvDataPtr)
 	*/
 	SyncUnregisterConnection(psConnection->psSyncConnectionData);
 
+	/*
+		Unregister with the PDump core, see the note above about logical order
+		and refcounting as it also applies to the PDump connection data
+	*/
+	PDumpUnregisterConnection(psConnection->psPDumpConnectionData);
+
 	/* Free the connection data */
 	eError = FreeConnectionData(psConnection);
 	if (eError != PVRSRV_OK)
@@ -182,7 +202,6 @@ IMG_VOID PVRSRVConnectionDisconnect(IMG_PVOID pvDataPtr)
 		PVR_DPF((PVR_DBG_ERROR, "PVRSRVConnectionDisconnect: Error freeing per-process data"));
 	}
 
-	/* FIXME: Is this still required? */
 	eError = PVRSRVPurgeHandles(KERNEL_HANDLE_BASE);
 	if (eError != PVRSRV_OK)
 	{

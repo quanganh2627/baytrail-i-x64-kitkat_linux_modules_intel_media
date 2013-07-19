@@ -56,9 +56,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRExportPMR(IMG_HANDLE hBridge,
 							  IMG_HANDLE hPMR,
 							  IMG_HANDLE *phPMRExport,
-							  IMG_UINT64 *pui32Size,
+							  IMG_UINT64 *pui64Size,
 							  IMG_UINT32 *pui32Log2Contig,
-							  IMG_UINT64 *pui32Password)
+							  IMG_UINT64 *pui64Password)
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
@@ -71,12 +71,11 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRExportPMR(IMG_HANDLE hBridge,
 		PMRExportPMR(
 					psPMRInt,
 					&psPMRExportInt,
-					pui32Size,
+					pui64Size,
 					pui32Log2Contig,
-					pui32Password);
+					pui64Password);
 
 	*phPMRExport = psPMRExportInt;
-
 	return eError;
 }
 
@@ -93,13 +92,12 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnexportPMR(IMG_HANDLE hBridge,
 		PMRUnexportPMR(
 					psPMRExportInt);
 
-
 	return eError;
 }
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRGetUID(IMG_HANDLE hBridge,
 						       IMG_HANDLE hPMR,
-						       IMG_UINT64 *pui32UID)
+						       IMG_UINT64 *pui64UID)
 {
 	PVRSRV_ERROR eError;
 	PMR * psPMRInt;
@@ -110,8 +108,7 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRGetUID(IMG_HANDLE hBridge,
 	eError =
 		PMRGetUID(
 					psPMRInt,
-					pui32UID);
-
+					pui64UID);
 
 	return eError;
 }
@@ -119,9 +116,9 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRGetUID(IMG_HANDLE hBridge,
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRMakeServerExportClientExport(IMG_HANDLE hBridge,
 									     DEVMEM_SERVER_EXPORTCOOKIE hPMRServerExport,
 									     IMG_HANDLE *phPMRExportOut,
-									     IMG_UINT64 *pui32Size,
+									     IMG_UINT64 *pui64Size,
 									     IMG_UINT32 *pui32Log2Contig,
-									     IMG_UINT64 *pui32Password)
+									     IMG_UINT64 *pui64Password)
 {
 	PVRSRV_ERROR eError;
 	DEVMEM_EXPORTCOOKIE * psPMRServerExportInt;
@@ -134,12 +131,11 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRMakeServerExportClientExport(IMG
 		PMRMakeServerExportClientExport(
 					psPMRServerExportInt,
 					&psPMRExportOutInt,
-					pui32Size,
+					pui64Size,
 					pui32Log2Contig,
-					pui32Password);
+					pui64Password);
 
 	*phPMRExportOut = psPMRExportOutInt;
-
 	return eError;
 }
 
@@ -156,14 +152,13 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnmakeServerExportClientExport(I
 		PMRUnmakeServerExportClientExport(
 					psPMRExportInt);
 
-
 	return eError;
 }
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRImportPMR(IMG_HANDLE hBridge,
 							  IMG_HANDLE hPMRExport,
-							  IMG_UINT64 ui32uiPassword,
-							  IMG_UINT64 ui32uiSize,
+							  IMG_UINT64 ui64uiPassword,
+							  IMG_UINT64 ui64uiSize,
 							  IMG_UINT32 ui32uiLog2Contig,
 							  IMG_HANDLE *phPMR)
 {
@@ -177,13 +172,12 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRImportPMR(IMG_HANDLE hBridge,
 	eError =
 		PMRImportPMR(
 					psPMRExportInt,
-					ui32uiPassword,
-					ui32uiSize,
+					ui64uiPassword,
+					ui64uiSize,
 					ui32uiLog2Contig,
 					&psPMRInt);
 
 	*phPMR = psPMRInt;
-
 	return eError;
 }
 
@@ -208,7 +202,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntCtxCreate(IMG_HANDLE hBrid
 
 	*phDevMemServerContext = psDevMemServerContextInt;
 	*phPrivData = hPrivDataInt;
-
 	return eError;
 }
 
@@ -224,7 +217,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntCtxDestroy(IMG_HANDLE hBri
 	eError =
 		DevmemIntCtxDestroy(
 					psDevmemServerContextInt);
-
 
 	return eError;
 }
@@ -252,7 +244,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntHeapCreate(IMG_HANDLE hBri
 					&psDevmemHeapPtrInt);
 
 	*phDevmemHeapPtr = psDevmemHeapPtrInt;
-
 	return eError;
 }
 
@@ -268,7 +259,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntHeapDestroy(IMG_HANDLE hBr
 	eError =
 		DevmemIntHeapDestroy(
 					psDevmemHeapInt);
-
 
 	return eError;
 }
@@ -300,7 +290,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntMapPMR(IMG_HANDLE hBridge,
 					&psMappingInt);
 
 	*phMapping = psMappingInt;
-
 	return eError;
 }
 
@@ -316,7 +305,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntUnmapPMR(IMG_HANDLE hBridg
 	eError =
 		DevmemIntUnmapPMR(
 					psMappingInt);
-
 
 	return eError;
 }
@@ -342,7 +330,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntReserveRange(IMG_HANDLE hB
 					&psReservationInt);
 
 	*phReservation = psReservationInt;
-
 	return eError;
 }
 
@@ -358,7 +345,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemIntUnreserveRange(IMG_HANDLE 
 	eError =
 		DevmemIntUnreserveRange(
 					psReservationInt);
-
 
 	return eError;
 }
@@ -394,7 +380,30 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePhysmemNewRamBackedPMR(IMG_HANDLE h
 					&psPMRPtrInt);
 
 	*phPMRPtr = psPMRPtrInt;
+	return eError;
+}
 
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRLocalImportPMR(IMG_HANDLE hBridge,
+							       IMG_HANDLE hExtHandle,
+							       IMG_HANDLE *phPMR,
+							       IMG_DEVMEM_SIZE_T *puiSize,
+							       IMG_DEVMEM_ALIGN_T *psAlign)
+{
+	PVRSRV_ERROR eError;
+	PMR * psExtHandleInt;
+	PMR * psPMRInt;
+	PVR_UNREFERENCED_PARAMETER(hBridge);
+
+	psExtHandleInt = (PMR *) hExtHandle;
+
+	eError =
+		PMRLocalImportPMR(
+					psExtHandleInt,
+					&psPMRInt,
+					puiSize,
+					psAlign);
+
+	*phPMR = psPMRInt;
 	return eError;
 }
 
@@ -410,7 +419,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgePMRUnrefPMR(IMG_HANDLE hBridge,
 	eError =
 		PMRUnrefPMR(
 					psPMRInt);
-
 
 	return eError;
 }
@@ -432,7 +440,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeDevmemSLCFlushInvalRequest(IMG_HAND
 					hDeviceNodeInt,
 					psPmrInt);
 
-
 	return eError;
 }
 
@@ -450,7 +457,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeHeapCfgHeapConfigCount(IMG_HANDLE h
 		HeapCfgHeapConfigCount(
 					hDeviceNodeInt,
 					pui32NumHeapConfigs);
-
 
 	return eError;
 }
@@ -471,7 +477,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeHeapCfgHeapCount(IMG_HANDLE hBridge
 					hDeviceNodeInt,
 					ui32HeapConfigIndex,
 					pui32NumHeaps);
-
 
 	return eError;
 }
@@ -494,7 +499,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeHeapCfgHeapConfigName(IMG_HANDLE hB
 					ui32HeapConfigIndex,
 					ui32HeapConfigNameBufSz,
 					puiHeapConfigName);
-
 
 	return eError;
 }
@@ -525,7 +529,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeHeapCfgHeapDetails(IMG_HANDLE hBrid
 					psDevVAddrBase,
 					puiHeapLength,
 					pui32Log2DataPageSizeOut);
-
 
 	return eError;
 }

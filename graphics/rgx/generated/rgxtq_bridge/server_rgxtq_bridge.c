@@ -51,6 +51,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "common_rgxtq_bridge.h"
 
+#include "allocmem.h"
 #include "pvr_debug.h"
 #include "connection_server.h"
 #include "pvr_bridge.h"
@@ -58,10 +59,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvcore.h"
 #include "handle.h"
 
+#if defined (SUPPORT_AUTH)
+#include "osauth.h"
+#endif
+
 #include <linux/slab.h>
 
+/* ***************************************************************************
+ * Bridge proxy functions
+ */
+
 static PVRSRV_ERROR
-RGXDestroyTQ3DContextResManProxy(IMG_HANDLE hResmanItem)
+RGXDestroyTransferContextResManProxy(IMG_HANDLE hResmanItem)
 {
 	PVRSRV_ERROR eError;
 
@@ -73,804 +82,1051 @@ RGXDestroyTQ3DContextResManProxy(IMG_HANDLE hResmanItem)
 	return eError;
 }
 
-static PVRSRV_ERROR
-RGXDestroyTQ2DContextResManProxy(IMG_HANDLE hResmanItem)
-{
-	PVRSRV_ERROR eError;
-
-	eError = ResManFreeResByPtr(hResmanItem);
-
-	/* Freeing a resource should never fail... */
-	PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
-
-	return eError;
-}
 
 
+/* ***************************************************************************
+ * Server-side bridge entry points
+ */
+ 
 static IMG_INT
-PVRSRVBridgeRGXCreateTQ3DContext(IMG_UINT32 ui32BridgeID,
-					 PVRSRV_BRIDGE_IN_RGXCREATETQ3DCONTEXT *psRGXCreateTQ3DContextIN,
-					 PVRSRV_BRIDGE_OUT_RGXCREATETQ3DCONTEXT *psRGXCreateTQ3DContextOUT,
+PVRSRVBridgeRGXCreateTransferContext(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_RGXCREATETRANSFERCONTEXT *psRGXCreateTransferContextIN,
+					 PVRSRV_BRIDGE_OUT_RGXCREATETRANSFERCONTEXT *psRGXCreateTransferContextOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
-	DEVMEM_MEMDESC * psTQ3DCCBMemDescInt;
-	DEVMEM_MEMDESC * psTQ3DCCBCtlMemDescInt;
-	RGX_TQ3D_CLEANUP_DATA * psCleanupCookieInt;
-	IMG_HANDLE hCleanupCookieInt2;
-	DEVMEM_MEMDESC * psFWTQ3DContextInt;
-	DEVMEM_MEMDESC * psFWTQ3DContextStateInt;
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
 	IMG_BYTE *psFrameworkCmdInt = IMG_NULL;
-	IMG_HANDLE hPrivDataInt;
+	IMG_HANDLE hPrivDataInt = IMG_NULL;
+	RGX_SERVER_TQ_CONTEXT * psTransferContextInt = IMG_NULL;
+	IMG_HANDLE hTransferContextInt2 = IMG_NULL;
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_RGXCREATETQ3DCONTEXT);
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_RGXCREATETRANSFERCONTEXT);
 
-	psFrameworkCmdInt = kmalloc(RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE), GFP_KERNEL);
-	if (!psFrameworkCmdInt)
+
+
+
+	if (psRGXCreateTransferContextIN->ui32FrameworkCmdize != 0)
 	{
-		psRGXCreateTQ3DContextOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXCreateTQ3DContext_exit;
+		psFrameworkCmdInt = OSAllocMem(psRGXCreateTransferContextIN->ui32FrameworkCmdize * sizeof(IMG_BYTE));
+		if (!psFrameworkCmdInt)
+		{
+			psRGXCreateTransferContextOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXCreateTransferContext_exit;
+		}
 	}
 
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXCreateTransferContextIN->psFrameworkCmd, psRGXCreateTransferContextIN->ui32FrameworkCmdize * sizeof(IMG_BYTE))
+				|| (OSCopyFromUser(NULL, psFrameworkCmdInt, psRGXCreateTransferContextIN->psFrameworkCmd,
+				psRGXCreateTransferContextIN->ui32FrameworkCmdize * sizeof(IMG_BYTE)) != PVRSRV_OK) )
+			{
+				psRGXCreateTransferContextOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
-	if (copy_from_user(psFrameworkCmdInt, psRGXCreateTQ3DContextIN->psFrameworkCmd,
-		RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE)) != 0)
-	{
-		psRGXCreateTQ3DContextOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+				goto RGXCreateTransferContext_exit;
+			}
 
-		goto RGXCreateTQ3DContext_exit;
-	}
+				{
+					/* Look up the address from the handle */
+					psRGXCreateTransferContextOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psRGXCreateTransferContextIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psRGXCreateTransferContextOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateTransferContext_exit;
+					}
 
+				}
 
-	NEW_HANDLE_BATCH_OR_ERROR(psRGXCreateTQ3DContextOUT->eError, psConnection, 3);
+				{
+					/* Look up the address from the handle */
+					psRGXCreateTransferContextOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hPrivDataInt,
+											psRGXCreateTransferContextIN->hPrivData,
+											PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
+					if(psRGXCreateTransferContextOUT->eError != PVRSRV_OK)
+					{
+						goto RGXCreateTransferContext_exit;
+					}
 
-	/* Look up the address from the handle */
-	psRGXCreateTQ3DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psRGXCreateTQ3DContextIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psRGXCreateTQ3DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateTQ3DContext_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXCreateTQ3DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psTQ3DCCBMemDescInt,
-						   psRGXCreateTQ3DContextIN->hTQ3DCCBMemDesc,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXCreateTQ3DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateTQ3DContext_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXCreateTQ3DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psTQ3DCCBCtlMemDescInt,
-						   psRGXCreateTQ3DContextIN->hTQ3DCCBCtlMemDesc,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXCreateTQ3DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateTQ3DContext_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXCreateTQ3DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPrivDataInt,
-						   psRGXCreateTQ3DContextIN->hPrivData,
-						   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
-	if(psRGXCreateTQ3DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateTQ3DContext_exit;
-	}
+				}
 
-	psRGXCreateTQ3DContextOUT->eError =
-		PVRSRVRGXCreateTQ3DContextKM(
+	psRGXCreateTransferContextOUT->eError =
+		PVRSRVRGXCreateTransferContextKM(psConnection,
 					hDevNodeInt,
-					psTQ3DCCBMemDescInt,
-					psTQ3DCCBCtlMemDescInt,
-					&psCleanupCookieInt,
-					&psFWTQ3DContextInt,
-					&psFWTQ3DContextStateInt,
-					psRGXCreateTQ3DContextIN->ui32Priority,
-					psRGXCreateTQ3DContextIN->sMCUFenceAddr,
-					psRGXCreateTQ3DContextIN->ui32FrameworkCmdize,
+					psRGXCreateTransferContextIN->ui32Priority,
+					psRGXCreateTransferContextIN->sMCUFenceAddr,
+					psRGXCreateTransferContextIN->ui32FrameworkCmdize,
 					psFrameworkCmdInt,
-					hPrivDataInt);
+					hPrivDataInt,
+					&psTransferContextInt);
 	/* Exit early if bridged call fails */
-	if(psRGXCreateTQ3DContextOUT->eError != PVRSRV_OK)
+	if(psRGXCreateTransferContextOUT->eError != PVRSRV_OK)
 	{
-		goto RGXCreateTQ3DContext_exit;
+		goto RGXCreateTransferContext_exit;
 	}
 
 	/* Create a resman item and overwrite the handle with it */
-	hCleanupCookieInt2 = ResManRegisterRes(psConnection->hResManContext,
-												RESMAN_TYPE_RGX_TQ3D_CONTEXT,
-												psCleanupCookieInt,
+	hTransferContextInt2 = ResManRegisterRes(psConnection->hResManContext,
+												RESMAN_TYPE_RGX_SERVER_TQ_CONTEXT,
+												psTransferContextInt,
 												/* FIXME: how can we avoid this cast? */
-												(RESMAN_FREE_FN)&PVRSRVRGXDestroyTQ3DContextKM);
-	if (hCleanupCookieInt2 == IMG_NULL)
+												(RESMAN_FREE_FN)&PVRSRVRGXDestroyTransferContextKM);
+	if (hTransferContextInt2 == IMG_NULL)
 	{
-		psRGXCreateTQ3DContextOUT->eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_RESOURCE;
-		goto RGXCreateTQ3DContext_exit;
+		psRGXCreateTransferContextOUT->eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_RESOURCE;
+		goto RGXCreateTransferContext_exit;
 	}
-	psRGXCreateTQ3DContextOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
-					  &psRGXCreateTQ3DContextOUT->hCleanupCookie,
-					  (IMG_HANDLE) hCleanupCookieInt2,
-					  PVRSRV_HANDLE_TYPE_RGX_TQ3D_CLEANUP,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
-	if (psRGXCreateTQ3DContextOUT->eError != PVRSRV_OK)
+	psRGXCreateTransferContextOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
+							&psRGXCreateTransferContextOUT->hTransferContext,
+							(IMG_HANDLE) hTransferContextInt2,
+							PVRSRV_HANDLE_TYPE_RGX_SERVER_TQ_CONTEXT,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							);
+	if (psRGXCreateTransferContextOUT->eError != PVRSRV_OK)
 	{
-		goto RGXCreateTQ3DContext_exit;
+		goto RGXCreateTransferContext_exit;
 	}
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psRGXCreateTQ3DContextOUT->hFWTQ3DContext,
-					  (IMG_HANDLE) psFWTQ3DContextInt,
-					  PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psRGXCreateTQ3DContextOUT->hCleanupCookie);
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psRGXCreateTQ3DContextOUT->hFWTQ3DContextState,
-					  (IMG_HANDLE) psFWTQ3DContextStateInt,
-					  PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psRGXCreateTQ3DContextOUT->hCleanupCookie);
-	COMMIT_HANDLE_BATCH_OR_ERROR(psRGXCreateTQ3DContextOUT->eError, psConnection);
 
 
+RGXCreateTransferContext_exit:
+	if (psRGXCreateTransferContextOUT->eError != PVRSRV_OK)
+	{
+		/* If we have a valid resman item we should undo the bridge function by freeing the resman item */
+		if (hTransferContextInt2)
+		{
+			PVRSRV_ERROR eError = ResManFreeResByPtr(hTransferContextInt2);
 
-RGXCreateTQ3DContext_exit:
+			/* Freeing a resource should never fail... */
+			PVR_ASSERT((eError == PVRSRV_OK) || (eError == PVRSRV_ERROR_RETRY));
+		}
+		else if (psTransferContextInt)
+		{
+			PVRSRVRGXDestroyTransferContextKM(psTransferContextInt);
+		}
+	}
+
 	if (psFrameworkCmdInt)
-		kfree(psFrameworkCmdInt);
+		OSFreeMem(psFrameworkCmdInt);
 
 	return 0;
 }
 
 static IMG_INT
-PVRSRVBridgeRGXDestroyTQ3DContext(IMG_UINT32 ui32BridgeID,
-					 PVRSRV_BRIDGE_IN_RGXDESTROYTQ3DCONTEXT *psRGXDestroyTQ3DContextIN,
-					 PVRSRV_BRIDGE_OUT_RGXDESTROYTQ3DCONTEXT *psRGXDestroyTQ3DContextOUT,
+PVRSRVBridgeRGXDestroyTransferContext(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_RGXDESTROYTRANSFERCONTEXT *psRGXDestroyTransferContextIN,
+					 PVRSRV_BRIDGE_OUT_RGXDESTROYTRANSFERCONTEXT *psRGXDestroyTransferContextOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hCleanupCookieInt2;
+	IMG_HANDLE hTransferContextInt2 = IMG_NULL;
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTQ3DCONTEXT);
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTRANSFERCONTEXT);
 
 
-	/* Look up the address from the handle */
-	psRGXDestroyTQ3DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hCleanupCookieInt2,
-						   psRGXDestroyTQ3DContextIN->hCleanupCookie,
-						   PVRSRV_HANDLE_TYPE_RGX_TQ3D_CLEANUP);
-	if(psRGXDestroyTQ3DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXDestroyTQ3DContext_exit;
-	}
 
-	psRGXDestroyTQ3DContextOUT->eError = RGXDestroyTQ3DContextResManProxy(hCleanupCookieInt2);
+
+
+				{
+					/* Look up the address from the handle */
+					psRGXDestroyTransferContextOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hTransferContextInt2,
+											psRGXDestroyTransferContextIN->hTransferContext,
+											PVRSRV_HANDLE_TYPE_RGX_SERVER_TQ_CONTEXT);
+					if(psRGXDestroyTransferContextOUT->eError != PVRSRV_OK)
+					{
+						goto RGXDestroyTransferContext_exit;
+					}
+
+				}
+
+	psRGXDestroyTransferContextOUT->eError = RGXDestroyTransferContextResManProxy(hTransferContextInt2);
 	/* Exit early if bridged call fails */
-	if(psRGXDestroyTQ3DContextOUT->eError != PVRSRV_OK)
+	if(psRGXDestroyTransferContextOUT->eError != PVRSRV_OK)
 	{
-		goto RGXDestroyTQ3DContext_exit;
+		goto RGXDestroyTransferContext_exit;
 	}
 
-	psRGXDestroyTQ3DContextOUT->eError =
+	psRGXDestroyTransferContextOUT->eError =
 		PVRSRVReleaseHandle(psConnection->psHandleBase,
-					(IMG_HANDLE) psRGXDestroyTQ3DContextIN->hCleanupCookie,
-					PVRSRV_HANDLE_TYPE_RGX_TQ3D_CLEANUP);
+					(IMG_HANDLE) psRGXDestroyTransferContextIN->hTransferContext,
+					PVRSRV_HANDLE_TYPE_RGX_SERVER_TQ_CONTEXT);
 
 
-RGXDestroyTQ3DContext_exit:
-
-	return 0;
-}
-
-static IMG_INT
-PVRSRVBridgeSubmitTQ3DKick(IMG_UINT32 ui32BridgeID,
-					 PVRSRV_BRIDGE_IN_SUBMITTQ3DKICK *psSubmitTQ3DKickIN,
-					 PVRSRV_BRIDGE_OUT_SUBMITTQ3DKICK *psSubmitTQ3DKickOUT,
-					 CONNECTION_DATA *psConnection)
-{
-	IMG_HANDLE hDevNodeInt;
-	DEVMEM_MEMDESC * psFWTQ3DContextInt;
-	DEVMEM_MEMDESC * pscCCBInt;
-	DEVMEM_MEMDESC * pscCCBCtlInt;
-	PVRSRV_CLIENT_SYNC_PRIM_OP* *sSyncOpInt = IMG_NULL;
-	SERVER_SYNC_PRIMITIVE * *psSyncHandleInt = IMG_NULL;
-	IMG_HANDLE *hSyncHandleInt2 = IMG_NULL;
-	IMG_BYTE *psCmdInt = IMG_NULL;
-	IMG_INT32 *i32FenceFdsInt = IMG_NULL;
-	RGX_TQ3D_CLEANUP_DATA * psCleanupCookieInt;
-	IMG_HANDLE hCleanupCookieInt2;
-
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_SUBMITTQ3DKICK);
-
-	sSyncOpInt = kmalloc(psSubmitTQ3DKickIN->ui32NumServerSyncs * sizeof(PVRSRV_CLIENT_SYNC_PRIM_OP*), GFP_KERNEL);
-	if (!sSyncOpInt)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-
-	if (copy_from_user(sSyncOpInt, psSubmitTQ3DKickIN->psSyncOp,
-		psSubmitTQ3DKickIN->ui32NumServerSyncs * sizeof(PVRSRV_CLIENT_SYNC_PRIM_OP*)) != 0)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-	psSyncHandleInt = kmalloc(psSubmitTQ3DKickIN->ui32NumServerSyncs * sizeof(SERVER_SYNC_PRIMITIVE *), GFP_KERNEL);
-	if (!psSyncHandleInt)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-	hSyncHandleInt2 = kmalloc(psSubmitTQ3DKickIN->ui32NumServerSyncs * sizeof(IMG_HANDLE), GFP_KERNEL);
-	if (!hSyncHandleInt2)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-	if (copy_from_user(hSyncHandleInt2, psSubmitTQ3DKickIN->phSyncHandle,
-		psSubmitTQ3DKickIN->ui32NumServerSyncs * sizeof(IMG_HANDLE)) != 0)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-	psCmdInt = kmalloc(psSubmitTQ3DKickIN->ui32CmdSize * sizeof(IMG_BYTE), GFP_KERNEL);
-	if (!psCmdInt)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-
-	if (copy_from_user(psCmdInt, psSubmitTQ3DKickIN->psCmd,
-		psSubmitTQ3DKickIN->ui32CmdSize * sizeof(IMG_BYTE)) != 0)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-	i32FenceFdsInt = kmalloc(psSubmitTQ3DKickIN->ui32NumFenceFds * sizeof(IMG_INT32), GFP_KERNEL);
-	if (!i32FenceFdsInt)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-
-	if (copy_from_user(i32FenceFdsInt, psSubmitTQ3DKickIN->pi32FenceFds,
-		psSubmitTQ3DKickIN->ui32NumFenceFds * sizeof(IMG_INT32)) != 0)
-	{
-		psSubmitTQ3DKickOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto SubmitTQ3DKick_exit;
-	}
-
-
-	/* Look up the address from the handle */
-	psSubmitTQ3DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psSubmitTQ3DKickIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psSubmitTQ3DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ3DKick_exit;
-	}
-	/* Look up the address from the handle */
-	psSubmitTQ3DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psFWTQ3DContextInt,
-						   psSubmitTQ3DKickIN->hFWTQ3DContext,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psSubmitTQ3DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ3DKick_exit;
-	}
-	/* Look up the address from the handle */
-	psSubmitTQ3DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &pscCCBInt,
-						   psSubmitTQ3DKickIN->hcCCB,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psSubmitTQ3DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ3DKick_exit;
-	}
-	/* Look up the address from the handle */
-	psSubmitTQ3DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &pscCCBCtlInt,
-						   psSubmitTQ3DKickIN->hcCCBCtl,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psSubmitTQ3DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ3DKick_exit;
-	}
-	{
-	IMG_UINT32 i;
-
-	for (i=0;i<psSubmitTQ3DKickIN->ui32NumServerSyncs;i++)
-	{
-	/* Look up the address from the handle */
-	psSubmitTQ3DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hSyncHandleInt2[i],
-						   hSyncHandleInt2[i],
-						   PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
-	if(psSubmitTQ3DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ3DKick_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psSubmitTQ3DKickOUT->eError = ResManFindPrivateDataByPtr(hSyncHandleInt2[i], (IMG_VOID **) &psSyncHandleInt[i]);
-	if(psSubmitTQ3DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ3DKick_exit;
-	}
-	}
-	}
-	/* Look up the address from the handle */
-	psSubmitTQ3DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hCleanupCookieInt2,
-						   psSubmitTQ3DKickIN->hCleanupCookie,
-						   PVRSRV_HANDLE_TYPE_RGX_TQ3D_CLEANUP);
-	if(psSubmitTQ3DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ3DKick_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psSubmitTQ3DKickOUT->eError = ResManFindPrivateDataByPtr(hCleanupCookieInt2, (IMG_VOID **) &psCleanupCookieInt);
-	if(psSubmitTQ3DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ3DKick_exit;
-	}
-
-	psSubmitTQ3DKickOUT->eError =
-		PVRSRVSubmitTQ3DKickKM(psConnection,
-					hDevNodeInt,
-					psFWTQ3DContextInt,
-					psSubmitTQ3DKickIN->pvui32TQ3DcCCBWoffUpdate,
-					pscCCBInt,
-					pscCCBCtlInt,
-					psSubmitTQ3DKickIN->ui32NumServerSyncs,
-					sSyncOpInt,
-					psSyncHandleInt,
-					psSubmitTQ3DKickIN->ui32CmdSize,
-					psCmdInt,
-					psSubmitTQ3DKickIN->ui32FenceOffset,
-					psSubmitTQ3DKickIN->ui32UpdateOffset,
-					psSubmitTQ3DKickIN->ui32NumFenceFds,
-					i32FenceFdsInt,
-					psSubmitTQ3DKickIN->bbPDumpContinuous,
-					psCleanupCookieInt);
-
-
-
-SubmitTQ3DKick_exit:
-	if (sSyncOpInt)
-		kfree(sSyncOpInt);
-	if (psSyncHandleInt)
-		kfree(psSyncHandleInt);
-	if (hSyncHandleInt2)
-		kfree(hSyncHandleInt2);
-	if (psCmdInt)
-		kfree(psCmdInt);
-	if (i32FenceFdsInt)
-		kfree(i32FenceFdsInt);
+RGXDestroyTransferContext_exit:
 
 	return 0;
 }
 
 static IMG_INT
-PVRSRVBridgeRGXCreateTQ2DContext(IMG_UINT32 ui32BridgeID,
-					 PVRSRV_BRIDGE_IN_RGXCREATETQ2DCONTEXT *psRGXCreateTQ2DContextIN,
-					 PVRSRV_BRIDGE_OUT_RGXCREATETQ2DCONTEXT *psRGXCreateTQ2DContextOUT,
+PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_RGXSUBMITTRANSFER *psRGXSubmitTransferIN,
+					 PVRSRV_BRIDGE_OUT_RGXSUBMITTRANSFER *psRGXSubmitTransferOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hDevNodeInt;
-	DEVMEM_MEMDESC * psTQ2DCCBMemDescInt;
-	DEVMEM_MEMDESC * psTQ2DCCBCtlMemDescInt;
-	RGX_TQ2D_CLEANUP_DATA * psCleanupCookieInt;
-	IMG_HANDLE hCleanupCookieInt2;
-	DEVMEM_MEMDESC * psFWTQ2DContextInt;
-	IMG_BYTE *psFrameworkCmdInt = IMG_NULL;
-	IMG_HANDLE hPrivDataInt;
+	RGX_SERVER_TQ_CONTEXT * psTransferContextInt = IMG_NULL;
+	IMG_HANDLE hTransferContextInt2 = IMG_NULL;
+	IMG_UINT32 *ui32ClientFenceCountInt = IMG_NULL;
+	PRGXFWIF_UFO_ADDR **sFenceUFOAddressInt = IMG_NULL;
+	IMG_UINT32 **ui32FenceValueInt = IMG_NULL;
+	IMG_UINT32 *ui32ClientUpdateCountInt = IMG_NULL;
+	PRGXFWIF_UFO_ADDR **sUpdateUFOAddressInt = IMG_NULL;
+	IMG_UINT32 **ui32UpdateValueInt = IMG_NULL;
+	IMG_UINT32 *ui32ServerSyncCountInt = IMG_NULL;
+	IMG_UINT32 **ui32ServerSyncFlagsInt = IMG_NULL;
+	SERVER_SYNC_PRIMITIVE * **psServerSyncInt = IMG_NULL;
+	IMG_HANDLE **hServerSyncInt2 = IMG_NULL;
+	IMG_INT32 *i32FenceFDsInt = IMG_NULL;
+	IMG_UINT32 *ui32CommandSizeInt = IMG_NULL;
+	IMG_UINT8 **ui8FWCommandInt = IMG_NULL;
+	IMG_UINT32 *ui32TQPrepareFlagsInt = IMG_NULL;
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_RGXCREATETQ2DCONTEXT);
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_RGXSUBMITTRANSFER);
 
-	psFrameworkCmdInt = kmalloc(RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE), GFP_KERNEL);
-	if (!psFrameworkCmdInt)
+
+
+
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
 	{
-		psRGXCreateTQ2DContextOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto RGXCreateTQ2DContext_exit;
+		ui32ClientFenceCountInt = OSAllocMem(psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32));
+		if (!ui32ClientFenceCountInt)
+		{
+			psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXSubmitTransfer_exit;
+		}
 	}
 
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXSubmitTransferIN->pui32ClientFenceCount, psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32ClientFenceCountInt, psRGXSubmitTransferIN->pui32ClientFenceCount,
+				psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
-	if (copy_from_user(psFrameworkCmdInt, psRGXCreateTQ2DContextIN->psFrameworkCmd,
-		RGXFWIF_RF_CMD_SIZE * sizeof(IMG_BYTE)) != 0)
+				goto RGXSubmitTransfer_exit;
+			}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
 	{
-		psRGXCreateTQ2DContextOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+		IMG_UINT32 ui32Pass=0;
+		IMG_UINT32 i;
+		IMG_UINT32 ui32AllocSize=0;
+		IMG_UINT32 ui32Size;
+		IMG_UINT8 *pui8Ptr = IMG_NULL;
 
-		goto RGXCreateTQ2DContext_exit;
+		/*
+			Two pass loop, 1st find out the size and 2nd allocation and set offsets.
+			Keeps allocation cost down and simplifies the free path
+		*/
+		for (ui32Pass=0;ui32Pass<2;ui32Pass++)
+		{
+			ui32Size = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(PRGXFWIF_UFO_ADDR *);
+			if (ui32Pass == 0)
+			{
+				ui32AllocSize += ui32Size;
+			}
+			else
+			{
+				pui8Ptr = OSAllocMem(ui32AllocSize);
+				if (pui8Ptr == IMG_NULL)
+				{
+					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+					goto RGXSubmitTransfer_exit;
+				}
+				sFenceUFOAddressInt = (PRGXFWIF_UFO_ADDR **) pui8Ptr;
+				pui8Ptr += ui32Size;
+			}
+			
+			for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+			{
+				ui32Size = psRGXSubmitTransferIN->pui32ClientFenceCount[i] * sizeof(PRGXFWIF_UFO_ADDR);
+				if (ui32Size)
+				{
+					if (ui32Pass == 0)
+					{
+						ui32AllocSize += ui32Size;
+					}
+					else
+					{
+						sFenceUFOAddressInt[i] = (PRGXFWIF_UFO_ADDR *) pui8Ptr;
+						pui8Ptr += ui32Size;
+					}
+				}
+			}
+		}
 	}
 
-
-	NEW_HANDLE_BATCH_OR_ERROR(psRGXCreateTQ2DContextOUT->eError, psConnection, 2);
-
-	/* Look up the address from the handle */
-	psRGXCreateTQ2DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psRGXCreateTQ2DContextIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psRGXCreateTQ2DContextOUT->eError != PVRSRV_OK)
 	{
-		goto RGXCreateTQ2DContext_exit;
+		IMG_UINT32 i;
+		PRGXFWIF_UFO_ADDR **psPtr;
+
+		/* Loop over all the pointers in the array copying the data into the kernel */
+		for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+		{
+			/* Copy the pointer over from the client side */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) &psRGXSubmitTransferIN->psFenceUFOAddress[i], sizeof(PRGXFWIF_UFO_ADDR **))
+				|| (OSCopyFromUser(NULL, &psPtr, &psRGXSubmitTransferIN->psFenceUFOAddress[i],
+				sizeof(PRGXFWIF_UFO_ADDR **)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32ClientFenceCount[i] * sizeof(PRGXFWIF_UFO_ADDR)))
+				|| (OSCopyFromUser(NULL, (sFenceUFOAddressInt[i]), psPtr,
+				(psRGXSubmitTransferIN->pui32ClientFenceCount[i] * sizeof(PRGXFWIF_UFO_ADDR))) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+		}
 	}
-	/* Look up the address from the handle */
-	psRGXCreateTQ2DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psTQ2DCCBMemDescInt,
-						   psRGXCreateTQ2DContextIN->hTQ2DCCBMemDesc,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXCreateTQ2DContextOUT->eError != PVRSRV_OK)
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
 	{
-		goto RGXCreateTQ2DContext_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXCreateTQ2DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psTQ2DCCBCtlMemDescInt,
-						   psRGXCreateTQ2DContextIN->hTQ2DCCBCtlMemDesc,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psRGXCreateTQ2DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateTQ2DContext_exit;
-	}
-	/* Look up the address from the handle */
-	psRGXCreateTQ2DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hPrivDataInt,
-						   psRGXCreateTQ2DContextIN->hPrivData,
-						   PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA);
-	if(psRGXCreateTQ2DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXCreateTQ2DContext_exit;
+		IMG_UINT32 ui32Pass=0;
+		IMG_UINT32 i;
+		IMG_UINT32 ui32AllocSize=0;
+		IMG_UINT32 ui32Size;
+		IMG_UINT8 *pui8Ptr = IMG_NULL;
+
+		/*
+			Two pass loop, 1st find out the size and 2nd allocation and set offsets.
+			Keeps allocation cost down and simplifies the free path
+		*/
+		for (ui32Pass=0;ui32Pass<2;ui32Pass++)
+		{
+			ui32Size = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32 *);
+			if (ui32Pass == 0)
+			{
+				ui32AllocSize += ui32Size;
+			}
+			else
+			{
+				pui8Ptr = OSAllocMem(ui32AllocSize);
+				if (pui8Ptr == IMG_NULL)
+				{
+					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+					goto RGXSubmitTransfer_exit;
+				}
+				ui32FenceValueInt = (IMG_UINT32 **) pui8Ptr;
+				pui8Ptr += ui32Size;
+			}
+			
+			for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+			{
+				ui32Size = psRGXSubmitTransferIN->pui32ClientFenceCount[i] * sizeof(IMG_UINT32);
+				if (ui32Size)
+				{
+					if (ui32Pass == 0)
+					{
+						ui32AllocSize += ui32Size;
+					}
+					else
+					{
+						ui32FenceValueInt[i] = (IMG_UINT32 *) pui8Ptr;
+						pui8Ptr += ui32Size;
+					}
+				}
+			}
+		}
 	}
 
-	psRGXCreateTQ2DContextOUT->eError =
-		PVRSRVRGXCreateTQ2DContextKM(
-					hDevNodeInt,
-					psTQ2DCCBMemDescInt,
-					psTQ2DCCBCtlMemDescInt,
-					&psCleanupCookieInt,
-					&psFWTQ2DContextInt,
-					psRGXCreateTQ2DContextIN->ui32Priority,
-					psRGXCreateTQ2DContextIN->ui32FrameworkCmdize,
-					psFrameworkCmdInt,
-					hPrivDataInt);
-	/* Exit early if bridged call fails */
-	if(psRGXCreateTQ2DContextOUT->eError != PVRSRV_OK)
 	{
-		goto RGXCreateTQ2DContext_exit;
+		IMG_UINT32 i;
+		IMG_UINT32 **psPtr;
+
+		/* Loop over all the pointers in the array copying the data into the kernel */
+		for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+		{
+			/* Copy the pointer over from the client side */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) &psRGXSubmitTransferIN->pui32FenceValue[i], sizeof(IMG_UINT32 **))
+				|| (OSCopyFromUser(NULL, &psPtr, &psRGXSubmitTransferIN->pui32FenceValue[i],
+				sizeof(IMG_UINT32 **)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32ClientFenceCount[i] * sizeof(IMG_UINT32)))
+				|| (OSCopyFromUser(NULL, (ui32FenceValueInt[i]), psPtr,
+				(psRGXSubmitTransferIN->pui32ClientFenceCount[i] * sizeof(IMG_UINT32))) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+		}
+	}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
+	{
+		ui32ClientUpdateCountInt = OSAllocMem(psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32));
+		if (!ui32ClientUpdateCountInt)
+		{
+			psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXSubmitTransfer_exit;
+		}
 	}
 
-	/* Create a resman item and overwrite the handle with it */
-	hCleanupCookieInt2 = ResManRegisterRes(psConnection->hResManContext,
-												RESMAN_TYPE_RGX_TQ2D_CONTEXT,
-												psCleanupCookieInt,
-												/* FIXME: how can we avoid this cast? */
-												(RESMAN_FREE_FN)&PVRSRVRGXDestroyTQ2DContextKM);
-	if (hCleanupCookieInt2 == IMG_NULL)
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXSubmitTransferIN->pui32ClientUpdateCount, psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32ClientUpdateCountInt, psRGXSubmitTransferIN->pui32ClientUpdateCount,
+				psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
 	{
-		psRGXCreateTQ2DContextOUT->eError = PVRSRV_ERROR_UNABLE_TO_REGISTER_RESOURCE;
-		goto RGXCreateTQ2DContext_exit;
+		IMG_UINT32 ui32Pass=0;
+		IMG_UINT32 i;
+		IMG_UINT32 ui32AllocSize=0;
+		IMG_UINT32 ui32Size;
+		IMG_UINT8 *pui8Ptr = IMG_NULL;
+
+		/*
+			Two pass loop, 1st find out the size and 2nd allocation and set offsets.
+			Keeps allocation cost down and simplifies the free path
+		*/
+		for (ui32Pass=0;ui32Pass<2;ui32Pass++)
+		{
+			ui32Size = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(PRGXFWIF_UFO_ADDR *);
+			if (ui32Pass == 0)
+			{
+				ui32AllocSize += ui32Size;
+			}
+			else
+			{
+				pui8Ptr = OSAllocMem(ui32AllocSize);
+				if (pui8Ptr == IMG_NULL)
+				{
+					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+					goto RGXSubmitTransfer_exit;
+				}
+				sUpdateUFOAddressInt = (PRGXFWIF_UFO_ADDR **) pui8Ptr;
+				pui8Ptr += ui32Size;
+			}
+			
+			for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+			{
+				ui32Size = psRGXSubmitTransferIN->pui32ClientUpdateCount[i] * sizeof(PRGXFWIF_UFO_ADDR);
+				if (ui32Size)
+				{
+					if (ui32Pass == 0)
+					{
+						ui32AllocSize += ui32Size;
+					}
+					else
+					{
+						sUpdateUFOAddressInt[i] = (PRGXFWIF_UFO_ADDR *) pui8Ptr;
+						pui8Ptr += ui32Size;
+					}
+				}
+			}
+		}
 	}
-	psRGXCreateTQ2DContextOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
-					  &psRGXCreateTQ2DContextOUT->hCleanupCookie,
-					  (IMG_HANDLE) hCleanupCookieInt2,
-					  PVRSRV_HANDLE_TYPE_RGX_TQ2D_CLEANUP,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  );
-	if (psRGXCreateTQ2DContextOUT->eError != PVRSRV_OK)
+
 	{
-		goto RGXCreateTQ2DContext_exit;
+		IMG_UINT32 i;
+		PRGXFWIF_UFO_ADDR **psPtr;
+
+		/* Loop over all the pointers in the array copying the data into the kernel */
+		for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+		{
+			/* Copy the pointer over from the client side */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) &psRGXSubmitTransferIN->psUpdateUFOAddress[i], sizeof(PRGXFWIF_UFO_ADDR **))
+				|| (OSCopyFromUser(NULL, &psPtr, &psRGXSubmitTransferIN->psUpdateUFOAddress[i],
+				sizeof(PRGXFWIF_UFO_ADDR **)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32ClientUpdateCount[i] * sizeof(PRGXFWIF_UFO_ADDR)))
+				|| (OSCopyFromUser(NULL, (sUpdateUFOAddressInt[i]), psPtr,
+				(psRGXSubmitTransferIN->pui32ClientUpdateCount[i] * sizeof(PRGXFWIF_UFO_ADDR))) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+		}
 	}
-	PVRSRVAllocSubHandleNR(psConnection->psHandleBase,
-					  &psRGXCreateTQ2DContextOUT->hFWTQ2DContext,
-					  (IMG_HANDLE) psFWTQ2DContextInt,
-					  PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC,
-					  PVRSRV_HANDLE_ALLOC_FLAG_NONE
-					  ,psRGXCreateTQ2DContextOUT->hCleanupCookie);
-	COMMIT_HANDLE_BATCH_OR_ERROR(psRGXCreateTQ2DContextOUT->eError, psConnection);
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
+	{
+		IMG_UINT32 ui32Pass=0;
+		IMG_UINT32 i;
+		IMG_UINT32 ui32AllocSize=0;
+		IMG_UINT32 ui32Size;
+		IMG_UINT8 *pui8Ptr = IMG_NULL;
+
+		/*
+			Two pass loop, 1st find out the size and 2nd allocation and set offsets.
+			Keeps allocation cost down and simplifies the free path
+		*/
+		for (ui32Pass=0;ui32Pass<2;ui32Pass++)
+		{
+			ui32Size = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32 *);
+			if (ui32Pass == 0)
+			{
+				ui32AllocSize += ui32Size;
+			}
+			else
+			{
+				pui8Ptr = OSAllocMem(ui32AllocSize);
+				if (pui8Ptr == IMG_NULL)
+				{
+					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+					goto RGXSubmitTransfer_exit;
+				}
+				ui32UpdateValueInt = (IMG_UINT32 **) pui8Ptr;
+				pui8Ptr += ui32Size;
+			}
+			
+			for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+			{
+				ui32Size = psRGXSubmitTransferIN->pui32ClientUpdateCount[i] * sizeof(IMG_UINT32);
+				if (ui32Size)
+				{
+					if (ui32Pass == 0)
+					{
+						ui32AllocSize += ui32Size;
+					}
+					else
+					{
+						ui32UpdateValueInt[i] = (IMG_UINT32 *) pui8Ptr;
+						pui8Ptr += ui32Size;
+					}
+				}
+			}
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+		IMG_UINT32 **psPtr;
+
+		/* Loop over all the pointers in the array copying the data into the kernel */
+		for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+		{
+			/* Copy the pointer over from the client side */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) &psRGXSubmitTransferIN->pui32UpdateValue[i], sizeof(IMG_UINT32 **))
+				|| (OSCopyFromUser(NULL, &psPtr, &psRGXSubmitTransferIN->pui32UpdateValue[i],
+				sizeof(IMG_UINT32 **)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32ClientUpdateCount[i] * sizeof(IMG_UINT32)))
+				|| (OSCopyFromUser(NULL, (ui32UpdateValueInt[i]), psPtr,
+				(psRGXSubmitTransferIN->pui32ClientUpdateCount[i] * sizeof(IMG_UINT32))) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+		}
+	}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
+	{
+		ui32ServerSyncCountInt = OSAllocMem(psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32));
+		if (!ui32ServerSyncCountInt)
+		{
+			psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXSubmitTransfer_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXSubmitTransferIN->pui32ServerSyncCount, psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32ServerSyncCountInt, psRGXSubmitTransferIN->pui32ServerSyncCount,
+				psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
+	{
+		IMG_UINT32 ui32Pass=0;
+		IMG_UINT32 i;
+		IMG_UINT32 ui32AllocSize=0;
+		IMG_UINT32 ui32Size;
+		IMG_UINT8 *pui8Ptr = IMG_NULL;
+
+		/*
+			Two pass loop, 1st find out the size and 2nd allocation and set offsets.
+			Keeps allocation cost down and simplifies the free path
+		*/
+		for (ui32Pass=0;ui32Pass<2;ui32Pass++)
+		{
+			ui32Size = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32 *);
+			if (ui32Pass == 0)
+			{
+				ui32AllocSize += ui32Size;
+			}
+			else
+			{
+				pui8Ptr = OSAllocMem(ui32AllocSize);
+				if (pui8Ptr == IMG_NULL)
+				{
+					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+					goto RGXSubmitTransfer_exit;
+				}
+				ui32ServerSyncFlagsInt = (IMG_UINT32 **) pui8Ptr;
+				pui8Ptr += ui32Size;
+			}
+			
+			for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+			{
+				ui32Size = psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_UINT32);
+				if (ui32Size)
+				{
+					if (ui32Pass == 0)
+					{
+						ui32AllocSize += ui32Size;
+					}
+					else
+					{
+						ui32ServerSyncFlagsInt[i] = (IMG_UINT32 *) pui8Ptr;
+						pui8Ptr += ui32Size;
+					}
+				}
+			}
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+		IMG_UINT32 **psPtr;
+
+		/* Loop over all the pointers in the array copying the data into the kernel */
+		for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+		{
+			/* Copy the pointer over from the client side */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) &psRGXSubmitTransferIN->pui32ServerSyncFlags[i], sizeof(IMG_UINT32 **))
+				|| (OSCopyFromUser(NULL, &psPtr, &psRGXSubmitTransferIN->pui32ServerSyncFlags[i],
+				sizeof(IMG_UINT32 **)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_UINT32)))
+				|| (OSCopyFromUser(NULL, (ui32ServerSyncFlagsInt[i]), psPtr,
+				(psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_UINT32))) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+		}
+	}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
+	{
+		IMG_UINT32 ui32Pass=0;
+		IMG_UINT32 i;
+		IMG_UINT32 ui32AllocSize=0;
+		IMG_UINT32 ui32Size;
+		IMG_UINT8 *pui8Ptr = IMG_NULL;
+		IMG_UINT32 ui32AllocSize2=0;
+		IMG_UINT32 ui32Size2;
+		IMG_UINT8 *pui8Ptr2 = IMG_NULL;
+
+		/*
+			Two pass loop, 1st find out the size and 2nd allocation and set offsets.
+			Keeps allocation cost down and simplifies the free path
+		*/
+		for (ui32Pass=0;ui32Pass<2;ui32Pass++)
+		{
+			ui32Size = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(SERVER_SYNC_PRIMITIVE * *);
+			ui32Size2 = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_HANDLE *);
+			if (ui32Pass == 0)
+			{
+				ui32AllocSize += ui32Size;
+				ui32AllocSize2 += ui32Size2;
+			}
+			else
+			{
+				pui8Ptr = OSAllocMem(ui32AllocSize);
+				if (pui8Ptr == IMG_NULL)
+				{
+					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+					goto RGXSubmitTransfer_exit;
+				}
+				psServerSyncInt = (SERVER_SYNC_PRIMITIVE * **) pui8Ptr;
+				pui8Ptr += ui32Size;
+				pui8Ptr2 = OSAllocMem(ui32AllocSize2);
+				if (pui8Ptr2 == IMG_NULL)
+				{
+					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+					goto RGXSubmitTransfer_exit;
+				}
+				hServerSyncInt2 = (IMG_HANDLE **) pui8Ptr2;
+				pui8Ptr2 += ui32Size2;
+			}
+			
+			for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+			{
+				ui32Size = psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(SERVER_SYNC_PRIMITIVE *);
+				ui32Size2 = psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_HANDLE);
+				if (ui32Size)
+				{
+					if (ui32Pass == 0)
+					{
+						ui32AllocSize += ui32Size;
+						ui32AllocSize2 += ui32Size2;
+					}
+					else
+					{
+						psServerSyncInt[i] = (SERVER_SYNC_PRIMITIVE * *) pui8Ptr;
+						pui8Ptr += ui32Size;
+						hServerSyncInt2[i] = (IMG_HANDLE *) pui8Ptr2;
+						pui8Ptr2 += ui32Size2;
+					}
+				}
+			}
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+		IMG_HANDLE **psPtr;
+
+		/* Loop over all the pointers in the array copying the data into the kernel */
+		for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+		{
+			/* Copy the pointer over from the client side */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) &psRGXSubmitTransferIN->phServerSync[i], sizeof(IMG_HANDLE **))
+				|| (OSCopyFromUser(NULL, &psPtr, &psRGXSubmitTransferIN->phServerSync[i],
+				sizeof(IMG_HANDLE **)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_HANDLE)))
+				|| (OSCopyFromUser(NULL, (hServerSyncInt2[i]), psPtr,
+				(psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_HANDLE))) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+		}
+	}
+	if (psRGXSubmitTransferIN->ui32NumFenceFDs != 0)
+	{
+		i32FenceFDsInt = OSAllocMem(psRGXSubmitTransferIN->ui32NumFenceFDs * sizeof(IMG_INT32));
+		if (!i32FenceFDsInt)
+		{
+			psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXSubmitTransfer_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXSubmitTransferIN->pi32FenceFDs, psRGXSubmitTransferIN->ui32NumFenceFDs * sizeof(IMG_INT32))
+				|| (OSCopyFromUser(NULL, i32FenceFDsInt, psRGXSubmitTransferIN->pi32FenceFDs,
+				psRGXSubmitTransferIN->ui32NumFenceFDs * sizeof(IMG_INT32)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
+	{
+		ui32CommandSizeInt = OSAllocMem(psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32));
+		if (!ui32CommandSizeInt)
+		{
+			psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXSubmitTransfer_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXSubmitTransferIN->pui32CommandSize, psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32CommandSizeInt, psRGXSubmitTransferIN->pui32CommandSize,
+				psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
+	{
+		IMG_UINT32 ui32Pass=0;
+		IMG_UINT32 i;
+		IMG_UINT32 ui32AllocSize=0;
+		IMG_UINT32 ui32Size;
+		IMG_UINT8 *pui8Ptr = IMG_NULL;
+
+		/*
+			Two pass loop, 1st find out the size and 2nd allocation and set offsets.
+			Keeps allocation cost down and simplifies the free path
+		*/
+		for (ui32Pass=0;ui32Pass<2;ui32Pass++)
+		{
+			ui32Size = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT8 *);
+			if (ui32Pass == 0)
+			{
+				ui32AllocSize += ui32Size;
+			}
+			else
+			{
+				pui8Ptr = OSAllocMem(ui32AllocSize);
+				if (pui8Ptr == IMG_NULL)
+				{
+					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+					goto RGXSubmitTransfer_exit;
+				}
+				ui8FWCommandInt = (IMG_UINT8 **) pui8Ptr;
+				pui8Ptr += ui32Size;
+			}
+			
+			for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+			{
+				ui32Size = psRGXSubmitTransferIN->pui32CommandSize[i] * sizeof(IMG_UINT8);
+				if (ui32Size)
+				{
+					if (ui32Pass == 0)
+					{
+						ui32AllocSize += ui32Size;
+					}
+					else
+					{
+						ui8FWCommandInt[i] = (IMG_UINT8 *) pui8Ptr;
+						pui8Ptr += ui32Size;
+					}
+				}
+			}
+		}
+	}
+
+	{
+		IMG_UINT32 i;
+		IMG_UINT8 **psPtr;
+
+		/* Loop over all the pointers in the array copying the data into the kernel */
+		for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+		{
+			/* Copy the pointer over from the client side */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) &psRGXSubmitTransferIN->pui8FWCommand[i], sizeof(IMG_UINT8 **))
+				|| (OSCopyFromUser(NULL, &psPtr, &psRGXSubmitTransferIN->pui8FWCommand[i],
+				sizeof(IMG_UINT8 **)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32CommandSize[i] * sizeof(IMG_UINT8)))
+				|| (OSCopyFromUser(NULL, (ui8FWCommandInt[i]), psPtr,
+				(psRGXSubmitTransferIN->pui32CommandSize[i] * sizeof(IMG_UINT8))) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+		}
+	}
+	if (psRGXSubmitTransferIN->ui32PrepareCount != 0)
+	{
+		ui32TQPrepareFlagsInt = OSAllocMem(psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32));
+		if (!ui32TQPrepareFlagsInt)
+		{
+			psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXSubmitTransfer_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXSubmitTransferIN->pui32TQPrepareFlags, psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32))
+				|| (OSCopyFromUser(NULL, ui32TQPrepareFlagsInt, psRGXSubmitTransferIN->pui32TQPrepareFlags,
+				psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32)) != PVRSRV_OK) )
+			{
+				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXSubmitTransfer_exit;
+			}
+
+				{
+					/* Look up the address from the handle */
+					psRGXSubmitTransferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hTransferContextInt2,
+											psRGXSubmitTransferIN->hTransferContext,
+											PVRSRV_HANDLE_TYPE_RGX_SERVER_TQ_CONTEXT);
+					if(psRGXSubmitTransferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSubmitTransfer_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXSubmitTransferOUT->eError = ResManFindPrivateDataByPtr(hTransferContextInt2, (IMG_VOID **) &psTransferContextInt);
+
+					if(psRGXSubmitTransferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSubmitTransfer_exit;
+					}
+				}
+
+	{
+		IMG_UINT32 i;
+
+		for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
+		{
+			IMG_UINT32 j;
+			for (j=0;j<psRGXSubmitTransferIN->pui32ServerSyncCount[i];j++)
+			{
+				{
+					/* Look up the address from the handle */
+					psRGXSubmitTransferOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hServerSyncInt2[i][j],
+											psRGXSubmitTransferIN->phServerSync[i][j],
+											PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
+					if(psRGXSubmitTransferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSubmitTransfer_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXSubmitTransferOUT->eError = ResManFindPrivateDataByPtr(hServerSyncInt2[i][j], (IMG_VOID **) &psServerSyncInt[i][j]);
+
+					if(psRGXSubmitTransferOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSubmitTransfer_exit;
+					}
+				}
+			}
+		}
+	}
+
+	psRGXSubmitTransferOUT->eError =
+		PVRSRVRGXSubmitTransferKM(
+					psTransferContextInt,
+					psRGXSubmitTransferIN->ui32PrepareCount,
+					ui32ClientFenceCountInt,
+					sFenceUFOAddressInt,
+					ui32FenceValueInt,
+					ui32ClientUpdateCountInt,
+					sUpdateUFOAddressInt,
+					ui32UpdateValueInt,
+					ui32ServerSyncCountInt,
+					ui32ServerSyncFlagsInt,
+					psServerSyncInt,
+					psRGXSubmitTransferIN->ui32NumFenceFDs,
+					i32FenceFDsInt,
+					ui32CommandSizeInt,
+					ui8FWCommandInt,
+					ui32TQPrepareFlagsInt);
 
 
 
-RGXCreateTQ2DContext_exit:
-	if (psFrameworkCmdInt)
-		kfree(psFrameworkCmdInt);
+RGXSubmitTransfer_exit:
+	if (ui32ClientFenceCountInt)
+		OSFreeMem(ui32ClientFenceCountInt);
+	if (sFenceUFOAddressInt)
+		OSFreeMem(sFenceUFOAddressInt);
+	if (ui32FenceValueInt)
+		OSFreeMem(ui32FenceValueInt);
+	if (ui32ClientUpdateCountInt)
+		OSFreeMem(ui32ClientUpdateCountInt);
+	if (sUpdateUFOAddressInt)
+		OSFreeMem(sUpdateUFOAddressInt);
+	if (ui32UpdateValueInt)
+		OSFreeMem(ui32UpdateValueInt);
+	if (ui32ServerSyncCountInt)
+		OSFreeMem(ui32ServerSyncCountInt);
+	if (ui32ServerSyncFlagsInt)
+		OSFreeMem(ui32ServerSyncFlagsInt);
+	if (psServerSyncInt)
+		OSFreeMem(psServerSyncInt);
+	if (hServerSyncInt2)
+		OSFreeMem(hServerSyncInt2);
+	if (i32FenceFDsInt)
+		OSFreeMem(i32FenceFDsInt);
+	if (ui32CommandSizeInt)
+		OSFreeMem(ui32CommandSizeInt);
+	if (ui8FWCommandInt)
+		OSFreeMem(ui8FWCommandInt);
+	if (ui32TQPrepareFlagsInt)
+		OSFreeMem(ui32TQPrepareFlagsInt);
 
 	return 0;
 }
 
 static IMG_INT
-PVRSRVBridgeRGXDestroyTQ2DContext(IMG_UINT32 ui32BridgeID,
-					 PVRSRV_BRIDGE_IN_RGXDESTROYTQ2DCONTEXT *psRGXDestroyTQ2DContextIN,
-					 PVRSRV_BRIDGE_OUT_RGXDESTROYTQ2DCONTEXT *psRGXDestroyTQ2DContextOUT,
+PVRSRVBridgeRGXSetTransferContextPriority(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_RGXSETTRANSFERCONTEXTPRIORITY *psRGXSetTransferContextPriorityIN,
+					 PVRSRV_BRIDGE_OUT_RGXSETTRANSFERCONTEXTPRIORITY *psRGXSetTransferContextPriorityOUT,
 					 CONNECTION_DATA *psConnection)
 {
-	IMG_HANDLE hCleanupCookieInt2;
+	RGX_SERVER_TQ_CONTEXT * psTransferContextInt = IMG_NULL;
+	IMG_HANDLE hTransferContextInt2 = IMG_NULL;
 
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTQ2DCONTEXT);
-
-
-	/* Look up the address from the handle */
-	psRGXDestroyTQ2DContextOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hCleanupCookieInt2,
-						   psRGXDestroyTQ2DContextIN->hCleanupCookie,
-						   PVRSRV_HANDLE_TYPE_RGX_TQ2D_CLEANUP);
-	if(psRGXDestroyTQ2DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXDestroyTQ2DContext_exit;
-	}
-
-	psRGXDestroyTQ2DContextOUT->eError = RGXDestroyTQ2DContextResManProxy(hCleanupCookieInt2);
-	/* Exit early if bridged call fails */
-	if(psRGXDestroyTQ2DContextOUT->eError != PVRSRV_OK)
-	{
-		goto RGXDestroyTQ2DContext_exit;
-	}
-
-	psRGXDestroyTQ2DContextOUT->eError =
-		PVRSRVReleaseHandle(psConnection->psHandleBase,
-					(IMG_HANDLE) psRGXDestroyTQ2DContextIN->hCleanupCookie,
-					PVRSRV_HANDLE_TYPE_RGX_TQ2D_CLEANUP);
-
-
-RGXDestroyTQ2DContext_exit:
-
-	return 0;
-}
-
-static IMG_INT
-PVRSRVBridgeSubmitTQ2DKick(IMG_UINT32 ui32BridgeID,
-					 PVRSRV_BRIDGE_IN_SUBMITTQ2DKICK *psSubmitTQ2DKickIN,
-					 PVRSRV_BRIDGE_OUT_SUBMITTQ2DKICK *psSubmitTQ2DKickOUT,
-					 CONNECTION_DATA *psConnection)
-{
-	IMG_HANDLE hDevNodeInt;
-	DEVMEM_MEMDESC * psFWTQ2DContextInt;
-	DEVMEM_MEMDESC * pscCCBInt;
-	DEVMEM_MEMDESC * pscCCBCtlInt;
-	PVRSRV_CLIENT_SYNC_PRIM_OP* *sSyncOpInt = IMG_NULL;
-	SERVER_SYNC_PRIMITIVE * *psSyncHandleInt = IMG_NULL;
-	IMG_HANDLE *hSyncHandleInt2 = IMG_NULL;
-	IMG_BYTE *psCmdInt = IMG_NULL;
-	IMG_INT32 *i32FenceFdsInt = IMG_NULL;
-	RGX_TQ2D_CLEANUP_DATA * psCleanupCookieInt;
-	IMG_HANDLE hCleanupCookieInt2;
-
-	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_SUBMITTQ2DKICK);
-
-	sSyncOpInt = kmalloc(psSubmitTQ2DKickIN->ui32NumServerSyncs * sizeof(PVRSRV_CLIENT_SYNC_PRIM_OP*), GFP_KERNEL);
-	if (!sSyncOpInt)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-
-	if (copy_from_user(sSyncOpInt, psSubmitTQ2DKickIN->psSyncOp,
-		psSubmitTQ2DKickIN->ui32NumServerSyncs * sizeof(PVRSRV_CLIENT_SYNC_PRIM_OP*)) != 0)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-	psSyncHandleInt = kmalloc(psSubmitTQ2DKickIN->ui32NumServerSyncs * sizeof(SERVER_SYNC_PRIMITIVE *), GFP_KERNEL);
-	if (!psSyncHandleInt)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-	hSyncHandleInt2 = kmalloc(psSubmitTQ2DKickIN->ui32NumServerSyncs * sizeof(IMG_HANDLE), GFP_KERNEL);
-	if (!hSyncHandleInt2)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-	if (copy_from_user(hSyncHandleInt2, psSubmitTQ2DKickIN->phSyncHandle,
-		psSubmitTQ2DKickIN->ui32NumServerSyncs * sizeof(IMG_HANDLE)) != 0)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-	psCmdInt = kmalloc(psSubmitTQ2DKickIN->ui32CmdSize * sizeof(IMG_BYTE), GFP_KERNEL);
-	if (!psCmdInt)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-
-	if (copy_from_user(psCmdInt, psSubmitTQ2DKickIN->psCmd,
-		psSubmitTQ2DKickIN->ui32CmdSize * sizeof(IMG_BYTE)) != 0)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-	i32FenceFdsInt = kmalloc(psSubmitTQ2DKickIN->ui32NumFenceFds * sizeof(IMG_INT32), GFP_KERNEL);
-	if (!i32FenceFdsInt)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-
-	if (copy_from_user(i32FenceFdsInt, psSubmitTQ2DKickIN->pi32FenceFds,
-		psSubmitTQ2DKickIN->ui32NumFenceFds * sizeof(IMG_INT32)) != 0)
-	{
-		psSubmitTQ2DKickOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
-
-		goto SubmitTQ2DKick_exit;
-	}
-
-
-	/* Look up the address from the handle */
-	psSubmitTQ2DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hDevNodeInt,
-						   psSubmitTQ2DKickIN->hDevNode,
-						   PVRSRV_HANDLE_TYPE_DEV_NODE);
-	if(psSubmitTQ2DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ2DKick_exit;
-	}
-	/* Look up the address from the handle */
-	psSubmitTQ2DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &psFWTQ2DContextInt,
-						   psSubmitTQ2DKickIN->hFWTQ2DContext,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psSubmitTQ2DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ2DKick_exit;
-	}
-	/* Look up the address from the handle */
-	psSubmitTQ2DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &pscCCBInt,
-						   psSubmitTQ2DKickIN->hcCCB,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psSubmitTQ2DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ2DKick_exit;
-	}
-	/* Look up the address from the handle */
-	psSubmitTQ2DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &pscCCBCtlInt,
-						   psSubmitTQ2DKickIN->hcCCBCtl,
-						   PVRSRV_HANDLE_TYPE_RGX_FW_MEMDESC);
-	if(psSubmitTQ2DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ2DKick_exit;
-	}
-	{
-	IMG_UINT32 i;
-
-	for (i=0;i<psSubmitTQ2DKickIN->ui32NumServerSyncs;i++)
-	{
-	/* Look up the address from the handle */
-	psSubmitTQ2DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hSyncHandleInt2[i],
-						   hSyncHandleInt2[i],
-						   PVRSRV_HANDLE_TYPE_SERVER_SYNC_PRIMITIVE);
-	if(psSubmitTQ2DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ2DKick_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psSubmitTQ2DKickOUT->eError = ResManFindPrivateDataByPtr(hSyncHandleInt2[i], (IMG_VOID **) &psSyncHandleInt[i]);
-	if(psSubmitTQ2DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ2DKick_exit;
-	}
-	}
-	}
-	/* Look up the address from the handle */
-	psSubmitTQ2DKickOUT->eError =
-		PVRSRVLookupHandle(psConnection->psHandleBase,
-						   (IMG_HANDLE *) &hCleanupCookieInt2,
-						   psSubmitTQ2DKickIN->hCleanupCookie,
-						   PVRSRV_HANDLE_TYPE_RGX_TQ2D_CLEANUP);
-	if(psSubmitTQ2DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ2DKick_exit;
-	}
-
-	/* Look up the data from the resman address */
-	psSubmitTQ2DKickOUT->eError = ResManFindPrivateDataByPtr(hCleanupCookieInt2, (IMG_VOID **) &psCleanupCookieInt);
-	if(psSubmitTQ2DKickOUT->eError != PVRSRV_OK)
-	{
-		goto SubmitTQ2DKick_exit;
-	}
-
-	psSubmitTQ2DKickOUT->eError =
-		PVRSRVSubmitTQ2DKickKM(psConnection,
-					hDevNodeInt,
-					psFWTQ2DContextInt,
-					psSubmitTQ2DKickIN->pvui32TQ2DcCCBWoffUpdate,
-					pscCCBInt,
-					pscCCBCtlInt,
-					psSubmitTQ2DKickIN->ui32NumServerSyncs,
-					sSyncOpInt,
-					psSyncHandleInt,
-					psSubmitTQ2DKickIN->ui32CmdSize,
-					psCmdInt,
-					psSubmitTQ2DKickIN->ui32FenceOffset,
-					psSubmitTQ2DKickIN->ui32UpdateOffset,
-					psSubmitTQ2DKickIN->ui32NumFenceFds,
-					i32FenceFdsInt,
-					psSubmitTQ2DKickIN->bbPDumpContinuous,
-					psCleanupCookieInt);
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTQ_RGXSETTRANSFERCONTEXTPRIORITY);
 
 
 
-SubmitTQ2DKick_exit:
-	if (sSyncOpInt)
-		kfree(sSyncOpInt);
-	if (psSyncHandleInt)
-		kfree(psSyncHandleInt);
-	if (hSyncHandleInt2)
-		kfree(hSyncHandleInt2);
-	if (psCmdInt)
-		kfree(psCmdInt);
-	if (i32FenceFdsInt)
-		kfree(i32FenceFdsInt);
+
+
+				{
+					/* Look up the address from the handle */
+					psRGXSetTransferContextPriorityOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hTransferContextInt2,
+											psRGXSetTransferContextPriorityIN->hTransferContext,
+											PVRSRV_HANDLE_TYPE_RGX_SERVER_TQ_CONTEXT);
+					if(psRGXSetTransferContextPriorityOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSetTransferContextPriority_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXSetTransferContextPriorityOUT->eError = ResManFindPrivateDataByPtr(hTransferContextInt2, (IMG_VOID **) &psTransferContextInt);
+
+					if(psRGXSetTransferContextPriorityOUT->eError != PVRSRV_OK)
+					{
+						goto RGXSetTransferContextPriority_exit;
+					}
+				}
+
+	psRGXSetTransferContextPriorityOUT->eError =
+		PVRSRVRGXSetTransferContextPriorityKM(psConnection,
+					psTransferContextInt,
+					psRGXSetTransferContextPriorityIN->ui32Priority);
+
+
+
+RGXSetTransferContextPriority_exit:
 
 	return 0;
 }
 
 
+
+/* *************************************************************************** 
+ * Server bridge dispatch related glue 
+ */
+ 
 PVRSRV_ERROR RegisterRGXTQFunctions(IMG_VOID);
 IMG_VOID UnregisterRGXTQFunctions(IMG_VOID);
 
@@ -879,12 +1135,10 @@ IMG_VOID UnregisterRGXTQFunctions(IMG_VOID);
  */
 PVRSRV_ERROR RegisterRGXTQFunctions(IMG_VOID)
 {
-	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_RGXCREATETQ3DCONTEXT, PVRSRVBridgeRGXCreateTQ3DContext);
-	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTQ3DCONTEXT, PVRSRVBridgeRGXDestroyTQ3DContext);
-	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_SUBMITTQ3DKICK, PVRSRVBridgeSubmitTQ3DKick);
-	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_RGXCREATETQ2DCONTEXT, PVRSRVBridgeRGXCreateTQ2DContext);
-	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTQ2DCONTEXT, PVRSRVBridgeRGXDestroyTQ2DContext);
-	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_SUBMITTQ2DKICK, PVRSRVBridgeSubmitTQ2DKick);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_RGXCREATETRANSFERCONTEXT, PVRSRVBridgeRGXCreateTransferContext);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_RGXDESTROYTRANSFERCONTEXT, PVRSRVBridgeRGXDestroyTransferContext);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_RGXSUBMITTRANSFER, PVRSRVBridgeRGXSubmitTransfer);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTQ_RGXSETTRANSFERCONTEXTPRIORITY, PVRSRVBridgeRGXSetTransferContextPriority);
 
 	return PVRSRV_OK;
 }

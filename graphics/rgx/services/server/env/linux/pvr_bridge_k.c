@@ -99,7 +99,9 @@ static void ProcSeqStartstopBridgeStats(struct seq_file *sfile,IMG_BOOL start);
 extern PVRSRV_LINUX_MUTEX gPVRSRVLock;
 
 PVRSRV_ERROR RegisterPDUMPFunctions(IMG_VOID);
+#if defined(SUPPORT_DISPLAY_CLASS)
 PVRSRV_ERROR RegisterDCFunctions(IMG_VOID);
+#endif
 PVRSRV_ERROR RegisterMMFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterCMMFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterPDUMPMMFunctions(IMG_VOID);
@@ -117,11 +119,13 @@ PVRSRV_ERROR RegisterRGXINITFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXTA3DFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXTQFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXCMPFunctions(IMG_VOID);
-PVRSRV_ERROR RegisterRGXCCBFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterBREAKPOINTFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterDEBUGMISCFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXPDUMPFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterRGXHWPERFFunctions(IMG_VOID);
+#if defined(RGX_FEATURE_RAY_TRACING)
+PVRSRV_ERROR RegisterRGXRAYFunctions(IMG_VOID);
+#endif /* RGX_FEATURE_RAY_TRACING */
 #endif /* SUPPORT_RGX */
 #if (CACHEFLUSH_TYPE == CACHEFLUSH_GENERIC)
 PVRSRV_ERROR RegisterCACHEGENERICFunctions(IMG_VOID);
@@ -133,11 +137,14 @@ PVRSRV_ERROR RegisterSMMFunctions(IMG_VOID);
 PVRSRV_ERROR RegisterPMMIFFunctions(IMG_VOID);
 #endif
 PVRSRV_ERROR RegisterPVRTLFunctions(IMG_VOID);
+#if defined(PVR_RI_DEBUG)
+PVRSRV_ERROR RegisterRIFunctions(IMG_VOID);
+#endif
 #if defined(SUPPORT_ION)
 PVRSRV_ERROR RegisterIONFunctions(IMG_VOID);
 #endif
 
-/* FIXME: These and their friends above will go when full bridge gen comes in */
+/* These and their friends above will go when full bridge gen comes in */
 PVRSRV_ERROR
 LinuxBridgeInit(IMG_VOID);
 IMG_VOID
@@ -233,11 +240,13 @@ LinuxBridgeInit(IMG_VOID)
 	}
 #endif
 
+#if defined(SUPPORT_DISPLAY_CLASS)
 	eError = RegisterDCFunctions();
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
 	}
+#endif
 
 #if (CACHEFLUSH_TYPE == CACHEFLUSH_GENERIC)
 	eError = RegisterCACHEGENERICFunctions();
@@ -261,13 +270,16 @@ LinuxBridgeInit(IMG_VOID)
 		return eError;
 	}
 
-#if defined (SUPPORT_RGX)
-	eError = RegisterRGXTQFunctions();
+	#if defined(PVR_RI_DEBUG)
+	eError = RegisterRIFunctions();
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
 	}
-	eError = RegisterRGXCCBFunctions();
+	#endif
+
+	#if defined (SUPPORT_RGX)
+	eError = RegisterRGXTQFunctions();
 	if (eError != PVRSRV_OK)
 	{
 		return eError;
@@ -314,6 +326,14 @@ LinuxBridgeInit(IMG_VOID)
 	{
 		return eError;
 	}
+	
+#if defined(RGX_FEATURE_RAY_TRACING)
+	eError = RegisterRGXRAYFunctions();
+	if (eError != PVRSRV_OK)
+	{
+		return eError;
+	}
+#endif /* RGX_FEATURE_RAY_TRACING */
 
 #endif /* SUPPORT_RGX */
 
@@ -492,7 +512,18 @@ PVRSRV_BridgeDispatchKM(struct file *pFile, unsigned int unref__ ioctlCmd, unsig
 	}
 #endif
 
-	psBridgePackageKM->ui32BridgeID = PVRSRV_GET_BRIDGE_ID(psBridgePackageKM->ui32BridgeID);
+#if defined(DEBUG_BRIDGE_CALLS)
+	{
+		IMG_UINT32 mangledID;
+		mangledID = psBridgePackageKM->ui32BridgeID;
+
+		psBridgePackageKM->ui32BridgeID = PVRSRV_GET_BRIDGE_ID(psBridgePackageKM->ui32BridgeID);
+
+		PVR_DPF((PVR_DBG_WARNING, "Bridge ID (x%8x) %8u (mangled: x%8x) ", psBridgePackageKM->ui32BridgeID, psBridgePackageKM->ui32BridgeID, mangledID));
+	}
+#else
+		psBridgePackageKM->ui32BridgeID = PVRSRV_GET_BRIDGE_ID(psBridgePackageKM->ui32BridgeID);
+#endif
 
 	err = BridgedDispatchKM(psConnection, psBridgePackageKM);
 

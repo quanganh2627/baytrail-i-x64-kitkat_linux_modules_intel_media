@@ -48,12 +48,21 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <img_defs.h>
 #include <pvrsrv_error.h>
 #include <device.h>
+#include <pmr.h>
 
 IMG_EXPORT PVRSRV_ERROR
 PVRSRVDebugMiscSLCSetBypassStateKM(
 	PVRSRV_DEVICE_NODE *psDeviceNode,
 	IMG_UINT32  uiFlags,
 	IMG_BOOL  bSetBypassed);
+
+IMG_EXPORT PVRSRV_ERROR
+PVRSRVDebugMiscInitFWImageKM(
+	PMR *psFWImgDestPMR,
+	PMR *psFWImgSrcPMR,
+	IMG_UINT64 ui64FWImgLen,
+	PMR *psFWImgSigPMR,
+	IMG_UINT64 ui64FWSigLen);
 
 IMG_EXPORT PVRSRV_ERROR
 PVRSRVRGXDebugMiscSetFWLogKM(

@@ -1,10 +1,9 @@
-
 /*************************************************************************/ /*!
-@File           physmem_lma.c
-@Title          Local card memory allocator
+@File           physmem_ion.c
+@Title          Ion memory allocator
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @Description    Part of the memory management. This module is responsible for
-                implementing the function callbacks for local card memory.
+                implementing the function callbacks for ion memory.
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -73,7 +72,7 @@ typedef struct _PMR_ION_DATA_ {
 	IMG_DEV_PHYADDR *pasDevPhysAddr;
 	PHYS_HEAP *psPhysHeap;
 	IMG_BOOL bPoisonOnFree;
-
+	ENV_ION_CONNECTION_DATA *psIonData;
 	/*
 	  for pdump...
 	*/
@@ -151,7 +150,7 @@ PVRSRV_ERROR IonPhysAddrAcquire(PMR_ION_DATA *psPrivData,
 
 	psPrivData->pasDevPhysAddr = pasDevPhysAddr;
 	psPrivData->ui32PageCount = ui32PageCount;
-	psPrivData->uiSize = ui32PageCount * PAGE_SIZE;
+	psPrivData->uiSize = (IMG_DEVMEM_SIZE_T)ui32PageCount * PAGE_SIZE;
 
 	return PVRSRV_OK;
 
@@ -170,56 +169,6 @@ IMG_VOID IonPhysAddrRelease(PMR_ION_DATA *psPrivData)
 /*****************************************************************************
  *                       PMR callback functions                              *
  *****************************************************************************/
-
-#if defined(PDUMP)
-static IMG_VOID
-_PDumpPMRMalloc(const PMR *psPMR,
-				IMG_DEVMEM_SIZE_T uiSize,
-				IMG_DEVMEM_ALIGN_T uiBlockSize,
-				IMG_HANDLE *phPDumpAllocInfoPtr)
-{
-	PVRSRV_ERROR eError;
-	IMG_HANDLE hPDumpAllocInfo;
-	IMG_CHAR aszMemspaceName[30];
-	IMG_CHAR aszSymbolicName[30];
-	IMG_DEVMEM_OFFSET_T uiOffset;
-	IMG_DEVMEM_OFFSET_T uiNextSymName;
-
-	uiOffset = 0;
-	eError = PMR_PDumpSymbolicAddr(psPMR,
-								   uiOffset,
-								   sizeof(aszMemspaceName),
-								   &aszMemspaceName[0],
-								   sizeof(aszSymbolicName),
-								   &aszSymbolicName[0],
-								   &uiOffset,
-				   &uiNextSymName);
-	PVR_ASSERT(eError == PVRSRV_OK);
-	PVR_ASSERT(uiOffset == 0);
-	PVR_ASSERT((uiOffset + uiSize) <= uiNextSymName);
-
-	PDumpPMRMalloc(aszMemspaceName,
-				   aszSymbolicName,
-				   uiSize,
-				   uiBlockSize,
-				   IMG_FALSE,
-				   &hPDumpAllocInfo);
-
-	*phPDumpAllocInfoPtr = hPDumpAllocInfo;
-}
-#else	/* PDUMP */
-static IMG_VOID
-_PDumpPMRMalloc(const PMR *psPMR,
-                IMG_DEVMEM_SIZE_T uiSize,
-                IMG_DEVMEM_ALIGN_T uiBlockSize,
-                IMG_HANDLE *phPDumpAllocInfoPtr)
-{
-	PVR_UNREFERENCED_PARAMETER(psPMR);
-	PVR_UNREFERENCED_PARAMETER(uiSize);
-	PVR_UNREFERENCED_PARAMETER(uiBlockSize);
-	PVR_UNREFERENCED_PARAMETER(phPDumpAllocInfoPtr);
-}
-#endif	/* PDUMP */
 
 
 static IMG_VOID
@@ -284,6 +233,7 @@ PMRFinalizeIon(PMR_IMPL_PRIVDATA pvPriv)
 
 	IonPhysAddrRelease(psPrivData);
 	ion_free(psPrivData->psIonClient, psPrivData->psIonHandle);
+	EnvDataIonClientRelease(psPrivData->psIonData);
 	PhysHeapRelease(psPrivData->psPhysHeap);
 	kfree(psPrivData);
 
@@ -292,7 +242,7 @@ PMRFinalizeIon(PMR_IMPL_PRIVDATA pvPriv)
 
 /*
 	Lock and unlock function for physical address
-	don't do anything for as we aqcuire the physical
+	don't do anything for as we acquire the physical
 	address at create time.
 */
 static PVRSRV_ERROR
@@ -327,7 +277,7 @@ PMRDevPhysAddrIon(PMR_IMPL_PRIVDATA pvPriv,
     ui32PageCount = psPrivData->ui32PageCount;
 
     ui32PageIndex = uiOffset >> PAGE_SHIFT;
-    ui32InPageOffset = uiOffset - (ui32PageIndex << PAGE_SHIFT);
+    ui32InPageOffset = uiOffset - ((IMG_DEVMEM_OFFSET_T)ui32PageIndex << PAGE_SHIFT);
     PVR_ASSERT(ui32PageIndex < ui32PageCount);
     PVR_ASSERT(ui32InPageOffset < PAGE_SIZE);
 
@@ -393,6 +343,8 @@ static PMR_IMPL_FUNCTAB _sPMRIonFuncTab = {
 	&PMRReleaseKernelMappingDataIon,
 	/* pfnReadBytes */
 	IMG_NULL,
+	/* pfnWriteBytes */
+	IMG_NULL,
 	/* pfnFinalize */
 	&PMRFinalizeIon
 };
@@ -455,6 +407,12 @@ PhysmemImportIon(CONNECTION_DATA *psConnection,
         goto fail_params;
     }
 
+	if (!psConnection)
+	{
+		eError = PVRSRV_ERROR_INVALID_PARAMS;
+		goto fail_params;
+	}
+
 	psPrivData = kmalloc(sizeof(*psPrivData), GFP_KERNEL);
 	if (psPrivData == NULL)
 	{
@@ -479,13 +437,13 @@ PhysmemImportIon(CONNECTION_DATA *psConnection,
 
 	/* Get the ion client from this connection */
 	psEnvConnectionData = PVRSRVConnectionPrivateData(psConnection);
-	psPrivData->psIonClient = EnvDataIonClientGet(psEnvConnectionData);
+	psPrivData->psIonData = psEnvConnectionData->psIonData;
+	psPrivData->psIonClient = EnvDataIonClientAcquire(psEnvConnectionData);
 
 	/* Get the buffer handle */
 	psPrivData->psIonHandle = ion_import_dma_buf(psPrivData->psIonClient, fd);
 	if (psPrivData->psIonHandle == IMG_NULL)
 	{
-		/* FIXME: add ion specific error? */
 		PVR_DPF((PVR_DBG_ERROR, "%s: ion_import_dma_buf failed", __func__));
 		eError = PVRSRV_ERROR_BAD_MAPPING;
 		goto fail_ionimport;
@@ -560,10 +518,11 @@ PhysmemImportIon(CONNECTION_DATA *psConnection,
 		goto fail_pmrcreate;
 	}
 
-	_PDumpPMRMalloc(psPMR,
-					psPrivData->uiSize,
-					PAGE_SIZE,
-					&hPDumpAllocInfo);
+	PDumpPMRMallocPMR(psPMR,
+					  psPrivData->uiSize,
+					  PAGE_SIZE,
+	                  IMG_FALSE,
+					  &hPDumpAllocInfo);
 	psPrivData->hPDumpAllocInfo = hPDumpAllocInfo;
 	psPrivData->bPDumpMalloced = IMG_TRUE;
 

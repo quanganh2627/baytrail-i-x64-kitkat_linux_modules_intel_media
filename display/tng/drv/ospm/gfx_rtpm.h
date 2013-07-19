@@ -33,7 +33,6 @@
 
 void rtpm_init(struct drm_device *dev);
 void rtpm_uninit(struct drm_device *dev);
-void rtpm_enable(struct drm_device *dev);
 
 /*
 * GFX-Runtime PM callbacks

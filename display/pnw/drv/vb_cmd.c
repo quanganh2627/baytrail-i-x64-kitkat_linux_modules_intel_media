@@ -1142,6 +1142,9 @@ void vb_igzo_g8_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 {
 	PSB_DEBUG_ENTRY("\n");
 
+	//FIXME,instability issue casued by CABC feature,fix it later
+	drm_psb_enable_cabc = 0;
+
 	vb_cmd_init(dev, p_funcs);
 	p_funcs->drv_ic_init = ls04x_drv_ic_init;
 	p_funcs->set_brightness = ls04x_cmd_set_brightness;

@@ -67,6 +67,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGXFW_ALIGN			_Pragma("align 8")
 #elif defined(_MSC_VER)
 #define RGXFW_ALIGN			__declspec(align(8))
+#pragma warning (disable : 4324)
 #else
 #error "Align MACROS need to be defined for this compiler"
 #endif
@@ -87,11 +88,11 @@ typedef IMG_UINT8	RGXFWIF_CCCB;
 #if defined(RGX_FIRMWARE)
 /* Compiling the actual firmware - use a fully typed pointer */
 typedef RGXFWIF_CCCB						*PRGXFWIF_CCCB;
-typedef struct _RGXFWIF_CCCB_CTL_			*PRGXFWIF_CCCB_CTL;
-typedef struct _RGXFWIF_RENDER_TARGET_		*PRGXFWIF_RENDER_TARGET;
-typedef struct _RGXFWIF_HWRTDATA_			*PRGXFWIF_HWRTDATA;
-typedef struct _RGXFWIF_FREELIST_			*PRGXFWIF_FREELIST;
-typedef struct _RGXFWIF_RTA_CTL_			*PRGXFWIF_RTA_CTL;
+typedef struct _RGXFWIF_CCCB_CTL_		*PRGXFWIF_CCCB_CTL;
+typedef struct _RGXFWIF_RENDER_TARGET_	*PRGXFWIF_RENDER_TARGET;
+typedef struct _RGXFWIF_HWRTDATA_		*PRGXFWIF_HWRTDATA;
+typedef struct _RGXFWIF_FREELIST_		*PRGXFWIF_FREELIST;
+typedef struct _RGXFWIF_RTA_CTL_		*PRGXFWIF_RTA_CTL;
 typedef IMG_UINT32						*PRGXFWIF_UFO_ADDR;
 #else
 /* Compiling the host driver - use a firmware device virtual pointer */
@@ -104,6 +105,8 @@ typedef RGXFWIF_DEV_VIRTADDR	PRGXFWIF_RTA_CTL;
 typedef RGXFWIF_DEV_VIRTADDR	PRGXFWIF_UFO_ADDR;
 #endif /* RGX_FIRMWARE */
 
+
+/* FIXME PRGXFWIF_UFO_ADDR and RGXFWIF_UFO should move back into rgx_fwif_client.h */
 typedef struct _RGXFWIF_UFO_
 {
 	PRGXFWIF_UFO_ADDR	puiAddrUFO;
@@ -130,7 +133,6 @@ typedef enum
 
 typedef struct _RGXFWIF_CLEANUP_CTL_
 {
-	IMG_UINT32				ui32SubmittedCommands;	/*!< Number of commands submitted to the FW */
 	IMG_UINT32				ui32ExecutedCommands;	/*!< Number of commands executed by the FW */
 	IMG_UINT32 				ui32SyncObjDevVAddr;	/*!< SyncPrimitive to update after cleanup completion */
 }RGXFWIF_CLEANUP_CTL;
@@ -185,21 +187,25 @@ typedef struct _RGXFWIF_FREELIST_
 	IMG_UINT32			ui32AllocatedMMUPageCount;
 	IMG_UINT32			ui32HWRCounter;
 	IMG_UINT32			ui32FreeListID;
+	IMG_BOOL			bGrowPending;
 } RGXFWIF_FREELIST;
 
 
 typedef struct _RGXFWIF_RENDER_TARGET_
 {
 	IMG_DEV_VIRTADDR	RGXFW_ALIGN psVHeapTableDevVAddr; /*!< VHeap Data Store */
-	IMG_BOOL			bZeroTACaches;					  /*!< Whether RTC and TPC caches (on mem) need to be zeroed on next TA kick */
+	IMG_BOOL			bTACachesNeedZeroing;			  /*!< Whether RTC and TPC caches (on mem) need to be zeroed on next first TA kick */
 
 } RGXFWIF_RENDER_TARGET;
 
 
 typedef struct _RGXFWIF_HWRTDATA_ 
 {
+	RGXFWIF_RTDATA_STATE	eState;
+
+	IMG_UINT32				ui32NumPartialRenders; /*!< Number of partial renders. Used to setup ZLS bits correctly */
+
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN psPMMListDevVAddr; /*!< MList Data Store */
-	PRGXFWIF_FREELIST 		RGXFW_ALIGN apsFreeLists[RGXFW_MAX_FREELISTS]; 
 	IMG_UINT64				RGXFW_ALIGN ui64VCECatBase;
 	IMG_UINT64				RGXFW_ALIGN ui64VCELastCatBase;
 	IMG_UINT64				RGXFW_ALIGN ui64TECatBase;
@@ -209,17 +215,13 @@ typedef struct _RGXFWIF_HWRTDATA_
 #if defined(SUPPORT_VFP)
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sVFPPageTableAddr;
 #endif
-
 	IMG_UINT64				RGXFW_ALIGN ui64PMAListStackPointer;
-
 	IMG_UINT32				ui32PMMListStackPointer;
 
+	PRGXFWIF_FREELIST 		RGXFW_ALIGN apsFreeLists[RGXFW_MAX_FREELISTS]; 
 	IMG_UINT32				aui32FreeListHWRSnapshot[RGXFW_MAX_FREELISTS];
 	
 	PRGXFWIF_RENDER_TARGET	psParentRenderTarget;
-	RGXFWIF_RTDATA_STATE	eState;
-
-	IMG_UINT32				ui32NumPartialRenders; /*!< Number of partial renders. Used to setup ZLS bits correctly */
 
 	RGXFWIF_CLEANUP_CTL		sTACleanupState;
 	RGXFWIF_CLEANUP_CTL		s3DCleanupState;
@@ -229,11 +231,19 @@ typedef struct _RGXFWIF_HWRTDATA_
 
 	PRGXFWIF_RTA_CTL		psRTACtl;
 
-	IMG_UINT32				ui32PagesTE;		/*!< Number of pages allocated for TE (only setup/used by MLIST checker */
-	IMG_UINT32				ui32PagesVCE;		/*!< Number of pages allocated for VCE (only setup/used by MLIST checker */
-	IMG_UINT32				ui32PagesALIST;		/*!< Number of pages allocated for ALIST (only setup/used by MLIST checker */
 	IMG_UINT32				bHasLastTA;
 
+	IMG_UINT32				ui32PPPScreen;
+	IMG_UINT32				ui32PPPGridOffset;
+	IMG_UINT64				RGXFW_ALIGN ui64PPPMultiSampleCtl;
+	IMG_UINT32				ui32TPCStride;
+	IMG_DEV_VIRTADDR		RGXFW_ALIGN sTailPtrsDevVAddr;
+	IMG_UINT32				ui32TPCSize;
+	IMG_UINT32				ui32TEScreen;
+	IMG_UINT32				ui32MTileStride;
+	IMG_UINT32				ui32TEAA;
+	IMG_UINT32				ui32TEMTILE1;
+	IMG_UINT32				ui32TEMTILE2;
 } RGXFWIF_HWRTDATA;
 
 typedef enum
@@ -251,6 +261,9 @@ typedef struct _RGXFWIF_ZSBUFFER_
 	RGXFWIF_ZSBUFFER_STATE	eState;						/*!< Z/S-Buffer state */
 	RGXFWIF_CLEANUP_CTL		sCleanupState;				/*!< Cleanup state */
 } RGXFWIF_FWZSBUFFER;
+
+/* Number of BIF tiling configurations / heaps */
+#define RGXFWIF_NUM_BIF_TILING_CONFIGS 4
 
 /*!
  *****************************************************************************
@@ -317,6 +330,8 @@ typedef enum _RGXFWIF_CCB_CMD_TYPE_
 	RGXFWIF_CCB_CMD_TYPE_TQ_2D		= 205 | RGX_CCB_TYPE_TASK,
 	RGXFWIF_CCB_CMD_TYPE_3D_PR		= 206 | RGX_CCB_TYPE_TASK,
 	RGXFWIF_CCB_CMD_TYPE_NULL		= 207 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_SHG		= 208 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_RTU		= 209 | RGX_CCB_TYPE_TASK,
 
 /* Leave a gap between CCB specific commands and generic commands */
 	RGXFWIF_CCB_CMD_TYPE_FENCE		= 211,
@@ -326,31 +341,6 @@ typedef enum _RGXFWIF_CCB_CMD_TYPE_
 	
 	RGXFWIF_CCB_CMD_TYPE_PADDING	= 220,
 } RGXFWIF_CCB_CMD_TYPE;
-
-/*!
- ******************************************************************************
- * per context CCB control structure for RGX
- *****************************************************************************/
-typedef struct _RGX_CLIENT_CCB_
-{
-	IMG_HANDLE					hClientCCB;					/*!< kernel handle for CCB */
-	DEVMEM_EXPORTCOOKIE			sClientCCBExportCookie;		/*!< export cookie for CCB */
-	DEVMEM_MEMDESC				*psClientCCBMemDesc;		/*!< MemDesc for CCB */
-	IMG_VOID					*pui32CCBLinAddr;			/*!< linear address of the buffer */
-
-	IMG_HANDLE					hClientCCBCtl;				/*!< kernel handle for CCB control */
-	DEVMEM_EXPORTCOOKIE			sClientCCBCtlExportCookie;	/*!< export cookie for CCB control */
-	DEVMEM_MEMDESC				*psClientCCBCtlMemDesc;		/*!< MemDesc for CCB control */
-	volatile RGXFWIF_CCCB_CTL	*psCCBCtl;					/*!< CCB control structure used by the fw */
-
-	IMG_UINT32					ui32CCBWriteOffset;			/*!< CCB write offset from the driver side */
-	
-	IMG_UINT32					ui32Size;					/*!< ((Size of the buffer) - (overrun size)) */
-
-	IMG_HANDLE					hCleanupCookie;				/*!< Cookie to pass back to the server for cleanup */
-	IMG_BOOL					bDumpedCCBCtlAlready;		/*! <To track if we have already dumped CCBCtl */
-} RGX_CLIENT_CCB;
-
 
 typedef struct _RGXFWIF_CCB_CMD_HEADER_
 {
@@ -367,11 +357,16 @@ typedef struct _RGXFWIF_CCB_CMD_HEADER_
  * the master definition.
  */
 
-/* Maximum number of DM in use: TA, 3D, 2D, CDM, GP */
+#if defined(RGX_FEATURE_RAY_TRACING)
+/* Maximum number of DM in use: GP, 2D, TA, 3D, CDM, SHG, RTU */
+#define RGXFWIF_DM_MAX			(7)
+#else
 #define RGXFWIF_DM_MAX			(5)
+#endif
 
-/* Maximum number of HW DMs (all but GP) : TA, 3D, 2D, CDM */
-#define RGXFWIF_HWDM_MAX		(RGXFWIF_DM_2D+1)
+/* Min/Max number of HW DMs (all but GP) */
+#define RGXFWIF_HWDM_MIN		(1)
+#define RGXFWIF_HWDM_MAX		(RGXFWIF_DM_MAX)
 
 
 #endif /*  __RGX_FWIF_SHARED_H__ */

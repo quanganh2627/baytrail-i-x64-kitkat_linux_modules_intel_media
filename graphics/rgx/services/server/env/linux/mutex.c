@@ -51,46 +51,116 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <img_defs.h>
 
 #include "mutex.h"
+#include "driverlock.h"
+#include "pvr_debug.h"
 
+/*#define DEBUG_BRIDGE_LOCK_CALLS 1 */
+#undef DEBUG_BRIDGE_LOCK_CALLS 
+
+#if defined(DEBUG_BRIDGE_LOCK_CALLS)
+extern PVRSRV_LINUX_MUTEX gPVRSRVLock;
+#endif
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
 
 IMG_VOID LinuxInitMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 {
-    mutex_init(psPVRSRVMutex);
+    mutex_init(&psPVRSRVMutex->sMutex);
+    psPVRSRVMutex->hHeldBy = 0;
+
+#if defined(LINUX_DEBUG_MUTEX_CALLS)
+    if (&gPVRSRVLock == psPVRSRVMutex)
+    {
+        PVR_TRACE(("LinuxInitMutex %p: %d", psPVRSRVMutex, psPVRSRVMutex->hHeldBy));
+     }
+#endif
 }
 
 IMG_VOID LinuxLockMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 {
-    mutex_lock(psPVRSRVMutex);
+#if defined(LINUX_DEBUG_MUTEX_CALLS)
+    if (&gPVRSRVLock == psPVRSRVMutex)
+    {
+    	PVR_TRACE(("LinuxLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, current->pid));
+    }
+#endif
+
+    mutex_lock(&psPVRSRVMutex->sMutex);
+    psPVRSRVMutex->hHeldBy = current->pid;
 }
 
 PVRSRV_ERROR LinuxLockMutexInterruptible(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 {
-    if(mutex_lock_interruptible(psPVRSRVMutex) == -EINTR)
+#if defined(LINUX_DEBUG_MUTEX_CALLS)
+    if (&gPVRSRVLock == psPVRSRVMutex)
+    {
+    	PVR_TRACE(("LinuxLockMutexInterruptible %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, current->pid));
+    }
+#endif
+
+    if(mutex_lock_interruptible(&psPVRSRVMutex->sMutex) == -EINTR)
     {
         return PVRSRV_ERROR_MUTEX_INTERRUPTIBLE_ERROR;
     }
     else
     {
+    	psPVRSRVMutex->hHeldBy = current->pid;
         return PVRSRV_OK;
     }
 }
 
 IMG_INT32 LinuxTryLockMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 {
-    return mutex_trylock(psPVRSRVMutex);
+#if defined(LINUX_DEBUG_MUTEX_CALLS)
+    if (&gPVRSRVLock == psPVRSRVMutex)
+    {
+    	PVR_TRACE(("LinuxTryLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, current->pid));
+    }
+#endif
+
+	if (mutex_trylock(&psPVRSRVMutex->sMutex) == 1)
+	{
+    	psPVRSRVMutex->hHeldBy = current->pid;
+        return 1;
+	}
+	else
+	{
+        return 0;
+	}
 }
 
 IMG_VOID LinuxUnLockMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 {
-    mutex_unlock(psPVRSRVMutex);
+#if defined(LINUX_DEBUG_MUTEX_CALLS)
+   if (&gPVRSRVLock == psPVRSRVMutex)
+   {
+    	PVR_TRACE(("LinuxUnLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, current->pid));
+   }
+#endif
+
+	psPVRSRVMutex->hHeldBy = 0;
+    mutex_unlock(&psPVRSRVMutex->sMutex);
+
+#if defined(LINUX_DEBUG_MUTEX_CALLS)
+    if (psPVRSRVMutex->sMutex.count.counter >= 2)
+    {
+        PVR_TRACE(("ASSERT Mutex counter %p: %d >= 2", psPVRSRVMutex, psPVRSRVMutex->sMutex.count.counter));
+    }
+#endif
+
+    PVR_ASSERT(psPVRSRVMutex->sMutex.count.counter < 2);
 }
 
 IMG_BOOL LinuxIsLockedMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 {
-    return (mutex_is_locked(psPVRSRVMutex)) ? IMG_TRUE : IMG_FALSE;
+    return (psPVRSRVMutex->hHeldBy != 0);
 }
+
+IMG_BOOL LinuxIsLockedByMeMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
+{
+    return (psPVRSRVMutex->hHeldBy == current->pid);
+}
+
 
 
 #else /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)) */

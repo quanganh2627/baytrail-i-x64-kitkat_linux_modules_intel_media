@@ -92,81 +92,6 @@ CopyToUserWrapper(CONNECTION_DATA *psConnection,
 	OSCopyToUser(psConnection, pvDest, pvSrc, ui32Size)
 #endif
 
-
-#define ASSIGN_AND_RETURN_ON_ERROR(error, src, res)		\
-	do							\
-	{							\
-		(error) = (src);				\
-		if ((error) != PVRSRV_OK) 			\
-		{						\
-			return (res);				\
-		}						\
-	} while ((error) != PVRSRV_OK)
-
-#define ASSIGN_AND_EXIT_ON_ERROR(error, src)		\
-	ASSIGN_AND_RETURN_ON_ERROR(error, src, 0)
-
-#if defined (PVR_SECURE_HANDLES)
-#ifdef INLINE_IS_PRAGMA
-#pragma inline(NewHandleBatch)
-#endif
-static INLINE PVRSRV_ERROR
-NewHandleBatch(CONNECTION_DATA *psConnection,
-					IMG_UINT32 ui32BatchSize)
-{
-	PVRSRV_ERROR eError;
-
-	PVR_ASSERT(!psConnection->bHandlesBatched);
-
-	eError = PVRSRVNewHandleBatch(psConnection->psHandleBase, ui32BatchSize);
-
-	if (eError == PVRSRV_OK)
-	{
-		psConnection->bHandlesBatched = IMG_TRUE;
-	}
-
-	return eError;
-}
-
-#define NEW_HANDLE_BATCH_OR_ERROR(error, psConnection, ui32BatchSize)	\
-	ASSIGN_AND_EXIT_ON_ERROR(error, NewHandleBatch(psConnection, ui32BatchSize))
-
-#ifdef INLINE_IS_PRAGMA
-#pragma inline(CommitHandleBatch)
-#endif
-static INLINE PVRSRV_ERROR
-CommitHandleBatch(CONNECTION_DATA *psConnection)
-{
-	PVR_ASSERT(psConnection->bHandlesBatched);
-
-	psConnection->bHandlesBatched = IMG_FALSE;
-
-	return PVRSRVCommitHandleBatch(psConnection->psHandleBase);
-}
-
-
-#define COMMIT_HANDLE_BATCH_OR_ERROR(error, psConnection) 			\
-	ASSIGN_AND_EXIT_ON_ERROR(error, CommitHandleBatch(psConnection))
-
-#ifdef INLINE_IS_PRAGMA
-#pragma inline(ReleaseHandleBatch)
-#endif
-static INLINE IMG_VOID
-ReleaseHandleBatch(CONNECTION_DATA *psConnection)
-{
-	if (psConnection->bHandlesBatched)
-	{
-		psConnection->bHandlesBatched = IMG_FALSE;
-
-		PVRSRVReleaseHandleBatch(psConnection->psHandleBase);
-	}
-}
-#else	/* defined(PVR_SECURE_HANDLES) */
-#define NEW_HANDLE_BATCH_OR_ERROR(error, psConnection, ui32BatchSize)
-#define COMMIT_HANDLE_BATCH_OR_ERROR(error, psConnection)
-#define ReleaseHandleBatch(psConnection)
-#endif	/* defined(PVR_SECURE_HANDLES) */
-
 IMG_INT
 DummyBW(IMG_UINT32 ui32BridgeID,
 		IMG_VOID *psBridgeIn,
@@ -247,8 +172,6 @@ typedef struct _PVRSRV_BRIDGE_GLOBAL_STATS
 extern PVRSRV_BRIDGE_GLOBAL_STATS g_BridgeGlobalStats;
 #endif
 
-
-PVRSRV_ERROR CommonBridgeInit(IMG_VOID);
 
 IMG_INT BridgedDispatchKM(CONNECTION_DATA * psConnection,
 					  PVRSRV_BRIDGE_PACKAGE   * psBridgePackageKM);

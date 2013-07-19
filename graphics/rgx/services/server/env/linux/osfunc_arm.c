@@ -114,11 +114,16 @@ IMG_VOID OSFlushCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 								IMG_CPU_PHYADDR sCPUPhysStart,
 								IMG_CPU_PHYADDR sCPUPhysEnd)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+	arm_dma_ops.sync_single_for_device(NULL, sCPUPhysStart.uiAddr, sCPUPhysEnd.uiAddr - sCPUPhysStart.uiAddr, DMA_TO_DEVICE);
+	arm_dma_ops.sync_single_for_cpu(NULL, sCPUPhysStart.uiAddr, sCPUPhysEnd.uiAddr - sCPUPhysStart.uiAddr, DMA_FROM_DEVICE);
+#else	/* (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)) */ 
 	/* Inner cache */
 	dmac_flush_range(pvVirtStart, pvVirtEnd);
 
 	/* Outer cache */
 	outer_flush_range(sCPUPhysStart.uiAddr, sCPUPhysEnd.uiAddr);
+#endif	/* (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)) */
 }
 
 IMG_VOID OSCleanCPUCacheRangeKM(IMG_PVOID pvVirtStart,
@@ -126,6 +131,9 @@ IMG_VOID OSCleanCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 								IMG_CPU_PHYADDR sCPUPhysStart,
 								IMG_CPU_PHYADDR sCPUPhysEnd)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+	arm_dma_ops.sync_single_for_device(NULL, sCPUPhysStart.uiAddr, sCPUPhysEnd.uiAddr - sCPUPhysStart.uiAddr, DMA_TO_DEVICE);
+#else	/* (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)) */ 
 	/* Inner cache */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34))
 	dmac_clean_range(pvVirtStart, pvVirtEnd);
@@ -135,6 +143,7 @@ IMG_VOID OSCleanCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 
 	/* Outer cache */
 	outer_clean_range(sCPUPhysStart.uiAddr, sCPUPhysEnd.uiAddr);
+#endif	/* (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)) */
 }
 
 IMG_VOID OSInvalidateCPUCacheRangeKM(IMG_PVOID pvVirtStart,
@@ -142,6 +151,9 @@ IMG_VOID OSInvalidateCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 									 IMG_CPU_PHYADDR sCPUPhysStart,
 									 IMG_CPU_PHYADDR sCPUPhysEnd)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+	arm_dma_ops.sync_single_for_cpu(NULL, sCPUPhysStart.uiAddr, sCPUPhysEnd.uiAddr - sCPUPhysStart.uiAddr, DMA_FROM_DEVICE);
+#else	/* (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)) */ 
 #if defined(PVR_LINUX_DONT_USE_RANGE_BASED_INVALIDATE)
 	OSCleanCPUCacheRangeKM(pvVirtStart, pvVirtEnd, sCPUPhysStart, sCPUPhysEnd);
 #else
@@ -155,4 +167,5 @@ IMG_VOID OSInvalidateCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 	/* Outer cache */
 	outer_inv_range(sCPUPhysStart.uiAddr, sCPUPhysEnd.uiAddr);
 #endif
+#endif	/* (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0)) */
 }

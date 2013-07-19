@@ -42,37 +42,32 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef _RGXDEFS_KM_H_
 #define _RGXDEFS_KM_H_
 
+#include RGX_BVNC_CORE_KM_HEADER
+#include RGX_BNC_CONFIG_KM_HEADER
+
 #define __IMG_EXPLICIT_INCLUDE_HWDEFS
 #include "rgx_cr_defs_km.h"
 #undef __IMG_EXPLICIT_INCLUDE_HWDEFS
 
-/* This #if guard is used by the debugger that will directly include the header,
- * rather than through config.h
- */
-#if defined(RGX_BVNC_CORE_KM_HEADER)
-#include RGX_BVNC_CORE_KM_HEADER
-#endif
-
 /******************************************************************************
  * Check for valid B.X.N.C
  *****************************************************************************/
-#if !defined(RGX_BVNC_B) || !defined(RGX_BVNC_N) || !defined(RGX_BVNC_C)
-#error "Need to specify BVNC (RGX_BVNC_B, RGX_BVNC_N and RGX_BVNC_C). Omitting RGX_BVNC_V means V=Head"
+#if !defined(RGX_BVNC_KM_B) || !defined(RGX_BVNC_KM_V) || !defined(RGX_BVNC_KM_N) || !defined(RGX_BVNC_KM_C)
+#error "Need to specify BVNC (RGX_BVNC_KM_B, RGX_BVNC_KM_V, RGX_BVNC_KM_N and RGX_BVNC_C)"
+#endif
+
+/* Check core/config compatibility */
+#if (RGX_BVNC_KM_B != RGX_BNC_KM_B) || (RGX_BVNC_KM_N != RGX_BNC_KM_N) || (RGX_BVNC_KM_C != RGX_BNC_KM_C) 
+#error "BVNC headers are mismatching (KM core/config)"
 #endif
 
 /******************************************************************************
  * RGX Version name
  *****************************************************************************/
 #define _RGX_BVNC_ST2(S)	#S
-#define _RGX_BVNC_ST(S)	_RGX_BVNC_ST2(S)
-
-#if !defined(RGX_BVNC_V)
-#define RGX_BVNC		_RGX_BVNC_ST(RGX_BVNC_B) ".X." _RGX_BVNC_ST(RGX_BVNC_N) "." _RGX_BVNC_ST(RGX_BVNC_C)
-#define RGX_BVNC_V_ST 	"X"
-#else
-#define RGX_BVNC		_RGX_BVNC_ST(RGX_BVNC_B) "." _RGX_BVNC_ST(RGX_BVNC_V) "." _RGX_BVNC_ST(RGX_BVNC_N) "." _RGX_BVNC_ST(RGX_BVNC_C)
-#define RGX_BVNC_V_ST	_RGX_BVNC_ST(RGX_BVNC_V)
-#endif
+#define _RGX_BVNC_ST(S)		_RGX_BVNC_ST2(S)
+#define RGX_BVNC_KM			_RGX_BVNC_ST(RGX_BVNC_KM_B) "." _RGX_BVNC_ST(RGX_BVNC_KM_V) "." _RGX_BVNC_ST(RGX_BVNC_KM_N) "." _RGX_BVNC_ST(RGX_BVNC_KM_C)
+#define RGX_BVNC_KM_V_ST	_RGX_BVNC_ST(RGX_BVNC_KM_V)
 
 /******************************************************************************
  * RGX Defines
@@ -104,5 +99,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGX_BIF_PM_VIRTUAL_PAGE_ALIGNSHIFT		(14)
 #define RGX_BIF_PM_VIRTUAL_PAGE_SIZE			(1 << RGX_BIF_PM_VIRTUAL_PAGE_ALIGNSHIFT)
 
+/******************************************************************************
+ * WA HWBRNs
+ *****************************************************************************/
+#if defined(FIX_HW_BRN_36492)
 
-#endif
+#undef RGX_CR_SOFT_RESET_SLC_EN
+#undef RGX_CR_SOFT_RESET_SLC_CLRMSK
+#undef RGX_CR_SOFT_RESET_SLC_SHIFT
+
+/* Remove the SOFT_RESET_SLC_EN bit from SOFT_RESET_MASKFULL */
+#undef RGX_CR_SOFT_RESET_MASKFULL 
+#define RGX_CR_SOFT_RESET_MASKFULL IMG_UINT64_C(0x000001FFF7FFFC1D)
+
+#endif /* FIX_HW_BRN_36492 */
+
+
+#endif /* _RGXDEFS_KM_H_ */

@@ -159,5 +159,8 @@ bool ospm_power_is_hw_on(u32 hw_island);
 void ospm_apm_power_down_topaz(struct drm_device *dev);
 int ospm_runtime_pm_allow(struct drm_device *dev);
 void ospm_runtime_pm_forbid(struct drm_device *dev);
+#ifdef CONFIG_GFX_RTPM
+void psb_ospm_post_power_down();
+#endif
 
 #endif		/* __INTEL_MEDIA_ISLAND_MANAGEMENT_H__ */

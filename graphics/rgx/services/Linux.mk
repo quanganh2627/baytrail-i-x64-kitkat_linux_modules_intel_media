@@ -57,7 +57,10 @@ services_tools_type := custom
 
 services_tools: rogueobjanal \
                 hwperfbin2json \
+                hwperfbin2jsont \
+                pvrdebug \
                 rgx_debug_info \
+                pvrhwperf \
                 tlioctl_cmd
 
 
@@ -72,7 +75,6 @@ services_tests_type := custom
 #   rgx_blitsize_test
 #   rgx_blit_test
 #   rgx_compute_test
-#   rgx_debug_info
 #   rgx_triangle_test
 #   rgx_triangle_test_usc
 #   rgx_twiddling_test
@@ -92,16 +94,18 @@ services_tests_custom_build: devmem_pmmif_test
 # Manual test modules that need a custom test environment or manual interaction
 # during test execution.
 
-services_tests_manual:  tlioctl_cmd \
-                        rgx_debug_info
+services_tests_manual:  tlioctl_cmd
 
 
 # Automated test modules that can be built and run in the standard 
 # environment.
 
-services_tests_auto:    tlstream_test \
-                        tlclient_test \
-                        rgx_hwperf_test
+services_tests_auto:	tlintern_test \
+						tlstream_test \
+						tlclient_test \
+						rgx_hwperf_test \
+						services_apiperf_test \
+						ri_test
 
 # All 
 
@@ -109,7 +113,6 @@ SERVICES_TESTS_OTHER = rgx_blitsize_test \
                 rgx_blit_test \
                 rgx_compute_test \
                 rgx_triangle_test \
-                rgx_triangle_test_usc \
                 rgx_twiddling_test \
                 services_test \
                 \
@@ -118,10 +121,8 @@ SERVICES_TESTS_OTHER = rgx_blitsize_test \
                 \
                 axi_ace_coherent_test \
                 breakpoint_test \
-                rgx_fw_test \
-                rgx_hwperf_test \
                 rgx_ispscandir_test \
-                rgx_rotation_test \
+                rgx_smppos_test \
                 rgx_tqplayer_test \
                 services_mutex_test \
                 tiling_test 

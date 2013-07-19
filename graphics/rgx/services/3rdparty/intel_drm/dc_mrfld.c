@@ -813,7 +813,7 @@ static PVRSRV_ERROR DC_MRFLD_BufferAlloc(IMG_HANDLE hDisplayContext,
 		(psBuffer->ui32BufferSize + (PAGE_SIZE - 1)) >> PAGE_SHIFT;
 
 	psBuffer->psSysAddr =
-		kzalloc(ulPagesNumber * sizeof(IMG_DEV_PHYADDR), GFP_KERNEL);
+		kzalloc(ulPagesNumber * sizeof(IMG_SYS_PHYADDR), GFP_KERNEL);
 	if (!psBuffer->psSysAddr) {
 		DRM_ERROR("Failed to allocate phy array\n");
 		eRes = PVRSRV_ERROR_OUT_OF_MEMORY;
@@ -822,8 +822,13 @@ static PVRSRV_ERROR DC_MRFLD_BufferAlloc(IMG_HANDLE hDisplayContext,
 
 	i = 0; j = 0;
 	for (i = 0; i < psBuffer->ui32BufferSize; i += PAGE_SIZE) {
+#if defined(UNDER_WDDM)
 		psBuffer->psSysAddr[j++].uiAddr =
-			vmalloc_to_pfn(psBuffer->sCPUVAddr + i) << PAGE_SHIFT;
+			(IMG_UINTPTR_T)vmalloc_to_pfn(psBuffer->sCPUVAddr + i) << PAGE_SHIFT;
+#else
+		psBuffer->psSysAddr[j++].uiAddr =
+			(IMG_UINT64)vmalloc_to_pfn(psBuffer->sCPUVAddr + i) << PAGE_SHIFT;
+#endif
 	}
 
 	psBuffer->bIsAllocated = IMG_TRUE;
@@ -840,7 +845,7 @@ static PVRSRV_ERROR DC_MRFLD_BufferAlloc(IMG_HANDLE hDisplayContext,
 	DCCBgttMapMemory(psDrmDev,
 			(unsigned int)psBuffer,
 			psBuffer->ui32OwnerTaskID,
-			(uintptr_t *)psBuffer->psSysAddr,
+			psBuffer->psSysAddr,
 			ulPagesNumber,
 			(unsigned int *)&psBuffer->sDevVAddr.uiAddr);
 
@@ -1002,6 +1007,9 @@ static DC_DEVICE_FUNCTIONS sDCFunctions = {
 	.pfnPanelQuery			= DC_MRFLD_PanelQuery,
 	.pfnFormatQuery			= DC_MRFLD_FormatQuery,
 	.pfnDimQuery			= DC_MRFLD_DimQuery,
+	.pfnSetBlank			= IMG_NULL,
+	.pfnSetVSyncReporting		= IMG_NULL,
+	.pfnLastVSyncQuery		= IMG_NULL,
 	.pfnContextCreate		= DC_MRFLD_ContextCreate,
 	.pfnContextDestroy		= DC_MRFLD_ContextDestroy,
 	.pfnContextConfigure		= DC_MRFLD_ContextConfigure,
@@ -1070,7 +1078,7 @@ static PVRSRV_ERROR _SystemBuffer_Init(DC_MRFLD_DEVICE *psDevice)
 
 	ulPagesNumber = (psPSBFb->size + (PAGE_SIZE - 1)) >> PAGE_SHIFT;
 	psDevice->psSystemBuffer->psSysAddr =
-		kzalloc(ulPagesNumber * sizeof(IMG_DEV_PHYADDR), GFP_KERNEL);
+		kzalloc(ulPagesNumber * sizeof(IMG_SYS_PHYADDR), GFP_KERNEL);
 	if (!psDevice->psSystemBuffer->psSysAddr) {
 		kfree(psDevice->psSystemBuffer);
 		return PVRSRV_ERROR_OUT_OF_MEMORY;

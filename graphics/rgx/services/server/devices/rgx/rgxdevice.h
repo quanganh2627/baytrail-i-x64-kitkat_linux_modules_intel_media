@@ -53,13 +53,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "cache_external.h"
 #include "device.h"
 
+
 /*!
  ******************************************************************************
  * Device state flags
  *****************************************************************************/
 #define RGXKM_DEVICE_STATE_ZERO_FREELIST		(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed freelists */
 
-
+#define RGXFWIF_GPU_STATS_WINDOW_SIZE_US					1000000
+#define RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE				10000
+#define RGXFWIF_GPU_STATS_NUMBER_OF_RENDERS_BETWEEN_RECALC	10
 
 typedef struct _PVRSRV_STUB_PBDESC_ PVRSRV_STUB_PBDESC;
 
@@ -75,6 +78,7 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	IMG_UINT32				ui32CoreFlags;
 
 	IMG_BOOL                bFirmwareInitialised;
+	IMG_BOOL				bPDPEnabled;
 
 	/* Kernel mode linear address of device registers */
 	IMG_PVOID				pvRegsBaseKM;
@@ -86,9 +90,6 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	IMG_CPU_PHYADDR			sRegsPhysBase;
 	/*  Register region size in bytes */
 	IMG_UINT32				ui32RegSize;
-
-	/*  RGX clock speed */
-	IMG_UINT32				ui32CoreClockSpeed;
 
 	PVRSRV_STUB_PBDESC		*psStubPBDescListKM;
 
@@ -123,8 +124,11 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	IMG_UINT32				ui32ClkGateStatusMask;
 	RGX_SCRIPTS				sScripts;
 
-	DEVMEM_MEMDESC			*psRGXFWMemDesc;
-	DEVMEM_EXPORTCOOKIE		sRGXFWExportCookie;
+	DEVMEM_MEMDESC			*psRGXFWCodeMemDesc;
+	DEVMEM_EXPORTCOOKIE		sRGXFWCodeExportCookie;
+
+	DEVMEM_MEMDESC			*psRGXFWDataMemDesc;
+	DEVMEM_EXPORTCOOKIE		sRGXFWDataExportCookie;
 
 	DEVMEM_MEMDESC			*psRGXFWIfTraceBufCtlMemDesc;
 	RGXFWIF_TRACEBUF		*psRGXFWIfTraceBuf;
@@ -132,6 +136,13 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	DEVMEM_MEMDESC			*psRGXFWIfHWRInfoBufCtlMemDesc;
 	RGXFWIF_HWRINFOBUF		*psRGXFWIfHWRInfoBuf;
 
+	DEVMEM_MEMDESC			*psRGXFWIfGpuUtilFWCbCtlMemDesc;
+	RGXFWIF_GPU_UTIL_FWCB	*psRGXFWIfGpuUtilFWCb;
+
+	DEVMEM_MEMDESC			*psRGXFWIfHWPerfBufCtlMemDesc;
+	IMG_BYTE				*psRGXFWIfHWPerfBuf;
+	IMG_UINT32				ui32RGXFWIfHWPerfBufSize; /* in bytes */
+	
 	DEVMEM_MEMDESC			*psRGXFWIfInitMemDesc;
 
 #if defined(RGXFW_ALIGNCHECKS)
@@ -158,28 +169,17 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	
 #endif	
 
-	/*! Handle on transport layer stream used to export HWPerf data to user
-	 * side clients. Set during initialisation if the app hint turns bit 7
+	/*! Handles to the lock and stream objects used to transport
+	 * HWPerf data to user side clients. See RGXHWPerfInit() RGXHWPerfDeinit().
+	 * Set during initialisation if the application hint turns bit 7
 	 * 'Enable HWPerf' on in the ConfigFlags sent to the FW. FW stores this
-	 * bit in the RGXFW_CTL.ui32StateFlags member. It may also get
-	 * set by the API RGXCtrlHWPerf(). Thus this member may be 0 if HWPerf is
-	 * not enabled as this member is created and destroyed on demand.
+	 * bit in the RGXFW_CTL.ui32StateFlags member. They may also get
+	 * set by the API RGXCtrlHWPerf(). Thus these members may be 0 if HWPerf is
+	 * not enabled as these members are created and destroyed on demand.
 	 */
+	POS_LOCK 				hLockHWPerfStream;
 	IMG_HANDLE				hHWPerfStream;
 
-	PSYNC_PRIM_CONTEXT		hSyncPrimContext;
-	PVRSRV_CLIENT_SYNC_PRIM *psPowSyncPrim;
-
-	IMG_VOID (*pfnActivePowerCheck) (PVRSRV_DEVICE_NODE *psDeviceNode);
-
-	IMG_UINT32 				ui32DeviceFlags;	/*!< Flags to track general device state  */
-
-	/* Poll data for detecting firmware fatal errors */
-	IMG_UINT32  aui32CrLastPollAddr[RGXFW_THREAD_NUM];
-	IMG_UINT32  aui32CrLastPollCounter[RGXFW_THREAD_NUM];
-	IMG_UINT32  ui32KCCBLastROff[RGXFWIF_DM_MAX];
-	IMG_UINT32  ui32LastGEOTimeouts;
-	
 	/* If we do 10 deferred memory allocations per second, then the ID would warp around after 13 years */
 	IMG_UINT32				ui32ZSBufferCurrID;	/*!< ID assigned to the next deferred devmem allocation */
 	IMG_UINT32				ui32FreelistCurrID;	/*!< ID assigned to the next freelist */
@@ -188,6 +188,30 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	DLLIST_NODE				sZSBufferHead;		/*!< List of on-demand ZSBuffers */
 	POS_LOCK 				hLockFreeList;		/*!< Lock to protect simultaneous access to Freelists */
 	DLLIST_NODE				sFreeListHead;		/*!< List of growable Freelists */
+	PSYNC_PRIM_CONTEXT		hSyncPrimContext;
+	PVRSRV_CLIENT_SYNC_PRIM *psPowSyncPrim;
+
+	IMG_VOID				(*pfnActivePowerCheck) (PVRSRV_DEVICE_NODE *psDeviceNode);
+	IMG_UINT32				ui32ActivePMReqOk;
+	IMG_UINT32				ui32ActivePMReqDenied;
+	IMG_UINT32				ui32ActivePMReqTotal;
+	
+	IMG_HANDLE				hProcessQueuesMISR;
+
+	IMG_UINT32 				ui32DeviceFlags;	/*!< Flags to track general device state  */
+
+	/* Poll data for detecting firmware fatal errors */
+	IMG_UINT32  aui32CrLastPollAddr[RGXFW_THREAD_NUM];
+	IMG_UINT32  ui32KCCBLastROff[RGXFWIF_DM_MAX];
+	IMG_UINT32  ui32LastGEOTimeouts;
+
+	/* GPU DVFS History and GPU Utilization stats */
+	RGXFWIF_GPU_DVFS_HIST	*psGpuDVFSHistory;
+	IMG_VOID				(*pfnUpdateGpuUtilStats) (PVRSRV_DEVICE_NODE *psDeviceNode);
+	IMG_UINT32				ui32GpuUtilTransitionsCountSample;
+	IMG_UINT32				ui32GpuStatActive;	/* GPU active  ratio expressed in 0,01% units */
+	IMG_UINT32				ui32GpuStatBlocked; /* GPU blocked ratio expressed in 0,01% units */
+	IMG_UINT32				ui32GpuStatIdle;    /* GPU idle    ratio expressed in 0,01% units */
 
 } PVRSRV_RGXDEV_INFO;
 
@@ -198,12 +222,15 @@ typedef struct _RGX_TIMING_INFORMATION_
 	IMG_UINT32			ui32CoreClockSpeed;
 	IMG_BOOL			bEnableActivePM;
 	IMG_BOOL			bEnableRDPowIsland;
+	IMG_UINT32			ui32ActivePMLatencyms;
 } RGX_TIMING_INFORMATION;
 
 typedef struct _RGX_DATA_
 {
 	/*! Timing information */
 	RGX_TIMING_INFORMATION	*psRGXTimingInfo;
+	IMG_BOOL bHasTDMetaCodePhysHeap;
+	IMG_UINT32 uiTDMetaCodePhysHeapID;
 } RGX_DATA;
 
 

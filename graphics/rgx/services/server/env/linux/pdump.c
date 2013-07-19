@@ -695,13 +695,13 @@ static IMG_BOOL PDumpWriteILock(PDBG_STREAM psStream, IMG_UINT8 *pui8Data, IMG_U
 		((ui32Flags & PDUMP_FLAGS_NEVER) != 0) ||
 		(PDumpInPowerTransition() && ((ui32Flags & PDUMP_FLAGS_POWERTRANS) != 0)))
 	{
-		PVR_DPF((PVR_DBG_MESSAGE, "PDumpWriteILock: Failed to write 0x%x bytes to stream 0x%x", ui32Count, (IMG_UINT32)psStream));
+		PVR_DPF((PVR_DBG_MESSAGE, "PDumpWriteILock: Failed to write 0x%x bytes to stream 0x%p", ui32Count, psStream));
 		return IMG_TRUE;
 	}
 
 	if(psStream->psCtrl->ui32Current > psStream->psCtrl->ui32End)
 	{
-		PVR_DPF((PVR_DBG_MESSAGE, "PDumpWriteILock: Current pointer is beyond end of stream 0x%x", (IMG_UINT32)psStream));
+		PVR_DPF((PVR_DBG_MESSAGE, "PDumpWriteILock: Current pointer is beyond end of stream 0x%p", psStream));
 		return IMG_TRUE;
 	}
 

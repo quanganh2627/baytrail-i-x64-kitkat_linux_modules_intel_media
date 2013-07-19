@@ -46,11 +46,11 @@
 #include "early_suspend.h"
 
 
-static struct _ospm_data_ *g_ospm_data;
+struct _ospm_data_ *g_ospm_data;
 struct drm_device *gpDrmDevice;
 
 /* island, state, ref_count, init_func, power_func */
-static struct ospm_power_island island_list[] = {
+struct ospm_power_island island_list[] = {
 	{OSPM_DISPLAY_A, OSPM_POWER_OFF, {0}, ospm_disp_a_init, NULL},
 	{OSPM_DISPLAY_B, OSPM_POWER_OFF, {0}, ospm_disp_b_init, NULL},
 	{OSPM_DISPLAY_C, OSPM_POWER_OFF, {0}, ospm_disp_c_init, NULL},
@@ -339,6 +339,10 @@ bool power_island_get(u32 hw_island)
 	struct drm_psb_private *dev_priv = g_ospm_data->dev->dev_private;
 	unsigned long flags;
 
+#ifdef CONFIG_GFX_RTPM
+	pm_runtime_get(&g_ospm_data->dev->pdev->dev);
+#endif
+
 	if (dev_priv->early_suspended) {
 		OSPM_DPF("Resuming PCI\n");
 		ospm_resume_pci(g_ospm_data->dev);
@@ -406,6 +410,10 @@ out_err:
 		OSPM_DPF("Suspending PCI\n");
 		ospm_suspend_pci(g_ospm_data->dev);
 	}
+
+#ifdef CONFIG_GFX_RTPM
+	pm_runtime_put(&g_ospm_data->dev->pdev->dev);
+#endif
 
 	return ret;
 }
@@ -501,6 +509,9 @@ out_err:
 void ospm_post_init(struct drm_device *dev)
 {
 	power_island_put(OSPM_VIDEO_DEC_ISLAND);
+#ifdef CONFIG_GFX_RTPM
+	rtpm_init(dev);
+#endif
 }
 
 /**
@@ -512,6 +523,10 @@ void ospm_power_uninit(void)
 {
 	int i;
 	OSPM_DPF("%s\n", __func__);
+
+#ifdef CONFIG_GFX_RTPM
+	rtpm_uninit(gpDrmDevice);
+#endif
 
 	/* un-init early suspend */
 	intel_media_early_suspend_uninit();

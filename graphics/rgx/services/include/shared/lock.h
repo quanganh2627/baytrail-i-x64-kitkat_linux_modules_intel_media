@@ -62,4 +62,8 @@ IMG_VOID OSLockRelease(POS_LOCK hLock);
 
 IMG_INTERNAL
 IMG_BOOL OSLockIsLocked(POS_LOCK hLock);
+
+IMG_INTERNAL
+IMG_BOOL OSLockIsLockedByMe(POS_LOCK hLock);
+
 #endif	/* _LOCK_H_ */

@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.20.4.4
+@Title          RGX Config BVNC 1.V.4.4
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,35 +39,15 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_20_4_4_H_
-#define _RGXCONFIG_KM_1_20_4_4_H_
+#ifndef _RGXCONFIG_KM_1_V_4_4_H_
+#define _RGXCONFIG_KM_1_V_4_4_H_
 
-/***** Automatically generated file (1/9/2013 5:43:26 PM): Do not edit manually ********************/
-/***** Timestamp:  (1/9/2013 5:43:26 PM)************************************************************/
-/***** CS: @866932 ******************************************************************/
+/***** Automatically generated file (6/17/2013 9:48:09 AM): Do not edit manually ********************/
+/***** Timestamp:  (6/17/2013 9:48:09 AM)************************************************************/
 
-
-/******************************************************************************
- * BVNC = 1.20.4.4 
- *****************************************************************************/
-#define RGX_BVNC_B 1
-#define RGX_BVNC_V 20
-#define RGX_BVNC_N 4
-#define RGX_BVNC_C 4
-
-/******************************************************************************
- * Errata 
- *****************************************************************************/
-
-#define FIX_HW_BRN_37200
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-
+#define RGX_BNC_KM_B 1
+#define RGX_BNC_KM_N 4
+#define RGX_BNC_KM_C 4
 
 /******************************************************************************
  * DDK Defines
@@ -78,7 +58,4 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 
 
-#endif /* _RGXCONFIG_KM_1_20_4_4_H_ */
-
-
-
+#endif /* _RGXCONFIG_1_V_4_4_H_ */

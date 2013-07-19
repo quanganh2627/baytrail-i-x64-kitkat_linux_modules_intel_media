@@ -46,6 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* Module specific includes */
 #include "pdump.h"
 #include "pdumpdefs.h"
+#include "devicemem_typedefs.h"
 
 #include "sync_server.h"
 #include "pdump.h"
@@ -75,7 +76,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeAllocSyncPrimitiveBlock(IMG_HANDLE 
 
 	*phSyncHandle = psSyncHandleInt;
 	*phExportCookie = psExportCookieInt;
-
 	return eError;
 }
 
@@ -91,7 +91,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeFreeSyncPrimitiveBlock(IMG_HANDLE h
 	eError =
 		PVRSRVFreeSyncPrimitiveBlockKM(
 					psSyncHandleInt);
-
 
 	return eError;
 }
@@ -113,7 +112,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimSet(IMG_HANDLE hBridge,
 					ui32Index,
 					ui32Value);
 
-
 	return eError;
 }
 
@@ -131,7 +129,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeServerSyncPrimSet(IMG_HANDLE hBridg
 		PVRSRVServerSyncPrimSetKM(
 					psSyncHandleInt,
 					ui32Value);
-
 
 	return eError;
 }
@@ -155,7 +152,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeServerSyncAlloc(IMG_HANDLE hBridge,
 					pui32SyncPrimVAddr);
 
 	*phSyncHandle = psSyncHandleInt;
-
 	return eError;
 }
 
@@ -171,7 +167,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeServerSyncFree(IMG_HANDLE hBridge,
 	eError =
 		PVRSRVServerSyncFreeKM(
 					psSyncHandleInt);
-
 
 	return eError;
 }
@@ -194,7 +189,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeServerSyncQueueHWOp(IMG_HANDLE hBri
 					bbUpdate,
 					pui32FenceValue,
 					pui32UpdateValue);
-
 
 	return eError;
 }
@@ -221,7 +215,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeServerSyncGetStatus(IMG_HANDLE hBri
 					pui32FWAddr,
 					pui32CurrentOp,
 					pui32NextOp);
-
 
 	return eError;
 }
@@ -257,7 +250,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimOpCreate(IMG_HANDLE hBridge
 					&psServerCookieInt);
 
 	*phServerCookie = psServerCookieInt;
-
 	return eError;
 }
 
@@ -286,7 +278,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimOpTake(IMG_HANDLE hBridge,
 					ui32ServerSyncCount,
 					pui32ServerFlags);
 
-
 	return eError;
 }
 
@@ -305,7 +296,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimOpReady(IMG_HANDLE hBridge,
 					psServerCookieInt,
 					pbReady);
 
-
 	return eError;
 }
 
@@ -322,7 +312,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimOpComplete(IMG_HANDLE hBrid
 		PVRSRVSyncPrimOpCompleteKM(
 					psServerCookieInt);
 
-
 	return eError;
 }
 
@@ -338,7 +327,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimOpDestroy(IMG_HANDLE hBridg
 	eError =
 		PVRSRVSyncPrimOpDestroyKM(
 					psServerCookieInt);
-
 
 	return eError;
 }
@@ -357,7 +345,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimPDump(IMG_HANDLE hBridge,
 		PVRSRVSyncPrimPDumpKM(
 					psSyncHandleInt,
 					ui32Offset);
-
 
 	return eError;
 }
@@ -378,7 +365,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimPDumpValue(IMG_HANDLE hBrid
 					psSyncHandleInt,
 					ui32Offset,
 					ui32Value);
-
 
 	return eError;
 }
@@ -406,7 +392,6 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimPDumpPol(IMG_HANDLE hBridge
 					eOperator,
 					uiPDumpFlags);
 
-
 	return eError;
 }
 
@@ -427,16 +412,15 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimOpPDumpPol(IMG_HANDLE hBrid
 					eOperator,
 					uiPDumpFlags);
 
-
 	return eError;
 }
 
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimPDumpCBP(IMG_HANDLE hBridge,
 							      IMG_HANDLE hSyncHandle,
 							      IMG_UINT32 ui32Offset,
-							      IMG_UINT32 ui32WriteOffset,
-							      IMG_UINT32 ui32PacketSize,
-							      IMG_UINT32 ui32BufferSize)
+							      IMG_DEVMEM_OFFSET_T uiWriteOffset,
+							      IMG_DEVMEM_SIZE_T uiPacketSize,
+							      IMG_DEVMEM_SIZE_T uiBufferSize)
 {
 	PVRSRV_ERROR eError;
 	SYNC_PRIMITIVE_BLOCK * psSyncHandleInt;
@@ -448,10 +432,9 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeSyncPrimPDumpCBP(IMG_HANDLE hBridge
 		PVRSRVSyncPrimPDumpCBPKM(
 					psSyncHandleInt,
 					ui32Offset,
-					ui32WriteOffset,
-					ui32PacketSize,
-					ui32BufferSize);
-
+					uiWriteOffset,
+					uiPacketSize,
+					uiBufferSize);
 
 	return eError;
 }
