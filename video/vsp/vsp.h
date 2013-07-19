@@ -79,6 +79,7 @@
 #define VSP_CONFIG_REG_SDRAM_BASE 0x1A0000
 #define VSP_CONFIG_REG_START 0x8
 
+#define VSP_FIRMWARE_MEM_ALIGNMENT 4096
 /* #define VP8_ENC_DEBUG 1 */
 
 static const unsigned int vsp_processor_base[] = {
@@ -171,6 +172,7 @@ extern int drm_vsp_pmpolicy;
 
 /* The status of vsp hardware */
 enum vsp_power_state {
+	VSP_STATE_HANG = -1,
 	VSP_STATE_DOWN = 0,
 	VSP_STATE_SUSPEND,
 	VSP_STATE_IDLE,
@@ -191,7 +193,7 @@ enum vsp_irq_reg {
 
 enum vsp_context_num {
 	VSP_CONTEXT_NUM_VPP = 0,
-	VSP_CONTEXT_NUM_VP8 = 1,
+	VSP_CONTEXT_NUM_VP8 = 0,
 	VSP_CONTEXT_NUM_MAX
 };
 

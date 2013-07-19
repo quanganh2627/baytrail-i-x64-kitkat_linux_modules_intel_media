@@ -348,6 +348,9 @@ bool vsp_interrupt(void *pvData)
 		return false;
 	} else {
 		IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_CLR, (1 << VSP_SP0_IRQ_SHIFT));
+		/* we need to clear IIR VSP bit */
+		PSB_WVDC32(_TNG_IRQ_VSP_FLAG, PSB_INT_IDENTITY_R);
+		(void)PSB_RVDC32(PSB_INT_IDENTITY_R);
 	}
 
 	/* handle the response message */
@@ -446,6 +449,12 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 			DRM_ERROR("VSP: failed to load firmware\n");
 			return -EFAULT;
 		}
+	}
+
+	/* If VSP timeout, don't send cmd to hardware anymore */
+	if (vsp_priv->vsp_state == VSP_STATE_HANG) {
+		DRM_ERROR("The VSP is hang abnormally!");
+		return -EFAULT;
 	}
 
 	/* consider to invalidate/flush MMU */
@@ -1151,7 +1160,7 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	unsigned int reg, i, j, *cmd_p;
 
 	/* config info */
-	for (i = 2; i < VSP_CONFIG_SIZE; i++) {
+	for (i = 0; i < VSP_CONFIG_SIZE; i++) {
 		CONFIG_REG_READ32(i, &reg);
 		VSP_DEBUG("partition1_config_reg_d%d=%x\n", i, reg);
 	}

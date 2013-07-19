@@ -85,7 +85,7 @@ int psb_fence_emit_sequence(struct ttm_fence_device *fdev,
 	}
 
 	*sequence = seq;
-	*timeout_jiffies = jiffies + DRM_HZ * 10;
+	*timeout_jiffies = jiffies + DRM_HZ * 3;
 
 	return 0;
 }
@@ -98,8 +98,9 @@ static void psb_fence_poll(struct ttm_fence_device *fdev,
 	struct drm_device *dev = dev_priv->dev;
 	uint32_t sequence = 0;
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
+#ifdef SUPPORT_VSP
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-
+#endif
 	if (unlikely(!dev_priv))
 		return;
 
@@ -199,7 +200,7 @@ static void psb_fence_lockup(struct ttm_fence_object *fence,
 		write_unlock(&fc->lock);
 
 		psb_vsp_dump_info(dev_priv);
-		vsp_priv->vsp_state = VSP_STATE_DOWN;
+		vsp_priv->vsp_state = VSP_STATE_HANG;
 #endif
 	} else {
 		DRM_ERROR("Unsupported fence class\n");

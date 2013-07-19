@@ -31,10 +31,9 @@
 
 #include "vsp.h"
 
-#define FW_SZ (2 * 800 * 1024)
+#define FW_SZ (2 * 1024 * 1024)
 
-#define FW_NAME "vsp_VPP_sle.bin"
-#define FW_VP8_NAME "vsp_vp8_enc.bin"
+#define FW_NAME "vsp_vpp_vp8.bin"
 
 static inline unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
 					    unsigned int processor);
@@ -297,6 +296,7 @@ void vsp_enableirq(struct drm_device *dev)
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_CLR, clear);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_ENB, enable);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_MASK, mask);
+	/* use the Level type interrupt */
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_LEVEL_PULSE, 1);
 }
 
@@ -335,18 +335,8 @@ int vsp_init_fw(struct drm_device *dev)
 	PSB_DEBUG_GENERAL("read firmware into buffer\n");
 
 	/* read firmware img */
-	VSP_DEBUG("load fw\n");
-	if (vsp_priv->fw_type == VSP_FW_TYPE_VP8) {
-		VSP_DEBUG("load vp8 fw\n");
-		ret = request_firmware(&raw, FW_VP8_NAME, &dev->pdev->dev);
-	} else if (vsp_priv->fw_type == VSP_FW_TYPE_VPP) {
-		VSP_DEBUG("load vpp fw\n");
-		ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
-	} else {
-		DRM_ERROR("Don't support this fw type=%d!\n",
-				vsp_priv->fw_type);
-		ret = -1;
-	}
+	VSP_DEBUG("load vsp fw\n");
+	ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
 
 	if (ret < 0 || raw == NULL) {
 		DRM_ERROR("VSP: request_firmware failed: reason %d\n", ret);
@@ -387,8 +377,8 @@ int vsp_init_fw(struct drm_device *dev)
 	VSP_DEBUG("boot_start_value %x\n", boot_header->boot_start_value);
 	VSP_DEBUG("boot_start_reg %x\n", boot_header->boot_start_reg);
 
-	/* load firmware to dmem */
-	if (raw->size > vsp_priv->firmware_sz) {
+	/* If the memory is less than FW, re-alloc it */
+	if (raw->size > (vsp_priv->firmware_sz - VSP_FIRMWARE_MEM_ALIGNMENT)) {
 		if (vsp_priv->firmware)
 			ttm_bo_unref(&vsp_priv->firmware);
 
@@ -419,6 +409,7 @@ int vsp_init_fw(struct drm_device *dev)
 		goto out;
 	}
 
+	/* load firmware to dmem */
 	bo_ptr = ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem);
 	memcpy(bo_ptr, ptr, raw->size);
 
@@ -563,6 +554,8 @@ void vsp_continue_function(struct drm_psb_private *dev_priv)
 {
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int i;
+
+	vsp_priv->ctrl->entry_kind = vsp_entry_booted;
 
 	vsp_set_firmware(dev_priv, vsp_vp0);
 
