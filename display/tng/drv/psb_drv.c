@@ -95,6 +95,7 @@ int drm_psb_enable_color_conversion;
 /*EXPORT_SYMBOL(drm_psb_debug);*/
 static int drm_psb_trap_pagefaults;
 
+int drm_psb_disable_vsync = 1;
 int drm_psb_no_fb;
 int drm_psb_force_pipeb;
 int drm_idle_check_interval = 5;
@@ -1523,6 +1524,7 @@ static int psb_driver_unload(struct drm_device *dev)
 		if (dev_priv->has_global)
 			psb_ttm_global_release(dev_priv);
 
+		kfree(dev_priv->vblank_count);
 		kfree(dev_priv);
 		dev->dev_private = NULL;
 	}
@@ -1541,6 +1543,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	unsigned long irqflags;
 	int ret = -ENOMEM;
 	uint32_t tt_pages;
+	int i;
 
 	DRM_INFO("psb - %s\n", PSB_PACKAGE_VERSION);
 
@@ -1565,6 +1568,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	dev_priv->psb_hotplug_state = NULL;
 	dev_priv->hdmi_done_reading_edid = false;
 	dev_priv->um_start = false;
+	dev_priv->b_vblank_enable = false;
 
 	dev_priv->dev = dev;
 	bdev = &dev_priv->bdev;
@@ -1830,6 +1834,17 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	if (ret)
 		goto out_err;
 
+	DRM_INIT_WAITQUEUE(&dev_priv->vsync_queue);
+
+	dev_priv->vblank_count =
+		kmalloc(sizeof(atomic_t) * dev_priv->num_pipe, GFP_KERNEL);
+
+	if (!dev_priv->vblank_count)
+		goto out_err;
+
+	for (i = 0; i < dev_priv->num_pipe; i++)
+		atomic_set(&dev_priv->vblank_count[i], 0);
+
 	/*
 	 * Install interrupt handlers prior to powering off SGX or else we will
 	 * crash.
@@ -1882,8 +1897,10 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	/*must be after mrst_get_fuse_settings() */
 	ret = psb_backlight_init(dev);
-	if (ret)
+	if (ret) {
+		kfree(dev_priv->vblank_count);
 		return ret;
+	}
 
 	/* initialize HDMI Hotplug interrupt forwarding
 	 * notifications for user mode
@@ -2826,9 +2843,10 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct drm_psb_vsync_set_arg *arg = data;
 	struct mdfld_dsi_config *dsi_config;
+	unsigned long irq_flags;
 	struct timespec now;
+	uint32_t vsync_enable = 0;
 	uint32_t pipe;
-	union drm_wait_vblank vblwait;
 	u32 vbl_count = 0;
 	s64 nsecs = 0;
 	int ret = 0;
@@ -2838,7 +2856,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		pipe = arg->vsync.pipe;
 
 		if (arg->vsync_operation_mask & GET_VSYNC_COUNT) {
-			vbl_count = drm_vblank_count(dev, pipe);
+			vbl_count = intel_vblank_count(dev, pipe);
 
 			getrawmonotonic(&now);
 			nsecs = timespec_to_ns(&now);
@@ -2848,26 +2866,24 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
-			mutex_lock(&dev->mode_config.mutex);
+			spin_lock_irqsave(&dev_priv->irqmask_lock, irq_flags);
+			vsync_enable = dev_priv->pipestat[pipe] &
+				(PIPE_TE_ENABLE | PIPE_VBLANK_INTERRUPT_ENABLE);
+			spin_unlock_irqrestore(&dev_priv->irqmask_lock,
+					irq_flags);
 
-			if (dev->vblank_enabled[pipe]) {
-				vblwait.request.type =
-					(_DRM_VBLANK_RELATIVE |
-					 _DRM_VBLANK_NEXTONMISS);
-				vblwait.request.sequence = 1;
+			vbl_count = intel_vblank_count(dev, pipe);
 
-				if (pipe == 1)
-					vblwait.request.type |=
-						_DRM_VBLANK_SECONDARY;
+			DRM_WAIT_ON(ret, dev_priv->vsync_queue,
+					3 * DRM_HZ,
+					(!vsync_enable ||
+					 (intel_vblank_count(dev, pipe) !=
+					  vbl_count)));
 
-				ret = drm_wait_vblank(dev, (void *)&vblwait,
-						file_priv);
-				if (ret)
-					DRM_ERROR("Fail to get pipe %d vsync\n",
-							pipe);
-			}
-
-			mutex_unlock(&dev->mode_config.mutex);
+			if (ret == -EINTR)
+				DRM_ERROR("Pipe %d vsync pending\n", pipe);
+			else if (ret == -EBUSY)
+				DRM_ERROR("Pipe %d vsync time out\n", pipe);
 
 			getrawmonotonic(&now);
 			nsecs = timespec_to_ns(&now);
@@ -2878,21 +2894,39 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			return 0;
 		}
 
-		if (!pipe)
-			dsi_config = dev_priv->dsi_configs[0];
-		else if (pipe == 2)
-			dsi_config = dev_priv->dsi_configs[1];
+		dsi_config = dev_priv->dsi_configs[0];
 
 		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
-			/* mdfld_dsi_dsr_forbid(dsi_config); */
-			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
+			switch (pipe) {
+			case 0:
+			case 2:
+				/*mdfld_dsi_dsr_forbid(dsi_config);*/
+
+				if (is_panel_vid_or_cmd(dev) ==
+						MDFLD_DSI_ENCODER_DPI)
+					ret = drm_vblank_get(dev, pipe);
+				break;
+			case 1:
 				ret = drm_vblank_get(dev, pipe);
+				break;
+			}
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
-			/* mdfld_dsi_dsr_allow(dsi_config); */
-			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
+			switch (pipe) {
+			case 0:
+			case 2:
+				if (is_panel_vid_or_cmd(dev) ==
+						MDFLD_DSI_ENCODER_DPI) {
+					drm_vblank_put(dev, pipe);
+				}
+
+				/*mdfld_dsi_dsr_allow(dsi_config);*/
+				break;
+			case 1:
 				drm_vblank_put(dev, pipe);
+				break;
+			}
 		}
 	}
 
@@ -3833,8 +3867,6 @@ static struct drm_driver driver = {
 	.enable_vblank = psb_enable_vblank,
 	.disable_vblank = psb_disable_vblank,
 	.get_vblank_counter = psb_get_vblank_counter,
-	.get_vblank_timestamp = intel_get_vblank_timestamp,
-	.get_scanout_position = intel_get_crtc_scanoutpos,
 	.firstopen = NULL,
 	.lastclose = psb_lastclose,
 	.open = psb_driver_open,

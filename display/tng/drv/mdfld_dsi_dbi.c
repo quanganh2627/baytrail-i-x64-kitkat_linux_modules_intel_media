@@ -410,13 +410,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		err = -EAGAIN;
 		goto power_on_err;
 	}
-
-	/*
-	 * Enable TE to trigger "write_mem_start" issuing
-	 * in non-normal boot modes.
-	 */
-	if (!dev_priv->um_start)
-		mdfld_enable_te(dev, dsi_config->pipe);
+	mdfld_enable_te(dev, 0);
 power_on_err:
 	return err;
 }
@@ -622,6 +616,7 @@ static int __dbi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 	dev_priv = dev->dev_private;
 
 	mdfld_dsi_dsr_forbid_locked(dsi_config);
+	mdfld_disable_te(dev, 0);
 	ctx->lastbrightnesslevel = psb_brightness;
 	if (p_funcs && p_funcs->set_brightness)
 		if (p_funcs->set_brightness(dsi_config, 0))

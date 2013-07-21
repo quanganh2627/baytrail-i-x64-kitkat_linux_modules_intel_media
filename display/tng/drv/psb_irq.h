@@ -45,9 +45,5 @@ void psb_irq_turn_off_dpst(struct drm_device *dev);
 int psb_enable_vblank(struct drm_device *dev, int pipe);
 void psb_disable_vblank(struct drm_device *dev, int pipe);
 u32 psb_get_vblank_counter(struct drm_device *dev, int pipe);
-extern int intel_get_vblank_timestamp(struct drm_device *dev, int pipe,
-		int *max_error, struct timeval *vblank_time, unsigned flags);
-extern int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
-		int *vpos, int *hpos);
 
 #endif				//_SYSIRQ_H_

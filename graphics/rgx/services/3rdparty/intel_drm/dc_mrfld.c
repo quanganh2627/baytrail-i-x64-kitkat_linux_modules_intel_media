@@ -415,6 +415,12 @@ static void _Queue_Flip(IMG_HANDLE hConfigData, IMG_HANDLE *ahBuffers,
 		memcpy(&psFlip->asBuffers[i], psBuffer, sizeof(*psBuffer));
 	}
 
+	/* Update swap interval */
+	if (DCCBIsSuspended(gpsDevice->psDrmDevice))
+		psFlip->uiSwapInterval = 0;
+	else
+		psFlip->uiSwapInterval = ui32DisplayPeriod;
+
 	for (i = 0; i < MAX_PIPE_NUM; i++)
 		psFlip->asPipeInfo[i].uiSwapInterval = ui32DisplayPeriod;
 
