@@ -114,6 +114,9 @@ int hdmi_state;
 u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
 int drm_psb_msvdx_tiling = 0;
 int drm_msvdx_bottom_half;
+int drm_hdmi_hpd_auto;
+
+
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -143,6 +146,8 @@ MODULE_PARM_DESC(udelay_divider, "divide the usec value of video udelay");
 MODULE_PARM_DESC(vsp_pm, "Power on/off the VSP");
 MODULE_PARM_DESC(ved_pm, "Power on/off the Msvdx");
 MODULE_PARM_DESC(vec_pm, "Power on/off the Topaz");
+MODULE_PARM_DESC(hdmi_hpd_auto, "HDMI hot-plug auto test flag");
+
 
 module_param_named(enable_color_conversion, drm_psb_enable_color_conversion,
 					int, 0600);
@@ -179,6 +184,8 @@ module_param_named(te_delay, drm_psb_te_timer_delay, int, 0600);
 #ifdef CONFIG_SLICE_HEADER_PARSING
 module_param_named(decode_flag, drm_decode_flag, int, 0600);
 #endif
+module_param_named(hdmi_hpd_auto, drm_hdmi_hpd_auto, int, 0600);
+
 
 #ifndef MODULE
 /* Make ospm configurable via cmdline firstly,
@@ -1539,6 +1546,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	bdev = &dev_priv->bdev;
 
 	hdmi_state = 0;
+	drm_hdmi_hpd_auto = 0;
 
 	ret = psb_ttm_global_init(dev_priv);
 	if (unlikely(ret != 0))
@@ -3551,6 +3559,74 @@ fun_exit:
 }
 #endif /* if KEEP_UNUSED_CODE_DRIVER_DISPATCH */
 
+#ifdef CONFIG_SUPPORT_HDMI
+int gpio_control_read(char *buf, char **start, off_t offset, int request,
+				     int *eof, void *data)
+{
+	unsigned int value = 0;
+	unsigned int pin_num = otm_hdmi_get_hpd_pin();
+	if (pin_num)
+		value = gpio_get_value(pin_num);
+
+	printk(KERN_ALERT "read pin_num: %8d value:%8d\n", pin_num, value);
+	return 0;
+}
+
+int gpio_control_write(struct file *file, const char *buffer,
+				      unsigned long count, void *data)
+{
+	char buf[2];
+	int  gpio_control;
+	int result = 0;
+	bool auto_state = drm_hdmi_hpd_auto;
+	struct drm_minor *minor = (struct drm_minor *)data;
+	struct drm_device *dev = minor->dev;
+
+	if (count != sizeof(buf)) {
+		return -EINVAL;
+	} else {
+		if (copy_from_user(buf, buffer, count))
+			return -EINVAL;
+		if (buf[count-1] != '\n')
+			return -EINVAL;
+		gpio_control = buf[0] - '0';
+
+		switch (gpio_control) {
+		case 0x0:
+			otm_hdmi_override_cable_status(false, auto_state);
+			android_hdmi_irq_test(dev);
+			break;
+		case 0x1:
+			otm_hdmi_override_cable_status(true, auto_state);
+			android_hdmi_irq_test(dev);
+			break;
+		default:
+			printk(KERN_ALERT "invalied parameters\n");
+		}
+	}
+	return count;
+}
+
+static int psb_hdmi_proc_init(struct drm_minor *minor)
+{
+	struct proc_dir_entry *gpio_setting;
+
+	gpio_setting = create_proc_entry(GPIO_PROC_ENTRY,
+				0644, minor->proc_root);
+
+	if (!gpio_setting)
+		return -1;
+
+	gpio_setting->write_proc = gpio_control_write;
+	gpio_setting->read_proc = gpio_control_read;
+	gpio_setting->data = (void *)minor;
+
+
+	return 0;
+}
+
+#endif
+
 /* When a client dies:
  *    - Check for and clean up flipped page state
  */
@@ -3564,74 +3640,26 @@ static void psb_remove(struct pci_dev *pdev)
 	drm_put_dev(dev);
 }
 
-#if KEEP_UNUSED_CODE_DRIVER_DISPATCH
+
 static int psb_proc_init(struct drm_minor *minor)
 {
-	struct proc_dir_entry *ent;
-	struct proc_dir_entry *ent1;
-	struct proc_dir_entry *rtpm;
-	struct proc_dir_entry *dsr;
-	struct proc_dir_entry *gfx_pm;
-	struct proc_dir_entry *vsp_pm;
-	struct proc_dir_entry *ved_pm;
-	struct proc_dir_entry *vec_pm;
-	struct proc_dir_entry *ent_display_status;
-	ent = create_proc_entry(OSPM_PROC_ENTRY, 0644, minor->proc_root);
-	rtpm = create_proc_entry(RTPM_PROC_ENTRY, 0644, minor->proc_root);
-	dsr = create_proc_entry(DSR_PROC_ENTRY, 0644, minor->proc_root);
-	gfx_pm = create_proc_entry(GFXPM_PROC_ENTRY, 0644, minor->proc_root);
-	vsp_pm = create_proc_entry(VSPPM_PROC_ENTRY, 0644, minor->proc_root);
-	ved_pm = create_proc_entry(VEDPM_PROC_ENTRY, 0644, minor->proc_root);
-	vec_pm = create_proc_entry(VECPM_PROC_ENTRY, 0644, minor->proc_root);
+#ifdef CONFIG_SUPPORT_HDMI
+	psb_hdmi_proc_init(minor);
+#endif
 
-	ent_display_status =
-	    create_proc_entry(DISPLAY_PROC_ENTRY, 0644, minor->proc_root);
-	ent1 =
-	    proc_create_data(BLC_PROC_ENTRY, 0, minor->proc_root,
-			     &psb_blc_proc_fops, minor);
-
-	drm_psb_vsp_pm = 0;
-	drm_psb_ved_pm = 0;
-	drm_psb_vec_pm = 0;
-
-	if (!ent || !ent1 || !rtpm || !ent_display_status || !dsr)
-		return -1;
-	ent->read_proc = psb_ospm_read;
-	ent->write_proc = psb_ospm_write;
-	ent->data = (void *)minor;
-	rtpm->read_proc = psb_rtpm_read;
-	rtpm->write_proc = psb_rtpm_write;
-	dsr->read_proc = psb_dsr_read;
-	dsr->write_proc = psb_dsr_write;
-	gfx_pm->read_proc = psb_gfx_pm_read;
-	gfx_pm->write_proc = psb_gfx_pm_write;
-	vsp_pm->read_proc = psb_vsp_pm_read;
-	vsp_pm->write_proc = psb_vsp_pm_write;
-	ved_pm->read_proc = psb_ved_pm_read;
-	ved_pm->write_proc = psb_ved_pm_write;
-	vec_pm->read_proc = psb_vec_pm_read;
-	vec_pm->write_proc = psb_vec_pm_write;
-	ent_display_status->write_proc = psb_display_register_write;
-	ent_display_status->read_proc = psb_display_register_read;
-	ent_display_status->data = (void *)minor;
 	return 0;
 }
-#endif /* if KEEP_UNUSED_CODE_DRIVER_DISPATCH */
 
-#if KEEP_UNUSED_CODE_DRIVER_DISPATCH
+
+
 static void psb_proc_cleanup(struct drm_minor *minor)
 {
-	remove_proc_entry(OSPM_PROC_ENTRY, minor->proc_root);
-	remove_proc_entry(RTPM_PROC_ENTRY, minor->proc_root);
-	remove_proc_entry(BLC_PROC_ENTRY, minor->proc_root);
-	remove_proc_entry(DSR_PROC_ENTRY, minor->proc_root);
-	remove_proc_entry(GFXPM_PROC_ENTRY, minor->proc_root);
-	remove_proc_entry(VSPPM_PROC_ENTRY, minor->proc_root);
-	remove_proc_entry(VEDPM_PROC_ENTRY, minor->proc_root);
-	remove_proc_entry(VECPM_PROC_ENTRY, minor->proc_root);
+#ifdef CONFIG_SUPPORT_HDMI
+	remove_proc_entry(GPIO_PROC_ENTRY, minor->proc_root);
+#endif
 	return;
 }
-#endif /* if KEEP_UNUSED_CODE_DRIVER_DISPATCH */
+
 
 static const struct dev_pm_ops psb_pm_ops = {
 	.runtime_suspend = rtpm_suspend,
@@ -3805,12 +3833,14 @@ static struct drm_driver driver = {
 	.lastclose = psb_lastclose,
 	.open = psb_driver_open,
 	.postclose = PVRSRVDrmPostClose,
+
+	.debugfs_init = psb_proc_init,
+	.debugfs_cleanup = psb_proc_cleanup,
+
 #if KEEP_UNUSED_CODE_DRIVER_DISPATCH
 /*
 *	.get_map_ofs = drm_core_get_map_ofs,
 *	.get_reg_ofs = drm_core_get_reg_ofs,
-*	.proc_init = psb_proc_init,
-*	.proc_cleanup = psb_proc_cleanup,
 */
 #endif /* if KEEP_UNUSED_CODE_DRIVER_DISPATCH */
 	.preclose = psb_driver_preclose,
