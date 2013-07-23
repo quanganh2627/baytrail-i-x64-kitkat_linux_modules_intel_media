@@ -449,6 +449,10 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe)
 		return 0;
 	}
 
+	/* FIXME: need to remove the suspended state checking. */
+	if (dev_priv->early_suspended)
+		return 0;
+
 	/* get display a for register reading */
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		active = (PSB_RVDC32(pipeconf_reg) & BIT31) ? 1 : 0 ;
