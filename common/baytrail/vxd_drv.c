@@ -18,8 +18,13 @@
  **************************************************************************/
 
 #include <linux/device.h>
+#include <linux/version.h>
 #include "drmP.h"
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 #include "drm.h"
+#else
+#include <uapi/drm/drm.h>
+#endif
 
 #include "i915_drm.h"
 #include "i915_drv.h"
