@@ -246,5 +246,13 @@ bool ips_hdmi_is_preferred_mode(int hdisplay, int vdisplay, int refresh);
 otm_hdmi_ret_t	ips_hdmi_crtc_mode_set_program_dpll(hdmi_device_t *dev,
 							unsigned long dclk);
 
+/**
+ * Description: disable all planes on pipe
+ *
+ * @pipe:    pipe ID
+ * @enable : true to enable planes; false to disable planes
+ *
+ */
+void ips_enable_planes_on_pipe(uint32_t pipe, bool enable);
 
 #endif /* __IPS_HDMI_H */

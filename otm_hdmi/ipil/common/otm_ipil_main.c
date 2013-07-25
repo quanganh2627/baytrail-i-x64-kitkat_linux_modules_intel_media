@@ -801,3 +801,14 @@ bool ipil_hdmi_is_preferred_mode(int hdisplay, int vdisplay, int refresh)
 	return ips_hdmi_is_preferred_mode(hdisplay, vdisplay, refresh);
 }
 
+/**
+ * Description: disable all planes on pipe
+ *
+ * @pipe: pipe ID
+ * @enable : true to enable planes; false to disable planes
+ *
+ */
+void ipil_enable_planes_on_pipe(uint32_t pipe, bool enable)
+{
+	ips_enable_planes_on_pipe(pipe, enable);
+}
