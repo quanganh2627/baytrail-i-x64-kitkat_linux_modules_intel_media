@@ -626,7 +626,7 @@ static int msvdx_startup_init(struct drm_device *dev)
 
 #ifndef CONFIG_DRM_VXD_BYT
 	if (IS_MRFLD(dev))
-		drm_msvdx_bottom_half = PSB_BOTTOM_HALF_WQ;
+		drm_msvdx_bottom_half = PSB_BOTTOM_HALF_TQ;
 	else
 #endif
 		drm_msvdx_bottom_half = PSB_BOTTOM_HALF_WQ;

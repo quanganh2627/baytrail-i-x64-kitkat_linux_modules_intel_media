@@ -484,12 +484,11 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 			sequence, msvdx_priv->msvdx_needs_reset);
 
 #ifdef MERRIFIELD
-	spin_unlock_irqrestore(&msvdx_priv->msvdx_lock, irq_flags);
 	/* get power island when submit cmd to hardware */
 	if (!power_island_get(OSPM_VIDEO_DEC_ISLAND)) {
+		spin_unlock_irqrestore(&msvdx_priv->msvdx_lock, irq_flags);
 		return -EBUSY;
 	}
-	spin_lock_irqsave(&msvdx_priv->msvdx_lock, irq_flags);
 #endif
 
 	if (msvdx_priv->msvdx_busy) {
