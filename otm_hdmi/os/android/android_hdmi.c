@@ -1563,7 +1563,9 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv;
 	struct android_hdmi_priv *hdmi_priv;
-	bool data;
+	bool is_connected;
+	bool hdmi_audio_busy = false;
+
 	if (NULL == dev)
 		return;
 	dev_priv = dev->dev_private;
@@ -1573,18 +1575,28 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 	if (NULL == hdmi_priv)
 		return;
 
+	hdmi_audio_busy = mid_hdmi_audio_is_busy(dev);
+	if (hdmi_audio_busy) {
+		pr_err("OSPM: %s: hdmi audio is busy\n", __func__);
+		return;
+	}
+
 	/* Check if monitor is attached to HDMI connector. */
-	data = otm_hdmi_get_cable_status(hdmi_priv->context);
+	is_connected = otm_hdmi_get_cable_status(hdmi_priv->context);
 
 	otm_hdmi_save_display_registers(hdmi_priv->context,
-					data);
+					is_connected);
 
 	otm_disable_hdmi(hdmi_priv->context);
 
 	otm_hdmi_power_rails_off();
 
-	/* Keep DSPB & HDMIO islands off after suspending. */
-	otm_hdmi_power_islands_off(OSPM_DISPLAY_ISLAND);
+	/* power island is turnned off by IRQ handler if device is disconnected */
+	if (is_connected && !hdmi_priv->hdmi_suspended) {
+		/* Keep DSPB & HDMIO islands off after suspending. */
+		otm_hdmi_power_islands_off(OSPM_DISPLAY_ISLAND);
+	}
+	hdmi_priv->hdmi_suspended = true;
 
 	return;
 }
@@ -1658,7 +1670,9 @@ void android_hdmi_resume_display(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv;
 	struct android_hdmi_priv *hdmi_priv;
-	bool data;
+	bool is_connected;  /* connection status during resume */
+	bool was_connected; /* connection status before suspend */
+	hdmi_context_t *ctx;
 	if (NULL == dev)
 		return;
 	dev_priv = dev->dev_private;
@@ -1668,20 +1682,36 @@ void android_hdmi_resume_display(struct drm_device *dev)
 	if (NULL == hdmi_priv)
 		return;
 
-	/* Keep DSPB & HDMIO islands on after resuming. */
-	if (!otm_hdmi_power_islands_on(OSPM_DISPLAY_ISLAND)) {
-		pr_err("Unable to power on display island!");
+	ctx = (hdmi_context_t *)(hdmi_priv->context);
+	if (NULL == ctx)
 		return;
+
+	/* use the connection status before suspend to determine if
+	  * to power on islands. HDMI may have been plugged out
+	  * during suspend
+	*/
+	was_connected = ctx->is_connected;
+	if (was_connected && hdmi_priv->hdmi_suspended) {
+		/* Keep DSPB & HDMIO islands on after resuming. */
+		if (!otm_hdmi_power_islands_on(OSPM_DISPLAY_ISLAND)) {
+			pr_err("Unable to power on display island!");
+			return;
+		}
 	}
+	hdmi_priv->hdmi_suspended = false;
 
 	otm_hdmi_power_rails_on();
 	/* Check if monitor is attached to HDMI connector. */
-	data = otm_hdmi_get_cable_status(hdmi_priv->context);
+	is_connected = otm_hdmi_get_cable_status(hdmi_priv->context);
 
+	/* only restore display if there is no connection status change */
 	otm_hdmi_restore_and_enable_display(hdmi_priv->context,
-				data);
-	if (!data)
+				was_connected & is_connected);
+
+	if (!is_connected) {
+		/* power off rails, HPD will continue to work */
 		otm_hdmi_power_rails_off();
+	}
 }
 
 /**

@@ -310,9 +310,10 @@ bool ps_hdmi_get_cable_status(void *context)
 		return g_context->is_connected_overridden;
 
 	if (gpio_get_value(ctx->gpio_hpd_pin) == 0)
-		return false;
+		ctx->is_connected =  false;
 	else
-		return true;
+		ctx->is_connected = true;
+	return ctx->is_connected;
 }
 
 /**

@@ -253,6 +253,10 @@ static int mid_hdmi_audio_set_caps(
 
 	switch (set_element) {
 	case HAD_SET_ENABLE_AUDIO:
+		if (hdmi_priv->hdmi_audio_enabled) {
+			pr_err("OSPM: %s: hdmi audio has been enabled\n", __func__);
+			return 0;
+		}
 		if (!power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI))
 			return -EINVAL;
 
@@ -263,14 +267,23 @@ static int mid_hdmi_audio_set_caps(
 
 		REG_WRITE(hdmi_priv->hdmib_reg, hdmib);
 		REG_READ(hdmi_priv->hdmib_reg);
-
+		hdmi_priv->hdmi_audio_enabled = true;
 		break;
 	case HAD_SET_DISABLE_AUDIO:
+		if (!hdmi_priv->hdmi_audio_enabled) {
+			pr_err("OSPM: %s: hdmi audio has been disabled\n", __func__);
+			return 0;
+		}
 		hdmib = REG_READ(hdmi_priv->hdmib_reg) & ~HDMIB_AUDIO_ENABLE;
 		REG_WRITE(hdmi_priv->hdmib_reg, hdmib);
 		REG_READ(hdmi_priv->hdmib_reg);
 
 		power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI);
+		hdmi_priv->hdmi_audio_enabled = false;
+		if (dev_priv->early_suspended) {
+			/* suspend hdmi display if device has been suspended */
+			android_hdmi_suspend_display(dev);
+		}
 		break;
 	case HAD_SET_ENABLE_AUDIO_INT:
 		if (*((u32 *)capabilties) & HDMI_AUDIO_UNDERRUN)
