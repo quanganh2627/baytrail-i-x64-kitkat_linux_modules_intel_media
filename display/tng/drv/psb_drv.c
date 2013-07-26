@@ -1087,7 +1087,6 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 	iounmap(pVBT_virtual);	/* Free virtual address space */
 
 	PSB_DEBUG_ENTRY("GCT Revision is %x\n", pVBT->Revision);
-
 	switch (pVBT->Revision) {
 	case 0:
 		pVBT->mrst_gct = NULL;
@@ -1187,6 +1186,9 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 		    *((u8 *) pGCT + 0x0d);
 		dev_priv->gct_data.Panel_MIPI_Display_Descriptor |=
 		    (*((u8 *) pGCT + 0x0e)) << 8;
+		break;
+	case 0x20:
+		pVBT->Size = 0;
 		break;
 	default:
 		PSB_DEBUG_ENTRY("Unknown revision of GCT!\n");

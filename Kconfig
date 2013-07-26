@@ -104,6 +104,13 @@ config SUPPORT_HDMI
         help
           Choose this option to support HDMI.
 
+config CTP_DPST
+        bool "CTP_DPST"
+        depends on DRM_MDFLD || DRM_CTP
+        default n
+        help
+          Choose this option to support DPST.
+
 config MDFD_GL3
 	bool "Enable GL3 Cache for GUNIT"
 	depends on DRM_MDFLD

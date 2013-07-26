@@ -30,7 +30,9 @@
 #include "mdfld_dsi_esd.h"
 #include <linux/gpio.h>
 #include <linux/regulator/driver.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #include <linux/regulator/intel_pmic.h>
+#endif
 #include <linux/regulator/machine.h>
 
 struct h8c7_regulator_factory {

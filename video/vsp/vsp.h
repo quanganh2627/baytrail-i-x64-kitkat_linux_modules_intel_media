@@ -79,6 +79,7 @@
 #define VSP_CONFIG_REG_SDRAM_BASE 0x1A0000
 #define VSP_CONFIG_REG_START 0x8
 
+#define VSP_FIRMWARE_MEM_ALIGNMENT 4096
 /* #define VP8_ENC_DEBUG 1 */
 
 static const unsigned int vsp_processor_base[] = {
@@ -171,6 +172,7 @@ extern int drm_vsp_pmpolicy;
 
 /* The status of vsp hardware */
 enum vsp_power_state {
+	VSP_STATE_HANG = -1,
 	VSP_STATE_DOWN = 0,
 	VSP_STATE_SUSPEND,
 	VSP_STATE_IDLE,
@@ -191,7 +193,7 @@ enum vsp_irq_reg {
 
 enum vsp_context_num {
 	VSP_CONTEXT_NUM_VPP = 0,
-	VSP_CONTEXT_NUM_VP8 = 1,
+	VSP_CONTEXT_NUM_VP8 = 0,
 	VSP_CONTEXT_NUM_MAX
 };
 
@@ -254,14 +256,16 @@ struct vsp_private {
 	int vsp_cmd_num;
 
 	unsigned int fw_type;
+	struct VssProcPictureVP8 ref_frame_buffers[4];
+	int available_recon_buffer;
+	int rec_surface_id;
 
-#ifdef VP8_ENC_DEBUG
 	/* save the address of vp8 cmd_buffer for now */
 	struct VssVp8encPictureParameterBuffer *vp8_encode_frame_cmd;
+	struct ttm_bo_kmap_obj vp8_encode_frame__kmap;
 
 	void *coded_buf;
 	struct ttm_bo_kmap_obj coded_buf_kmap;
-#endif
 };
 
 extern int vsp_init(struct drm_device *dev);
@@ -296,7 +300,7 @@ extern int psb_check_vsp_idle(struct drm_device *dev);
 
 void vsp_init_function(struct drm_psb_private *dev_priv);
 void vsp_continue_function(struct drm_psb_private *dev_priv);
-void vsp_resume_function(struct drm_psb_private *dev_priv);
+int vsp_resume_function(struct drm_psb_private *dev_priv);
 
 extern int psb_vsp_dump_info(struct drm_psb_private *dev_priv);
 

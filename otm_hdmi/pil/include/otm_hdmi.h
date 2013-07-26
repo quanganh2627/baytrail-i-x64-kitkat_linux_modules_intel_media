@@ -217,6 +217,29 @@ otm_hdmi_ret_t otm_hdmi_hpd_init(void);
  */
 otm_hdmi_ret_t otm_hdmi_hpd_deinit(void);
 
+
+/**
+ * otm_hdmi_get_hpd_pin - get hdmi hpd pin number.
+ *
+ * No input arguments
+ *
+ * Returns - pin number
+ */
+unsigned int otm_hdmi_get_hpd_pin(void);
+
+
+/**
+ * otm_hdmi_override_cable_status - override hdmi hpd cable status.
+ *
+ * Input: override state and auto test state
+ */
+void otm_hdmi_override_cable_status(bool state, bool auto_state);
+
+
+
+
+
+
 /**
  * otm_hdmi_hpd_callback_register - Register a callback for HPD events
  * @context: hdmi device context
@@ -247,6 +270,7 @@ otm_hdmi_ret_t otm_hdmi_device_init(void **context, struct pci_dev *pdev);
 
 /*deinit hdmi device driver */
 void otm_hdmi_deinit(void *context);
+
 
 /* read edid information */
 unsigned char *otm_hdmi_read_edid(void);

@@ -514,6 +514,7 @@ irqreturn_t psb_irq_handler(DRM_IRQ_ARGS)
 	if (vsp_int) {
 		vsp_interrupt(dev);
 		handled = 1;
+		vdc_stat &= ~_TNG_IRQ_VSP_FLAG;
 	}
 #endif
 
@@ -578,7 +579,7 @@ void psb_irq_preinstall_islands(struct drm_device *dev, int hw_islands)
 			dev_priv->vdc_irq_mask |= _LNC_IRQ_TOPAZ_FLAG;
 
 	if (hw_islands & OSPM_VIDEO_VPP_ISLAND)
-		if (IS_MID(dev))
+		if (IS_MID(dev) && ospm_power_is_hw_on(OSPM_VIDEO_VPP_ISLAND))
 			dev_priv->vdc_irq_mask |= _TNG_IRQ_VSP_FLAG;
 
 	/*This register is safe even if display island is off*/

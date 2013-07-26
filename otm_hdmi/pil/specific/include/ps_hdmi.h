@@ -107,6 +107,13 @@ void ps_hdmi_pmu_nc_set_power_state(int islands, int state_type, int reg);
 /* control HDMI vblank interrupt */
 void ps_hdmi_vblank_control(struct drm_device *dev, bool on);
 
+/* get HDMI hotplug pin number */
+int ps_hdmi_get_hpd_pin(void);
+
+/* override the hdmi hpd cable status */
+void ps_hdmi_override_cable_status(bool state, bool auto_state);
+
+
 /**
  * hdmi interrupt handler (top half).
  * @irq:	irq number

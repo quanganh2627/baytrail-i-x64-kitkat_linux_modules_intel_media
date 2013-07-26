@@ -310,11 +310,13 @@ reset_recovery:
 	for (i = 0; i < 256; i++)
 		REG_WRITE(regs->palette_reg + (i<<2), ctx->palette[i]);
 
+#ifdef CONFIG_CTP_DPST
 	/* restore dpst setting */
 	if (dev_priv->psb_dpst_state) {
 		dpstmgr_reg_restore_locked(dsi_config);
 		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
 	}
+#endif
 
 	/*exit ULPS state*/
 	__dpi_exit_ulps_locked(dsi_config);

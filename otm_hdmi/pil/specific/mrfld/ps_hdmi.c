@@ -359,6 +359,17 @@ static int ps_hdmi_hpd_resume(struct device *dev)
 	return 0;
 }
 
+int ps_hdmi_get_hpd_pin(void)
+{
+	return 0;
+}
+
+void ps_hdmi_override_cable_status(bool state, bool auto_state)
+{
+	return;
+}
+
+
 /* PCI probe function */
 static int ps_hdmi_hpd_probe(struct pci_dev *pdev,
 				       const struct pci_device_id *id)

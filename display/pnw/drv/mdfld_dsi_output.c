@@ -984,9 +984,11 @@ int mdfld_dsi_output_init(struct drm_device *dev, int pipe)
 	
 	drm_sysfs_connector_add(connector);
 
+#ifdef CONFIG_CTP_DPST
 	/* DPST: TODO - get appropriate connector */
 	if (dev_priv->dpst_lvds_connector == 0)
 		dev_priv->dpst_lvds_connector = connector;
+#endif
 
 	/*init dsr*/
 	if (mdfld_dsi_dsr_init(dsi_config))

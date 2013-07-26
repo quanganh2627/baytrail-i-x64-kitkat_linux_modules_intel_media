@@ -215,11 +215,11 @@ enum VssResponseType {
 };
 
 enum VssStatus {
-	VssOK                         = 0x80010000,
-	VssInvalidCommandType         = 0x80020000,
-	VssInvalidCommandArgument     = 0x80030000,
-	VssInvalidProcPictureCommand  = 0x80040000,
-	VssInvalidDdrAddress          = 0x80050000,
+	VssOK                         = 0x8001,
+	VssInvalidCommandType         = 0x8002,
+	VssInvalidCommandArgument     = 0x8003,
+	VssInvalidProcPictureCommand  = 0x8004,
+	VssInvalidDdrAddress          = 0x8005,
 	VssInvalidSequenceParameters_VP8 = 0x1,
 	VssInvalidPictureParameters_VP8  = 0x2,
 	VssInitFailure_VP8               = 0x5
@@ -437,7 +437,9 @@ enum vsp_entry_kind {
 /* values passed via VSP_POWER_SAVING_MODE_REG */
 enum vsp_power_saving_mode {
 	vsp_always_on              = 0,
-	vsp_suspend_on_empty_queue = 1
+	vsp_suspend_on_empty_queue = 1,
+	vsp_hw_idle_on_empty_queue = 2,
+	vsp_suspend_and_hw_idle_on_empty_queue
 };
 
 /****************************
@@ -481,8 +483,6 @@ struct VssVp8encSequenceParameterBuffer {
 	uint32_t max_intra_rate;
 	uint32_t cyclic_intra_refresh;
 	uint32_t concatenate_partitions;
-
-	struct VssProcPictureVP8 ref_frame_buffers[4];
 };
 
 struct VssVp8encEncodedFrame {
@@ -494,11 +494,10 @@ struct VssVp8encEncodedFrame {
 	uint32_t segments;
 	uint32_t quantizer[4];
 	uint32_t frame_flags;
-	uint32_t ref_frame_flags;
 	uint32_t partition_id;
 	uint32_t buffer_level;
 	uint32_t quality;
-	uint32_t surfaced_of_ref_frame[3];
+	uint32_t surfaceId_of_ref_frame[3];
 	uint32_t reserved[15];
 	uint32_t coded_data[1];
 };
@@ -527,7 +526,8 @@ enum VssVp8encCommandType {
 	VssVp8encSetSequenceParametersCommand = 123,
 	VssVp8encEncodeFrameCommand,
 	VssVp8encEndOfSequenceCommand,
-	VssVp8encInit
+	VssVp8encInit,
+	Vss_Sys_Ref_Frame_COMMAND
 };
 
 #endif

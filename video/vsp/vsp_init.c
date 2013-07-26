@@ -31,10 +31,9 @@
 
 #include "vsp.h"
 
-#define FW_SZ (2 * 800 * 1024)
+#define FW_SZ (2 * 1024 * 1024)
 
-#define FW_NAME "vsp_VPP_sle.bin"
-#define FW_VP8_NAME "vsp_vp8_enc.bin"
+#define FW_NAME "vsp_vpp_vp8.bin"
 
 static inline unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
 					    unsigned int processor);
@@ -90,6 +89,8 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->current_sequence = 0;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 	vsp_priv->dev = dev;
+
+	vsp_priv->available_recon_buffer = 0;
 
 	dev_priv->vsp_private = vsp_priv;
 
@@ -246,12 +247,12 @@ int vsp_deinit(struct drm_device *dev)
 		vsp_priv->ack_queue = NULL;
 	}
 	if (vsp_priv->setting) {
-		ttm_bo_kunmap(&vsp_priv->setting);
+		ttm_bo_kunmap(&vsp_priv->setting_kmap);
 		vsp_priv->setting = NULL;
 	}
 
 	if (vsp_priv->context_setting) {
-		ttm_bo_kunmap(&vsp_priv->context_setting);
+		ttm_bo_kunmap(&vsp_priv->context_setting_kmap);
 		vsp_priv->context_setting = NULL;
 	}
 
@@ -295,6 +296,8 @@ void vsp_enableirq(struct drm_device *dev)
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_CLR, clear);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_ENB, enable);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_MASK, mask);
+	/* use the Level type interrupt */
+	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_LEVEL_PULSE, 1);
 }
 
 void vsp_disableirq(struct drm_device *dev)
@@ -332,17 +335,8 @@ int vsp_init_fw(struct drm_device *dev)
 	PSB_DEBUG_GENERAL("read firmware into buffer\n");
 
 	/* read firmware img */
-	if (vsp_priv->fw_type == VSP_FW_TYPE_VP8) {
-		VSP_DEBUG("load vp8 fw\n");
-		ret = request_firmware(&raw, FW_VP8_NAME, &dev->pdev->dev);
-	} else if (vsp_priv->fw_type == VSP_FW_TYPE_VPP) {
-		VSP_DEBUG("load vpp fw\n");
-		ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
-	} else {
-		DRM_ERROR("Don't support this fw type=%d!\n",
-			vsp_priv->fw_type);
-		ret = -1;
-	}
+	VSP_DEBUG("load vsp fw\n");
+	ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
 
 	if (ret < 0 || raw == NULL) {
 		DRM_ERROR("VSP: request_firmware failed: reason %d\n", ret);
@@ -383,8 +377,8 @@ int vsp_init_fw(struct drm_device *dev)
 	VSP_DEBUG("boot_start_value %x\n", boot_header->boot_start_value);
 	VSP_DEBUG("boot_start_reg %x\n", boot_header->boot_start_reg);
 
-	/* load firmware to dmem */
-	if (raw->size > vsp_priv->firmware_sz) {
+	/* If the memory is less than FW, re-alloc it */
+	if (raw->size > (vsp_priv->firmware_sz - VSP_FIRMWARE_MEM_ALIGNMENT)) {
 		if (vsp_priv->firmware)
 			ttm_bo_unref(&vsp_priv->firmware);
 
@@ -415,6 +409,7 @@ int vsp_init_fw(struct drm_device *dev)
 		goto out;
 	}
 
+	/* load firmware to dmem */
 	bo_ptr = ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem);
 	memcpy(bo_ptr, ptr, raw->size);
 
@@ -476,8 +471,14 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 	/* Set power-saving mode */
 	if (drm_vsp_pmpolicy == PSB_PMPOLICY_NOPM)
 		vsp_priv->ctrl->power_saving_mode = vsp_always_on;
-	else
+	else if (drm_vsp_pmpolicy == PSB_PMPOLICY_POWERDOWN ||
+			drm_vsp_pmpolicy == PSB_PMPOLICY_CLOCKGATING)
 		vsp_priv->ctrl->power_saving_mode = vsp_suspend_on_empty_queue;
+	else if (drm_vsp_pmpolicy == PSB_PMPOLICY_HWIDLE)
+		vsp_priv->ctrl->power_saving_mode = vsp_hw_idle_on_empty_queue;
+	else
+		vsp_priv->ctrl->power_saving_mode =
+			vsp_suspend_and_hw_idle_on_empty_queue;
 
 	/* communicate the type of init
 	 * this is the last value to write
@@ -518,7 +519,8 @@ unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
 
 	/* config icache */
 	VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_INVALID_FLAG);
-	VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_PREFETCH_FLAG);
+	/* disable ICACHE_PREFETCH_FLAG from v2.3 */
+	/* VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_PREFETCH_FLAG); */
 	SP_REG_WRITE32(SP_STAT_AND_CTRL_REG, reg, processor);
 
 	/* set icache base address: point to instructions in DDR */
@@ -553,6 +555,8 @@ void vsp_continue_function(struct drm_psb_private *dev_priv)
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int i;
 
+	vsp_priv->ctrl->entry_kind = vsp_entry_booted;
+
 	vsp_set_firmware(dev_priv, vsp_vp0);
 
 	vsp_priv->ctrl->entry_kind = vsp_entry_resume;
@@ -560,10 +564,18 @@ void vsp_continue_function(struct drm_psb_private *dev_priv)
 	vsp_priv->vsp_state = VSP_STATE_ACTIVE;
 }
 
-void vsp_resume_function(struct drm_psb_private *dev_priv)
+int vsp_resume_function(struct drm_psb_private *dev_priv)
 {
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	uint32_t pd_addr;
+	struct pci_dev *pdev = vsp_priv->dev->pdev;
+	uint32_t pd_addr, mmadr;
+
+	/* FIXME, change should be removed once bz 120324 is fixed */
+	pci_read_config_dword(pdev, 0x10, &mmadr);
+	if (mmadr == 0) {
+		DRM_ERROR("Bad PCI config!\n");
+		return -1;
+	}
 
 	vsp_priv->ctrl = (struct vsp_ctrl_reg *) (dev_priv->vsp_reg +
 						  VSP_CONFIG_REG_SDRAM_BASE +
@@ -598,5 +610,7 @@ void vsp_resume_function(struct drm_psb_private *dev_priv)
 	vsp_priv->ctrl->entry_kind = vsp_entry_resume;
 
 	vsp_priv->vsp_state = VSP_STATE_ACTIVE;
+
+	return 0;
 }
 

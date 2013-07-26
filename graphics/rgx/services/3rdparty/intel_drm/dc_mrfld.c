@@ -451,8 +451,6 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
 	{
 		if (psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_DC_UPDATED) {
-			if (psFlip == gpsDevice->psLastFlip)
-				continue;
 			/*remove this entry from flip queue, decrease refCount*/
 			list_del(&psFlip->sFlips[iPipe]);
 

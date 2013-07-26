@@ -38,8 +38,11 @@
 #include <sound/initval.h>
 
 #include "intel_mid_hdmi_audio.h"
-
+#ifdef CONFIG_DRM_INTEL_HANDSET
+#include <pwr_mgmt.h>
+#else
 #include <psb_powermgmt.h>
+#endif
 
 #define PCM_INDEX		0
 #define MAX_PB_STREAMS		1

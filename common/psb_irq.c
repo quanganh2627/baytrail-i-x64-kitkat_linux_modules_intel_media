@@ -511,6 +511,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	if (pipe == 1 && !dev_priv->bhdmiconnected)
 		return;
 
+#ifdef CONFIG_CTP_DPST
 	if ((pipe_stat_val & (PIPE_DPST_EVENT_STATUS)) &&
 	    (dev_priv->psb_dpst_state != NULL)) {
 		uint32_t pwm_reg = 0;
@@ -552,6 +553,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 				   PWM_CONTROL_LOGIC); */
 		}
 	}
+#endif
 
 	if (pipe_stat_val & PIPE_VBLANK_STATUS) {
 		dev_priv->vsync_te_irq_ts[pipe] = cpu_clock(0);
@@ -1039,6 +1041,7 @@ void psb_irq_uninstall_islands(struct drm_device *dev, int hw_islands)
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 }
 
+#ifdef CONFIG_CTP_DPST
 void psb_irq_turn_on_dpst(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv =
@@ -1145,6 +1148,7 @@ int psb_irq_disable_dpst(struct drm_device *dev)
 
 	return 0;
 }
+#endif
 
 #ifdef PSB_FIXME
 static int psb_vblank_do_wait(struct drm_device *dev,
