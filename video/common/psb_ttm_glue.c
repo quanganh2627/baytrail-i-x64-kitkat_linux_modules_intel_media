@@ -256,6 +256,7 @@ void psb_remove_videoctx(struct drm_psb_private *dev_priv, struct file *filp)
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	/* iterate to query all ctx to if there is DRM running*/
 	ied_enabled = 0;
+	int ctx_type;
 
 	mutex_lock(&dev_priv->video_ctx_mutex);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
@@ -304,8 +305,9 @@ void psb_remove_videoctx(struct drm_psb_private *dev_priv, struct file *filp)
 					(found_ctx->ctx_type & 0xff)
 				&& VAProfileVP8Version0_3 ==
 					((found_ctx->ctx_type >> 8) & 0xff))) {
+			ctx_type = found_ctx->ctx_type & 0xff;
 			PSB_DEBUG_PM("Remove vsp context.\n");
-			vsp_rm_context(dev_priv->dev);
+			vsp_rm_context(dev_priv->dev, ctx_type);
 #endif
 		} else
 #endif

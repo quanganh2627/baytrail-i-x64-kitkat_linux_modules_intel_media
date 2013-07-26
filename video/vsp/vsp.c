@@ -181,8 +181,8 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			if (cmd_rd == cmd_wr) {
 				if (!vsp_priv->vsp_cmd_num) {
 					PSB_DEBUG_PM("Trying to off...\n");
-					schedule_delayed_work(
-						&vsp_priv->vsp_suspend_wq, 0);
+					tasklet_hi_schedule(
+					&vsp_priv->vsp_suspend_tasklet);
 				}
 			} else {
 				PSB_DEBUG_PM("cmd_queue has data,continue.\n");
@@ -443,7 +443,7 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int ret;
 
-	if (vsp_priv->fw_loaded == 0) {
+	if (vsp_priv->fw_loaded == VSP_FW_NONE) {
 		ret = vsp_init_fw(dev);
 		if (ret != 0) {
 			DRM_ERROR("VSP: failed to load firmware\n");
@@ -664,8 +664,6 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 			vsp_priv->fw_type = VSP_FW_TYPE_VPP;
 
-			if(vsp_priv->fw_loaded == 0)
-				vsp_new_context(dev_priv->dev);
 		} else if (cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND) {
 			struct vsp_context_settings_t *context_setting;
 			context_setting =
@@ -682,8 +680,6 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 			vsp_priv->fw_type = VSP_FW_TYPE_VP8;
 
-			if(vsp_priv->fw_loaded == 0)
-				vsp_new_context(dev_priv->dev);
 		} else if (cur_cmd->type == Vss_Sys_Ref_Frame_COMMAND) {
 			ref_vp8_bo =
 				ttm_buffer_object_lookup(tfile,
@@ -1062,16 +1058,17 @@ void vsp_new_context(struct drm_device *dev)
 		DRM_ERROR("VSP: vsp driver is not initialized correctly\n");
 		return;
 	}
-	vsp_priv->vss_cc_acc = 0;
-	vsp_priv->fw_loaded = 0;
+
+	vsp_priv->context_num++;
 
 	return;
 }
 
-void vsp_rm_context(struct drm_device *dev)
+void vsp_rm_context(struct drm_device *dev, int ctx_type)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+	bool ret;
 
 	dev_priv = dev->dev_private;
 	if (dev_priv == NULL) {
@@ -1088,19 +1085,32 @@ void vsp_rm_context(struct drm_device *dev)
 	if (vsp_priv->ctrl == NULL)
 		return;
 
-	vsp_priv->ctrl->entry_kind = vsp_exit;
-	vsp_priv->vsp_state = VSP_STATE_DOWN;
-	vsp_priv->fw_loaded = 0;
-	vsp_priv->current_sequence = 0;
-
-	if (vsp_priv->coded_buf != NULL) {
-		ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
-		ttm_bo_unref(&vsp_priv->coded_buf_bo);
-		vsp_priv->coded_buf = NULL;
+	VSP_DEBUG("ctx_type=%d\n", ctx_type);
+	if (VAEntrypointEncSlice == ctx_type) {
+		if (vsp_priv->coded_buf != NULL) {
+			ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
+			ttm_bo_unref(&vsp_priv->coded_buf_bo);
+			vsp_priv->coded_buf = NULL;
+		}
 	}
 
-	schedule_delayed_work(&vsp_priv->vsp_suspend_wq, 0);
-	VSP_DEBUG("VSP: OK. Power down the HW!\n");
+	vsp_priv->context_num--;
+	if (vsp_priv->context_num >= 1) {
+		return;
+	}
+
+	vsp_priv->ctrl->entry_kind = vsp_exit;
+	vsp_priv->vsp_state = VSP_STATE_DOWN;
+
+	ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
+
+	vsp_priv->fw_loaded = VSP_FW_NONE;
+	vsp_priv->current_sequence = 0;
+
+	if (ret == false)
+		PSB_DEBUG_PM("Couldn't power down VSP!");
+	else
+		PSB_DEBUG_PM("VSP: OK. Power down the HW!\n");
 
 	/* FIXME: frequency should change */
 	VSP_PERF("the total time spend on VSP is %ld ms\n",
@@ -1114,6 +1124,9 @@ int psb_vsp_save_context(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int i;
+
+	if (vsp_priv->fw_loaded == VSP_FW_NONE)
+		return 0;
 
 	/* save the VSP config registers */
 	for (i = 2; i < VSP_CONFIG_SIZE; i++)
@@ -1137,11 +1150,14 @@ int psb_check_vsp_idle(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int i;
+	int cmd_rd, cmd_wr;
 
 	if (vsp_priv->fw_loaded == 0 || vsp_priv->vsp_state == VSP_STATE_DOWN)
 		return 0;
 
-	if (vsp_priv->vsp_cmd_num ||  vsp_priv->vsp_state == VSP_STATE_ACTIVE) {
+	cmd_rd = vsp_priv->ctrl->cmd_rd;
+	cmd_wr = vsp_priv->ctrl->cmd_wr;
+	if (cmd_rd != cmd_wr ||  vsp_priv->vsp_state == VSP_STATE_ACTIVE) {
 		PSB_DEBUG_PM("VSP: there is command need to handle!\n");
 		return -EBUSY;
 	}
@@ -1170,6 +1186,27 @@ int psb_check_vsp_idle(struct drm_device *dev)
 
 
 	return 0;
+}
+
+/* The tasklet function to power down VSP */
+void psb_powerdown_vsp(unsigned long data)
+{
+	struct drm_device *dev = (struct drm_device *)data;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+	bool ret;
+
+	if (!vsp_priv)
+		return;
+
+	ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
+
+	if (ret == false)
+		PSB_DEBUG_PM("The VSP could NOT be powered off!\n");
+	else
+		PSB_DEBUG_PM("The VSP has been powered off!\n");
+
+	return;
 }
 
 int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
@@ -1209,13 +1246,57 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	VSP_DEBUG("context_settings(addr):%x\n",
 			vsp_priv->context_setting_bo->offset);
 	VSP_DEBUG("context_settings.app_id:%d\n",
-			vsp_priv->context_setting->app_id);
+			vsp_priv->context_setting[0].app_id);
 	VSP_DEBUG("context_setting->state_buffer_size:0x%x\n",
-			vsp_priv->context_setting->state_buffer_size);
+			vsp_priv->context_setting[0].state_buffer_size);
 	VSP_DEBUG("context_setting->state_buffer_addr:%x\n",
-			vsp_priv->context_setting->state_buffer_addr);
+			vsp_priv->context_setting[0].state_buffer_addr);
 	VSP_DEBUG("context_settings.usage:%d\n",
-			vsp_priv->context_setting->usage);
+			vsp_priv->context_setting[0].usage);
+
+	VSP_DEBUG("context_settings(addr):%x\n",
+			vsp_priv->context_setting_bo->offset);
+	VSP_DEBUG("context_settings.app_id:%d\n",
+			vsp_priv->context_setting[1].app_id);
+	VSP_DEBUG("context_setting->state_buffer_size:0x%x\n",
+			vsp_priv->context_setting[1].state_buffer_size);
+	VSP_DEBUG("context_setting->state_buffer_addr:%x\n",
+			vsp_priv->context_setting[1].state_buffer_addr);
+	VSP_DEBUG("context_settings.usage:%d\n",
+			vsp_priv->context_setting[1].usage);
+
+
+	/* dump dma register */
+	VSP_DEBUG("partition1_dma_external_ch[0..23]_pending_req_cnt\n");
+	for (i=0; i <= 23; i++) {
+		MM_READ32(0x150010, i * 0x20, &reg);
+		if (reg != 0)
+			VSP_DEBUG("partition1_dma_external_ch%d_pending_req_cnt = 0x%x\n",
+					i, reg);
+	}
+
+	VSP_DEBUG("partition1_dma_external_dim[0..31]_pending_req_cnt\n");
+	for (i=0; i <= 31; i++) {
+		MM_READ32(0x151008, i * 0x20, &reg);
+		if (reg != 0)
+			VSP_DEBUG("partition1_dma_external_dim%d_pending_req_cnt = 0x%x\n",
+					i, reg);
+	}
+
+	VSP_DEBUG("partition1_dma_internal_ch[0..7]_pending_req_cnt\n");
+	for (i=0; i <= 7; i++) {
+		MM_READ32(0x160010, i * 0x20, &reg);
+		if (reg != 0)
+			VSP_DEBUG("partition1_dma_internal_ch%d_pending_req_cnt = 0x%x\n",
+					i, reg);
+	}
+	VSP_DEBUG("partition1_dma_internal_dim[0..7]_pending_req_cnt\n");
+	for (i=0; i <= 7; i++) {
+		MM_READ32(0x160408, i * 0x20, &reg);
+		if (reg != 0)
+			VSP_DEBUG("partition1_dma_internal_dim%d_pending_req_cnt = 0x%x\n",
+					i, reg);
+	}
 
 	/* IRQ registers */
 	for (i = 0; i < 6; i++) {
@@ -1359,24 +1440,6 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	}
 
 	return 0;
-}
-
-void psb_powerdown_vsp(struct work_struct *work)
-{
-	struct vsp_private *vsp_priv =
-		container_of(work, struct vsp_private, vsp_suspend_wq.work);
-	bool ret;
-
-	if (!vsp_priv)
-		return;
-
-	ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
-	if (ret == false)
-		PSB_DEBUG_PM("The VSP could NOT be powered off!\n");
-	else
-		PSB_DEBUG_PM("The VSP has been powered off!\n");
-
-	return;
 }
 
 void check_invalid_cmd_type(unsigned int cmd_type)
