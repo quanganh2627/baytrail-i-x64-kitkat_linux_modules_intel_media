@@ -564,12 +564,13 @@ void msvdx_init_test(struct drm_device *dev)
 
 static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 {
-	struct firmware **fw;
+	struct firmware **fw = NULL;
 	*fw = NULL;
 	uint8_t *fw_io_base;
 	void *ptr = NULL;
 	int rc, fw_size;
-	uint32_t imrl, imrh;
+	uint32_t imrl = 0;
+	uint32_t imrh = 0;
 	uint64_t imr_base, imr_end;
 	const unsigned long tng_magic_num = 0x44455624;
 
