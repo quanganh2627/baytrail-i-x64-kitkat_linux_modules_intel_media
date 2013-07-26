@@ -2022,6 +2022,7 @@ enum MTX_eWriteBackData {
 
 int tng_topaz_reset(struct drm_psb_private *dev_priv);
 int tng_topaz_init_fw(struct drm_device *dev);
+int tng_topaz_init_fw_chaabi(struct drm_device *dev);
 
 int tng_topaz_init_board(
 	struct drm_device *dev,
@@ -2029,6 +2030,11 @@ int tng_topaz_init_board(
 	enum drm_tng_topaz_codec codec);
 
 int tng_topaz_setup_fw(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx,
+	enum drm_tng_topaz_codec codec);
+
+int tng_topaz_fw_run(
 	struct drm_device *dev,
 	struct psb_video_ctx *video_ctx,
 	enum drm_tng_topaz_codec codec);
@@ -2236,6 +2242,15 @@ static inline void mtx_set_target(struct drm_psb_private *dev_priv)
 
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CORE_SEL_0, reg_val);
 }
+
+int tng_topaz_power_up(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx,
+	enum drm_tng_topaz_codec codec);
+
+int tng_topaz_power_off(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx);
 
 #define SHIFT_WB_PRODUCER       (0)
 #define MASK_WB_PRODUCER	\

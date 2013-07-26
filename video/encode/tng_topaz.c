@@ -601,8 +601,8 @@ bool tng_topaz_interrupt(void *pvData)
 			? 31 \
 			: topaz_priv->producer - 1];
 
-	PSB_DEBUG_TOPAZ("TOPAZ: Dispatch write back message, " \
-		"producer = %d, consumer = %d\n",
+	PSB_DEBUG_TOPAZ("TOPAZ: Dispatch write back message:\n");
+	PSB_DEBUG_TOPAZ("producer = %d, consumer = %d\n",
 		topaz_priv->producer, topaz_priv->consumer);
 
 	if (video_ctx->codec != IMG_CODEC_JPEG) {
@@ -614,8 +614,9 @@ bool tng_topaz_interrupt(void *pvData)
 		};
 	}
 
-	PSB_DEBUG_TOPAZ("TOPAZ: Context %08x(%s), frame %d, command %s IRQ\n",
-		(unsigned int)video_ctx, codec_to_string(video_ctx->codec),
+	PSB_DEBUG_TOPAZ("TOPAZ: Context %08x(%s): \n",
+		(unsigned int)video_ctx, codec_to_string(video_ctx->codec));
+	PSB_DEBUG_TOPAZ("TOPAZ: frame %d, command %s IRQ\n",
 		video_ctx->frame_count,
 		cmd_to_string(wb_msg->ui32CmdWord));
 
@@ -670,7 +671,11 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 	if (topaz_priv->topaz_fw_loaded == 0) {
 		/* #.# load fw to driver */
 		PSB_DEBUG_INIT("TOPAZ: load /lib/firmware/topazhp_fw.bin\n");
+#if _MRFLD_B0_
+		ret = tng_topaz_init_fw_chaabi(dev);
+#else
 		ret = tng_topaz_init_fw(dev);
+#endif
 		if (ret) {
 			/* FIXME: find a proper return value */
 			DRM_ERROR("TOPAX:load /lib/firmware/topaz_fwsc.bin" \
@@ -690,12 +695,14 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 
 		PSB_DEBUG_TOPAZ("TOPAZ: reset ok.\n");
 
+#if (_MRFLD_B0_ == 0)
 		/* #.# upload firmware */
 		ret = tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
 		if (ret) {
 			DRM_ERROR("TOPAZ: upload FW to HW failed\n");
 			return ret;
 		}
+#endif
 	}
 
 	if (!topaz_priv->topaz_busy) {
@@ -1712,8 +1719,8 @@ int tng_topaz_kick_null_cmd(struct drm_device *dev,
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CMD_FIFO_WRITE,
 			 sync_seq);
 
-	PSB_DEBUG_TOPAZ("TOPAZ: Write to command FIFO: " \
-		"%08x, %08x, %08x, %08x\n",
+	PSB_DEBUG_TOPAZ("TOPAZ: Write to command FIFO: \n");
+	PSB_DEBUG_TOPAZ("%08x, %08x, %08x, %08x\n",
 		MTX_CMDID_NULL, 0, 0, 0);
 
 	/* Notify ISR which context trigger interrupt */
@@ -1879,6 +1886,17 @@ out:
     return;
 }
 
+static inline void tng_topaz_trace_ctx(
+	char *words,
+	struct psb_video_ctx *trace_ctx)
+{
+	PSB_DEBUG_TOPAZ("TOPAZ: %s:\n", words);
+	PSB_DEBUG_TOPAZ("%08x(%s), status %08x\n",
+		trace_ctx, codec_to_string(trace_ctx->codec),
+		trace_ctx->status);
+	return ;
+}
+
 static int tng_context_switch(
 	struct drm_device *dev,
 	struct drm_file *file_priv,
@@ -1897,11 +1915,14 @@ static int tng_context_switch(
 	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Frame (%d)\n", video_ctx->frame_count);
+	tng_topaz_trace_ctx("input Context", video_ctx);
+	tng_topaz_trace_ctx("current Context", topaz_priv->cur_context);
 
 	if (codec == IMG_CODEC_JPEG) {
-		PSB_DEBUG_TOPAZ("TOPAZ: JPEG context(%08x), " \
-			"continue doing other commands\n",
+		PSB_DEBUG_TOPAZ("TOPAZ: JPEG context(%08x)\n",
 			(unsigned int)video_ctx);
+		PSB_DEBUG_TOPAZ("continue doing other commands\n");
+
 		topaz_priv->cur_context = video_ctx;
 		topaz_priv->cur_codec = codec;
 		return ret;
@@ -1909,20 +1930,25 @@ static int tng_context_switch(
 
 	/* Continue doing other commands */
 	if (is_first_frame) {
-		PSB_DEBUG_TOPAZ("TOPAZ: First frame of ctx %08x(%s), " \
-			"continue doing other commands\n",
+		PSB_DEBUG_TOPAZ("TOPAZ: First frame of ctx %08x(%s)\n",
 			(unsigned int)video_ctx, codec_to_string(codec));
+		PSB_DEBUG_TOPAZ("continue doing other commands\n");
 		topaz_priv->cur_context = video_ctx;
 		topaz_priv->cur_codec = codec;
 		return ret;
 	}
 
 	if (topaz_priv->cur_context == video_ctx) {
+#if _MRFLD_B0_A_
+		if (!ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
+			PSB_DEBUG_TOPAZ("TOPAZ: in power off.\n");
+			tng_topaz_power_up(dev, video_ctx, codec);
+		}
+#endif
+
 		if (video_ctx->status & MASK_TOPAZ_CONTEXT_SAVED) {
-			PSB_DEBUG_TOPAZ("TOPAZ: Restore context %08x(%s)" \
-				" status %08x\n", video_ctx, \
-				codec_to_string(video_ctx->codec), \
-				video_ctx->status);
+			tng_topaz_trace_ctx("Restore Same Context",
+				video_ctx);
 			/* Context switch */
 			topaz_priv->cur_context = video_ctx;
 			topaz_priv->cur_codec = codec;
@@ -1932,12 +1958,8 @@ static int tng_context_switch(
 				return ret;
 			}
 		} else {
-			PSB_DEBUG_TOPAZ("TOPAZ: Current context equals " \
-				"incoming context %08x(%s) status %08x, " \
-				"continue doing other commands\n",
-				(unsigned int)video_ctx, \
-				codec_to_string(codec),\
-				video_ctx->status);
+			tng_topaz_trace_ctx("Input Ctx equals Current Ctx",
+				video_ctx);
 			topaz_priv->cur_context = video_ctx;
 			topaz_priv->cur_codec = codec;
 			return ret;
@@ -1946,21 +1968,12 @@ static int tng_context_switch(
 		/* Current context already saved */
 		if (topaz_priv->cur_context->status & \
 		    MASK_TOPAZ_CONTEXT_SAVED) {
-			PSB_DEBUG_TOPAZ("TOPAZ: Context %08x(%s)" \
-				" status %08x already saved," \
-				" continue doing other commands\n", \
-				topaz_priv->cur_context, \
-				codec_to_string(topaz_priv->cur_context), \
-				topaz_priv->cur_context->status);
+			tng_topaz_trace_ctx("Current Ctx already saved",
+				topaz_priv->cur_context);
 		} else {
 			/* Save current context */
-			PSB_DEBUG_TOPAZ("TOPAZ: Context %08x(%s)" \
-				" status %08x not saved," \
-				" save it\n", \
-				topaz_priv->cur_context, \
-				codec_to_string( \
-				topaz_priv->cur_context->codec), \
-				topaz_priv->cur_context->status);
+			tng_topaz_trace_ctx("Current Ctx not saved",
+				topaz_priv->cur_context);
 			ret = tng_topaz_save_mtx_state(dev);
 			if (ret) {
 				DRM_ERROR("Failed to save mtx status");
@@ -1968,10 +1981,15 @@ static int tng_context_switch(
 			}
 		}
 
-		PSB_DEBUG_TOPAZ("TOPAZ: Restore context %08x(%s)" \
-			" status %08x\n", video_ctx, \
-			codec_to_string(video_ctx->codec), \
-			video_ctx->status);
+#if _MRFLD_B0_A_
+		if (ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
+			PSB_DEBUG_TOPAZ("TOPAZ: to power off.\n");
+			tng_topaz_power_off(dev, video_ctx);
+		}
+		tng_topaz_power_up(dev, video_ctx, codec);
+#endif
+
+		tng_topaz_trace_ctx("Restore Switched Ctx", video_ctx);
 
 		/* Context switch */
 		topaz_priv->cur_context = video_ctx;
@@ -2092,6 +2110,7 @@ static int tng_setup_new_context(
 
 		if (topaz_priv->cur_context &&
 		    topaz_priv->cur_context != video_ctx) {
+
 			if (topaz_priv->cur_context->status & \
 			    MASK_TOPAZ_CONTEXT_SAVED) {
 				PSB_DEBUG_TOPAZ("Context %08x(%s)" \
@@ -2174,6 +2193,28 @@ static int tng_setup_new_context(
 				& 0xffff0000)  >> 16) ;
 	*/
 
+#if _MRFLD_B0_A_
+	if (ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
+		PSB_DEBUG_TOPAZ("TOPAZ: to power off.\n");
+		tng_topaz_power_off(dev, video_ctx);
+	}
+
+	ret = tng_topaz_power_up(dev, video_ctx, codec);
+	if (ret) {
+		DRM_ERROR("TOPAZ: failed power up\n");
+		goto out;
+	}
+
+#endif
+
+
+#if _MRFLD_B0_
+	ret = tng_topaz_fw_run(dev, video_ctx, codec);
+	if (ret) {
+		DRM_ERROR("TOPAZ: upload FW to HW failed\n");
+		goto out;
+	}
+#else
 	/* Upload the new codec firmware */
 	ret = tng_topaz_init_board(dev, video_ctx, codec);
 	if (ret) {
@@ -2190,6 +2231,7 @@ static int tng_setup_new_context(
 		/* tng_error_dump_reg(dev_priv, 0); */
 		goto out;
 	}
+#endif
 out:
 	return ret;
 }
@@ -2322,6 +2364,7 @@ tng_topaz_send(
 	int32_t ret = 0;
 	struct psb_video_ctx *video_ctx;
 
+#if (_MRFLD_B0_A_ == 0)
 	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM) {
 		if (!power_island_get_dummy(dev)) {
 			DRM_ERROR("Failed to power on ENC island\n");
@@ -2333,24 +2376,25 @@ tng_topaz_send(
 			return -1;
 		}
 	}
-
+#endif
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 	topaz_priv->topaz_busy = 1;
 
-	PSB_DEBUG_TOPAZ("TOPAZ : send the command in the buffer " \
-		"one by one, cmdsize(%d), sequence(%08x)\n",
+	PSB_DEBUG_TOPAZ("TOPAZ : send the command in the buffer\n");
+	PSB_DEBUG_TOPAZ("one by one, cmdsize(%d), sequence(%08x)\n",
 		cmd_size, sync_seq);
 
+#if (_MRFLD_B0_A_ == 0)
 	/* Must flush here in case of invalid cache data */
 	tng_topaz_mmu_flushcache(dev_priv);
-
+#endif
 	while (cmd_size > 0) {
 		cur_cmd_header = (struct tng_topaz_cmd_header *) command;
 		cur_cmd_id = cur_cmd_header->id;
 
-		PSB_DEBUG_TOPAZ("TOPAZ : cmd is(%s), " \
-			"remaining cmd size is(%d)\n",
-			cmd_to_string(cur_cmd_id & (~MTX_CMDID_PRIORITY)),
+		PSB_DEBUG_TOPAZ("TOPAZ : cmd is(%s)\n",
+			cmd_to_string(cur_cmd_id & (~MTX_CMDID_PRIORITY)));
+		PSB_DEBUG_TOPAZ("remaining cmd size is(%d)\n",
 			cmd_size);
 
 		switch (cur_cmd_id) {
@@ -2358,8 +2402,7 @@ tng_topaz_send(
 			codec = (*((uint32_t *) cmd) & 0xFF00) >> 8;
 			cur_cmd_size = (codec == IMG_CODEC_JPEG) ? 3 : 4;
 			ret = tng_setup_new_context(dev, file_priv,
-				(uint32_t *)command,
-				codec);
+				(uint32_t *)command, codec);
 			if (ret) {
 				DRM_ERROR("Failed to setup new context");
 				return ret;
