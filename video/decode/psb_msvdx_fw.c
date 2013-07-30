@@ -40,8 +40,6 @@
 #include <linux/module.h>
 #endif
 
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
-
 #define UPLOAD_FW_BY_DMA 1
 #define STACKGUARDWORD          0x10101010
 #define MSVDX_MTX_DATA_LOCATION 0x82880000
@@ -761,5 +759,3 @@ int psb_setup_fw(struct drm_device *dev)
 out:
 	return ret;
 }
-
-#endif
