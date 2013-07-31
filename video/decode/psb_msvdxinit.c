@@ -567,16 +567,17 @@ void msvdx_init_test(struct drm_device *dev)
 static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 {
 	struct firmware **fw;
+	*fw = NULL;
 	uint8_t *fw_io_base;
 	void *ptr = NULL;
 	int rc, fw_size;
 	uint32_t imrl, imrh;
 	uint64_t imr_base, imr_end;
 
-	intel_mid_msgbus_write32(TNG_IMR_MSG_PORT,
-			TNG_IMR5L_MSG_REGADDR, imrl);
-	intel_mid_msgbus_write32(TNG_IMR_MSG_PORT,
-			TNG_IMR5H_MSG_REGADDR, imrh);
+	imrl = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
+			TNG_IMR5L_MSG_REGADDR);
+	imrh = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
+			TNG_IMR5H_MSG_REGADDR);
 
 	imr_base = (imrl & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
 	imr_end = (imrh & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
