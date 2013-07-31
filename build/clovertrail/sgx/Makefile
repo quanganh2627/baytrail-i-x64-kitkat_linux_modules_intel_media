@@ -5,7 +5,6 @@ GFXDIR=$(MEDIADIR)/graphics/sgx
 DISPLAYDIR=$(MEDIADIR)/display/pnw/drv
 GPU_BURST_DIR=$(MEDIADIR)/graphics/gburst
 
-KERNELDIR ?= $(ANDROID_BUILD_TOP)/$(KERNEL_SRC_DIR)
 ENVDIR=$(GFXDIR)/services4/srvkm/env/linux
 COMMONDIR=$(GFXDIR)/services4/srvkm/common
 BRIDGEDDIR=$(GFXDIR)/services4/srvkm/bridged
@@ -30,7 +29,7 @@ include_dirs := \
 	-I$(MEDIAINC)/common \
 	-Iinclude/linux \
 	-Iinclude/drm \
-	-I$(ANDROID_BUILD_TOP)/linux/kernel-next/drivers/staging/android \
+	-Idrivers/staging/android
 
 ifeq ($(DISPLAY_DRIVER_DEBUG_INTERFACE), true)
 ccflags-y += -DDISPLAY_DRIVER_DEBUG_INTERFACE
