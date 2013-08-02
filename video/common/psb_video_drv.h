@@ -254,8 +254,6 @@ struct psb_video_ctx {
 	/* Context save and restore */
 	struct ttm_buffer_object *reg_saving_bo;
 	struct ttm_buffer_object *data_saving_bo;
-	uint32_t fw_data_dma_size;
-	uint32_t fw_data_dma_offset;
 	/* Write back buffer object */
 	struct ttm_buffer_object *wb_bo;
 	struct ttm_bo_kmap_obj wb_bo_kmap;
@@ -274,6 +272,12 @@ struct psb_video_ctx {
 
 	bool handle_sequence_needed;
 	uint32_t cur_sequence;
+
+	uint32_t low_cmd_count;
+	uint32_t high_cmd_count;
+
+	uint32_t enc_ctx_param;
+	uint32_t enc_ctx_addr;
 };
 
 #ifdef MERRIFIELD

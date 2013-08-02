@@ -417,3 +417,34 @@ void ips_hdmi_destroy_saved_data(hdmi_device_t *dev)
 		dev->avi.valid = false;
 	}
 }
+
+/**
+ * Description: disable all planes on pipe
+ *
+ * @pipe:    pipe ID
+ * @enable : true to enable planes; false to disable planes
+ *
+ */
+void ips_enable_planes_on_pipe(uint32_t pipe, bool enable)
+{
+	uint32_t  temp;
+
+	/* Currently, only handle planes on pipe B */
+	switch (pipe) {
+	case 1:
+		temp = hdmi_read32(IPS_PIPEBCONF);
+
+		if (enable)
+			temp &= ~IPIL_PIPECONF_PLANE_OFF;
+		else
+			temp |= IPIL_PIPECONF_PLANE_OFF;
+
+		hdmi_write32(IPS_PIPEBCONF, temp);
+
+		break;
+	default:
+		break;
+	}
+
+	return;
+}

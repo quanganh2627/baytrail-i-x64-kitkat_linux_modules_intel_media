@@ -20,7 +20,12 @@
 #ifndef _VXD_DRM_H_
 #define _VXD_DRM_H_
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 #include "drm.h"
+#else
+#include <uapi/drm/drm.h>
+#endif
+
 #if defined(__linux__) && !defined(__KERNEL__)
 #include<stdint.h>
 #include <linux/types.h>

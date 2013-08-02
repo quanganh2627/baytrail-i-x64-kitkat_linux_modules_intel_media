@@ -27,6 +27,7 @@
 
 #include <linux/list.h>
 #include <linux/kref.h>
+#include <linux/version.h>
 
 #define TTM_FENCE_FLAG_EMIT (1 << 0)
 #define TTM_FENCE_TYPE_EXE  (1 << 0)
@@ -261,10 +262,23 @@ static inline uint32_t ttm_fence_types(const struct ttm_fence_object *fence)
  * uint32_t representing a fence_type argument.
  */
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 extern bool ttm_fence_sync_obj_signaled(void *sync_obj, void *sync_arg);
+#else
+extern bool ttm_fence_sync_obj_signaled(void *sync_obj);
+#endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 extern int ttm_fence_sync_obj_wait(void *sync_obj, void *sync_arg,
 				   bool lazy, bool interruptible);
+#else
+extern int ttm_fence_sync_obj_wait(void *sync_obj,
+				   bool lazy, bool interruptible);
+#endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 extern int ttm_fence_sync_obj_flush(void *sync_obj, void *sync_arg);
+#else
+extern int ttm_fence_sync_obj_flush(void *sync_obj);
+#endif
 extern void ttm_fence_sync_obj_unref(void **sync_obj);
 extern void *ttm_fence_sync_obj_ref(void *sync_obj);
 

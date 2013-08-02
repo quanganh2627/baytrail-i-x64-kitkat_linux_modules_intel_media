@@ -214,7 +214,9 @@ static int psb_placement_fence_type(struct ttm_buffer_object *bo,
 	uint32_t clr_flags = clr_val_flags & 0xFFFFFFFF;
 	*/
 	struct ttm_fence_object *old_fence;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	uint32_t old_fence_type;
+#endif
 	struct ttm_placement placement;
 
 	if (unlikely
@@ -241,11 +243,15 @@ static int psb_placement_fence_type(struct ttm_buffer_object *bo,
 
 	*new_fence_type = n_fence_type;
 	old_fence = (struct ttm_fence_object *) bo->sync_obj;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	old_fence_type = (uint32_t)(unsigned long) bo->sync_obj_arg;
 
 	if (old_fence && ((new_fence_class != old_fence->fence_class) ||
 			  ((n_fence_type ^ old_fence_type) &
 			   old_fence_type))) {
+#else
+	if (old_fence && ((new_fence_class != old_fence->fence_class))) {
+#endif
 		ret = ttm_bo_wait(bo, 0, 1, 0);
 		if (unlikely(ret != 0))
 			return ret;
@@ -352,7 +358,11 @@ static int psb_validate_buffer_list(struct drm_file *file_priv,
 		placement.lpfn = 0;
 
 		spin_unlock(&bo->bdev->fence_lock);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		ret = ttm_bo_validate(bo, &placement, 1, 0, 0);
+#else
+		ret = ttm_bo_validate(bo, &placement, 1, 0);
+#endif
 		/* spin_lock(&bo->lock); */
 		/* mem and offset field of bo is protected by ::reserve
 		 * this function is called in reserve */
@@ -360,8 +370,10 @@ static int psb_validate_buffer_list(struct drm_file *file_priv,
 			goto out_err;
 
 		fence_types |= cur_fence_type;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		entry->new_sync_obj_arg = (void *)
 					  (unsigned long) cur_fence_type;
+#endif
 
 		item->offset = bo->offset;
 		item->flags = bo->mem.placement;
@@ -803,9 +815,13 @@ static int psb_handle_copyback(struct drm_device *dev,
 					arg.ret = -EFAULT;
 				arg.d.rep.gpu_offset = bo->offset;
 				arg.d.rep.placement = bo->mem.placement;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 				arg.d.rep.fence_type_mask =
 					(uint32_t)(unsigned long)
 					entry->new_sync_obj_arg;
+#else
+				arg.d.rep.fence_type_mask = _PSB_FENCE_TYPE_EXE;
+#endif
 				ttm_bo_unreserve(bo);
 				/* spin_unlock(&bo->lock); */
 			}

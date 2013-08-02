@@ -111,6 +111,13 @@ config CTP_DPST
         help
           Choose this option to support DPST.
 
+config PVR_PROC
+        bool "PVR_PROC"
+        depends on DRM_MDFLD || DRM_CTP
+        default n
+        help
+          Choose this option to support PVR proc debug interface.
+
 config MDFD_GL3
 	bool "Enable GL3 Cache for GUNIT"
 	depends on DRM_MDFLD
@@ -375,5 +382,6 @@ config DRM_VXD_BYT
        bool "Enable vxd on intel by default"
        depends on DRM_I915
        default n
+       select DRM_TTM
        help
          Choose this option if you want to enable VXD decoding for Baylake platform

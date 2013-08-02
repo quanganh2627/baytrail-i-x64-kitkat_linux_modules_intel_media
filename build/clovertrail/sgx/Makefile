@@ -5,6 +5,7 @@ GFXDIR=$(MEDIADIR)/graphics/sgx
 DISPLAYDIR=$(MEDIADIR)/display/pnw/drv
 GPU_BURST_DIR=$(MEDIADIR)/graphics/gburst
 
+KERNELDIR ?= $(ANDROID_BUILD_TOP)/$(KERNEL_SRC_DIR)
 ENVDIR=$(GFXDIR)/services4/srvkm/env/linux
 COMMONDIR=$(GFXDIR)/services4/srvkm/common
 BRIDGEDDIR=$(GFXDIR)/services4/srvkm/bridged
@@ -28,7 +29,8 @@ include_dirs := \
 	-I$(MEDIAINC)/video/common \
 	-I$(MEDIAINC)/common \
 	-Iinclude/linux \
-	-Iinclude/drm
+	-Iinclude/drm \
+	-I$(ANDROID_BUILD_TOP)/linux/kernel-next/drivers/staging/android \
 
 ifeq ($(DISPLAY_DRIVER_DEBUG_INTERFACE), true)
 ccflags-y += -DDISPLAY_DRIVER_DEBUG_INTERFACE
@@ -37,6 +39,10 @@ endif
 ccflags-y += $(include_dirs)
 
 ccflags-y += $(PVRDEFS-y)
+
+ifeq ($(CONFIG_PVR_PROC), y)
+$(DRIVER_NAME)-objs += $(ENVDIR)/proc.o
+endif
 
 $(DRIVER_NAME)-objs +=  \
 	$(GPU_BURST_DIR)/gburstm.o \
@@ -47,7 +53,6 @@ $(DRIVER_NAME)-objs +=  \
 	$(ENVDIR)/mmap.o \
 	$(ENVDIR)/module.o \
 	$(ENVDIR)/pdump.o \
-	$(ENVDIR)/proc.o \
 	$(ENVDIR)/pvr_bridge_k.o \
 	$(ENVDIR)/pvr_debug.o \
 	$(ENVDIR)/mm.o \

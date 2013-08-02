@@ -29,6 +29,7 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #include <asm/intel_scu_pmic.h>
 #else
+#undef DISPLAY_DRIVER_DEBUG_INTERFACE
 #include <asm/intel_scu_ipc.h>
 #endif
 #include <asm/intel-mid.h>
@@ -83,10 +84,18 @@ bool gbdispstatus = true;
 int drm_psb_disable_vsync = 1;
 int drm_psb_no_fb;
 int drm_psb_force_pipeb;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 int drm_msvdx_pmpolicy = PSB_PMPOLICY_POWERDOWN;
+#else
+int drm_msvdx_pmpolicy = PSB_PMPOLICY_NOPM;
+#endif
 int drm_psb_cpurelax;
 int drm_psb_udelaydivider = 1;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 int drm_topaz_pmpolicy = PSB_PMPOLICY_POWERDOWN;
+#else
+int drm_topaz_pmpolicy = PSB_PMPOLICY_NOPM;
+#endif
 int drm_topaz_sbuswa;
 int drm_psb_ospm = 1;
 int drm_psb_gl3_enable = 1;
@@ -617,7 +626,7 @@ int SYSPVRDBGDrivIoctl2(struct drm_device *dev, IMG_VOID *arg,
 #endif
 
 #define PSB_IOCTL_DEF(ioctl, func, flags) \
-	[DRM_IOCTL_NR(ioctl) - DRM_COMMAND_BASE] = {ioctl, flags, func}
+	[DRM_IOCTL_NR(ioctl) - DRM_COMMAND_BASE] = {ioctl, flags, func, ioctl}
 
 static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_KMS_OFF, psbfb_kms_off_ioctl,
@@ -3926,6 +3935,7 @@ static long psb_unlocked_ioctl(struct file *filp, unsigned int cmd,
 	return ret;
 }
 
+#ifdef DISPLAY_DRIVER_DEBUG_INTERFACE
 static int psb_blc_proc_show(struct seq_file *seq, void *v)
 {
 	struct drm_minor *minor = (struct drm_minor *) seq->private;
@@ -3947,7 +3957,11 @@ static int psb_blc_proc_show(struct seq_file *seq, void *v)
 
 static int psb_blc_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, psb_blc_proc_show, PDE(inode)->data);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+	return single_open(file, psb_blc_proc_show, PDE(inode));
+#else
+	return single_open(file, psb_blc_proc_show, PDE_DATA(inode));
+#endif
 }
 
 static const struct file_operations psb_blc_proc_fops = {
@@ -4557,20 +4571,6 @@ int gpio_control_write(struct file *file, const char *buffer,
 }
 #endif
 
-
-/* When a client dies:
- *    - Check for and clean up flipped page state
- */
-void psb_driver_preclose(struct drm_device *dev, struct drm_file *priv)
-{
-}
-
-static void psb_remove(struct pci_dev *pdev)
-{
-	struct drm_device *dev = pci_get_drvdata(pdev);
-	drm_put_dev(dev);
-}
-
 #ifdef CONFIG_SUPPORT_HDMI
 static int psb_hdmi_proc_init(struct drm_minor *minor)
 {
@@ -4642,6 +4642,20 @@ static void psb_proc_cleanup(struct drm_minor *minor)
 	remove_proc_entry(GPIO_PROC_ENTRY, minor->proc_root);
 #endif
 	return;
+}
+#endif /* DISPLAY_DRIVER_DEBUG_INTERFACE */
+
+/* When a client dies:
+ *    - Check for and clean up flipped page state
+ */
+void psb_driver_preclose(struct drm_device *dev, struct drm_file *priv)
+{
+}
+
+static void psb_remove(struct pci_dev *pdev)
+{
+	struct drm_device *dev = pci_get_drvdata(pdev);
+	drm_put_dev(dev);
 }
 
 static const struct dev_pm_ops psb_pm_ops = {

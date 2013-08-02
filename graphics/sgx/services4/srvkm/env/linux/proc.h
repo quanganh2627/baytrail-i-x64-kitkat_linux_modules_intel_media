@@ -40,9 +40,10 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
-
 #ifndef __SERVICES_PROC_H__
 #define __SERVICES_PROC_H__
+
+#ifdef CONFIG_PVR_PROC
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0))
 #include <asm/system.h>		// va_list etc
@@ -127,4 +128,5 @@ struct proc_dir_entry* CreatePerProcessProcEntrySeq (
 IMG_VOID RemoveProcEntrySeq(struct proc_dir_entry* proc_entry);
 IMG_VOID RemovePerProcessProcEntrySeq(struct proc_dir_entry* proc_entry);
 
+#endif
 #endif

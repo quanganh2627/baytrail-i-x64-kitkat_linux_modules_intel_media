@@ -251,11 +251,19 @@ static int msvdx_allocate_ccb(struct drm_device *dev,
 
 	PSB_DEBUG_INIT("MSVDX: allocate CCB\n");
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev, size,
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT, 0, 0, 0,
 				       NULL, ccb);
+#else
+	ret = ttm_buffer_object_create(bdev, size,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT, 0, 0,
+				       NULL, ccb);
+#endif
 	if (ret) {
 		DRM_ERROR("MSVDX:failed to allocate CCB.\n");
 		*ccb = NULL;
