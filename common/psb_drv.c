@@ -29,7 +29,6 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #include <asm/intel_scu_pmic.h>
 #else
-#undef DISPLAY_DRIVER_DEBUG_INTERFACE
 #include <asm/intel_scu_ipc.h>
 #endif
 #include <asm/intel-mid.h>
@@ -4571,21 +4570,62 @@ int gpio_control_write(struct file *file, const char *buffer,
 }
 #endif
 
+#if !(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+static const struct file_operations psb_gpio_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = gpio_control_read,
+       .write = gpio_control_write,
+};
+
+static const struct file_operations psb_ospm_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = psb_ospm_read,
+       .write = psb_ospm_write,
+};
+
+static const struct file_operations psb_rtpm_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = psb_rtpm_read,
+       .write = psb_rtpm_write,
+};
+
+static const struct file_operations psb_display_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = psb_display_register_read,
+       .write = psb_display_register_write,
+};
+
+static const struct file_operations psb_panel_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = psb_panel_register_read,
+       .write = psb_panel_register_write,
+};
+
+static const struct file_operations psb_csc_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = csc_control_read,
+       .write = csc_control_write,
+ };
+#endif
+
 #ifdef CONFIG_SUPPORT_HDMI
 static int psb_hdmi_proc_init(struct drm_minor *minor)
 {
 	struct proc_dir_entry *gpio_setting;
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	gpio_setting = create_proc_entry(GPIO_PROC_ENTRY,
 				0644, minor->proc_root);
-
+#else
+        gpio_setting = proc_create_data(GPIO_PROC_ENTRY,
+                                0644, minor->proc_root, &psb_gpio_proc_fops, minor);
+#endif
 	if (!gpio_setting)
 		return -1;
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	gpio_setting->write_proc = gpio_control_write;
 	gpio_setting->read_proc = gpio_control_read;
 	gpio_setting->data = (void *)minor;
-
+#endif
 
 	return 0;
 }
@@ -4600,6 +4640,7 @@ static int psb_proc_init(struct drm_minor *minor)
 	struct proc_dir_entry *ent_panel_status;
 	struct proc_dir_entry *csc_setting;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	ent = create_proc_entry(OSPM_PROC_ENTRY, 0644, minor->proc_root);
 	rtpm = create_proc_entry(RTPM_PROC_ENTRY, 0644, minor->proc_root);
 	ent_display_status = create_proc_entry(DISPLAY_PROC_ENTRY, 0644, minor->proc_root);
@@ -4607,10 +4648,21 @@ static int psb_proc_init(struct drm_minor *minor)
 			 0644, minor->proc_root);
 	ent1 = proc_create_data(BLC_PROC_ENTRY, 0, minor->proc_root, &psb_blc_proc_fops, minor);
 	csc_setting = create_proc_entry(CSC_PROC_ENTRY, 0644, minor->proc_root);
+#else
+        ent = proc_create_data(OSPM_PROC_ENTRY, 0644, minor->proc_root, &psb_ospm_proc_fops, minor);
+        rtpm = proc_create_data(RTPM_PROC_ENTRY, 0644, minor->proc_root, &psb_rtpm_proc_fops, minor);
+        ent_display_status = proc_create_data(DISPLAY_PROC_ENTRY, 0644, minor->proc_root,
+                 &psb_display_proc_fops, minor);
+        ent_panel_status = proc_create_data(PANEL_PROC_ENTRY, 0644, minor->proc_root,
+                &psb_panel_proc_fops, minor);
+        ent1 = proc_create_data(BLC_PROC_ENTRY, 0, minor->proc_root, &psb_blc_proc_fops, minor);
+        csc_setting = proc_create_data(CSC_PROC_ENTRY, 0644, minor->proc_root, &psb_csc_proc_fops, minor);
+#endif
 
 	if (!ent || !ent1 || !rtpm || !ent_display_status || !ent_panel_status
 		|| !csc_setting)
 		return -1;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	ent->read_proc = psb_ospm_read;
 	ent->write_proc = psb_ospm_write;
 	ent->data = (void *)minor;
@@ -4625,7 +4677,7 @@ static int psb_proc_init(struct drm_minor *minor)
 	csc_setting->write_proc = csc_control_write;
 	csc_setting->read_proc = csc_control_read;
 	csc_setting->data = (void *)minor;
-
+#endif
 #ifdef CONFIG_SUPPORT_HDMI
 	psb_hdmi_proc_init(minor);
 #endif

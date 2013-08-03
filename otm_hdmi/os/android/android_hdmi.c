@@ -66,6 +66,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/kernel.h>
 #include <linux/interrupt.h>
+#include <linux/version.h>
 #include <drm/drmP.h>
 #include <drm/drm.h>
 #include <drm/drm_crtc.h>
@@ -1042,7 +1043,9 @@ edid_is_ready:
 				ret++;
 	}
 #endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	connector->display_info.raw_edid = NULL;
+#endif
 	/* monitor_type is being used to switch state between HDMI & DVI */
 	if (otm_hdmi_is_monitor_hdmi(hdmi_priv->context))
 		hdmi_priv->monitor_type = MONITOR_TYPE_HDMI;
@@ -1074,10 +1077,13 @@ edid_is_ready:
 
 		j++;
 	}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	/* add user mode to connector->mode list to support
 	 * DRM IOCTL attachmode
 	 */
+        /*we don't support attach mode in DRM_IOCTL in kernel3.10 now,
+         * so saftly remove below code when linux kernel version is 3.10
+         */
 	list_for_each_entry_safe(user_mode, t, &connector->user_modes, head) {
 		mode_present = 0;
 		/* check for whether user_mode is already in the mode_list */
@@ -1101,6 +1107,7 @@ edid_is_ready:
 			ret += 1;
 		}
 	}
+#endif
 
 	pref_mode_assigned = NULL;
 
@@ -1434,10 +1441,15 @@ int android_hdmi_crtc_mode_set(struct drm_crtc *crtc,
 			continue;
 		psb_intel_output = to_psb_intel_output(connector);
 	}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	if (psb_intel_output)
 		drm_connector_property_get_value(&psb_intel_output->base,
 			dev->mode_config.scaling_mode_property, &scalingType);
+#else
+        if (psb_intel_output)
+            drm_object_property_get_value(&(&psb_intel_output->base)->base,
+                    dev->mode_config.scaling_mode_property, &scalingType);
+#endif
 
 	psb_intel_crtc->scaling_type = scalingType;
 
@@ -2310,14 +2322,20 @@ static int android_hdmi_set_property(struct drm_connector *connector,
 		default:
 			goto set_prop_error;
 		}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 		if (drm_connector_property_get_value(connector, property, &curValue))
+#else
+                if (drm_object_property_get_value(&connector->base, property, &curValue))
+#endif
 			goto set_prop_error;
 
 		if (curValue == value)
 			goto set_prop_done;
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 		if (drm_connector_property_set_value(connector, property, value))
+#else 
+                if (drm_object_property_set_value(&connector->base, property, value))
+#endif
 			goto set_prop_error;
 
 		bTransitionFromToCentered =
@@ -2628,11 +2646,15 @@ void android_hdmi_driver_init(struct drm_device *dev,
 	drm_encoder_helper_add(encoder, &android_hdmi_enc_helper_funcs);
 	drm_connector_helper_add(connector,
 				 &android_hdmi_connector_helper_funcs);
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	drm_connector_attach_property(connector,
 					dev->mode_config.scaling_mode_property,
 					DRM_MODE_SCALE_CENTER);
-
+#else
+        drm_object_attach_property(&connector->base,
+                                        dev->mode_config.scaling_mode_property,
+                                        DRM_MODE_SCALE_CENTER);
+#endif
 	connector->display_info.subpixel_order = SubPixelHorizontalRGB;
 	connector->interlace_allowed = false;
 	connector->doublescan_allowed = false;

@@ -68,6 +68,7 @@
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/string.h>
+#include <linux/version.h>
 #include "otm_hdmi.h"
 #include "ipil_hdmi.h"
 #include "ps_hdmi.h"
@@ -105,8 +106,13 @@ static hdmi_context_t *g_context;
 #define PS_VCC330_OFF				0x24
 #define PS_VCC330_ON				0x37
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 extern int intel_scu_ipc_command(u32 cmd, u32 sub, u8 *in, u32 inlen,
 		u32 *out, u32 outlen);
+#else
+extern int intel_scu_ipc_command(int cmd, int sub, u32 *in, int inlen,
+                u32 *out, int outlen);
+#endif
 
 /* For CTP, it is required that SW pull up or pull down the
  * LS_OE GPIO pin based on cable status. This is needed before
@@ -392,11 +398,14 @@ void ps_hdmi_update_security_hdmi_hdcp_status(bool hdcp, bool cable)
 		in_buf[4] |= 1 << 0;
 	if (hdcp)
 		in_buf[4] |= 1 << 1;
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	/* no sub-cmd, so set "sub" argument to 0 */
 	intel_scu_ipc_command(IA_SCU_CMD, 0, in_buf, sizeof(in_buf),
 			out_buf, sizeof(out_buf)/sizeof(uint32_t));
-
+#else
+        intel_scu_ipc_command(IA_SCU_CMD, 0, (u32 *)in_buf, sizeof(in_buf),
+                        out_buf, sizeof(out_buf)/sizeof(uint32_t));
+#endif
 	pr_debug("hdcp: leave %s\n", __func__);
 	return;
 }
