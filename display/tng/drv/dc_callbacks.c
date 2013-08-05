@@ -359,6 +359,46 @@ void DCCBFlipPrimary(struct drm_device *dev,
 	}
 }
 
+void DCCBSetupZorder(struct drm_device *dev,
+			struct intel_dc_plane_zorder *zorder,
+			int pipe)
+{
+	struct drm_psb_private *dev_priv;
+	u32 dspcntr_reg;
+	u32 dspsurf_reg;
+	u32 sprite_reg = DSPACNTR + 0x3000;
+	u32 sprite_surf_reg = DSPASURF + 0x3000;
+
+	if (!dev || pipe < 0 || pipe > 2)
+		return;
+
+	if (pipe == 0) {
+		dspcntr_reg = DSPACNTR;
+		dspsurf_reg = DSPASURF;
+	} else if (pipe == 1) {
+		dspcntr_reg = DSPACNTR + 0x1000;
+		dspsurf_reg = DSPASURF + 0x1000;
+	} else if (pipe == 2) {
+		dspcntr_reg = DSPACNTR + 0x2000;
+		dspsurf_reg = DSPASURF + 0x2000;
+	} else
+		return;
+
+	dev_priv = (struct drm_psb_private *)dev->dev_private;
+
+	PSB_WVDC32((PSB_RVDC32(dspcntr_reg) & ~0x00000004), dspcntr_reg);
+	PSB_WVDC32((PSB_RVDC32(sprite_reg) & ~0x00000002), sprite_reg);
+
+	if (zorder->forceBottom[pipe])
+		PSB_WVDC32((PSB_RVDC32(dspcntr_reg) | 0x00000004), dspcntr_reg);
+
+	if (zorder->abovePrimary)
+		PSB_WVDC32((PSB_RVDC32(sprite_reg) | 0x00000002), sprite_reg);
+
+	PSB_WVDC32(PSB_RVDC32(dspsurf_reg), dspsurf_reg);
+	PSB_WVDC32(PSB_RVDC32(sprite_surf_reg), sprite_surf_reg);
+}
+
 static void _OverlayWaitFlip(struct drm_device *dev, u32 ovstat_reg)
 {
 	int retry;

@@ -151,6 +151,13 @@ static void _Flip_Primary(DC_MRFLD_DEVICE *psDevice,
 		DCCBFlipPrimary(psDevice->psDrmDevice, psContext);
 }
 
+static void _Setup_ZOrder(DC_MRFLD_DEVICE *psDevice,
+			DC_MRFLD_DC_PLANE_ZORDER *psZorder,
+			IMG_INT iPipe)
+{
+	DCCBSetupZorder(psDevice->psDrmDevice, psZorder, iPipe);
+}
+
 static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 {
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom;
@@ -253,6 +260,10 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 			}
 		}
 	}
+
+	/*setup plane zorder config*/
+	if (psSurfCustom)
+		_Setup_ZOrder(gpsDevice, &psSurfCustom->zorder, iPipe);
 
 	/* Issue "write_mem_start" for command mode panel. */
 	if (iPipe != DC_PIPE_B)
