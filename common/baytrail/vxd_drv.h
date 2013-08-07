@@ -272,6 +272,7 @@ struct drm_psb_private *psb_priv(struct drm_device *dev);
 
 extern int drm_psb_cpurelax;
 extern int drm_psb_udelaydivider;
+extern int drm_psb_priv_pmu_func;
 
 /*
  * set cpu_relax = 1 in sysfs to use cpu_relax instead of udelay bysy loop

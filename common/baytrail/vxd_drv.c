@@ -40,7 +40,7 @@ extern int drm_psb_trap_pagefaults;
 
 int drm_psb_cpurelax;
 int drm_psb_udelaydivider = 1;
-
+int drm_psb_priv_pmu_func = 0;
 static struct pci_dev *pci_root;
 
 int drm_psb_trap_pagefaults;
@@ -57,12 +57,18 @@ module_param_named(trap_pagefaults, drm_psb_trap_pagefaults, int, 0600);
 int drm_msvdx_pmpolicy = PSB_PMPOLICY_POWERDOWN;
 int drm_msvdx_bottom_half = PSB_BOTTOM_HALF_WQ;
 module_param_named(msvdx_pmpolicy, drm_msvdx_pmpolicy, int, 0600);
+module_param_named(priv_pmu_func, drm_psb_priv_pmu_func, int, 0600);
 MODULE_PARM_DESC(msvdx_pmpolicy,
 		"control d0i3 of msvdx "
 		"(default: 2"
 		"0 - d0i3 is disabled"
 		"1 - clockgating is enabled"
 		"2 - powerdown is enabled)");
+MODULE_PARM_DESC(priv_pmu_func,
+		"Use private PMU function or not "
+		"(default: 0"
+		"0 - disable"
+		"1 - enable)");
 
 int drm_psb_debug = 0x0;
 module_param_named(psb_debug, drm_psb_debug, int, 0600);
@@ -670,68 +676,70 @@ err_i1:
 	return retcode;
 }
 
-#define USING_PRIVATE_PMU_FUNC 1
-
-static void vxd_power_down(struct drm_device *dev)
+static bool vxd_power_down(struct drm_device *dev)
 {
 	uint32_t pwr_sts;
 	PSB_DEBUG_PM("MSVDX: power off msvdx.\n");
-
-#ifdef USING_PRIVATE_PMU_FUNC
-	intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
-	udelay(10);
-	pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-	while (pwr_sts != 0x03000003) {
+	if (drm_psb_priv_pmu_func) {
 		intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
 		udelay(10);
 		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
+		while (pwr_sts != 0x03000003) {
+			intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
+			udelay(10);
+			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
+		}
+		return true;
 	}
-#else
-	if (pmu_nc_set_power_state(VEDSSC, OSPM_ISLAND_DOWN, VEDSSPM0)) {
-		PSB_DEBUG_PM("VED: pmu_nc_set_power_state DOWN failed!\n");
-		return false;
+	else {
+		if (pmu_nc_set_power_state(VEDSSC, OSPM_ISLAND_DOWN, VEDSSPM0)) {
+			PSB_DEBUG_PM("VED: pmu_nc_set_power_state DOWN failed!\n");
+			return false;
+		}
+		return true;
 	}
-#endif
 }
 
-static void vxd_power_on(struct drm_device *dev)
+static bool vxd_power_on(struct drm_device *dev)
 {
 	uint32_t pwr_sts;
 	PSB_DEBUG_PM("MSVDX: power on msvdx.\n");
-#ifdef USING_PRIVATE_PMU_FUNC
-	/* TODO: need be replaced by pmu_nc_get_power_state */
-	intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
-	udelay(10);
-	pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-	while (pwr_sts != 0x0) {
+	if (drm_psb_priv_pmu_func) {
 		intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
 		udelay(10);
 		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-	}
+		while (pwr_sts != 0x0) {
+			intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
+			udelay(10);
+			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
+		}
 
-	intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
-	udelay(10);
-	pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-	while (pwr_sts != 0x03000003) {
 		intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
 		udelay(10);
 		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-	}
+		while (pwr_sts != 0x03000003) {
+			intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
+			udelay(10);
+			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
+		}
 
-	intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
-	udelay(10);
-	pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-	while (pwr_sts != 0x0) {
 		intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
 		udelay(10);
 		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
+		while (pwr_sts != 0x0) {
+			intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
+			udelay(10);
+			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
+		}
+		return true;
 	}
-#else
-	if (pmu_nc_set_power_state(VEDSSC, OSPM_ISLAND_UP, VEDSSPM0)) {
-		PSB_DEBUG_PM("VED: pmu_nc_set_power_state ON failed!\n");
-		return false;
+	else {
+		if (pmu_nc_set_power_state(VEDSSC, OSPM_ISLAND_UP, VEDSSPM0)) {
+			PSB_DEBUG_PM("VED: pmu_nc_set_power_state ON failed!\n");
+			return false;
+		}
+		return true;
 	}
-#endif
 }
 
 static void vxd_power_init(struct drm_device *dev)
