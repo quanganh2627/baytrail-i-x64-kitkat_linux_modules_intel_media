@@ -1034,10 +1034,7 @@ int tng_topaz_init_fw(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
-
-	const unsigned int ui_align = SECURE_ALING - 1;
 	const struct firmware *raw = NULL;
-
 	struct tng_secure_fw *cur_sec_fw;
 	struct ttm_buffer_object **cur_drm_obj;
 	struct ttm_bo_kmap_obj tmp_kmap;
@@ -1131,7 +1128,8 @@ int tng_topaz_init_fw(struct drm_device *dev)
 		ttm_bo_kunmap(&tmp_kmap);
 
 		/* handle data section */
-		uc_ptr += (cur_sec_fw->text_size + ui_align) & (~ui_align);
+		uc_ptr += cur_sec_fw->text_size;
+
 		cur_drm_obj = &cur_sec_fw->data;
 		cur_size = cur_sec_fw->data_size;
 

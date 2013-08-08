@@ -1897,10 +1897,14 @@ static inline void tng_topaz_trace_ctx(
 	char *words,
 	struct psb_video_ctx *trace_ctx)
 {
-	PSB_DEBUG_TOPAZ("TOPAZ: %s:\n", words);
-	PSB_DEBUG_TOPAZ("%08x(%s), status %08x\n",
+	if (words != NULL)
+		PSB_DEBUG_TOPAZ("TOPAZ: %s:\n", words);
+#ifdef _MRFLD_B0_
+	if (trace_ctx != NULL)
+		PSB_DEBUG_TOPAZ("%08x(%s), status %08x\n",
 		trace_ctx, codec_to_string(trace_ctx->codec),
 		trace_ctx->status);
+#endif
 	return ;
 }
 
@@ -1923,7 +1927,6 @@ static int tng_context_switch(
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Frame (%d)\n", video_ctx->frame_count);
 	tng_topaz_trace_ctx("input Context", video_ctx);
-	tng_topaz_trace_ctx("current Context", topaz_priv->cur_context);
 
 	if (codec == IMG_CODEC_JPEG) {
 		PSB_DEBUG_TOPAZ("TOPAZ: JPEG context(%08x)\n",
@@ -1944,6 +1947,8 @@ static int tng_context_switch(
 		topaz_priv->cur_codec = codec;
 		return ret;
 	}
+
+	tng_topaz_trace_ctx("current Context", topaz_priv->cur_context);
 
 	if (topaz_priv->cur_context == video_ctx) {
 #if _MRFLD_B0_A_
