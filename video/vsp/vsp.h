@@ -266,6 +266,7 @@ struct vsp_private {
 
 	void *coded_buf;
 	struct ttm_bo_kmap_obj coded_buf_kmap;
+	struct ttm_buffer_object *coded_buf_bo;
 };
 
 extern int vsp_init(struct drm_device *dev);

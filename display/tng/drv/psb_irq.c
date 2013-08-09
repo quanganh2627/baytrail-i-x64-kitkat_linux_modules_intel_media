@@ -28,12 +28,7 @@
 #include "psb_msvdx.h"
 #include "mdfld_dsi_dbi_dsr.h"
 
-#ifdef MEDFIELD
-#include "pnw_topaz.h"
-#endif
-#ifdef MERRIFIELD
 #include "tng_topaz.h"
-#endif
 
 #ifdef SUPPORT_VSP
 #include "vsp.h"
@@ -498,18 +493,10 @@ irqreturn_t psb_irq_handler(DRM_IRQ_ARGS)
 		psb_msvdx_interrupt(dev);
 		handled = 1;
 	}
-#ifdef MEDFIELD
-	if ((IS_MDFLD(dev) && topaz_int)) {
-		pnw_topaz_interrupt(dev);
-		handled = 1;
-	}
-#endif
-#ifdef MERRIFIELD
-	if ((IS_MRFLD(dev) && topaz_int)) {
+	if ((topaz_int)) {
 		tng_topaz_interrupt(dev);
 		handled = 1;
 	}
-#endif
 #ifdef SUPPORT_VSP
 	if (vsp_int) {
 		vsp_interrupt(dev);
@@ -610,14 +597,7 @@ int psb_irq_postinstall_islands(struct drm_device *dev, int hw_islands)
 	if (IS_MID(dev) && !dev_priv->topaz_disabled)
 		if (hw_islands & OSPM_VIDEO_ENC_ISLAND)
 			if (ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
-#ifdef MEDFIELD
-				if (IS_MDFLD(dev))
-					pnw_topaz_enableirq(dev);
-#endif
-#ifdef MERRIFIELD
-				if (IS_MRFLD(dev))
-					tng_topaz_enableirq(dev);
-#endif
+				tng_topaz_enableirq(dev);
 
 			}
 
@@ -681,14 +661,7 @@ void psb_irq_uninstall_islands(struct drm_device *dev, int hw_islands)
 	if (IS_MID(dev) && !dev_priv->topaz_disabled)
 		if (hw_islands & OSPM_VIDEO_ENC_ISLAND)
 			if (ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
-#ifdef MEDFIELD
-				if (IS_MDFLD(dev))
-					pnw_topaz_disableirq(dev);
-#endif
-#ifdef MERRIFIELD
-				if (IS_MRFLD(dev))
-					tng_topaz_disableirq(dev);
-#endif
+				tng_topaz_disableirq(dev);
 			}
 
 	if (hw_islands & OSPM_VIDEO_DEC_ISLAND)

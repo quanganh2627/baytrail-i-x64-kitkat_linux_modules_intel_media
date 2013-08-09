@@ -89,6 +89,7 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->current_sequence = 0;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 	vsp_priv->dev = dev;
+	vsp_priv->coded_buf = NULL;
 
 	vsp_priv->available_recon_buffer = 0;
 

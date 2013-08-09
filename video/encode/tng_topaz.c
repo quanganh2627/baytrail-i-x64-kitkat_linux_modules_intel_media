@@ -663,7 +663,7 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 	void *cmd;
 	uint32_t sequence = dev_priv->sequence[LNC_ENGINE_ENCODE];
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
-	struct psb_video_ctx *video_ctx = get_ctx_from_fp(dev, file_priv->filp);
+	struct psb_video_ctx *video_ctx = NULL;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: command submit, topaz busy = %d\n",
 		topaz_priv->topaz_busy);
@@ -696,6 +696,12 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 		PSB_DEBUG_TOPAZ("TOPAZ: reset ok.\n");
 
 #if (_MRFLD_B0_ == 0)
+		video_ctx = get_ctx_from_fp(dev, file_priv->filp);
+		if (!video_ctx) {
+			DRM_ERROR("Failed to get context from fp\n");
+			return -1;
+		}
+
 		/* #.# upload firmware */
 		ret = tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
 		if (ret) {
@@ -1749,12 +1755,13 @@ int mtx_write_FIFO(
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	int32_t ret = 0;
 	uint32_t cmdword = 0;
-	struct psb_video_ctx *video_ctx;
+	struct psb_video_ctx *video_ctx = NULL;
 
 	if (topaz_priv->cur_context) {
 		video_ctx = topaz_priv->cur_context;
 	} else {
 		DRM_ERROR("Invalid video context\n");
+		return -1;
 	}
 
 #ifdef TOPAZHP_SERIALIZED
@@ -2617,12 +2624,14 @@ int tng_topaz_remove_ctx(
 	if (video_ctx->reg_saving_bo) {
 		PSB_DEBUG_TOPAZ("TOPAZ: unref reg saving bo\n");
 		ttm_bo_kunmap(&video_ctx->reg_kmap);
+		ttm_bo_unreserve(video_ctx->reg_saving_bo);
 		ttm_bo_unref(&video_ctx->reg_saving_bo);
 		video_ctx->reg_saving_bo = NULL;
 	}
 
 	if (video_ctx->data_saving_bo) {
 		PSB_DEBUG_TOPAZ("TOPAZ: unref data saving bo\n");
+		ttm_bo_unreserve(video_ctx->data_saving_bo);
 		ttm_bo_unref(&video_ctx->data_saving_bo);
 		video_ctx->data_saving_bo = NULL;
 	}

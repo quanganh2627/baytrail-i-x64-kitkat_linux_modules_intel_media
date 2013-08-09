@@ -212,7 +212,6 @@ int psb_msvdx_core_reset(struct drm_psb_private *dev_priv)
  * Reset chip and disable interrupts.
  * Return 0 success, 1 failure
  */
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
 int psb_msvdx_reset(struct drm_psb_private *dev_priv)
 {
 	int ret = 0;
@@ -237,7 +236,6 @@ int psb_msvdx_reset(struct drm_psb_private *dev_priv)
 
 	return ret;
 }
-#endif
 
 static int msvdx_allocate_ccb(struct drm_device *dev,
 			    struct ttm_buffer_object **ccb,
@@ -567,16 +565,17 @@ void msvdx_init_test(struct drm_device *dev)
 static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 {
 	struct firmware **fw;
+	*fw = NULL;
 	uint8_t *fw_io_base;
 	void *ptr = NULL;
 	int rc, fw_size;
 	uint32_t imrl, imrh;
 	uint64_t imr_base, imr_end;
 
-	intel_mid_msgbus_write32(TNG_IMR_MSG_PORT,
-			TNG_IMR5L_MSG_REGADDR, imrl);
-	intel_mid_msgbus_write32(TNG_IMR_MSG_PORT,
-			TNG_IMR5H_MSG_REGADDR, imrh);
+	imrl = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
+			TNG_IMR5L_MSG_REGADDR);
+	imrh = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
+			TNG_IMR5H_MSG_REGADDR);
 
 	imr_base = (imrl & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
 	imr_end = (imrh & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
@@ -835,36 +834,35 @@ int psb_msvdx_post_boot_init(struct drm_device *dev)
 	/* DDK setup tiling region here */
 	/* DDK set MMU_CONTROL2 register */
 
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
 	/* set watchdog timer here */
-	int reg_val = 0;
-	REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_CNT_CTRL, 0x3);
-	REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_ENABLE, 0);
-	REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_ACTION0, 1);
-	REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_CLEAR_SELECT, 1);
-	REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_CLKDIV_SELECT, 7);
-	PSB_WMSVDX32(fe_wdt_clks / WDT_CLOCK_DIVIDER, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-	PSB_WMSVDX32(reg_val, FE_MSVDX_WDT_CONTROL_OFFSET);
+	if (!msvdx_priv->fw_loaded_by_punit) {
+		int reg_val = 0;
+		REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_CNT_CTRL, 0x3);
+		REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_ENABLE, 0);
+		REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_ACTION0, 1);
+		REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_CLEAR_SELECT, 1);
+		REGIO_WRITE_FIELD(reg_val, FE_MSVDX_WDT_CONTROL, FE_WDT_CLKDIV_SELECT, 7);
+		PSB_WMSVDX32(fe_wdt_clks / WDT_CLOCK_DIVIDER, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
+		PSB_WMSVDX32(reg_val, FE_MSVDX_WDT_CONTROL_OFFSET);
 
-	reg_val = 0;
-	/* DDK set BE_WDT_CNT_CTRL as 0x5 and BE_WDT_CLEAR_SELECT as 0x1 */
-	REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_CNT_CTRL, 0x7);
-	REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_ENABLE, 0);
-	REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_ACTION0, 1);
-	REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_CLEAR_SELECT, 0xd);
-	REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_CLKDIV_SELECT, 7);
+		reg_val = 0;
+		/* DDK set BE_WDT_CNT_CTRL as 0x5 and BE_WDT_CLEAR_SELECT as 0x1 */
+		REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_CNT_CTRL, 0x7);
+		REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_ENABLE, 0);
+		REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_ACTION0, 1);
+		REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_CLEAR_SELECT, 0xd);
+		REGIO_WRITE_FIELD(reg_val, BE_MSVDX_WDT_CONTROL, BE_WDT_CLKDIV_SELECT, 7);
 
-	PSB_WMSVDX32(be_wdt_clks / WDT_CLOCK_DIVIDER, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-	PSB_WMSVDX32(reg_val, BE_MSVDX_WDT_CONTROL_OFFSET);
-#else
-	/* for the other two, use the default value punit set */
-	PSB_WMSVDX32(fe_wdt_clks / WDT_CLOCK_DIVIDER, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-	PSB_WMSVDX32(be_wdt_clks / WDT_CLOCK_DIVIDER, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-#endif
+		PSB_WMSVDX32(be_wdt_clks / WDT_CLOCK_DIVIDER, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
+		PSB_WMSVDX32(reg_val, BE_MSVDX_WDT_CONTROL_OFFSET);
+	} else {
+		/* for the other two, use the default value punit set */
+		PSB_WMSVDX32(fe_wdt_clks / WDT_CLOCK_DIVIDER, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
+		PSB_WMSVDX32(be_wdt_clks / WDT_CLOCK_DIVIDER, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
+	}
+
 	return msvdx_rendec_init_by_msg(dev);
 }
-
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
 
 int psb_msvdx_init(struct drm_device *dev)
 {
@@ -886,6 +884,11 @@ int psb_msvdx_init(struct drm_device *dev)
 	msvdx_priv->msvdx_busy = 0;
 	msvdx_priv->msvdx_hw_busy = 1;
 
+	if (msvdx_priv->fw_loaded_by_punit) {
+		/* DDK: Configure MSVDX Memory Stalling iwth the min, max and ratio of access */
+		msvdx_post_powerup_core_reset(dev);
+	}
+
 	/* Enable Clocks */
 	PSB_DEBUG_INIT("Enabling clocks\n");
 	psb_msvdx_mtx_set_clocks(dev_priv->dev, clk_enable_all);
@@ -895,6 +898,13 @@ int psb_msvdx_init(struct drm_device *dev)
 	if (!msvdx_priv->fw_loaded_by_punit) {
 		/* Enable MMU by removing all bypass bits */
 		PSB_WMSVDX32(0, MSVDX_MMU_CONTROL0_OFFSET);
+	} else {
+		msvdx_priv->rendec_init = 0;
+		ret = msvdx_mtx_init(dev, msvdx_priv->decoding_err);
+		if (ret) {
+			PSB_DEBUG_WARN("WARN: msvdx_mtx_init failed.\n");
+			return 1;
+		}
 	}
 
 	ret = msvdx_alloc_ccb_for_rendec(dev);
@@ -926,28 +936,17 @@ int psb_msvdx_init(struct drm_device *dev)
 
 		PSB_WMSVDX32(820, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
 		PSB_WMSVDX32(8200, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-	} else {
-		msvdx_priv->rendec_init = 0;
-		/* for the other two, use the default value punit set */
-		PSB_WMSVDX32(0x334, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-		PSB_WMSVDX32(0x2008, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-	}
 
 #ifndef CONFIG_DRM_VXD_BYT
-	if (IS_MRFLD(dev)) {
-		psb_irq_preinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
-		psb_irq_postinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
-	}
+		if (IS_MRFLD(dev)) {
+			psb_irq_preinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
+			psb_irq_postinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
+		}
 #endif
 
-	psb_msvdx_clearirq(dev);
-	psb_msvdx_enableirq(dev);
+		psb_msvdx_clearirq(dev);
+		psb_msvdx_enableirq(dev);
 
-#ifndef CONFIG_DRM_VXD_BYT
-	PSB_DEBUG_INIT("MSDVX:old clock gating disable = 0x%08x\n",
-		       PSB_RVDC32(PSB_MSVDX_CLOCKGATING));
-#endif
-	if (!msvdx_priv->fw_loaded_by_punit) {
 		cmd = 0;
 		cmd = PSB_RMSVDX32(VEC_SHIFTREG_CONTROL_OFFSET);
 		REGIO_WRITE_FIELD(cmd,
@@ -957,6 +956,10 @@ int psb_msvdx_init(struct drm_device *dev)
 		PSB_WMSVDX32(cmd, VEC_SHIFTREG_CONTROL_OFFSET);
 	}
 
+#ifndef CONFIG_DRM_VXD_BYT
+	PSB_DEBUG_INIT("MSDVX:old clock gating disable = 0x%08x\n",
+		       PSB_RVDC32(PSB_MSVDX_CLOCKGATING));
+#endif
 #ifdef CONFIG_SLICE_HEADER_PARSING
 	if (!msvdx_priv->term_buf) {
 		ret = psb_allocate_term_buf(dev, &msvdx_priv->term_buf,
@@ -968,68 +971,6 @@ int psb_msvdx_init(struct drm_device *dev)
 #endif
 	return 0;
 }
-
-#else
-
-int psb_msvdx_init(struct drm_device *dev)
-{
-	struct drm_psb_private *dev_priv = psb_priv(dev);
-	int ret;
-	struct msvdx_private *msvdx_priv;
-
-	if (!dev_priv->msvdx_private) {
-		if (msvdx_startup_init(dev))
-			return 1;
-	}
-
-	if (dev_priv->msvdx_private == NULL)
-		return 1;
-
-	msvdx_priv = dev_priv->msvdx_private;
-
-	msvdx_priv->msvdx_busy = 0;
-	msvdx_priv->msvdx_hw_busy = 1;
-
-	/* DDK: Configure MSVDX Memory Stalling iwth the min, max and ratio of access */
-
-	msvdx_post_powerup_core_reset(dev);
-
-	/* Enable Clocks */
-	PSB_DEBUG_INIT("Enabling clocks\n");
-	psb_msvdx_mtx_set_clocks(dev_priv->dev, clk_enable_all);
-
-	msvdx_priv->rendec_init = 0;
-
-	ret = msvdx_mtx_init(dev, msvdx_priv->decoding_err);
-	if (ret) {
-		PSB_DEBUG_WARN("WARN: msvdx_mtx_init failed.\n");
-		return 1;
-	}
-
-	ret = msvdx_alloc_ccb_for_rendec(dev);
-	if (ret) {
-		PSB_DEBUG_WARN("WARN: msvdx_alloc_ccb_for_rendec failed.\n");
-		return 1;
-	}
-
-#ifndef CONFIG_DRM_VXD_BYT
-	PSB_DEBUG_INIT("MSDVX:old clock gating disable = 0x%08x\n",
-		       PSB_RVDC32(PSB_MSVDX_CLOCKGATING));
-#endif
-#ifdef CONFIG_SLICE_HEADER_PARSING
-	if (!msvdx_priv->term_buf) {
-		ret = psb_allocate_term_buf(dev, &msvdx_priv->term_buf,
-					    &msvdx_priv->term_buf_addr,
-					    TERMINATION_SIZE);
-		if (ret)
-			return 1;
-	}
-#endif
-
-	return 0;
-}
-
-#endif
 
 int psb_msvdx_uninit(struct drm_device *dev)
 {
@@ -1056,10 +997,12 @@ int psb_msvdx_uninit(struct drm_device *dev)
 		msvdx_priv->term_buf = NULL;
 	}
 #endif
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
-	if (msvdx_priv->msvdx_fw)
-		kfree(msvdx_priv->msvdx_fw);
-#endif
+
+	if (!msvdx_priv->fw_loaded_by_punit) {
+		if (msvdx_priv->msvdx_fw)
+			kfree(msvdx_priv->msvdx_fw);
+	}
+
 #ifdef PSB_MSVDX_SAVE_RESTORE_VEC
 	if (msvdx_priv->vec_local_mem_data)
 		kfree(msvdx_priv->vec_local_mem_data);

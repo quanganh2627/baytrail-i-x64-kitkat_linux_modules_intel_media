@@ -34,15 +34,7 @@
 #include "vsp.h"
 #endif
 
-#ifdef ENABLE_MRST
-#include "lnc_topaz.h"
-#endif
-#ifdef MEDFIELD
-#include "pnw_topaz.h"
-#endif
-#ifdef MERRIFIELD
 #include "tng_topaz.h"
-#endif
 
 #include <drm/drm_pciids.h>
 #include "pwr_mgmt.h"
@@ -121,7 +113,7 @@ int drm_psb_te_timer_delay = (DRM_HZ / 40);
 char HDMI_EDID[HDMI_MONITOR_NAME_LENGTH];
 int hdmi_state;
 u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
-int drm_psb_msvdx_tiling;
+int drm_psb_msvdx_tiling = 0;
 int drm_msvdx_bottom_half;
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
@@ -227,17 +219,6 @@ early_param("dsr", config_dsr);
 #endif
 
 static struct pci_device_id pciidlist[] = {
-#ifdef MEDFIELD
-	{0x8086, 0x4100, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MDFLD_0130},
-	{0x8086, 0x4101, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MDFLD_0130},
-	{0x8086, 0x4102, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MDFLD_0130},
-	{0x8086, 0x4103, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MDFLD_0130},
-	{0x8086, 0x0134, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MDFLD_0130},
-	{0x8086, 0x0135, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MDFLD_0130},
-	{0x8086, 0x0136, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MDFLD_0130},
-	{0x8086, 0x0137, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MDFLD_0130},
-#endif
-#ifdef MERRIFIELD
 	{0x8086, 0x1180, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MRFLD_1180},
 	{0x8086, 0x1181, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MRFLD_1180},
 	{0x8086, 0x1182, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MRFLD_1180},
@@ -246,7 +227,7 @@ static struct pci_device_id pciidlist[] = {
 	{0x8086, 0x1185, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MRFLD_1180},
 	{0x8086, 0x1186, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MRFLD_1180},
 	{0x8086, 0x1187, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MRFLD_1180},
-#endif
+	{0x8086, 0x1480, PCI_ANY_ID, PCI_ANY_ID, 0, 0, CHIP_MRFLD_1480},
 	{0, 0, 0}
 };
 
@@ -814,8 +795,7 @@ static void psb_do_takedown(struct drm_device *dev)
 #ifdef SUPPORT_VSP
 	vsp_deinit(dev);
 #endif
-	if (IS_MRFLD(dev))
-		tng_topaz_uninit(dev);
+	tng_topaz_uninit(dev);
 }
 
 #if KEEP_UNUSED_CODE
@@ -1345,8 +1325,6 @@ static int psb_do_init(struct drm_device *dev)
 	dev_priv->gatt_free_offset = pg->mmu_gatt_start +
 	    (stolen_gtt << PAGE_SHIFT) * 1024;
 
-	spin_lock_init(&dev_priv->irqmask_lock);
-
 	tt_pages = (pg->gatt_pages < PSB_TT_PRIV0_PLIMIT) ?
 	    pg->gatt_pages : PSB_TT_PRIV0_PLIMIT;
 	tt_start = dev_priv->gatt_free_offset - pg->mmu_gatt_start;
@@ -1383,15 +1361,12 @@ static int psb_do_init(struct drm_device *dev)
 	PSB_DEBUG_INIT("Init MSVDX\n");
 	psb_msvdx_init(dev);
 #ifdef SUPPORT_VSP
-	if (IS_MRFLD(dev)) {
-		VSP_DEBUG("Init VSP\n");
-		vsp_init(dev);
-	}
+	VSP_DEBUG("Init VSP\n");
+	vsp_init(dev);
 #endif
 
 	PSB_DEBUG_INIT("Init Topaz\n");
-	if (IS_MRFLD(dev))
-		tng_topaz_init(dev);
+	tng_topaz_init(dev);
 	return 0;
  out_err:
 	psb_do_takedown(dev);
@@ -1460,7 +1435,6 @@ static int psb_driver_unload(struct drm_device *dev)
 			dev_priv->vsp_mmu = NULL;
 		}
 #endif
-
 		if (IS_MRFLD(dev))
 			mrfld_gtt_takedown(dev_priv->pg, 1);
 		else
@@ -1503,11 +1477,9 @@ static int psb_driver_unload(struct drm_device *dev)
 			dev_priv->msvdx_reg = NULL;
 		}
 #ifdef SUPPORT_VSP
-		if (IS_MRFLD(dev)) {
-			if (dev_priv->vsp_reg) {
-				iounmap(dev_priv->vsp_reg);
-				dev_priv->vsp_reg = NULL;
-			}
+		if (dev_priv->vsp_reg) {
+			iounmap(dev_priv->vsp_reg);
+			dev_priv->vsp_reg = NULL;
 		}
 #endif
 
@@ -1547,10 +1519,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	DRM_INFO("psb - %s\n", PSB_PACKAGE_VERSION);
 
-	if (IS_MRFLD(dev))
-		DRM_INFO("Run drivers on Merrifield platform!\n");
-	else
-		DRM_INFO("Run drivers on Poulsbo platform!\n");
+	DRM_INFO("Run drivers on Merrifield platform!\n");
 
 	dev_priv = kzalloc(sizeof(*dev_priv), GFP_KERNEL);
 	if (dev_priv == NULL)
@@ -1599,6 +1568,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	mutex_init(&dev_priv->vsync_lock);
 
 	spin_lock_init(&dev_priv->reloc_lock);
+	spin_lock_init(&dev_priv->irqmask_lock);
 
 	DRM_INIT_WAITQUEUE(&dev_priv->rel_mapped_queue);
 
@@ -1626,18 +1596,9 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 		goto out_err;
 #endif
 	if (IS_TOPAZ(dev)) {
-		if (IS_MRFLD(dev))
-			dev_priv->topaz_reg =
-			    ioremap(resource_start + TNG_TOPAZ_OFFSET,
-				    TNG_TOPAZ_SIZE);
-		else if (IS_MDFLD(dev))
-			dev_priv->topaz_reg =
-			    ioremap(resource_start + PNW_TOPAZ_OFFSET,
-				    PNW_TOPAZ_SIZE);
-		else
-			dev_priv->topaz_reg =
-			    ioremap(resource_start + LNC_TOPAZ_OFFSET,
-				    LNC_TOPAZ_SIZE);
+		dev_priv->topaz_reg =
+		    ioremap(resource_start + TNG_TOPAZ_OFFSET,
+			    TNG_TOPAZ_SIZE);
 
 		if (!dev_priv->topaz_reg)
 			goto out_err;

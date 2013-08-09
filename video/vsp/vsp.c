@@ -685,41 +685,43 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			if(vsp_priv->fw_loaded == 0)
 				vsp_new_context(dev_priv->dev);
 		} else if (cur_cmd->type == Vss_Sys_Ref_Frame_COMMAND) {
-				ref_vp8_bo =
-					ttm_buffer_object_lookup(tfile,
-						cur_cmd->reserved7);
-				if (ref_vp8_bo == NULL) {
-					DRM_ERROR("VSP: failed to find %x bo\n",
-						cur_cmd->reserved7);
-					ret = -1;
-					goto out;
-				}
-				bool is_iomem;
-				struct ttm_bo_kmap_obj vp8_ref__kmap;
-				ret = ttm_bo_kmap(ref_vp8_bo, 0,
-						  ref_vp8_bo->num_pages,
-						  &vp8_ref__kmap);
-				if (ret) {
-					DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
-					goto out;
-				}
-				struct VssProcPictureVP8* ref =
-					(struct VssProcPictureVP8*)
-						ttm_kmap_obj_virtual(&vp8_ref__kmap,
-								     &is_iomem);
+			ref_vp8_bo =
+				ttm_buffer_object_lookup(tfile,
+					cur_cmd->reserved7);
+			if (ref_vp8_bo == NULL) {
+				DRM_ERROR("VSP: failed to find %x bo\n",
+					cur_cmd->reserved7);
+				ret = -1;
+				goto out;
+			}
+			bool is_iomem;
+			struct ttm_bo_kmap_obj vp8_ref__kmap;
+			ret = ttm_bo_kmap(ref_vp8_bo, 0,
+					ref_vp8_bo->num_pages,
+					&vp8_ref__kmap);
+			if (ret) {
+				DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
+				ttm_bo_unref(&ref_vp8_bo);
+				goto out;
+			}
+			struct VssProcPictureVP8* ref =
+				(struct VssProcPictureVP8*)
+					ttm_kmap_obj_virtual(&vp8_ref__kmap,
+							     &is_iomem);
 
-				ref = ((char *)ref)+256;
-				for (i = 0; i<4; i++) {
-					vsp_priv->ref_frame_buffers[i] = ref[i];
-					VSP_DEBUG("vsp_priv->ref_frame_buffers[%d]=%x\n",
-							i,vsp_priv->ref_frame_buffers[i]);
-					VSP_DEBUG("vsp_priv->ref_frame_buffers[%d].surface_id=%x\n",
-							i,vsp_priv->ref_frame_buffers[i].surface_id);
-					VSP_DEBUG("vsp_priv->ref_frame_buffers[%d].base=%x\n",
-							i,vsp_priv->ref_frame_buffers[i].base);
-				}
+			ref = ((char *)ref)+256;
+			for (i = 0; i<4; i++) {
+			vsp_priv->ref_frame_buffers[i] = ref[i];
+			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d]=%x\n",
+					i,vsp_priv->ref_frame_buffers[i]);
+			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d].surface_id=%x\n",
+					i,vsp_priv->ref_frame_buffers[i].surface_id);
+			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d].base=%x\n",
+					i,vsp_priv->ref_frame_buffers[i].base);
+			}
 
-				ttm_bo_kunmap(&vp8_ref__kmap);
+			ttm_bo_kunmap(&vp8_ref__kmap);
+			ttm_bo_unref(&ref_vp8_bo);
 		} else
 			/* calculate the numbers of cmd send to VSP */
 			vsp_cmd_num++;
@@ -786,6 +788,7 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 	VSP_DEBUG("finished fencing\n");
 out:
+
 	return ret;
 }
 
@@ -819,6 +822,7 @@ int vsp_fence_surfaces(struct drm_file *priv,
 			  &pic_param_kmap);
 	if (ret) {
 		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
+		ttm_bo_unref(&pic_param_bo);
 		goto out;
 	}
 
@@ -854,6 +858,8 @@ int vsp_fence_surfaces(struct drm_file *priv,
 				break;
 			}
 		}
+
+		ttm_bo_unref(&surf_bo);
 
 		BUG_ON(!list_empty(&surf_list));
 		/* create fence */
@@ -906,6 +912,7 @@ int vsp_fence_surfaces(struct drm_file *priv,
 	}
 out:
 	ttm_bo_kunmap(&pic_param_kmap);
+	ttm_bo_unref(&pic_param_bo);
 
 	return ret;
 }
@@ -936,6 +943,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 			  &vp8_encode_frame__kmap);
 	if (ret) {
 		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
+		ttm_bo_unref(&pic_param_bo);
 		goto out;
 	}
 
@@ -965,6 +973,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 
 	if (vsp_priv->coded_buf != NULL) {
 		ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
+		ttm_bo_unref(&vsp_priv->coded_buf_bo);
 		vsp_priv->coded_buf = NULL;
 	}
 	/* map coded buffer */
@@ -972,9 +981,11 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 			  &vsp_priv->coded_buf_kmap);
 	if (ret) {
 		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
+		ttm_bo_unref(&coded_buf_bo);
 		goto out;
 	}
 
+	vsp_priv->coded_buf_bo = coded_buf_bo;
 	vsp_priv->coded_buf = (void *)
 		ttm_kmap_obj_virtual(
 				&vsp_priv->coded_buf_kmap,
@@ -997,6 +1008,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 out:
 #ifndef VP8_ENC_DEBUG
 	ttm_bo_kunmap(&vp8_encode_frame__kmap);
+	ttm_bo_unref(&pic_param_bo);
 #endif
 	return ret;
 }
@@ -1080,6 +1092,12 @@ void vsp_rm_context(struct drm_device *dev)
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 	vsp_priv->fw_loaded = 0;
 	vsp_priv->current_sequence = 0;
+
+	if (vsp_priv->coded_buf != NULL) {
+		ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
+		ttm_bo_unref(&vsp_priv->coded_buf_bo);
+		vsp_priv->coded_buf = NULL;
+	}
 
 	schedule_delayed_work(&vsp_priv->vsp_suspend_wq, 0);
 	VSP_DEBUG("VSP: OK. Power down the HW!\n");

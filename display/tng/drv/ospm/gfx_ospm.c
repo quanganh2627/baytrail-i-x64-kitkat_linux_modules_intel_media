@@ -330,6 +330,8 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	OSPM_DPF("Post-power-up status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
+	psb_irq_preinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+
 	return !ret;
 }
 
@@ -346,6 +348,9 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 
 	OSPM_DPF("Pre-power-off Status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
+
+	psb_irq_uninstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+	synchronize_irq(dev->pdev->irq);
 
 	/* power down every thing */
 	if (gfx_island_selected & GFX_RSCD_SSC)

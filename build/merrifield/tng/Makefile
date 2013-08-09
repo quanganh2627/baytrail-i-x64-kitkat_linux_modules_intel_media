@@ -59,7 +59,7 @@ ccflags-$(CONFIG_SUPPORT_HDMI) += \
 #
 # Video ccflags
 #
-ccflags-y += -DCONFIG_VIDEO_MRFLD -DPSB_MSVDX_FW_LOADED_BY_HOST -DSUPPORT_VSP
+ccflags-y += -DCONFIG_VIDEO_MRFLD -DSUPPORT_VSP
 ccflags-y += \
  	-I$(VIDEOINC)/common \
 	-I$(VIDEOINC)/decode \

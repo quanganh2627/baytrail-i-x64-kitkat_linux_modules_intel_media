@@ -47,10 +47,8 @@
 #include <linux/version.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #define SUPPORT_EARLY_SUSPEND 1
-#include <asm/intel_scu_pmic.h>
-#else
-#include <asm/intel_scu_ipc.h>
 #endif
+#include <asm/intel_scu_pmic.h>
 
 #if SUPPORT_EARLY_SUSPEND
 #include <linux/earlysuspend.h>

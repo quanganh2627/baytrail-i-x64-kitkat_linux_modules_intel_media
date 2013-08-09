@@ -64,7 +64,8 @@ enum {
 	CHIP_PSB_8109 = 1,
 	CHIP_MRST_4100 = 2,
 	CHIP_MDFLD_0130 = 3,
-	CHIP_MRFLD_1180 = 4
+	CHIP_MRFLD_1180 = 4,
+	CHIP_MRFLD_1480 = 5
 };
 
 
@@ -1298,7 +1299,7 @@ static inline void WRAPPER_REGISTER_WRITE(struct drm_device *dev, uint32_t reg,
 #define IS_CTP(dev) (((dev->pci_device & 0xffff) == 0x08c0) ||	\
 		((dev->pci_device & 0xffff) == 0x08c7) ||  \
 		((dev->pci_device & 0xffff) == 0x08c8))
-#define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180)
+#define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180 || ((dev)->pci_device & 0xfff8) == 0x1480)
 
 #define IS_MID(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
 #define IS_FLDS(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))

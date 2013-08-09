@@ -64,6 +64,8 @@
 extern int sepapp_image_verify(u8 *addr, ssize_t size, u32 key_index, u32 magic_num);
 #endif
 
+extern int drm_psb_msvdx_tiling;
+
 /* #define TOPAZHP_ENCODE_FPGA */
 static int tng_init_error_dump_reg(struct drm_psb_private *dev_priv)
 {
@@ -598,24 +600,24 @@ static void tng_topaz_mmu_configure(struct drm_device *dev)
 #endif
 
 void tng_topaz_mmu_enable_tiling(
-	struct drm_device *dev,
 	struct drm_psb_private *dev_priv,
 	uint32_t pipe_id)
 {
 	uint32_t reg_val;
-	uint32_t min_addr = 0x80000000 + 0x800000;
-	uint32_t max_addr = 0x80000000 + pci_resource_len(dev->pdev, 2);
-	PSB_DEBUG_TOPAZ("TOPAZ: Enable tiled memory from %08x ~ %08x\n",
-		min_addr, max_addr);
-	reg_val = F_ENCODE(1, TOPAZHP_TOP_CR_TILE_ENABLE) |
-		F_ENCODE(0, TOPAZHP_TOP_CR_TILE_STRIDE) |
-		F_ENCODE(((0x80000000 + 0x800000) +
-			(pci_resource_len(dev->pdev, 2) - 0x800000)) >> 20,
-			TOPAZHP_TOP_CR_TILE_MAX_ADDR) |
-			F_ENCODE((0x80000000 + 0x800000) >> 20,
-		TOPAZHP_TOP_CR_TILE_MIN_ADDR);
+	uint32_t min_addr = dev_priv->bdev.man[TTM_PL_TT].gpu_offset;
+	uint32_t max_addr = dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].gpu_offset +
+			(dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].size<<PAGE_SHIFT);
 
-	TOPAZCORE_WRITE32(pipe_id, 0x0038, reg_val);
+	PSB_DEBUG_TOPAZ("TOPAZ: Enable tiled memory from %08x ~ %08x\n",
+			min_addr, max_addr);
+
+	reg_val = F_ENCODE(1, TOPAZHP_TOP_CR_TILE_ENABLE) | /* Enable tiling */
+		F_ENCODE(0, TOPAZHP_TOP_CR_TILE_STRIDE) | /* Set stride */
+		F_ENCODE((max_addr>>20), TOPAZHP_TOP_CR_TILE_MAX_ADDR) | /* Set max address */
+		F_ENCODE((min_addr>>20), TOPAZHP_TOP_CR_TILE_MIN_ADDR); /* Set min address */
+
+	TOPAZCORE_WRITE32(pipe_id, TOPAZHP_TOP_CR_MMU_TILE_0, reg_val);
+
 }
 
 #if _MRFLD_BO_A_
@@ -1874,10 +1876,15 @@ static void release_mtx_control_from_dash(struct drm_psb_private *dev_priv)
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MTX_DEBUG_MSTR, reg_val);
 }
 
+/* When width or height is bigger than 1280. Encode will
+   treat TTM_PL_TT buffers as tilied memory */
+#define PSB_TOPAZ_TILING_THRESHOLD (1280)
+
 void tng_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv)
 {
 	uint32_t reg_val = 0;
 	uint32_t pd_addr = 0;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Setup MMU\n");
 
@@ -1895,6 +1902,13 @@ void tng_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv)
 	/*There's two of these (0) and (1).. only 0 is currently used*/
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MMU_DIR_LIST_BASE(0), pd_addr);
 	/* setup index register, all pointing to directory bank 0 */
+
+	/* Enable tiling */
+	if (drm_psb_msvdx_tiling && dev_priv->have_mem_mmu_tiling &&
+		((topaz_priv->frame_w>PSB_TOPAZ_TILING_THRESHOLD) ||
+		(topaz_priv->frame_h>PSB_TOPAZ_TILING_THRESHOLD))) {
+		tng_topaz_mmu_enable_tiling(dev_priv, 0);
+	}
 
 	/* now enable MMU access for all requestors */
 	reg_val = F_ENCODE(0, TOPAZHP_TOP_CR_MMU_BYPASS_TOPAZ);

@@ -52,11 +52,11 @@ int psb_wait_for_register(struct drm_psb_private *dev_priv,
 int psb_msvdx_init(struct drm_device *dev);
 int psb_msvdx_uninit(struct drm_device *dev);
 int psb_msvdx_core_reset(struct drm_psb_private *dev_priv);
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
+
 /* TODO: psb_msvdx_reset is used for the case of fw loading by driver
  * Later we can test if it can be removed. */
 int psb_msvdx_reset(struct drm_psb_private *dev_priv);
-#endif
+
 int psb_msvdx_post_boot_init(struct drm_device *dev);
 
 /* psb_msvdx.c */
@@ -215,11 +215,11 @@ struct msvdx_private {
 	struct list_head msvdx_queue;
 	int msvdx_busy;
 	int rendec_init;
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
+
 	int msvdx_fw_loaded;
 	void *msvdx_fw;
 	int msvdx_fw_size;
-#endif
+
 	uint32_t msvdx_hw_busy;
 
 #ifdef CONFIG_VIDEO_MRFLD
