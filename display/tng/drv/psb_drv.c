@@ -1345,6 +1345,8 @@ static int psb_do_init(struct drm_device *dev)
 	dev_priv->gatt_free_offset = pg->mmu_gatt_start +
 	    (stolen_gtt << PAGE_SHIFT) * 1024;
 
+	spin_lock_init(&dev_priv->irqmask_lock);
+
 	tt_pages = (pg->gatt_pages < PSB_TT_PRIV0_PLIMIT) ?
 	    pg->gatt_pages : PSB_TT_PRIV0_PLIMIT;
 	tt_start = dev_priv->gatt_free_offset - pg->mmu_gatt_start;
@@ -1597,7 +1599,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	mutex_init(&dev_priv->vsync_lock);
 
 	spin_lock_init(&dev_priv->reloc_lock);
-	spin_lock_init(&dev_priv->irqmask_lock);
 
 	DRM_INIT_WAITQUEUE(&dev_priv->rel_mapped_queue);
 
