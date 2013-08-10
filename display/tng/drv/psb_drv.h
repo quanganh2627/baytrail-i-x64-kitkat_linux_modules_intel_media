@@ -1303,6 +1303,7 @@ static inline void WRAPPER_REGISTER_WRITE(struct drm_device *dev, uint32_t reg,
 		((dev->pci_device & 0xffff) == 0x08c7) ||  \
 		((dev->pci_device & 0xffff) == 0x08c8))
 #define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180 || ((dev)->pci_device & 0xfff8) == 0x1480)
+#define IS_TNG_B0(dev) (((dev)->pci_device & 0xffff) == 0x1181)
 
 #define IS_MID(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
 #define IS_FLDS(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
