@@ -1417,6 +1417,7 @@ int tng_topaz_save_mtx_state(struct drm_device *dev)
 
 #ifdef TOPAZHP_IRQ_ENABLED
 	spin_lock_irqsave(&topaz_priv->topaz_lock, irq_flags);
+	spin_lock(&topaz_priv->ctx_spinlock);
 
 	/* In case the context has been removed in
 	 * tng_topaz_remove_ctx()
@@ -1542,6 +1543,7 @@ int tng_topaz_save_mtx_state(struct drm_device *dev)
 	video_ctx->status |= MASK_TOPAZ_CONTEXT_SAVED;
 out:
 #ifdef TOPAZHP_IRQ_ENABLED
+	spin_unlock(&topaz_priv->ctx_spinlock);
 	spin_unlock_irqrestore(&topaz_priv->topaz_lock, irq_flags);
 #endif
 	/* topaz_priv->topaz_mtx_saved = 1; */
