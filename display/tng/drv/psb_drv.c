@@ -2838,15 +2838,10 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 
 			mutex_unlock(&dev->mode_config.mutex);
 
-			if (vblwait.reply.tval_usec)
-				arg->vsync.timestamp =
-					(uint64_t)vblwait.reply.tval_usec;
-			else {
-				getrawmonotonic(&now);
-				nsecs = timespec_to_ns(&now);
+			getrawmonotonic(&now);
+			nsecs = timespec_to_ns(&now);
 
-				arg->vsync.timestamp = (uint64_t)nsecs;
-			}
+			arg->vsync.timestamp = (uint64_t)nsecs;
 
 			mutex_unlock(&dev_priv->vsync_lock);
 			return 0;
