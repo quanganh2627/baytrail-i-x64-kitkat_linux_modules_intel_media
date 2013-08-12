@@ -258,6 +258,10 @@ struct psb_video_ctx {
 	struct ttm_buffer_object *wb_bo;
 	struct ttm_bo_kmap_obj wb_bo_kmap;
 	uint32_t wb_addr[WB_FIFO_SIZE];
+	/* Setvideo buffer object */
+	struct ttm_buffer_object *mtx_ctx_bo;
+	struct ttm_bo_kmap_obj mtx_ctx_kmap;
+	uint32_t setv_addr;
 	/* Save state registers */
 	uint32_t *mtx_reg_state;
 	struct ttm_bo_kmap_obj reg_kmap;

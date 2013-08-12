@@ -1908,6 +1908,44 @@ static inline void tng_topaz_trace_ctx(
 	return ;
 }
 
+static int tng_update_mtx_context(
+	struct drm_device *dev,
+	uint32_t *cmd)
+{
+	unsigned int *p;
+	int ret = 0;
+	unsigned int offset;
+	int value;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+	struct psb_video_ctx *video_ctx;
+
+	offset = *(cmd + 3) / 4;
+	value = *(cmd + 4);
+
+	video_ctx = topaz_priv->cur_context;
+
+	PSB_DEBUG_TOPAZ("Update context %08x(%s) IMG_MTX_VIDEO_CONTEXT of offset %d to %d\n",
+			video_ctx, codec_to_string(video_ctx->codec), offset, value);
+
+	ret = tng_topaz_save_mtx_state(dev);
+	if (ret) {
+		DRM_ERROR("Failed to save mtx status");
+		return ret;
+	}
+
+	p = video_ctx->setv_addr;
+	*(p + offset) = value;
+
+	ret = tng_topaz_restore_mtx_state(dev);
+	if (ret) {
+		DRM_ERROR("Failed to restore mtx status");
+		return ret;
+	}
+
+	return ret;
+}
+
 static int tng_context_switch(
 	struct drm_device *dev,
 	struct drm_file *file_priv,
@@ -2026,6 +2064,7 @@ static int32_t tng_setup_WB_mem(
 	int ret;
 	bool is_iomem;
 	uint32_t wb_handle;
+	uint32_t mtx_ctx_handle;
 	struct psb_video_ctx *video_ctx;
 
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
@@ -2041,26 +2080,21 @@ static int32_t tng_setup_WB_mem(
 	video_ctx->wb_bo = ttm_buffer_object_lookup(tfile, wb_handle);
 
         if (unlikely(video_ctx->wb_bo == NULL)) {
-                DRM_ERROR("TOPAZ: error wb_bo\n");
+                DRM_ERROR("TOPAZ: Failed to lookup write back BO\n");
                 return -1;
         }
-
-	PSB_DEBUG_TOPAZ("TOPAZ: wb_bo 0x%08x, 0x%08x\n",
-		video_ctx->wb_bo, wb_handle);
-	PSB_DEBUG_TOPAZ("TOPAZ: wb_bo num page, 0x%08x\n",
-		video_ctx->wb_bo->num_pages);
 
 	ret = ttm_bo_reserve(video_ctx->wb_bo , true, true, false, 0);
 	if (ret) {
 		DRM_ERROR("TOPAZ: reserver failed.\n");
-		return;
+		return -1;
 	}
 
 	ret = ttm_bo_kmap(video_ctx->wb_bo, 0,
 			  video_ctx->wb_bo->num_pages,
 			  &video_ctx->wb_bo_kmap);
 	if (ret) {
-		DRM_ERROR("TOPAZ: Failed to map topaz WriteBack BO......\n");
+		DRM_ERROR("TOPAZ: Failed to map topaz write back BO\n");
 		ttm_bo_unref(&video_ctx->wb_bo);
 		return -1;
 	}
@@ -2082,6 +2116,31 @@ static int32_t tng_setup_WB_mem(
 
 	PSB_DEBUG_TOPAZ("TOPAZ: GET/SETVIDEO data: %08x, address: %08x\n", \
 			video_ctx->enc_ctx_param, video_ctx->enc_ctx_addr);
+
+	if (video_ctx->codec == IMG_CODEC_JPEG)
+		return 0;
+
+	mtx_ctx_handle = *((uint32_t *)command + 4);
+	PSB_DEBUG_TOPAZ("TOPAZ: Map IMG_MTX_VIDEO_CONTEXT buffer from handle %08x\n",
+		mtx_ctx_handle);
+
+	video_ctx->mtx_ctx_bo = ttm_buffer_object_lookup(tfile, mtx_ctx_handle);
+        if (unlikely(video_ctx->mtx_ctx_bo == NULL)) {
+                DRM_ERROR("TOPAZ: Failed to lookup IMG_MTX_VIDEO_CONTEXT handle\n");
+                return -1;
+        }
+
+	ret = ttm_bo_kmap(video_ctx->mtx_ctx_bo, 0,
+			  video_ctx->mtx_ctx_bo->num_pages,
+			  &video_ctx->mtx_ctx_kmap);
+	if (ret) {
+		DRM_ERROR("TOPAZ: Failed to map IMG_MTX_VIDEO_CONTEXT BO\n");
+		ttm_bo_unref(&video_ctx->mtx_ctx_bo);
+		return -1;
+	}
+
+	video_ctx->setv_addr = (uint32_t)ttm_kmap_obj_virtual(
+				&video_ctx->mtx_ctx_kmap, &is_iomem);
 
 	return ret;
 }
@@ -2389,6 +2448,12 @@ tng_topaz_send(
 	}
 #endif
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
+	if (!video_ctx) {
+		DRM_ERROR("Failed to get context from filp %08x\n", file_priv->filp);
+		ret = -1;
+		goto out;
+	}
+
 	topaz_priv->topaz_busy = 1;
 
 	PSB_DEBUG_TOPAZ("TOPAZ : send the command in the buffer\n");
@@ -2399,6 +2464,7 @@ tng_topaz_send(
 	/* Must flush here in case of invalid cache data */
 	tng_topaz_mmu_flushcache(dev_priv);
 #endif
+
 	while (cmd_size > 0) {
 		cur_cmd_header = (struct tng_topaz_cmd_header *) command;
 		cur_cmd_id = cur_cmd_header->id;
@@ -2436,6 +2502,14 @@ tng_topaz_send(
 				return ret;
 			}
 
+			break;
+		case MTX_CMDID_SW_UPDATE_MTX_CONTEXT:
+			ret = tng_update_mtx_context(dev, (uint32_t *)command);
+			if (ret) {
+				DRM_ERROR("Failed to update mtx context");
+				return ret;
+			}
+			cur_cmd_size = 5;
 			break;
 		case MTX_CMDID_SW_WRITEREG:
 			ret = tng_topaz_set_bias(dev, file_priv,
@@ -2538,6 +2612,8 @@ tng_topaz_send(
 			/* Calculate command size */
 			switch (cur_cmd_id) {
 			case MTX_CMDID_SETVIDEO:
+				cur_cmd_size = (video_ctx->codec == IMG_CODEC_JPEG) ? 4 : 5;
+				break;
 			case MTX_CMDID_SETUP_INTERFACE:
 			case MTX_CMDID_SHUTDOWN:
 				cur_cmd_size = 4;
@@ -2656,6 +2732,13 @@ int tng_topaz_remove_ctx(
 		ttm_bo_unreserve(video_ctx->wb_bo);
 		ttm_bo_unref(&video_ctx->wb_bo);
 		video_ctx->wb_bo = NULL;
+	}
+
+	if (video_ctx->mtx_ctx_bo) {
+		PSB_DEBUG_TOPAZ("TOPAZ: unref setvideo bo\n");
+		ttm_bo_kunmap(&video_ctx->mtx_ctx_kmap);
+		ttm_bo_unref(&video_ctx->mtx_ctx_bo);
+		video_ctx->mtx_ctx_bo = NULL;
 	}
 
 	video_ctx->status = 0;
