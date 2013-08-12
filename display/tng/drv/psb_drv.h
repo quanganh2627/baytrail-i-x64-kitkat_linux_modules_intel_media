@@ -439,7 +439,7 @@ struct drm_psb_private {
 	struct work_struct reset_panel_work;
 
 	struct work_struct vsync_event_work;
-	int vsync_pipe;
+	unsigned int vsync_pipe;
 
 	struct mutex vsync_lock;
 	atomic_t *vblank_count;

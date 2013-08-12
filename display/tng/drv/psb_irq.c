@@ -312,14 +312,24 @@ void mdfld_vsync_event_work(struct work_struct *work)
 {
 	struct drm_psb_private *dev_priv =
 		container_of(work, struct drm_psb_private, vsync_event_work);
-	int pipe = dev_priv->vsync_pipe;
 	struct drm_device *dev = dev_priv->dev;
+	unsigned int pipe_bits;
+	unsigned long flags;
+	int i;
 
-	mid_vblank_handler(dev, pipe);
+	spin_lock_irqsave(&dev_priv->irqmask_lock, flags);
+	pipe_bits = dev_priv->vsync_pipe;
+	dev_priv->vsync_pipe = 0;
+	spin_unlock_irqrestore(&dev_priv->irqmask_lock, flags);
 
-	/* TODO: to report vsync event to HWC. */
-	/*report vsync event*/
-	/* mdfld_vsync_event(dev, pipe); */
+	for (i = 0; i < dev_priv->num_pipe; i++) {
+		if (pipe_bits & (1 << i)) {
+			mid_vblank_handler(dev, i);
+			/* TODO: to report vsync event to HWC. */
+			/*report vsync event*/
+			/* mdfld_vsync_event(dev, pipe); */
+		}
+	}
 }
 
 void mdfld_te_handler_work(struct work_struct *work)
@@ -468,7 +478,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	}
 
 	if (pipe_stat_val & PIPE_VBLANK_STATUS) {
-		dev_priv->vsync_pipe = pipe;
+		dev_priv->vsync_pipe |= (1 << pipe);
 		drm_handle_vblank(dev, pipe);
 		queue_work(dev_priv->vsync_wq, &dev_priv->vsync_event_work);
 	}
