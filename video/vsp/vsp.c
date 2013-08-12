@@ -1092,7 +1092,22 @@ void vsp_rm_context(struct drm_device *dev, int ctx_type)
 			ttm_bo_unref(&vsp_priv->coded_buf_bo);
 			vsp_priv->coded_buf = NULL;
 		}
-	}
+		struct vsp_context_settings_t *context_setting;
+		context_setting =
+			&(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8]);
+		context_setting->app_id = 0;
+		context_setting->usage = vsp_context_unused;
+		context_setting->state_buffer_size = 0;
+		context_setting->state_buffer_addr = 0;
+	 } else {
+		struct vsp_context_settings_t *context_setting;
+		context_setting =
+			&(vsp_priv->context_setting[VSP_CONTEXT_NUM_VPP]);
+		context_setting->app_id = 0;
+		context_setting->usage = vsp_context_unused;
+		context_setting->state_buffer_size = 0;
+		context_setting->state_buffer_addr = 0;
+	 }
 
 	vsp_priv->context_num--;
 	if (vsp_priv->context_num >= 1) {
