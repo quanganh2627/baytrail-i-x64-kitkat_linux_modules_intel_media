@@ -31,6 +31,7 @@
 #include "psb_msvdx.h"
 #include "tng_topaz.h"
 #include "tng_wa.h"
+#include <asm/intel-mid.h>
 #ifdef CONFIG_GFX_RTPM
 #include <linux/pm_runtime.h>
 #endif
@@ -52,10 +53,16 @@ static bool vsp_power_up(struct drm_device *dev,
 
 	if (p_island->island_state == OSPM_POWER_ON)
 		return true;
+	/*
+         * This workarounds are only needed for TNG A0/A1 silicon.
+         * Any TNG SoC which is newer than A0/A1 won't need this.
+         */
+        if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
+                intel_mid_soc_stepping() < 1)
+        {
+		apply_A0_workarounds(OSPM_VIDEO_VPP_ISLAND, 1);
+	}
 
-#if A0_WORKAROUNDS
-	apply_A0_workarounds(OSPM_VIDEO_VPP_ISLAND, 1);
-#endif
 	pm_ret = pmu_nc_set_power_state(PMU_VPP, OSPM_ISLAND_UP, VSP_SS_PM0);
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state ON failed!\n");
