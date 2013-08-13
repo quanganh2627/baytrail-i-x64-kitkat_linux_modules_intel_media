@@ -551,7 +551,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	bfdata->gbp_cooldv_state_override = -1;
 
 	{
-		static const char *tcd_type = "dfrgx";
+		static const char *tcd_type = "gpu_burst";
 		static const struct thermal_cooling_device_ops tcd_ops = {
 			.get_max_state = tcd_get_max_state,
 			.get_cur_state = tcd_get_cur_state,
