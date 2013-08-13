@@ -564,8 +564,7 @@ void msvdx_init_test(struct drm_device *dev)
 
 static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 {
-	struct firmware **fw = NULL;
-	*fw = NULL;
+	struct firmware *fw = NULL;
 	uint8_t *fw_io_base;
 	void *ptr = NULL;
 	int rc, fw_size;
@@ -589,25 +588,25 @@ static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 		return 1;
 	}
 
-	rc = request_firmware(fw, name, &dev->pdev->dev);
-	if (*fw == NULL || rc < 0) {
+	rc = request_firmware(&fw, name, &dev->pdev->dev);
+	if (fw == NULL || rc < 0) {
 		DRM_ERROR("MSVDX: %s request_firmware failed: Reason %d\n",
 			  name, rc);
 		return 1;
 	}
 
-	ptr = (int *)((*fw))->data;
-	fw_size =  (int *)((*fw))->size;
+	ptr = (int *)(fw)->data;
+	fw_size =  (int)(fw)->size;
 	if (0 == ptr || fw_size != PSB_MSVDX_FW_SIZE) {
 		DRM_ERROR("MSVDX: Failed to load %s, fw_size is %d\n", name, fw_size);
-		release_firmware(*fw);
+		release_firmware(fw);
 		return 1;
 	}
 
        fw_io_base = ioremap(imr_base, PSB_MSVDX_FW_SIZE);
 
        if (!fw_io_base) {
-		release_firmware(*fw);
+		release_firmware(fw);
 		DRM_ERROR("MSVDX_FW_PHADDRESS ioremap failed in function msvdx_fw_initialize\r\n");
 		return 1;
 	}
@@ -615,7 +614,7 @@ static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 	memcpy(fw_io_base, ptr, fw_size);
 	DRM_INFO("MSVDX_FW copied to IMR5\n");
 	iounmap(fw_io_base);
-	release_firmware(*fw);
+	release_firmware(fw);
 
 #ifdef CONFIG_DX_SEP54_IMAGE
 	ret = sepapp_image_verify(imr_base, PSB_MSVDX_FW_SIZE, 0,
