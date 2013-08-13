@@ -70,6 +70,7 @@
 #include <linux/suspend.h>
 
 #include <linux/thermal.h>
+#include <asm/errno.h>
 
 #include <linux/devfreq.h>
 
@@ -77,7 +78,7 @@
 
 #include <ospm/gfx_freq.h>
 #include "dev_freq_debug.h"
-
+#include "dev_freq_graphics_pm.h"
 #define DFRGX_GLOBAL_ENABLE_DEFAULT 1
 
 #define DF_RGX_NAME_DEV    "dfrgx"
@@ -135,6 +136,10 @@ struct busfreq_data {
 
 /* df_rgx_created_dev - Pointer to created device, if any. */
 static struct platform_device *df_rgx_created_dev;
+
+/*Need to check if this is the 1st request*/
+static int firstRequest = 1;
+
 
 /**
  * Module parameters:
@@ -304,11 +309,22 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 {
 	struct platform_device *pdev;
 	struct busfreq_data *bfdata;
-	int ret;
+	int ret = 0;
 	(void) flags;
 
 	pdev = container_of(dev, struct platform_device, dev);
 	bfdata = platform_get_drvdata(pdev);
+
+	/*FIXME: Need to rethink about this scenario*/
+	if(firstRequest){
+		*p_freq = DF_RGX_INITIAL_FREQ_KHZ;
+		firstRequest = 0;
+		goto out;
+	}
+
+	if(!df_rgx_is_active()){
+		return -EBUSY;
+	}
 
 	ret = set_desired_frequency_khz(bfdata, *p_freq);
 	if (ret <= 0)
@@ -316,6 +332,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 
 	*p_freq = ret;
 
+out:
 	return 0;
 }
 
@@ -667,7 +684,11 @@ static int __init df_rgx_busfreq_init(void)
 		return -ENODEV;
 	}
 
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: %s: starting\n", DF_RGX_NAME_DRIVER, __func__);
+	gpu_freq_set_suspend_func(&df_rgx_suspend);
+
+	gpu_freq_set_resume_func(&df_rgx_resume);
+
+	DFRGX_DPF(DFRGX_DEBUG_HIGH,"%s: %s: starting\n", DF_RGX_NAME_DRIVER, __func__);
 
 	pdev = df_rgx_busfreq_device_create();
 	if (IS_ERR(pdev))

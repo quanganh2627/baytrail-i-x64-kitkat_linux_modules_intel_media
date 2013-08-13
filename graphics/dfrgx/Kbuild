@@ -49,6 +49,9 @@ obj-$(CONFIG_GFX_RGX_DEVFREQ)	+= dfrgx.o
 
 dfrgx-y :=
 dfrgx-y += df_rgx.o
+dfrgx-y += dev_freq_graphics_pm.o
+
+include ../modules/intel_media/graphics/dfrgx/dependencies/Makefile
 
 my_warning_flags :=
 my_warning_flags += -Wall -fmessage-length=0 -Wunused-parameter
@@ -74,5 +77,10 @@ ccflags-y += $(my_warning_flags)
 CFLAGS_df_rgx.o += -Idrivers/devfreq
 
 # Fixme: Replace the hardcoded path with something more intelligent approach
-CFLAGS_df_rgx.o += -I../modules/intel_media/display/tng/drv
-CFLAGS_df_rgx.o += -I../modules/intel_media/graphics/dfrgx
+CFLAGS_df_rgx.o += \
+	-I../modules/intel_media/display/tng/drv \
+	-I../modules/intel_media/graphics/dfrgx \
+	-I$(INCLUDES_RGX)
+
+CFLAGS_dev_freq_graphics_pm.o += -I$(INCLUDES_RGX)
+
