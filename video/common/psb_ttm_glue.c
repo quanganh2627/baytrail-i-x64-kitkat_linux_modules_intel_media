@@ -412,7 +412,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 		if (ret)
 			break;
 
-		video_ctx = kmalloc(sizeof(struct psb_video_ctx), GFP_KERNEL);
+		video_ctx = kzalloc(sizeof(struct psb_video_ctx), GFP_KERNEL);
 		if (video_ctx == NULL) {
 			ret = -ENOMEM;
 			break;

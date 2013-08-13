@@ -2038,7 +2038,6 @@ static int32_t tng_setup_WB_mem(
 	PSB_DEBUG_TOPAZ("TOPAZ: Map write back memory from handle %08x\n",
 		wb_handle);
 
-
 	video_ctx->wb_bo = ttm_buffer_object_lookup(tfile, wb_handle);
 
         if (unlikely(video_ctx->wb_bo == NULL)) {
@@ -2462,15 +2461,25 @@ tng_topaz_send(
 			break;
 
 		/* Ordinary commmand */
-		case MTX_CMDID_SETVIDEO:
-		case MTX_CMDID_SETUP_INTERFACE:
-			ret = tng_setup_WB_mem(dev, file_priv,
-				(const void *)command);
-			if (ret) {
-				DRM_ERROR("Failed to setup " \
-					"write back memory region");
-				return ret;
+                case MTX_CMDID_SETUP_INTERFACE:
+			if (video_ctx && video_ctx->wb_bo) {
+				PSB_DEBUG_TOPAZ("TOPAZ: unref write back bo\n");
+				ttm_bo_kunmap(&video_ctx->wb_bo_kmap);
+				ttm_bo_unreserve(video_ctx->wb_bo);
+				ttm_bo_unref(&video_ctx->wb_bo);
+				video_ctx->wb_bo = NULL;
+
+				tng_set_consumer(dev, 0);
+				tng_set_producer(dev, 0);
 			}
+                case MTX_CMDID_SETVIDEO:
+                        ret = tng_setup_WB_mem(dev, file_priv,
+                                (const void *)command);
+                        if (ret) {
+                                DRM_ERROR("Failed to setup " \
+                                        "write back memory region");
+                                return ret;
+                        }
 
 		case MTX_CMDID_DO_HEADER:
 		case MTX_CMDID_ENCODE_FRAME:
