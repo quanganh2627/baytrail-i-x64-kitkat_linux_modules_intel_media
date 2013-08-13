@@ -774,9 +774,12 @@ static void vxd_power_post_init(struct drm_device *dev)
  */
 bool is_vxd_on()
 {
-	uint32_t pwr_sts =
-		intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-	PSB_DEBUG_PM("check if vxd is power on, pwr_sts is 0x%x.\n", pwr_sts);
+	uint32_t pwr_sts;
+	if (drm_psb_priv_pmu_func)
+		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
+	else
+		pwr_sts = pmu_nc_get_power_state(VEDSSC, VEDSSPM0);
+
 	if (pwr_sts == VXD_APM_STS_D0)
 		return true;
 	else
