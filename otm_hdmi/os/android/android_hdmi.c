@@ -1573,7 +1573,6 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 	struct drm_psb_private *dev_priv;
 	struct android_hdmi_priv *hdmi_priv;
 	bool is_connected;
-	bool hdmi_audio_busy = false;
 
 	if (NULL == dev)
 		return;
@@ -1584,8 +1583,7 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 	if (NULL == hdmi_priv)
 		return;
 
-	hdmi_audio_busy = mid_hdmi_audio_is_busy(dev);
-	if (hdmi_audio_busy) {
+	if (hdmi_priv->hdmi_audio_enabled) {
 		pr_err("OSPM: %s: hdmi audio is busy\n", __func__);
 		return;
 	}
