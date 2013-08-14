@@ -275,17 +275,17 @@ void psb_ospm_post_power_down()
 {
 	int ret;
 
-	if (likely(!gpDrmDevice->dev->power.runtime_auto))
+	if (likely(!gpDrmDevice->pdev->dev.power.runtime_auto))
 		return;
 
 	PSB_DEBUG_PM("request runtime idle\n");
-	ret = pm_request_idle(gpDrmDevice->dev);
+	ret = pm_request_idle(&gpDrmDevice->pdev->dev);
 
 	if (ret) {
 		PSB_DEBUG_PM("pm_request_idle fail, ret %d\n", ret);
-		ret = pm_runtime_barrier(gpDrmDevice->dev);
+		ret = pm_runtime_barrier(&gpDrmDevice->pdev->dev);
 		if (!ret) {
-			ret = pm_request_idle(gpDrmDevice->dev);
+			ret = pm_request_idle(&gpDrmDevice->pdev->dev);
 			 PSB_DEBUG_PM("pm_request_idle again, ret %d\n", ret);
 		}
 	}

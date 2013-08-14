@@ -115,7 +115,7 @@ void ospm_disp_a_init(struct drm_device *dev,
 {
 	p_island->p_funcs->power_up = disp_a_power_up;
 	p_island->p_funcs->power_down = disp_a_power_down;
-	p_island->p_dependency = get_island_ptr(OSPM_VIRTUAL_PCI_ISLAND);
+	p_island->p_dependency = NULL;
 }
 
 /***********************************************************

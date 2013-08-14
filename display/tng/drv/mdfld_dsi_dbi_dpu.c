@@ -470,10 +470,8 @@ static int mdfld_dpu_update_fb(struct drm_device *dev)
 		return -EAGAIN;
 
 	/*try to prevent any new damage reports*/
-	if (!spin_trylock_irqsave(&dpu_info->dpu_update_lock, irq_flags)) {
-		ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
+	if (!spin_trylock_irqsave(&dpu_info->dpu_update_lock, irq_flags))
 		return -EAGAIN;
-	}
 
 	for (i = 0; i < dpu_info->dbi_output_num; i++) {
 		crtc = dbi_output[i]->base.base.crtc;
