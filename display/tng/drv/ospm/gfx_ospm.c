@@ -73,6 +73,9 @@ enum GFX_ISLAND_STATUS {
 static int (*pSuspend_func)(void) = NULL;
 static int (*pResume_func)(void) = NULL;
 
+int is_tng_b0 = 0;
+EXPORT_SYMBOL(is_tng_b0);
+
 /**
   * gpu_freq_code_to_mhz() - Given frequency as a code (as defined for *_PM1
   * register), return frequency in mhz.
@@ -512,6 +515,9 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 void ospm_gfx_init(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
+	if(IS_TNG_B0(dev))
+		is_tng_b0 = 1;
+
 	OSPM_DPF("%s\n", __func__);
 	p_island->p_funcs->power_up = ospm_gfx_power_up;
 	p_island->p_funcs->power_down = ospm_gfx_power_down;

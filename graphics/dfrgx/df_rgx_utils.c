@@ -24,25 +24,37 @@
  * Authors:
  *    Javier Torres Castillo <javier.torres.castillo@intel.com>
  */
-#if !defined DEVFREQ_DEBUG_H
-#define  DEVFREQ_DEBUG_H
-#include <linux/kernel.h>
-#define DF_RGX_DEV    "dfrgx"
-#define DFRGX_ALERT    KERN_ALERT DF_RGX_DEV ": "
-#define DFRGX_DEBUG_MASK	0x07
-#define DFRGX_DEBUG_HIGH	0x01
-#define DFRGX_DEBUG_MED		0x02
-#define DFRGX_DEBUG_LOW		0x04
+#include "df_rgx_defs.h"
+#include "dev_freq_debug.h"
 
-#define DFRGX_HWPERF_DEBUG 1
+extern int is_tng_b0;
 
-#ifdef DFRGX_HWPERF_DEBUG
-#define DFRGX_DPF(mask,...) if (mask & DFRGX_DEBUG_MASK ) \
-		{ \
-			printk(DFRGX_ALERT __VA_ARGS__); \
+unsigned int df_rgx_is_valid_freq(unsigned long int freq)
+{
+	unsigned int valid = 0;
+	int i;
+	int aSize = NUMBER_OF_LEVELS;
+	
+	if(is_tng_b0)
+		aSize = NUMBER_OF_LEVELS_B0;
+	
+
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s freq: %d\n", __func__, 
+			freq);
+
+	for(i = 0; i < aSize; i++)
+	{
+		if(freq == aAvailableStateFreq[i])
+		{
+			valid = 1;
+			break;
 		}
-#else
-#define DFRGX_DPF(mask,...)
-#endif
-#endif /*DEVFREQ_DEBUG_H*/
+	}
+	
+	
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s valid: %d\n", __func__, 
+			valid);
+
+	return valid;
+}
 
