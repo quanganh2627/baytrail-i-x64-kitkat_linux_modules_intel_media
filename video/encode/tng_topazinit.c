@@ -961,14 +961,13 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 		DRM_ERROR("TOPAZ: Request firmware failed: %d\n", ret);
 		return ret;
 	}
-
-	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size %d\n", raw->size);
-
 	if ((NULL == raw) || (raw->size < 20)) {
 		DRM_ERROR("TOPAZ: Firmware file size is not correct.\n");
 		ret = -1;
 		goto out;
 	}
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size %d\n", raw->size);
 
 	uc_ptr = (unsigned char *) raw->data;
 	if (!uc_ptr) {
