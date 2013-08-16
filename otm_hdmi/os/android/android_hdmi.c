@@ -415,6 +415,16 @@ static irqreturn_t android_hdmi_irq_callback(int irq, void *data)
 	return __hdmi_irq_handler_bottomhalf(data);
 }
 
+int android_hdmi_irq_test(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct android_hdmi_priv *hdmi_priv = dev_priv->hdmi_priv;
+
+	return __hdmi_irq_handler_bottomhalf(hdmi_priv);
+}
+
+
 /**
  * This function sets the hdmi driver during bootup
  * @dev		: handle to drm_device

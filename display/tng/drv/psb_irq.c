@@ -129,12 +129,6 @@ void psb_disable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 		u32 writeVal;
 		dev_priv->pipestat[pipe] &= ~mask;
 		if (power_island_get(power_island)) {
-			if ((mask == PIPE_VBLANK_INTERRUPT_ENABLE) ||
-					(mask == PIPE_TE_ENABLE)) {
-				atomic_inc(&dev_priv->vblank_count[pipe]);
-				wake_up_interruptible(&dev_priv->vsync_queue);
-			}
-
 			writeVal = PSB_RVDC32(reg);
 			writeVal &= ~mask;
 			PSB_WVDC32(writeVal, reg);
@@ -279,7 +273,6 @@ void mdfld_vsync_event_work(struct work_struct *work)
 	/* TODO: to report vsync event to HWC. */
 	/*report vsync event*/
 	/* mdfld_vsync_event(dev, pipe); */
-	DRM_WAKEUP(&dev_priv->vsync_queue);
 }
 
 void mdfld_te_handler_work(struct work_struct *work)
@@ -401,13 +394,11 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 
 	if (pipe_stat_val & PIPE_VBLANK_STATUS) {
 		dev_priv->vsync_pipe = pipe;
-		atomic_inc(&dev_priv->vblank_count[pipe]);
 		schedule_work(&dev_priv->vsync_event_work);
 	}
 
 	if (pipe_stat_val & PIPE_TE_STATUS) {
 		dev_priv->te_pipe = pipe;
-		atomic_inc(&dev_priv->vblank_count[pipe]);
 		schedule_work(&dev_priv->te_work);
 	}
 
@@ -799,10 +790,9 @@ int psb_enable_vblank(struct drm_device *dev, int pipe)
 	PSB_DEBUG_ENTRY("\n");
 
 	encoder_type = is_panel_vid_or_cmd(dev);
-	if (IS_MRFLD(dev) &&
-		(encoder_type == MDFLD_DSI_ENCODER_DBI) &&
-			(pipe == 0))
-				return 0;
+	if (IS_MRFLD(dev) && (encoder_type == MDFLD_DSI_ENCODER_DBI) &&
+			(pipe != 1))
+		return mdfld_enable_te(dev, pipe);
 
 	if (power_island_get(power_island)) {
 		reg_val = REG_READ(pipeconf_reg);
@@ -812,11 +802,8 @@ int psb_enable_vblank(struct drm_device *dev, int pipe)
 	if (!(reg_val & PIPEACONF_ENABLE))
 		return -EINVAL;
 
-	dev_priv->b_vblank_enable = true;
-
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 
-	drm_psb_disable_vsync = 0;
 	mid_enable_pipe_event(dev_priv, pipe);
 	psb_enable_pipestat(dev_priv, pipe, PIPE_VBLANK_INTERRUPT_ENABLE);
 
@@ -839,15 +826,14 @@ void psb_disable_vblank(struct drm_device *dev, int pipe)
 	PSB_DEBUG_ENTRY("\n");
 
 	encoder_type = is_panel_vid_or_cmd(dev);
-#if 0
-	if (IS_MRFLD(dev) && (encoder_type == MDFLD_DSI_ENCODER_DBI))
+	if (IS_MRFLD(dev) && (encoder_type == MDFLD_DSI_ENCODER_DBI) &&
+			(pipe != 1)) {
 		mdfld_disable_te(dev, pipe);
-#endif
-	dev_priv->b_vblank_enable = false;
+		return;
+	}
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 
-	drm_psb_disable_vsync = 1;
 	mid_disable_pipe_event(dev_priv, pipe);
 	psb_disable_pipestat(dev_priv, pipe, PIPE_VBLANK_INTERRUPT_ENABLE);
 
@@ -917,6 +903,119 @@ u32 psb_get_vblank_counter(struct drm_device *dev, int pipe)
 	power_island_put(power_island);
 
 	return count;
+}
+
+int intel_get_vblank_timestamp(struct drm_device *dev, int pipe,
+		int *max_error,
+		struct timeval *vblank_time,
+		unsigned flags)
+{
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct drm_crtc *crtc;
+
+	if (pipe < 0 || pipe >= dev_priv->num_pipe) {
+		DRM_ERROR("Invalid crtc %d\n", pipe);
+		return -EINVAL;
+	}
+
+	/* Get drm_crtc to timestamp: */
+	crtc = psb_intel_get_crtc_from_pipe(dev, pipe);
+	if (crtc == NULL) {
+		DRM_ERROR("Invalid crtc %d\n", pipe);
+		return -EINVAL;
+	}
+
+	if (!crtc->enabled) {
+		DRM_DEBUG_KMS("crtc %d is disabled\n", pipe);
+		return -EBUSY;
+	}
+
+	/* Helper routine in DRM core does all the work: */
+	return drm_calc_vbltimestamp_from_scanoutpos(dev, pipe, max_error,
+			vblank_time, flags,
+			crtc);
+}
+
+int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
+		int *vpos, int *hpos)
+{
+	u32 vbl = 0, position = 0;
+	int vbl_start, vbl_end, vtotal;
+	bool in_vbl = true;
+	int pipeconf_reg = PIPEACONF;
+	int vtot_reg = VTOTAL_A;
+	int dsl_reg = PIPEADSL;
+	int vblank_reg = VBLANK_A;
+	u32 power_island = pipe_to_island(pipe);
+	int ret = 0;
+
+	switch (pipe) {
+	case 0:
+		break;
+	case 1:
+		pipeconf_reg = PIPEBCONF;
+		vtot_reg = VTOTAL_B;
+		dsl_reg = PIPEBDSL;
+		vblank_reg = VBLANK_B;
+		break;
+	case 2:
+		pipeconf_reg = PIPECCONF;
+		vtot_reg = VTOTAL_C;
+		dsl_reg = PIPECDSL;
+		vblank_reg = VBLANK_C;
+		break;
+	default:
+		DRM_ERROR("Illegal Pipe Number.\n");
+		return 0;
+	}
+
+	if (!power_island_get(power_island))
+		return 0;
+
+	if (!REG_READ(pipeconf_reg)) {
+		DRM_DEBUG_DRIVER("Failed to get scanoutpos in pipe %d\n", pipe);
+		power_island_put(power_island);
+		return 0;
+	}
+
+	/* Get vtotal. */
+	vtotal = 1 + ((REG_READ(vtot_reg) >> 16) & 0x1fff);
+
+	position = REG_READ(dsl_reg);
+
+	/*
+	 * Decode into vertical scanout position. Don't have
+	 * horizontal scanout position.
+	 */
+	*vpos = position & 0x1fff;
+	*hpos = 0;
+
+	/* Query vblank area. */
+	vbl = REG_READ(vblank_reg);
+
+	power_island_put(power_island);
+
+	/* Test position against vblank region. */
+	vbl_start = vbl & 0x1fff;
+	vbl_end = (vbl >> 16) & 0x1fff;
+
+	if ((*vpos < vbl_start) || (*vpos > vbl_end))
+		in_vbl = false;
+
+	/* Inside "upper part" of vblank area? Apply corrective offset: */
+	if (in_vbl && (*vpos >= vbl_start))
+		*vpos = *vpos - vtotal;
+
+	/* Readouts valid? */
+	if (vbl > 0)
+		ret |= DRM_SCANOUTPOS_VALID | DRM_SCANOUTPOS_ACCURATE;
+
+	/* In vblank? */
+	if (in_vbl)
+		ret |= DRM_SCANOUTPOS_INVBL;
+
+	return ret;
 }
 
 /*

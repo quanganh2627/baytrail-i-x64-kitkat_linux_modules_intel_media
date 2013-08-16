@@ -449,12 +449,9 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe)
 		return 0;
 	}
 
-	mutex_lock(&dev->mode_config.mutex);
-	if (dev_priv->early_suspended){
-		mutex_unlock(&dev->mode_config.mutex);
+	/* FIXME: need to remove the suspended state checking. */
+	if (dev_priv->early_suspended)
 		return 0;
-	}
-	mutex_unlock(&dev->mode_config.mutex);
 
 	/* get display a for register reading */
 	if (power_island_get(OSPM_DISPLAY_A)) {

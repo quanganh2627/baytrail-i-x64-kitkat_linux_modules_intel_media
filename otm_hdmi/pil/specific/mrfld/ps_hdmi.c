@@ -169,6 +169,7 @@ otm_hdmi_ret_t ps_hdmi_pci_dev_init(void *context, struct pci_dev *pdev)
 	ctx->dev.id = pci_dev_revision;
 	/* Store this context for use by MSIC PCI driver */
 	g_context = ctx;
+	ctx->is_connected_overridden = true;
 
 	/* Handle Merrifield specific GPIO configuration
 	 * to enable EDID reads
@@ -305,6 +306,9 @@ bool ps_hdmi_get_cable_status(void *context)
 	 */
 	__ps_gpio_configure_edid_read();
 
+	if (g_context->override_cable_state)
+		return g_context->is_connected_overridden;
+
 	if (gpio_get_value(ctx->gpio_hpd_pin) == 0)
 		return false;
 	else
@@ -359,15 +363,30 @@ static int ps_hdmi_hpd_resume(struct device *dev)
 	return 0;
 }
 
+/* get HDMI hotplug pin number */
 int ps_hdmi_get_hpd_pin(void)
 {
-	return 0;
+	if (g_context == NULL)
+		return 0;
+
+	return g_context->gpio_hpd_pin;
 }
 
+/* override the hdmi hpd cable status */
 void ps_hdmi_override_cable_status(bool state, bool auto_state)
 {
+	if (g_context == NULL)
+		return 0;
+
+	g_context->override_cable_state = auto_state;
+
+	if (state)
+		g_context->is_connected_overridden = true;
+	else
+		g_context->is_connected_overridden = false;
 	return;
 }
+
 
 
 /* PCI probe function */

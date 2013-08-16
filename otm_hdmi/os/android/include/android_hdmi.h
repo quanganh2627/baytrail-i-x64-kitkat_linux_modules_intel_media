@@ -117,6 +117,12 @@ extern void mid_hdmi_audio_init(struct android_hdmi_priv *p_hdmi_priv);
 void android_hdmi_driver_init(struct drm_device *dev,
 			      void *mode_dev);
 
+
+
+
+int android_hdmi_irq_test(struct drm_device *dev);
+
+
 /**
  * This function sets the hdmi driver during bootup
  * @dev		: handle to drm_device

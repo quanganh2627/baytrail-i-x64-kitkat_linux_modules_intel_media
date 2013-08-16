@@ -234,14 +234,6 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 	PSB_DEBUG_ENTRY("mode = %d, pipe = %d\n", mode, pipe);
 
-	if (mode != DRM_MODE_DPMS_ON) {
-		/* Turn off vsync interrupt. */
-		drm_vblank_off(dev, pipe);
-
-		/* Make the pending flip request as completed. */
-		DCUnAttachPipe(pipe);
-	}
-
 #ifndef CONFIG_SUPPORT_TOSHIBA_MIPI_DISPLAY
 	/**
 	 * MIPI dpms
@@ -413,6 +405,8 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 		psb_intel_crtc_load_lut(crtc);
 
+		DCAttachPipe(pipe);
+
 		/* Give the overlay scaler a chance to enable
 		   if it's on this pipe */
 		/* psb_intel_crtc_dpms_video(crtc, true); TODO */
@@ -474,6 +468,12 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 #endif
 			}
 		}
+
+		/* Turn off vsync interrupt. */
+		drm_vblank_off(dev, pipe);
+
+		/* Make the pending flip request as completed. */
+		DCUnAttachPipe(pipe);
 		break;
 	}
 

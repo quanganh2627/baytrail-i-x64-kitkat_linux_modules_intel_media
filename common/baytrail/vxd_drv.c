@@ -203,7 +203,7 @@ int vxd_release(struct inode *inode, struct file *filp)
 
 	/* remove video context */
 	/* psb_remove_videoctx(dev_priv, filp); */
-
+	return 0;
 }
 
 static struct vm_operations_struct psb_ttm_vm_ops;
@@ -643,7 +643,7 @@ long vxd_ioctl(struct file *filp,
 				retcode = -EFAULT;
 				goto err_i1;
 			}
-		} else
+		} else if (cmd & IOC_OUT)
 			memset(kdata, 0, usize);
 
 		if (ioctl->flags & DRM_UNLOCKED)

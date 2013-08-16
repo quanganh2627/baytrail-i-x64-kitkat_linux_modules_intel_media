@@ -410,7 +410,13 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		err = -EAGAIN;
 		goto power_on_err;
 	}
-	mdfld_enable_te(dev, 0);
+
+	/*
+	 * Enable TE to trigger "write_mem_start" issuing
+	 * in non-normal boot modes.
+	 */
+	if (!dev_priv->um_start)
+		mdfld_enable_te(dev, dsi_config->pipe);
 power_on_err:
 	return err;
 }
@@ -616,7 +622,6 @@ static int __dbi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 	dev_priv = dev->dev_private;
 
 	mdfld_dsi_dsr_forbid_locked(dsi_config);
-	mdfld_disable_te(dev, 0);
 	ctx->lastbrightnesslevel = psb_brightness;
 	if (p_funcs && p_funcs->set_brightness)
 		if (p_funcs->set_brightness(dsi_config, 0))
@@ -835,22 +840,36 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 	dev = dsi_config->dev;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
+	mdfld_generic_dsi_dbi_set_power(encoder, false);
+
 	/* Turn off vsync (TE) interrupt. */
 	drm_vblank_off(dev, pipe);
 
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
-
-	mdfld_generic_dsi_dbi_set_power(encoder, false);
 }
 
 static
 void mdfld_generic_dsi_dbi_restore(struct drm_encoder *encoder)
 {
+	struct mdfld_dsi_encoder *dsi_encoder;
+	struct mdfld_dsi_config *dsi_config;
+	struct drm_device *dev;
+	int pipe;
+
+	PSB_DEBUG_ENTRY("\n");
+
 	if (!encoder)
 		return;
 
+	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
+	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
+	dev = dsi_config->dev;
+	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
+
 	mdfld_generic_dsi_dbi_set_power(encoder, true);
+
+	DCAttachPipe(pipe);
 }
 
 static
