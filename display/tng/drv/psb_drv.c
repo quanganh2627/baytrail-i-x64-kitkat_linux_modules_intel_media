@@ -2800,7 +2800,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 	s64 nsecs = 0;
 	int ret = 0;
 
-	mutex_lock(&dev_priv->vsync_lock);
 	if (arg->vsync_operation_mask) {
 		pipe = arg->vsync.pipe;
 
@@ -2815,8 +2814,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
-			mutex_lock(&dev->mode_config.mutex);
-
+			/* TODO: find a clean way to protect vblank_enabled */
 			if (dev->vblank_enabled[pipe]) {
 				vblwait.request.type =
 					(_DRM_VBLANK_RELATIVE |
@@ -2834,15 +2832,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 							pipe);
 			}
 
-			mutex_unlock(&dev->mode_config.mutex);
-
 			getrawmonotonic(&now);
 			nsecs = timespec_to_ns(&now);
 
 			arg->vsync.timestamp = (uint64_t)nsecs;
 
-			mutex_unlock(&dev_priv->vsync_lock);
-			return 0;
+			return ret;
 		}
 
 		if (!pipe)
@@ -2863,7 +2858,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		}
 	}
 
-	mutex_unlock(&dev_priv->vsync_lock);
 	return ret;
 }
 
