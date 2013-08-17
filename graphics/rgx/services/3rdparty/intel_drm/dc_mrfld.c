@@ -484,9 +484,6 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 							iPipe);
 			}
 
-			if (psFlip == gpsDevice->psLastFlip)
-				continue;
-
 			/*remove this entry from flip queue, decrease refCount*/
 			list_del(&psFlip->sFlips[iPipe]);
 
