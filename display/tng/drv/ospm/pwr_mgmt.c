@@ -711,6 +711,45 @@ out:
 	return;
 }
 
+void ospm_apm_power_down_vsp(struct drm_device *dev)
+{
+	int ret;
+	struct ospm_power_island *p_island;
+	unsigned long flags;
+
+	PSB_DEBUG_PM("Power down VPP...\n");
+	p_island = get_island_ptr(OSPM_VIDEO_VPP_ISLAND);
+
+	if (!p_island) {
+		DRM_ERROR("p_island is NULL\n");
+		return;
+	}
+
+	spin_lock_irqsave(&g_ospm_data->ospm_lock, flags);
+
+	if (!ospm_power_is_hw_on(OSPM_VIDEO_VPP_ISLAND))
+		goto out;
+
+	if (atomic_read(&p_island->ref_count)) {
+		PSB_DEBUG_PM("VPP ref_count has been set(%d), bypass\n",
+			     atomic_read(&p_island->ref_count));
+		goto out;
+	}
+
+	ret = p_island->p_funcs->power_down(
+			g_ospm_data->dev,
+			p_island);
+
+	/* set the island state */
+	if (ret)
+		p_island->island_state = OSPM_POWER_OFF;
+
+	PSB_DEBUG_PM("Power down VPP done\n");
+out:
+	spin_unlock_irqrestore(&g_ospm_data->ospm_lock, flags);
+	return;
+}
+
 int ospm_runtime_pm_allow(struct drm_device *dev)
 {
 	return 0;

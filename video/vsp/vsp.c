@@ -172,6 +172,12 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			cmd_wr = vsp_priv->ctrl->cmd_wr;
 			VSP_DEBUG("cmd_rd=%d, cmd_wr=%d\n", cmd_rd, cmd_wr);
 
+			if (vsp_priv->fw_loaded_by_punit &&
+			    vsp_priv->vsp_state == VSP_STATE_ACTIVE) {
+				vsp_priv->vsp_state = VSP_STATE_IDLE;
+				break;
+			}
+
 			vsp_priv->vsp_state = VSP_STATE_IDLE;
 			/* If there is still commands in the cmd buffer,
 			 * set CONTINUE command and start API main directly not
@@ -362,7 +368,14 @@ bool vsp_interrupt(void *pvData)
 	if (sequence != vsp_priv->current_sequence) {
 		vsp_priv->current_sequence = sequence;
 		psb_fence_handler(dev, VSP_ENGINE_VPP);
+	} else {
+		VSP_DEBUG("will not handle fence for %x vs current %x\n",
+			  sequence, vsp_priv->current_sequence);
 	}
+
+	if (vsp_priv->fw_loaded_by_punit &&
+	    vsp_priv->vsp_state == VSP_STATE_IDLE)
+		ospm_apm_power_down_vsp(dev);
 
 	VSP_DEBUG("will leave interrupt\n");
 	return ret;
@@ -449,7 +462,8 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int ret;
 
-	if (vsp_priv->fw_loaded == VSP_FW_NONE) {
+	if (!vsp_priv->fw_loaded_by_punit &&
+	    vsp_priv->fw_loaded == VSP_FW_NONE) {
 		ret = vsp_init_fw(dev);
 		if (ret != 0) {
 			DRM_ERROR("VSP: failed to load firmware\n");
@@ -482,7 +496,8 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 	}
 
 	/* If the VSP is ind idle, need to send "Continue" */
-	if (vsp_priv->vsp_state == VSP_STATE_IDLE) {
+	if (!vsp_priv->fw_loaded_by_punit &&
+	    vsp_priv->vsp_state == VSP_STATE_IDLE) {
 		vsp_continue_function(dev_priv);
 		VSP_DEBUG("The VSP is on idle, send continue!\n");
 	}
@@ -1121,12 +1136,11 @@ void vsp_rm_context(struct drm_device *dev, int ctx_type)
 	}
 
 	vsp_priv->ctrl->entry_kind = vsp_exit;
-	vsp_priv->vsp_state = VSP_STATE_DOWN;
 
 	ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
 
-	vsp_priv->fw_loaded = VSP_FW_NONE;
 	vsp_priv->current_sequence = 0;
+	vsp_priv->vsp_state = VSP_STATE_DOWN;
 
 	if (ret == false)
 		PSB_DEBUG_PM("Couldn't power down VSP!");
@@ -1178,7 +1192,8 @@ int psb_check_vsp_idle(struct drm_device *dev)
 
 	cmd_rd = vsp_priv->ctrl->cmd_rd;
 	cmd_wr = vsp_priv->ctrl->cmd_wr;
-	if (cmd_rd != cmd_wr ||  vsp_priv->vsp_state == VSP_STATE_ACTIVE) {
+	if ((cmd_rd != cmd_wr && vsp_priv->vsp_state != VSP_STATE_IDLE)
+	    || vsp_priv->vsp_state == VSP_STATE_ACTIVE) {
 		PSB_DEBUG_PM("VSP: there is command need to handle!\n");
 		return -EBUSY;
 	}
@@ -1204,7 +1219,6 @@ int psb_check_vsp_idle(struct drm_device *dev)
 		PSB_DEBUG_PM("VSP: vp1 return busy!\n");
 		return -EBUSY;
 	}
-
 
 	return 0;
 }
@@ -1241,7 +1255,8 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	}
 
 	/* firmware*/
-	VSP_DEBUG("firmware addr:%x\n", vsp_priv->firmware->offset);
+	if (!vsp_priv->fw_loaded_by_punit)
+		VSP_DEBUG("firmware addr:%x\n", vsp_priv->firmware->offset);
 
 	/* ma_header_reg */
 	MM_READ32(vsp_priv->boot_header.ma_header_reg, 0, &reg);

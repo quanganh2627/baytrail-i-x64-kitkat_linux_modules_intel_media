@@ -214,6 +214,7 @@ struct vsp_private {
 
 	int fw_loaded;
 	int vsp_state;
+	int fw_loaded_by_punit;
 
 	spinlock_t lock;
 
