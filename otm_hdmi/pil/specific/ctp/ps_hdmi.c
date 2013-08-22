@@ -297,6 +297,13 @@ bool ps_hdmi_power_islands_on()
 	return true;
 }
 
+bool ps_hdmi_hdcp_power_islands_on()
+{
+
+	return true;
+}
+
+
 void ps_hdmi_power_islands_off()
 {
 }

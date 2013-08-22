@@ -882,6 +882,13 @@ bool otm_hdmi_power_islands_on()
 	return ps_hdmi_power_islands_on();
 }
 
+/* turn HDMI power islands on */
+bool otm_hdmi_hdcp_power_islands_on()
+{
+	return ps_hdmi_hdcp_power_islands_on();
+}
+
+
 /* turn HDMI power islands off */
 void otm_hdmi_power_islands_off()
 {
