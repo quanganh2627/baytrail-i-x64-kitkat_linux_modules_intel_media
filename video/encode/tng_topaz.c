@@ -605,14 +605,12 @@ bool tng_topaz_interrupt(void *pvData)
 	PSB_DEBUG_TOPAZ("producer = %d, consumer = %d\n",
 		topaz_priv->producer, topaz_priv->consumer);
 
-	if (video_ctx->codec != IMG_CODEC_JPEG) {
-		while (topaz_priv->consumer != topaz_priv->producer) {
-			topaz_priv->consumer++;
-			if (topaz_priv->consumer == WB_FIFO_SIZE)
-				topaz_priv->consumer = 0;
-			tng_set_consumer(dev, topaz_priv->producer);
-		};
-	}
+	while (topaz_priv->consumer != topaz_priv->producer) {
+		topaz_priv->consumer++;
+		if (topaz_priv->consumer == WB_FIFO_SIZE)
+			topaz_priv->consumer = 0;
+		tng_set_consumer(dev, topaz_priv->producer);
+	};
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Context %08x(%s): \n",
 		(unsigned int)video_ctx, codec_to_string(video_ctx->codec));
@@ -2537,14 +2535,15 @@ tng_topaz_send(
 		/* Ordinary commmand */
                 case MTX_CMDID_SETUP_INTERFACE:
 			if (video_ctx && video_ctx->wb_bo) {
+				PSB_DEBUG_TOPAZ("TOPAZ: reset\n");
+				tng_topaz_reset(dev_priv);
+				tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
+
 				PSB_DEBUG_TOPAZ("TOPAZ: unref write back bo\n");
 				ttm_bo_kunmap(&video_ctx->wb_bo_kmap);
 				ttm_bo_unreserve(video_ctx->wb_bo);
 				ttm_bo_unref(&video_ctx->wb_bo);
 				video_ctx->wb_bo = NULL;
-
-				tng_set_consumer(dev, 0);
-				tng_set_producer(dev, 0);
 			}
                 case MTX_CMDID_SETVIDEO:
                         ret = tng_setup_WB_mem(dev, file_priv,
