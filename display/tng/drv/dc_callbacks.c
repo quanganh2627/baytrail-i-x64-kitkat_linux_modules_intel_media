@@ -31,6 +31,7 @@
 #include "displayclass_interface.h"
 #include "mdfld_dsi_output.h"
 #include "pwr_mgmt.h"
+#include "mdfld_dsi_dbi_dsr.h"
 
 #define KEEP_UNUSED_CODE 0
 
@@ -188,6 +189,8 @@ void DCCBFlipOverlay(struct drm_device *dev,
 			struct intel_dc_overlay_ctx *ctx)
 {
 	struct drm_psb_private *dev_priv;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_context *dsi_ctx;
 	u32 ovadd_reg = OV_OVADD;
 
 	if (!dev || !ctx)
@@ -203,6 +206,27 @@ void DCCBFlipOverlay(struct drm_device *dev,
 	ctx->ovadd |= ctx->pipe;
 	ctx->ovadd |= 1;
 
+	if (((ctx->pipe & OV_PIPE_SELECT) >> OV_PIPE_SELECT_POS) == OV_PIPE_A)
+		dsi_config = dev_priv->dsi_configs[0];
+	else if (((ctx->pipe & OV_PIPE_SELECT) >> OV_PIPE_SELECT_POS) ==
+			OV_PIPE_C)
+		dsi_config = dev_priv->dsi_configs[1];
+
+	if (dsi_config) {
+		dsi_ctx = &dsi_config->dsi_hw_context;
+		if (ctx->index == 0)
+			dsi_ctx->ovaadd = ctx->ovadd;
+		else if (ctx->index == 1)
+			dsi_ctx->ovcadd = ctx->ovadd;
+	} else {
+		/* Record the context of Overlay C attached to Pipe B. */
+		dsi_config = dev_priv->dsi_configs[0];
+		if (dsi_config) {
+			dsi_ctx = &dsi_config->dsi_hw_context;
+			dsi_ctx->ovcadd = ctx->ovadd;
+		}
+	}
+
 	PSB_WVDC32(ctx->ovadd, ovadd_reg);
 }
 
@@ -210,6 +234,8 @@ void DCCBFlipSprite(struct drm_device *dev,
 			struct intel_dc_sprite_ctx *ctx)
 {
 	struct drm_psb_private *dev_priv;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_context *dsi_ctx;
 	u32 reg_offset = 0x3000;
 
 	if (!dev || !ctx)
@@ -225,10 +251,27 @@ void DCCBFlipSprite(struct drm_device *dev,
 	}
 
 	/* asign sprite to pipe */
-	if (ctx->pipe)
-		ctx->cntr |= (0x1 << 24);
-	else
-		ctx->cntr &= ~(0x3 << 24);
+	ctx->cntr &= ~DISPPLANE_SEL_PIPE_MASK;
+
+	if (ctx->pipe == 1)
+		ctx->cntr |= DISPPLANE_SEL_PIPE_B;
+	else if (ctx->pipe == 0) {
+		ctx->cntr |= DISPPLANE_SEL_PIPE_A;
+		dsi_config = dev_priv->dsi_configs[0];
+	} else if (ctx->pipe == 2) {
+		ctx->cntr |= DISPPLANE_SEL_PIPE_C;
+		dsi_config = dev_priv->dsi_configs[1];
+	}
+
+	if (dsi_config) {
+		dsi_ctx = &dsi_config->dsi_hw_context;
+		dsi_ctx->sprite_dsppos = ctx->pos;
+		dsi_ctx->sprite_dspsize = ctx->size;
+		dsi_ctx->sprite_dspstride = ctx->stride;
+		dsi_ctx->sprite_dspcntr = ctx->cntr;
+		dsi_ctx->sprite_dsplinoff = ctx->linoff;
+		dsi_ctx->sprite_dspsurf = ctx->surf;
+	}
 
 	if ((ctx->update_mask & SPRITE_UPDATE_POSITION))
 		PSB_WVDC32(ctx->pos, DSPAPOS + reg_offset);
@@ -335,6 +378,8 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 	u32 ovstat_reg = OV_DOVASTA;
 	u32 power_islands = OSPM_DISPLAY_A;
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_context *dsi_ctx;
 
 	if (index != 0 && index != 1) {
 		DRM_ERROR("Invalid overlay index %d\n", index);
@@ -357,6 +402,29 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 		power_island_put(power_islands);
 	}
 
+	if (!enabled) {
+		if (((ctx & OV_PIPE_SELECT) >> OV_PIPE_SELECT_POS) == OV_PIPE_A)
+			dsi_config = dev_priv->dsi_configs[0];
+		else if (((ctx & OV_PIPE_SELECT) >> OV_PIPE_SELECT_POS) ==
+				OV_PIPE_C)
+			dsi_config = dev_priv->dsi_configs[1];
+
+		if (dsi_config) {
+			dsi_ctx = &dsi_config->dsi_hw_context;
+			if (index == 0)
+				dsi_ctx->ovaadd = 0;
+			else if (index == 1)
+				dsi_ctx->ovcadd = 0;
+		} else {
+			/* Record the context of Overlay C attached to Pipe B */
+			dsi_config = dev_priv->dsi_configs[0];
+			if (dsi_config) {
+				dsi_ctx = &dsi_config->dsi_hw_context;
+				dsi_ctx->ovcadd = 0;
+			}
+		}
+	}
+
 	return 0;
 }
 
@@ -365,14 +433,25 @@ int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 {
 	u32 power_islands = (OSPM_DISPLAY_A | OSPM_DISPLAY_C);
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_context *dsi_ctx;
 
 	if (index != 0) {
 		DRM_ERROR("Invalid overlay index %d\n", index);
 		return -EINVAL;
 	}
 
+	/* FIXME: need to check pipe info here. */
+	dsi_config = dev_priv->dsi_configs[0];
+
+	if (dsi_config)
+		dsi_ctx = &dsi_config->dsi_hw_context;
+
 	if (power_island_get(power_islands)) {
-		PSB_WVDC32((PSB_RVDC32(DSPDCNTR) & ~BIT31), DSPDCNTR);
+		if (dsi_ctx)
+			dsi_ctx->sprite_dspcntr &= ~DISPLAY_PLANE_ENABLE;
+		PSB_WVDC32((PSB_RVDC32(DSPDCNTR) & ~DISPLAY_PLANE_ENABLE),
+				DSPDCNTR);
 		PSB_WVDC32((PSB_RVDC32(DSPDSURF)), DSPDSURF);
 		power_island_put(power_islands);
 	}
@@ -380,9 +459,20 @@ int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 	return 0;
 }
 
-void DCCBUpdateDbiPanel(struct drm_device *dev)
+void DCCBUpdateDbiPanel(struct drm_device *dev, int pipe)
 {
-	mdfld_dbi_update_panel(dev, 0);
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
+
+	if ((pipe != 0) && (pipe != 2))
+		return;
+
+	if (dev_priv && dev_priv->dsi_configs)
+		dsi_config = (pipe == 0) ?
+			dev_priv->dsi_configs[0] : dev_priv->dsi_configs[1];
+
+	mdfld_dsi_dsr_update_panel_fb(dsi_config);
 }
 
 void DCCBUnblankDisplay(struct drm_device *dev)
@@ -446,6 +536,7 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe)
 {
 	struct drm_psb_private *dev_priv =
 		(struct drm_psb_private *)dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
 	u32 pipeconf_reg;
 	int active = 0;
 
@@ -464,9 +555,51 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe)
 
 	/* get display a for register reading */
 	if (power_island_get(OSPM_DISPLAY_A)) {
+		if ((pipe != 1) && dev_priv->dsi_configs) {
+			dsi_config = (pipe == 0) ? dev_priv->dsi_configs[0] :
+				dev_priv->dsi_configs[1];
+		}
+
+		mdfld_dsi_dsr_forbid(dsi_config);
+
 		active = (PSB_RVDC32(pipeconf_reg) & BIT31) ? 1 : 0 ;
+
+		mdfld_dsi_dsr_allow(dsi_config);
+
 		power_island_put(OSPM_DISPLAY_A);
 	}
 
 	return active;
+}
+
+void DCCBDsrForbid(struct drm_device *dev, int pipe)
+{
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
+
+	if ((pipe != 0) && (pipe != 2))
+		return;
+
+	if (dev_priv && dev_priv->dsi_configs)
+		dsi_config = (pipe == 0) ?
+			dev_priv->dsi_configs[0] : dev_priv->dsi_configs[1];
+
+	mdfld_dsi_dsr_forbid(dsi_config);
+}
+
+void DCCBDsrAllow(struct drm_device *dev, int pipe)
+{
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
+
+	if ((pipe != 0) && (pipe != 2))
+		return;
+
+	if (dev_priv && dev_priv->dsi_configs)
+		dsi_config = (pipe == 0) ?
+			dev_priv->dsi_configs[0] : dev_priv->dsi_configs[1];
+
+	mdfld_dsi_dsr_allow(dsi_config);
 }

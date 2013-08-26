@@ -236,6 +236,14 @@ struct mdfld_dsi_hw_context {
 	u32 dspstride;
 	u32 dsplinoff;
 
+	/*plane*/
+	u32 sprite_dspcntr;
+	u32 sprite_dspsize;
+	u32 sprite_dspsurf;
+	u32 sprite_dsppos;
+	u32 sprite_dspstride;
+	u32 sprite_dsplinoff;
+
 	/*overlay*/
 	u32 ovaadd;
 	u32 ovcadd;

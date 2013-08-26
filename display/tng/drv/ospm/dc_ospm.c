@@ -271,7 +271,7 @@ static bool mio_power_up(struct drm_device *dev,
 	udelay(50);
 	sb_write_packet(true);
 	udelay(50);
-	printk(KERN_WARNING "%s:using sideband to powerup MIO\n", __func__);
+	OSPM_DPF("%s:using sideband to powerup MIO\n", __func__);
 #else
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_MIO, OSPM_ISLAND_UP, MIO_SS_PM);

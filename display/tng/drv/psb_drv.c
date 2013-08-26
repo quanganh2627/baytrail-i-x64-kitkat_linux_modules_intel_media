@@ -70,6 +70,7 @@
 /* SH DPST */
 #include "psb_dpst_func.h"
 
+#include "mdfld_dsi_dbi_dsr.h"
 
 #define KEEP_UNUSED_CODE 0
 #define KEEP_UNUSED_CODE_S3D 0
@@ -1902,6 +1903,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	dpst_init(dev, 5, 1);
 #endif
 
+	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
+
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:
 	psb_driver_unload(dev);
@@ -2806,7 +2809,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct drm_psb_vsync_set_arg *arg = data;
-	struct mdfld_dsi_config *dsi_config;
+	struct mdfld_dsi_config *dsi_config = NULL;
 	struct timespec now;
 	uint32_t pipe;
 	union drm_wait_vblank vblwait;
@@ -2827,6 +2830,11 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			arg->vsync.vsync_count = (uint64_t)vbl_count;
 		}
 
+		if (!pipe)
+			dsi_config = dev_priv->dsi_configs[0];
+		else if (pipe == 2)
+			dsi_config = dev_priv->dsi_configs[1];
+
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
 			/* TODO: find a clean way to protect vblank_enabled */
 			if (dev->vblank_enabled[pipe]) {
@@ -2839,11 +2847,15 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					vblwait.request.type |=
 						_DRM_VBLANK_SECONDARY;
 
+				mdfld_dsi_dsr_forbid(dsi_config);
+
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
 				if (ret)
 					DRM_ERROR("Fail to get pipe %d vsync\n",
 							pipe);
+
+				mdfld_dsi_dsr_allow(dsi_config);
 			}
 
 			getrawmonotonic(&now);
@@ -2854,21 +2866,18 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			return ret;
 		}
 
-		if (!pipe)
-			dsi_config = dev_priv->dsi_configs[0];
-		else if (pipe == 2)
-			dsi_config = dev_priv->dsi_configs[1];
-
 		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
-			/* mdfld_dsi_dsr_forbid(dsi_config); */
+			mdfld_dsi_dsr_forbid(dsi_config);
+
 			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
 				ret = drm_vblank_get(dev, pipe);
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
-			/* mdfld_dsi_dsr_allow(dsi_config); */
 			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
 				drm_vblank_put(dev, pipe);
+
+			mdfld_dsi_dsr_allow(dsi_config);
 		}
 	}
 
@@ -2880,6 +2889,7 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct drm_psb_register_rw_arg *arg = data;
+	struct mdfld_dsi_config *dsi_config = NULL;
 	u32 power_island = 0;
 
 	if (arg->overlay_write_mask != 0) {
@@ -2920,6 +2930,10 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				return -EINVAL;
 			}
 
+			/*forbid dsr which will restore regs*/
+			dsi_config = dev_priv->dsi_configs[0];
+			mdfld_dsi_dsr_forbid(dsi_config);
+
 			if (arg->overlay_write_mask & OV_REGRWBITS_OGAM_ALL) {
 				PSB_WVDC32(arg->overlay.OGAMC5, ov_ogamc5_reg);
 				PSB_WVDC32(arg->overlay.OGAMC4, ov_ogamc4_reg);
@@ -2928,6 +2942,9 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				PSB_WVDC32(arg->overlay.OGAMC1, ov_ogamc1_reg);
 				PSB_WVDC32(arg->overlay.OGAMC0, ov_ogamc0_reg);
 			}
+
+			/*allow entering dsr*/
+			mdfld_dsi_dsr_allow(dsi_config);
 
 			power_island_put(power_island);
 		}
@@ -3420,6 +3437,7 @@ static int psb_display_register_write(struct file *file, const char *buffer,
 	struct drm_device *dev = minor->dev;
 	struct drm_psb_private *dev_priv =
 	    (struct drm_psb_private *)dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = dev_priv->dsi_configs[0];
 	int reg_val = 0;
 	char buf[256];
 	char op = '0';
@@ -3481,6 +3499,10 @@ static int psb_display_register_write(struct file *file, const char *buffer,
 			MDFLD_DSR_MIPI_CONTROL, 0, 0);
 #endif
 	}
+
+	/*forbid dsr which will restore regs*/
+	mdfld_dsi_dsr_forbid(dsi_config);
+
 	if (op == 'r') {
 		if (reg >= 0xa000) {
 			reg_val = REG_READ(reg);
@@ -3561,6 +3583,9 @@ static int psb_display_register_write(struct file *file, const char *buffer,
 		}
 	}
 fun_exit:
+	/*allow entering dsr*/
+	mdfld_dsi_dsr_allow(dsi_config);
+
 	power_island_put(OSPM_DISPLAY_ISLAND);
 	return count;
 }

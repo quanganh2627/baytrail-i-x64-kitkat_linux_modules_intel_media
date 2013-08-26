@@ -544,10 +544,11 @@ struct dpst_guardband {
 #define DISPPLANE_32BPP				(0x7<<26)
 #define DISPPLANE_STEREO_ENABLE			(1<<25)
 #define DISPPLANE_STEREO_DISABLE		0
-#define DISPPLANE_SEL_PIPE_MASK			(1<<24)
+#define DISPPLANE_SEL_PIPE_MASK			(3<<24)
 #define DISPPLANE_SEL_PIPE_POS			24
-#define DISPPLANE_SEL_PIPE_A			0
+#define DISPPLANE_SEL_PIPE_A			(0<<24)
 #define DISPPLANE_SEL_PIPE_B			(1<<24)
+#define DISPPLANE_SEL_PIPE_C			(2<<24)
 #define DISPPLANE_SRC_KEY_ENABLE		(1<<22)
 #define DISPPLANE_SRC_KEY_DISABLE		0
 #define DISPPLANE_LINE_DOUBLE			(1<<20)
@@ -623,6 +624,7 @@ struct dpst_guardband {
 #define OV_PIPE_SELECT				(BIT6|BIT7)
 #define OV_PIPE_SELECT_POS			6
 #define OV_PIPE_A				0
+#define OV_PIPE_B				2
 #define OV_PIPE_C				1
 #define OV_OGAMC5		0x30010
 #define OV_OGAMC4		0x30014
