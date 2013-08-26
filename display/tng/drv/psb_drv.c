@@ -2851,9 +2851,11 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
-				if (ret)
+				if (ret) {
 					DRM_ERROR("Fail to get pipe %d vsync\n",
 							pipe);
+					schedule_work(&dev_priv->reset_panel_work);
+				}
 
 				mdfld_dsi_dsr_allow(dsi_config);
 			}
