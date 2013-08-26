@@ -641,16 +641,17 @@ long vxd_ioctl(struct file *filp,
 			}
 			if (asize > usize)
 				memset(kdata + usize, 0, asize - usize);
-		}
 
-		if (cmd & IOC_IN) {
-			if (copy_from_user(kdata, (void __user *)arg,
-					   usize) != 0) {
-				retcode = -EFAULT;
-				goto err_i1;
+			if (cmd & IOC_IN) {
+				if (copy_from_user(kdata, (void __user *)arg,
+						   usize) != 0) {
+					retcode = -EFAULT;
+					goto err_i1;
+				}
+			} else {
+				memset(kdata, 0, usize);
 			}
-		} else if (cmd & IOC_OUT)
-			memset(kdata, 0, usize);
+		}
 
 		if (ioctl->flags & DRM_UNLOCKED)
 			retcode = func(dev, kdata, file_priv);
