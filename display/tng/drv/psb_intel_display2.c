@@ -1438,7 +1438,7 @@ static int mdfld_crtc_mode_set(struct drm_crtc *crtc,
 		REG_WRITE(PFIT_CONTROL, 0);
 
 	if (psb_intel_output)
-		drm_connector_property_get_value(&psb_intel_output->base,
+		drm_object_property_get_value(&psb_intel_output->base->base,
 						 dev->
 						 mode_config.scaling_mode_property,
 						 &scalingType);

@@ -129,6 +129,80 @@ static int gpu_freq_code_to_mhz(int freq_code_in)
 	return freq_mhz_out;
 }
 
+/**
+ * mrfl_pwr_cmd_gfx - Change graphics power state.
+ * Change island power state in the require sequence.
+ *
+ * @gfx_mask: Mask of islands to be changed.
+ * @new_state: 0 for power-off, 1 for power-on.
+ */
+#ifdef USE_GFX_INTERNAL_PM_FUNC
+static int mrfl_pwr_cmd_gfx(u32 gfx_mask, int new_state)
+{
+	/*
+	 * pwrtab - gfx pwr sub-islands in required power-up order and
+	 * in reverse of required power-down order.
+	 */
+	static const u32 pwrtab[] = {
+		GFX_SLC_LDO_SHIFT,
+		GFX_SLC_SHIFT,
+		GFX_SDKCK_SHIFT,
+		GFX_RSCD_SHIFT,
+	};
+	const int pwrtablen = ARRAY_SIZE(pwrtab);
+	int i;
+	int j;
+	int ret;
+	u32 ns_mask;
+	u32 done_mask;
+	u32 this_mask;
+	u32 pwr_state_prev;
+
+	pwr_state_prev = intel_mid_msgbus_read32(PUNIT_PORT, GFX_SS_PM0);
+
+	if (new_state == OSPM_ISLAND_UP)
+		ns_mask = TNG_COMPOSITE_I0;
+	else
+		ns_mask = TNG_COMPOSITE_D3;
+
+	/*  Call underlying function separately for each step in the
+	    power sequence. */
+	done_mask = 0;
+	for (i = 0; i < pwrtablen ; i++) {
+		if (new_state == OSPM_ISLAND_UP)
+			j = i;
+		else
+			j = pwrtablen - i - 1;
+
+		done_mask |= TNG_SSC_MASK << pwrtab[j];
+		this_mask = gfx_mask & done_mask;
+		if (this_mask) {
+		/*  FIXME - if (new_state == 0), check for required
+			    conditions per the SAS. */
+			ret = pmu_set_power_state_tng(GFX_SS_PM0,
+					this_mask, ns_mask);
+			if (ret)
+			return ret;
+		}
+
+#if A0_WORKAROUNDS
+		/**
+		 * If turning some power on, and the power to be on includes SLC,
+		 * and SLC was not previously on, then setup some registers.
+	 */
+		if ((new_state == OSPM_ISLAND_UP)
+			&& (pwrtab[j] == GFX_SLC_SHIFT)
+			&& ((pwr_state_prev >> GFX_SLC_SHIFT) != TNG_SSC_I0))
+			apply_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
+#endif
+
+		if ((gfx_mask & ~done_mask) == 0)
+			break;
+	}
+
+	return 0;
+}
+#endif
 
 /**
  * pm_cmd_freq_wait() - Wait for frequency valid via specified register.
@@ -330,6 +404,9 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 		first_boot = false;
 	}
 
+#ifdef USE_GFX_INTERNAL_PM_FUNC
+	ret = mrfl_pwr_cmd_gfx(GFX_ALL, OSPM_ISLAND_UP);
+#else
 	if (gfx_all & GFX_SLC_LDO_SSC)
 		ret = GFX_POWER_UP(PMU_LDO);
 
@@ -340,22 +417,27 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	 * This workarounds are only needed for TNG A0/A1 silicon.
 	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-        if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
+#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
 		intel_mid_soc_stepping() < 1)
 	{
+#endif
 		/**
 		* If turning some power on, and the power to be on includes SLC,
 		* and SLC was not previously on, then setup some registers.
 		*/
 		if (gfx_all & GFX_SLC_SSC)
 			apply_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
+#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
 	}
+#endif
 
 	if (gfx_all & GFX_SDKCK_SSC)
 		ret = GFX_POWER_UP(PMU_SDKCK);
 
 	if (gfx_all & GFX_RSCD_SSC)
 		ret = GFX_POWER_UP(PMU_RSCD);
+#endif /*USE_GFX_INTERNAL_PM_FUNC*/
 
 	OSPM_DPF("Post-power-up status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
@@ -387,6 +469,9 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 		}
 	}
 
+#ifdef GFX_KERNEL_3_10_FIX
+	return true;
+#endif
 	OSPM_DPF("Pre-power-off Status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 

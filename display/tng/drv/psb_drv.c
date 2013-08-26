@@ -48,7 +48,6 @@
 
 #include <asm/intel_scu_ipc.h>
 #include <asm/intel-mid.h>
-#include <linux/panel_psb_drv.h>
 
 #include "mdfld_dsi_dbi.h"
 #ifdef CONFIG_MID_DSI_DPU
@@ -115,8 +114,6 @@ u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
 int drm_psb_msvdx_tiling = 0;
 int drm_msvdx_bottom_half;
 int drm_hdmi_hpd_auto;
-
-
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -567,9 +564,15 @@ static int user_printk_ioctl(struct drm_device *dev, void *data,
 static int psb_drm_hdmi_test_ioctl(struct drm_device *,
 				   void *, struct drm_file *);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #define PSB_IOCTL_DEF(ioctl, func, flags) \
 	 [DRM_IOCTL_NR(ioctl) - DRM_COMMAND_BASE] = \
 	 {ioctl, flags, func}
+#else
+#define PSB_IOCTL_DEF(ioctl, func, flags) \
+	 [DRM_IOCTL_NR(ioctl) - DRM_COMMAND_BASE] = \
+	 {ioctl, flags, func, ioctl}
+#endif
 
 static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_KMS_OFF, psbfb_kms_off_ioctl,
@@ -592,8 +595,13 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 		      DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_STOLEN_MEMORY, psb_stolen_memory_ioctl,
 		      DRM_AUTH),
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_REGISTER_RW, psb_register_rw_ioctl,
 		      DRM_AUTH),
+#else
+	PSB_IOCTL_DEF(DRM_IOCTL_PSB_REGISTER_RW, psb_register_rw_ioctl,
+		      DRM_AUTH | DRM_UNLOCKED),
+#endif
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_GTT_MAP,
 		      psb_gtt_map_meminfo_ioctl,
 		      DRM_AUTH),
@@ -1884,6 +1892,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	/*Intel drm driver load is done, continue doing pvr load */
 	DRM_DEBUG("Pvr driver load\n");
 
+#ifndef GFX_KERNEL_3_10_FIX
 	/* init display manager */
 	dispmgr_start(dev);
 
@@ -1891,6 +1900,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	* SH This hooks dpst with the device.
 	*/
 	dpst_init(dev, 5, 1);
+#endif
 
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:
@@ -2980,6 +2990,7 @@ static long psb_unlocked_ioctl(struct file *filp, unsigned int cmd,
 	return ret;
 }
 
+#ifndef GFX_KERNEL_3_10_FIX
 static int psb_blc_proc_show(struct seq_file *seq, void *v)
 {
 	struct drm_minor *minor = (struct drm_minor *)seq->private;
@@ -3001,7 +3012,11 @@ static int psb_blc_proc_show(struct seq_file *seq, void *v)
 
 static int psb_blc_proc_open(struct inode *inode, struct file *file)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 	return single_open(file, psb_blc_proc_show, PDE(inode)->data);
+#else
+	return single_open(file, psb_blc_proc_show, PDE_DATA(inode));
+#endif
 }
 
 static const struct file_operations psb_blc_proc_fops = {
@@ -3011,6 +3026,7 @@ static const struct file_operations psb_blc_proc_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+#endif
 
 #if KEEP_UNUSED_CODE_DRIVER_DISPATCH
 static int psb_rtpm_read(char *buf, char **start, off_t offset, int request,
@@ -3616,7 +3632,7 @@ static int psb_hdmi_proc_init(struct drm_minor *minor)
 	return 0;
 }
 
-#endif
+#endif /* CONFIG_SUPPORT_HDMI */
 
 /* When a client dies:
  *    - Check for and clean up flipped page state
@@ -3631,7 +3647,6 @@ static void psb_remove(struct pci_dev *pdev)
 	drm_put_dev(dev);
 }
 
-
 static int psb_proc_init(struct drm_minor *minor)
 {
 #ifdef CONFIG_SUPPORT_HDMI
@@ -3641,8 +3656,6 @@ static int psb_proc_init(struct drm_minor *minor)
 	return 0;
 }
 
-
-
 static void psb_proc_cleanup(struct drm_minor *minor)
 {
 #ifdef CONFIG_SUPPORT_HDMI
@@ -3650,7 +3663,6 @@ static void psb_proc_cleanup(struct drm_minor *minor)
 #endif
 	return;
 }
-
 
 static const struct dev_pm_ops psb_pm_ops = {
 	.runtime_suspend = rtpm_suspend,

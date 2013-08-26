@@ -248,8 +248,11 @@ static IMG_INT pvr_proc_open(struct inode *inode,struct file *file)
 	IMG_INT ret = seq_open(file, &pvr_proc_seq_operations);
 
 	struct seq_file *seq = (struct seq_file*)file->private_data;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
 	struct proc_dir_entry* pvr_proc_entry = PDE(inode);
-
+#else
+	struct proc_dir_entry* pvr_proc_entry = PDE_DATA(inode);
+#endif
 	/* Add pointer to handlers to seq_file structure */
 	seq->private = pvr_proc_entry->data;
 	return ret;
@@ -673,7 +676,6 @@ static IMG_INT pvr_read_proc(IMG_CHAR *page, IMG_CHAR **start, off_t off,
 
     return len;
 }
-
 
 /*!
 ******************************************************************************

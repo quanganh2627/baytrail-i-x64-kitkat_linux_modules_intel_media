@@ -26,7 +26,6 @@
  */
 
 
-#include <linux/earlysuspend.h>
 #include <linux/spinlock.h>
 #include <asm/intel-mid.h>
 #include <asm/intel_scu_ipc.h>
@@ -515,8 +514,10 @@ void ospm_power_init(struct drm_device *dev)
 		}
 	}
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
 	/* register early_suspend runtime pm */
 	intel_media_early_suspend_init(dev);
+#endif
 
 #ifdef CONFIG_GFX_RTPM
 	rtpm_init(dev);
@@ -539,9 +540,10 @@ void ospm_power_uninit(void)
 	rtpm_uninit(gpDrmDevice);
 #endif
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
 	/* un-init early suspend */
 	intel_media_early_suspend_uninit();
-
+#endif
 	/* Do we need to turn off all islands? */
 	power_island_put(OSPM_ALL_ISLANDS);
 

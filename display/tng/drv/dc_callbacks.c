@@ -25,6 +25,7 @@
 #include <linux/console.h>
 
 #include "psb_drv.h"
+#include "pmu_tng.h"
 #include "psb_fb.h"
 #include "psb_intel_reg.h"
 #include "displayclass_interface.h"
@@ -319,8 +320,13 @@ static void _OverlayWaitFlip(struct drm_device *dev, u32 ovstat_reg)
 		udelay(10);
 	}
 
-	if (!retry)
+	if (!retry){
 		DRM_ERROR("OVADD flip timeout!\n");
+#ifdef GFX_KERNEL_3_10_FIX
+		printk("Disp: power status = 0x%08lX\n",
+			intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
+#endif
+	}
 }
 int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled)
@@ -339,6 +345,9 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 		ovadd_reg = OVC_OVADD;
 		ovstat_reg = OVC_DOVCSTA;
 		power_islands |= OSPM_DISPLAY_C;
+#ifdef GFX_KERNEL_3_10_FIX
+		DRM_ERROR("Display C %d\n", index);
+#endif
 	}
 
 	if (power_island_get(power_islands)) {
