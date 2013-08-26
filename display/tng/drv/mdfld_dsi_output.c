@@ -996,11 +996,13 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 		goto dsi_init_err0;
 	}
 
+#if 0
 	/*init panel error detector*/
 	if (mdfld_dsi_error_detector_init(dev, dsi_connector)) {
 		DRM_ERROR("Failed to init dsi_error detector");
 		goto dsi_init_err1;
 	}
+#endif
 
 	/*create DBI & DPI encoders*/
 	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {
