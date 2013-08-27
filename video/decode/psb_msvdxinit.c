@@ -564,14 +564,13 @@ void msvdx_init_test(struct drm_device *dev)
 
 static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 {
-	struct firmware *fw = NULL;
+	struct firmware **fw;
+	*fw = NULL;
 	uint8_t *fw_io_base;
 	void *ptr = NULL;
 	int rc, fw_size;
-	uint32_t imrl = 0;
-	uint32_t imrh = 0;
+	uint32_t imrl, imrh;
 	uint64_t imr_base, imr_end;
-	const unsigned long tng_magic_num = 0x44455624;
 
 	imrl = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
 			TNG_IMR5L_MSG_REGADDR);
@@ -588,43 +587,34 @@ static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 		return 1;
 	}
 
-	rc = request_firmware(&fw, name, &dev->pdev->dev);
-	if (fw == NULL || rc < 0) {
+	rc = request_firmware(fw, name, &dev->pdev->dev);
+	if (*fw == NULL || rc < 0) {
 		DRM_ERROR("MSVDX: %s request_firmware failed: Reason %d\n",
 			  name, rc);
 		return 1;
 	}
 
-	ptr = (int *)(fw)->data;
-	fw_size =  (int)(fw)->size;
+	ptr = (int *)((*fw))->data;
+	fw_size =  (int *)((*fw))->size;
 	if (0 == ptr || fw_size != PSB_MSVDX_FW_SIZE) {
 		DRM_ERROR("MSVDX: Failed to load %s, fw_size is %d\n", name, fw_size);
-		release_firmware(fw);
+		release_firmware(*fw);
 		return 1;
 	}
 
        fw_io_base = ioremap(imr_base, PSB_MSVDX_FW_SIZE);
 
        if (!fw_io_base) {
-		release_firmware(fw);
+		release_firmware(*fw);
 		DRM_ERROR("MSVDX_FW_PHADDRESS ioremap failed in function msvdx_fw_initialize\r\n");
 		return 1;
+	} else {
+		memcpy(fw_io_base, ptr, fw_size);
+		DRM_INFO("MSVDX_FW successfully intialize \r\n");
+		iounmap(fw_io_base);
+		release_firmware(*fw);
+		return 0;
 	}
-
-	memcpy(fw_io_base, ptr, fw_size);
-	DRM_INFO("MSVDX_FW copied to IMR5\n");
-	iounmap(fw_io_base);
-	release_firmware(fw);
-
-#ifdef CONFIG_DX_SEP54_IMAGE
-	ret = sepapp_image_verify(imr_base, PSB_MSVDX_FW_SIZE, 0,
-		tng_magic_num);
-	if (ret) {
-		DRM_ERROR("failed to verify VED firmware ret %x\n", ret);
-		return -1;
-	}
-#endif
-	return 0;
 }
 #endif
 
@@ -655,12 +645,8 @@ static int msvdx_startup_init(struct drm_device *dev)
 #ifdef MERRIFIELD
 	msvdx_priv->msvdx_needs_reset = 1;
 
-	if (IS_MRFLD(dev)) {
-		if (IS_TNG_B0(dev))
-			msvdx_priv->fw_loaded_by_punit = 1;
-		else
-			msvdx_priv->fw_loaded_by_punit = 0;
-	}
+	if (IS_MRFLD(dev))
+		msvdx_priv->fw_loaded_by_punit = 0;
 	else
 #endif
 		msvdx_priv->fw_loaded_by_punit =
@@ -712,9 +698,8 @@ static int msvdx_startup_init(struct drm_device *dev)
 #endif
 		drm_msvdx_bottom_half = PSB_BOTTOM_HALF_WQ;
 
-#ifdef MERRIFIELD
-	if (IS_TNG_B0(dev))
-		return tng_msvdx_fw_init("signed_msvdx_fw_mrfld.bin", dev);
+#ifdef MERRIFIELD_B0
+	return tng_msvdx_fw_init("signed_msvdx_fw_mrfld.bin", dev);
 #endif
 
 	return 0;
