@@ -72,7 +72,7 @@
 
 #include "mdfld_dsi_dbi_dsr.h"
 #include "mrfld_clock.h"
-
+#include "mdfld_debugfs.h"
 
 #define KEEP_UNUSED_CODE 0
 #define KEEP_UNUSED_CODE_S3D 0
@@ -3711,6 +3711,31 @@ static void psb_proc_cleanup(struct drm_minor *minor)
 	return;
 }
 
+#if defined(CONFIG_DEBUG_FS)
+/*debugfs init entry*/
+static int psb_debugfs_init(struct drm_minor *minor)
+{
+	/*call original psb_proc_init*/
+	/*NOTE: why we are doing proc init here????*/
+	if (psb_proc_init(minor))
+		DRM_ERROR("psb_proc_init failed\n");
+
+	/*call debugfs init*/
+	return mdfld_debugfs_init(minor);
+}
+
+/*debugfs cleanup entry*/
+static void psb_debugfs_cleanup(struct drm_minor *minor)
+{
+	/*call original psb_proc_cleanup*/
+	/*NOTE: why we are doing proc cleanup here????*/
+	psb_proc_cleanup(minor);
+
+	/*call debugfs cleanup*/
+	mdfld_debugfs_cleanup(minor);
+}
+#endif
+
 static const struct dev_pm_ops psb_pm_ops = {
 	.runtime_suspend = rtpm_suspend,
 	.runtime_resume = rtpm_resume,
@@ -3883,9 +3908,10 @@ static struct drm_driver driver = {
 	.lastclose = psb_lastclose,
 	.open = psb_driver_open,
 	.postclose = PVRSRVDrmPostClose,
-
-	.debugfs_init = psb_proc_init,
-	.debugfs_cleanup = psb_proc_cleanup,
+#if defined(CONFIG_DEBUG_FS)
+	.debugfs_init = psb_debugfs_init,
+	.debugfs_cleanup = psb_debugfs_cleanup,
+#endif
 
 #if KEEP_UNUSED_CODE_DRIVER_DISPATCH
 /*
