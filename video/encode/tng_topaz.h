@@ -91,7 +91,6 @@ struct tng_topaz_cmd_queue {
 	uint32_t sequence;
 };
 
-#define SECURE_ALING 16
 #define SECURE_VRL_HEADER 728
 #define SECURE_FIP_HEADER 296
 

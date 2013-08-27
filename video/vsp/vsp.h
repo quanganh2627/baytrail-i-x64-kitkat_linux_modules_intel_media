@@ -179,6 +179,12 @@ enum vsp_power_state {
 	VSP_STATE_ACTIVE
 };
 
+/* The status of firmware */
+enum vsp_firmware_state {
+	VSP_FW_NONE = 0,
+	VSP_FW_LOADED
+};
+
 #define VSP_CONFIG_SIZE 16
 
 enum vsp_irq_reg {
@@ -193,7 +199,7 @@ enum vsp_irq_reg {
 
 enum vsp_context_num {
 	VSP_CONTEXT_NUM_VPP = 0,
-	VSP_CONTEXT_NUM_VP8 = 0,
+	VSP_CONTEXT_NUM_VP8 = 1,
 	VSP_CONTEXT_NUM_MAX
 };
 
@@ -250,7 +256,8 @@ struct vsp_private {
 	struct mutex vsp_mutex;
 
 	/* pm suspend wq */
-	struct delayed_work vsp_suspend_wq;
+	//struct delayed_work vsp_suspend_wq;
+	struct tasklet_struct vsp_suspend_tasklet;
 
 	/* the number of cmd will send to VSP */
 	int vsp_cmd_num;
@@ -267,6 +274,7 @@ struct vsp_private {
 	void *coded_buf;
 	struct ttm_bo_kmap_obj coded_buf_kmap;
 	struct ttm_buffer_object *coded_buf_bo;
+	int context_num;
 };
 
 extern int vsp_init(struct drm_device *dev);
@@ -292,7 +300,7 @@ extern int vsp_cmdbuf_vpp(struct drm_file *priv,
 extern uint32_t vsp_fence_poll(struct drm_psb_private *dev_priv);
 
 extern void vsp_new_context(struct drm_device *dev);
-extern void vsp_rm_context(struct drm_device *dev);
+extern void vsp_rm_context(struct drm_device *dev, int ctx_type);
 extern uint32_t psb_get_default_pd_addr(struct psb_mmu_driver *driver);
 
 extern int psb_vsp_save_context(struct drm_device *dev);
@@ -305,7 +313,7 @@ int vsp_resume_function(struct drm_psb_private *dev_priv);
 
 extern int psb_vsp_dump_info(struct drm_psb_private *dev_priv);
 
-extern void psb_powerdown_vsp(struct work_struct *work);
+extern void psb_powerdown_vsp(unsigned long data);
 
 static inline
 unsigned int vsp_is_idle(struct drm_psb_private *dev_priv,

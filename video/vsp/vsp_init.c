@@ -85,13 +85,14 @@ int vsp_init(struct drm_device *dev)
 		"vsp_pmstate");
 
 	vsp_priv->vsp_cmd_num = 0;
-	vsp_priv->fw_loaded = 0;
+	vsp_priv->fw_loaded = VSP_FW_NONE;
 	vsp_priv->current_sequence = 0;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 	vsp_priv->dev = dev;
 	vsp_priv->coded_buf = NULL;
 
 	vsp_priv->available_recon_buffer = 0;
+	vsp_priv->context_num = 0;
 
 	dev_priv->vsp_private = vsp_priv;
 
@@ -265,8 +266,8 @@ int vsp_init(struct drm_device *dev)
 	spin_lock_init(&vsp_priv->lock);
 	mutex_init(&vsp_priv->vsp_mutex);
 
-	INIT_DELAYED_WORK(&vsp_priv->vsp_suspend_wq,
-			&psb_powerdown_vsp);
+	tasklet_init(&vsp_priv->vsp_suspend_tasklet,
+			psb_powerdown_vsp, (unsigned long)dev);
 
 	return 0;
 out_clean:
@@ -471,7 +472,7 @@ int vsp_init_fw(struct drm_device *dev)
 
 	ttm_bo_kunmap(&tmp_kmap);
 
-	vsp_priv->fw_loaded = 1;
+	vsp_priv->fw_loaded = VSP_FW_LOADED;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 
 	vsp_priv->ctrl = (struct vsp_ctrl_reg *) (dev_priv->vsp_reg +
@@ -510,7 +511,7 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 	vsp_priv->setting->response_queue_size = VSP_ACK_QUEUE_SIZE;
 	vsp_priv->setting->response_queue_addr = vsp_priv->ack_queue_bo->offset;
 
-	vsp_priv->setting->max_contexts = 1;
+	vsp_priv->setting->max_contexts = VSP_CONTEXT_NUM_MAX;
 	vsp_priv->setting->contexts_array_addr =
 				vsp_priv->context_setting_bo->offset;
 

@@ -282,13 +282,10 @@ bool otm_hdmi_power_rails_on(void);
 bool otm_hdmi_power_rails_off(void);
 
 /* turn HDMI power islands on */
-bool otm_hdmi_power_islands_on(int hw_island);
+bool otm_hdmi_power_islands_on(void);
 
 /* turn HDMI power islands off */
-void otm_hdmi_power_islands_off(int hw_island);
-
-/* control HDMI power islands */
-void otm_hdmi_pmu_nc_set_power_state(int islands, int state_type, int reg);
+void otm_hdmi_power_islands_off(void);
 
 /* control HDMI vblank interrupt */
 void otm_hdmi_vblank_control(struct drm_device *dev, bool on);

@@ -22,18 +22,15 @@
  * SOFTWARE.
  *
  * Authors:
- *    Hitesh K. Patel <hitesh.k.patel@intel.com>
+ *    Javier Torres Castillo <javier.torres.castillo@intel.com>
  */
 
-#ifndef _TNG_GRAPHICS_OSPM_H_
-#define _TNG_GRAPHICS_OSPM_H_
+#if !defined DEVFREQ_GRAPHICS_PM_H
+#define DEVFREQ_GRAPHICS_PM_H
 
-int gpu_freq_mhz_to_code(int freq_mhz, int *p_freq_out);
+/*PM on dfrgx*/
+int df_rgx_is_active(void);
+int df_rgx_suspend(void);
+int df_rgx_resume(void);
 
-int gpu_freq_set_from_code(int freq_code);
-
-void gpu_freq_set_suspend_func(int (*suspend_func)(void));
-
-void gpu_freq_set_resume_func(int (*resume_func)(void));
-
-#endif	/* _TNG_GRAPHICS_OSPM_H_*/
+#endif /*DEVFREQ_GRAPHICS_PM_H*/

@@ -93,6 +93,8 @@ struct android_hdmi_priv {
 	struct delayed_work hdmi_delayed_wq;
 	void *data;
 
+	bool hdmi_suspended;
+	bool hdmi_audio_enabled;
 	bool is_hdcp_supported;
 	int monitor_type;
 	void *context;

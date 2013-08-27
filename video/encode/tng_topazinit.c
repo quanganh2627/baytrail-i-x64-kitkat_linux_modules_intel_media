@@ -961,14 +961,13 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 		DRM_ERROR("TOPAZ: Request firmware failed: %d\n", ret);
 		return ret;
 	}
-
-	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size %d\n", raw->size);
-
 	if ((NULL == raw) || (raw->size < 20)) {
 		DRM_ERROR("TOPAZ: Firmware file size is not correct.\n");
 		ret = -1;
 		goto out;
 	}
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size %d\n", raw->size);
 
 	uc_ptr = (unsigned char *) raw->data;
 	if (!uc_ptr) {
@@ -1034,10 +1033,7 @@ int tng_topaz_init_fw(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
-
-	const unsigned int ui_align = SECURE_ALING - 1;
 	const struct firmware *raw = NULL;
-
 	struct tng_secure_fw *cur_sec_fw;
 	struct ttm_buffer_object **cur_drm_obj;
 	struct ttm_bo_kmap_obj tmp_kmap;
@@ -1131,7 +1127,8 @@ int tng_topaz_init_fw(struct drm_device *dev)
 		ttm_bo_kunmap(&tmp_kmap);
 
 		/* handle data section */
-		uc_ptr += (cur_sec_fw->text_size + ui_align) & (~ui_align);
+		uc_ptr += cur_sec_fw->text_size;
+
 		cur_drm_obj = &cur_sec_fw->data;
 		cur_size = cur_sec_fw->data_size;
 

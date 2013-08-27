@@ -48,6 +48,7 @@
 #include <linux/socket.h>
 #include <linux/skbuff.h>
 #include <linux/netlink.h>
+#include <linux/version.h>
 #include <net/sock.h>
 #include "psb_umevents.h"
 
@@ -353,6 +354,7 @@ int psb_add_uevent_var(struct kobj_uevent_env *env, const char *format, ...)
 #if defined(CONFIG_NET)
 int __init psb_kobject_uevent_init(void)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	/* This should be the 15, but 3 seems to work better.  Why? WHY!? */
 	/* uevent_sock = netlink_kernel_create(&init_net,
 					    NETLINK_PSB_KOBJECT_UEVENT,
@@ -362,13 +364,21 @@ int __init psb_kobject_uevent_init(void)
 					    NETLINK_PSB_KOBJECT_UEVENT,
 					    0x3, /* 3 is for hotplug & dpst */
 					    NULL, NULL, THIS_MODULE);
-
+#else
+        struct netlink_kernel_cfg cfg = {
+            .groups = 3,
+            .flags = NL_CFG_F_NONROOT_RECV,
+        };
+        uevent_sock = netlink_kernel_create(&init_net,
+                  NETLINK_PSB_KOBJECT_UEVENT, &cfg);
+#endif
 	if (!uevent_sock) {
 		printk(KERN_ERR "psb_kobject_uevent: failed create socket!\n");
 		return -ENODEV;
 	}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	netlink_set_nonroot(NETLINK_PSB_KOBJECT_UEVENT, NL_NONROOT_RECV);
-
+#endif
 	return 0;
 }
 

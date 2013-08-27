@@ -74,6 +74,7 @@
 #include "psb_drv.h"
 
 #include <asm/intel_scu_pmic.h>
+#include "psb_powermgmt.h"
 
 /* Implementation of the Medfield specific PCI driver for receiving
  * Hotplug and other device status signals.
@@ -261,20 +262,21 @@ bool ps_hdmi_power_rails_off(void)
 	return true;
 }
 
-bool ps_hdmi_power_islands_on(int hw_island)
+bool ps_hdmi_power_islands_on()
 {
-	return true;
-}
-
-void ps_hdmi_power_islands_off(int hw_island)
-{
-}
-
-void ps_hdmi_pmu_nc_set_power_state(int islands, int state_type, int reg)
-{
+	/*
+	 * If pmu_nc_set_power_state fails then accessing HW
+	 * reg would result in a crash - IERR/Fabric error.
+	 */
 	if (pmu_nc_set_power_state(OSPM_DISPLAY_B_ISLAND,
 				OSPM_ISLAND_UP, OSPM_REG_TYPE))
 		BUG();
+
+	return true;
+}
+
+void ps_hdmi_power_islands_off()
+{
 }
 
 void ps_hdmi_vblank_control(struct drm_device *dev, bool on)

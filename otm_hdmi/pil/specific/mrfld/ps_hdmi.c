@@ -74,7 +74,7 @@
 #include "ps_hdmi.h"
 #include <asm/intel_scu_pmic.h>
 #include <asm/intel-mid.h>
-#include "psb_powermgmt.h"
+#include "pwr_mgmt.h"
 
 /* Implementation of the Merrifield specific PCI driver for receiving
  * Hotplug and other device status signals.
@@ -258,26 +258,15 @@ bool ps_hdmi_power_rails_off(void)
 
 }
 
-bool ps_hdmi_power_islands_on(int hw_island)
+bool ps_hdmi_power_islands_on()
 {
-	return ospm_power_using_hw_begin(hw_island, OSPM_UHB_FORCE_POWER_ON);
+	return ospm_power_using_hw_begin(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI,
+			OSPM_UHB_FORCE_POWER_ON);
 }
 
-void ps_hdmi_power_islands_off(int hw_island)
+void ps_hdmi_power_islands_off()
 {
-	/*
-	 * FIXME: need to turn off OSPM_DISPLAY_HDMI island after plugging out
-	 * HDMI cable, but here fabric error happens.
-	 */
-	if (!hw_island)
-		hw_island = OSPM_DISPLAY_A | OSPM_DISPLAY_B;
-
-	ospm_power_using_hw_end(hw_island);
-}
-
-void ps_hdmi_pmu_nc_set_power_state(int islands, int state_type, int reg)
-{
-	/* Don't need to force powering on DSPB for MRFLD. */
+	ospm_power_using_hw_end(OSPM_DISPLAY_HDMI | OSPM_DISPLAY_B);
 }
 
 void ps_hdmi_vblank_control(struct drm_device *dev, bool on)
@@ -310,9 +299,10 @@ bool ps_hdmi_get_cable_status(void *context)
 		return g_context->is_connected_overridden;
 
 	if (gpio_get_value(ctx->gpio_hpd_pin) == 0)
-		return false;
+		ctx->is_connected =  false;
 	else
-		return true;
+		ctx->is_connected = true;
+	return ctx->is_connected;
 }
 
 /**

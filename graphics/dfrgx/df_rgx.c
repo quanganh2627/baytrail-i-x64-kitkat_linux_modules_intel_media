@@ -70,20 +70,21 @@
 #include <linux/suspend.h>
 
 #include <linux/thermal.h>
+#include <asm/errno.h>
 
 #include <linux/devfreq.h>
 
 #include <governor.h>
 
 #include <ospm/gfx_freq.h>
-
+#include "dev_freq_debug.h"
+#include "dev_freq_graphics_pm.h"
 #define DFRGX_GLOBAL_ENABLE_DEFAULT 1
 
 #define DF_RGX_NAME_DEV    "dfrgx"
 #define DF_RGX_NAME_DRIVER "dfrgxdrv"
 
 #define DFRGX_HEADING DF_RGX_NAME_DEV ": "
-#define DFRGX_ALERT KERN_ALERT DF_RGX_NAME_DEV ": "
 
 /* FIXME - Temporary limits to frequency range, pending further testing. */
 #define DF_RGX_FREQ_KHZ_MIN             200000
@@ -135,6 +136,10 @@ struct busfreq_data {
 
 /* df_rgx_created_dev - Pointer to created device, if any. */
 static struct platform_device *df_rgx_created_dev;
+
+/*Need to check if this is the 1st request*/
+static int firstRequest = 1;
+
 
 /**
  * Module parameters:
@@ -229,7 +234,7 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	else
 		freq_req = freq_khz;
 
-	printk(DFRGX_ALERT "%s: entry, caller requesting %luKHz\n",
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: entry, caller requesting %luKHz\n",
 		__func__, freq_khz);
 
 	if (freq_req < DF_RGX_FREQ_KHZ_MIN)
@@ -264,13 +269,13 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	if (bfdata->bf_freq_mhz_rlzd != freq_mhz_quantized) {
 		sts = gpu_freq_set_from_code(freq_code);
 		if (sts < 0) {
-			printk(DFRGX_ALERT
+			DFRGX_DPF(DFRGX_DEBUG_MED,
 				"%s: error (%d) from gpu_freq_set_from_code for %uMHz\n",
 				__func__, sts, freq_mhz_quantized);
 			goto out;
 		} else {
 			bfdata->bf_freq_mhz_rlzd = sts;
-			printk(DFRGX_ALERT "%s: freq MHz(requested, realized) = %u, %lu\n",
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: freq MHz(requested, realized) = %u, %lu\n",
 				__func__, freq_mhz_quantized,
 				bfdata->bf_freq_mhz_rlzd);
 		}
@@ -304,11 +309,22 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 {
 	struct platform_device *pdev;
 	struct busfreq_data *bfdata;
-	int ret;
+	int ret = 0;
 	(void) flags;
 
 	pdev = container_of(dev, struct platform_device, dev);
 	bfdata = platform_get_drvdata(pdev);
+
+	/*FIXME: Need to rethink about this scenario*/
+	if(firstRequest){
+		*p_freq = DF_RGX_INITIAL_FREQ_KHZ;
+		firstRequest = 0;
+		goto out;
+	}
+
+	if(!df_rgx_is_active()){
+		return -EBUSY;
+	}
 
 	ret = set_desired_frequency_khz(bfdata, *p_freq);
 	if (ret <= 0)
@@ -316,6 +332,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 
 	*p_freq = ret;
 
+out:
 	return 0;
 }
 
@@ -334,7 +351,7 @@ static int df_rgx_bus_get_dev_status(struct device *dev,
 {
 	struct busfreq_data *bfdata = dev_get_drvdata(dev);
 
-	printk(DFRGX_ALERT "%s: entry\n", __func__);
+	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
 	stat->current_frequency = bfdata->bf_freq_mhz_rlzd * 1000;
 
@@ -415,7 +432,7 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 		}
 
 		if (mprm_verbosity >= 2)
-			printk(DFRGX_ALERT "Thermal state changed from %d to %d\n",
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "Thermal state changed from %d to %d\n",
 				bfdata->gbp_cooldv_state_prev,
 				bfdata->gbp_cooldv_state_cur);
 
@@ -442,7 +459,7 @@ static void df_rgx_bus_exit(struct device *dev)
 	struct busfreq_data *bfdata = dev_get_drvdata(dev);
 	(void) bfdata;
 
-	printk(DFRGX_ALERT "%s: entry\n", __func__);
+	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
 	/*  devfreq_unregister_opp_notifier(dev, bfdata->devfreq); */
 }
@@ -472,7 +489,7 @@ static int df_rgx_busfreq_pm_notifier_event(struct notifier_block *this,
 {
 	struct busfreq_data *bfdata = container_of(this, struct busfreq_data,
 						 pm_notifier);
-	printk(DFRGX_ALERT "%s: entry\n", __func__);
+	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
 	switch (event) {
 	case PM_SUSPEND_PREPARE:
@@ -500,7 +517,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	struct devfreq *df;
 	int sts = 0;
 
-	printk(DFRGX_ALERT "%s: entry\n", __func__);
+	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
 	/* dev_err(dev, "example.\n"); */
 
@@ -558,7 +575,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		tcdhdl = thermal_cooling_device_register(
 			(char *) tcd_type, bfdata, &tcd_ops);
 		if (IS_ERR(tcdhdl)) {
-			printk(DFRGX_ALERT "Cooling device registration failed: %ld\n",
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "Cooling device registration failed: %ld\n",
 				-PTR_ERR(tcdhdl));
 			sts = PTR_ERR(tcdhdl);
 			goto err_001;
@@ -572,7 +589,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		goto err_002;
 	}
 
-	printk(DFRGX_ALERT "%s: success\n", __func__);
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: success\n", __func__);
 
 	return 0;
 
@@ -604,7 +621,7 @@ static int df_rgx_busfreq_resume(struct device *dev)
 {
 	struct busfreq_data *bfdata = dev_get_drvdata(dev);
 
-	printk(DFRGX_ALERT "%s: entry\n", __func__);
+	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
 	busfreq_mon_reset(bfdata);
 	return 0;
@@ -662,12 +679,16 @@ static int __init df_rgx_busfreq_init(void)
 	int ret;
 
 	if (!mprm_enable) {
-		printk(DFRGX_ALERT "%s: %s: disabled\n",
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: %s: disabled\n",
 			DF_RGX_NAME_DRIVER, __func__);
 		return -ENODEV;
 	}
 
-	printk(DFRGX_ALERT "%s: %s: starting\n", DF_RGX_NAME_DRIVER, __func__);
+	gpu_freq_set_suspend_func(&df_rgx_suspend);
+
+	gpu_freq_set_resume_func(&df_rgx_resume);
+
+	DFRGX_DPF(DFRGX_DEBUG_HIGH,"%s: %s: starting\n", DF_RGX_NAME_DRIVER, __func__);
 
 	pdev = df_rgx_busfreq_device_create();
 	if (IS_ERR(pdev))
@@ -679,7 +700,7 @@ static int __init df_rgx_busfreq_init(void)
 
 	ret = platform_driver_register(&df_rgx_busfreq_driver);
 
-	printk(DFRGX_ALERT "%s: %s: success\n", DF_RGX_NAME_DRIVER, __func__);
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: %s: success\n", DF_RGX_NAME_DRIVER, __func__);
 
 	return ret;
 }
@@ -690,7 +711,7 @@ static void __exit df_rgx_busfreq_exit(void)
 	struct platform_device *pdev = df_rgx_created_dev;
 	struct busfreq_data *bfdata = platform_get_drvdata(pdev);
 
-	printk(DFRGX_ALERT "%s:\n", __func__);
+	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s:\n", __func__);
 
 	if (bfdata && bfdata->gbp_cooldv_hdl) {
 		thermal_cooling_device_unregister(bfdata->gbp_cooldv_hdl);

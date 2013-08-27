@@ -22,18 +22,27 @@
  * SOFTWARE.
  *
  * Authors:
- *    Hitesh K. Patel <hitesh.k.patel@intel.com>
+ *    Javier Torres Castillo <javier.torres.castillo@intel.com>
  */
+#if !defined DEVFREQ_DEBUG_H
+#define  DEVFREQ_DEBUG_H
+#include <linux/kernel.h>
+#define DF_RGX_DEV    "dfrgx"
+#define DFRGX_ALERT    KERN_ALERT DF_RGX_DEV ": "
+#define DFRGX_DEBUG_MASK	0x01
+#define DFRGX_DEBUG_HIGH	0x01
+#define DFRGX_DEBUG_MED		0x02
+#define DFRGX_DEBUG_LOW		0x04
 
-#ifndef _TNG_GRAPHICS_OSPM_H_
-#define _TNG_GRAPHICS_OSPM_H_
+#define DFRGX_HWPERF_DEBUG 1
 
-int gpu_freq_mhz_to_code(int freq_mhz, int *p_freq_out);
+#ifdef DFRGX_HWPERF_DEBUG
+#define DFRGX_DPF(mask,...) if (mask & DFRGX_DEBUG_MASK ) \
+		{ \
+			printk(DFRGX_ALERT __VA_ARGS__); \
+		}
+#else
+#define DFRGX_DPF(mask,...)
+#endif
+#endif /*DEVFREQ_DEBUG_H*/
 
-int gpu_freq_set_from_code(int freq_code);
-
-void gpu_freq_set_suspend_func(int (*suspend_func)(void));
-
-void gpu_freq_set_resume_func(int (*resume_func)(void));
-
-#endif	/* _TNG_GRAPHICS_OSPM_H_*/

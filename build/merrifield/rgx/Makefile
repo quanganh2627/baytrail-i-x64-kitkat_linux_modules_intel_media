@@ -242,6 +242,10 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/devices/rgx/rgxdebug.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxbreakpoint.o
 
+# For devfreq
+$(DRIVER_NAME)-y += \
+	$(RGXDIR)/services/server/devices/rgx/rgxdf.o
+
 $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/cmm_bridge/server_cmm_bridge.o \
 	$(RGXDIR)/generated/dc_bridge/server_dc_bridge.o \
