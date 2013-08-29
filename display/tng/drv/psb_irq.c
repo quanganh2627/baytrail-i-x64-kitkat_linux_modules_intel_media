@@ -114,6 +114,17 @@ void psb_enable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 	(void)PSB_RVDC32(reg);
 }
 
+void psb_recover_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
+{
+	if ((dev_priv->pipestat[pipe] & mask) == mask) {
+		u32 reg = psb_pipestat(pipe);
+		u32 writeVal = PSB_RVDC32(reg);
+		writeVal |= (mask | (mask >> 16));
+		PSB_WVDC32(writeVal, reg);
+		(void)PSB_RVDC32(reg);
+	}
+}
+
 void psb_disable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 {
 	u32 reg = psb_pipestat(pipe);
@@ -1009,6 +1020,31 @@ int mdfld_enable_te(struct drm_device *dev, int pipe)
 
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 	PSB_DEBUG_ENTRY("%s: Enabled TE for pipe %d\n", __func__, pipe);
+
+	return 0;
+}
+
+/*
+ * It is used to recover TE interrupt in case pysical stat mismatch with logical stat
+ */
+int mdfld_recover_te(struct drm_device *dev, int pipe)
+{
+	struct drm_psb_private *dev_priv =
+	    (struct drm_psb_private *)dev->dev_private;
+	unsigned long irqflags;
+	uint32_t reg_val = 0;
+	uint32_t pipeconf_reg = mid_pipeconf(pipe);
+
+	reg_val = REG_READ(pipeconf_reg);
+
+	if (!(reg_val & PIPEACONF_ENABLE))
+		return -EINVAL;
+
+	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
+
+	psb_recover_pipestat(dev_priv, pipe, PIPE_TE_ENABLE);
+
+	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 
 	return 0;
 }

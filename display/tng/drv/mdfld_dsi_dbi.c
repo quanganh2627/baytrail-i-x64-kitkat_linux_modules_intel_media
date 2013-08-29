@@ -32,6 +32,7 @@
 #include "pwr_mgmt.h"
 #include "mdfld_dsi_dbi_dsr.h"
 #include "mrfld_clock.h"
+#include "psb_drv.h"
 
 /**
  * Enter DSR
@@ -1164,6 +1165,9 @@ void mdfld_reset_panel_handler_work(struct work_struct *work)
 		}
 
 		mutex_unlock(&dsi_config->context_lock);
+
+		/*recover pipestat in case island once been poweroff and pipestat was reset to default*/
+		mdfld_recover_te(dev, dsi_config->pipe);
 
 		DRM_INFO("%s: End panel reset\n", __func__);
 	} else {
