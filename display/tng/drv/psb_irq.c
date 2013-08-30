@@ -104,65 +104,45 @@ static inline u32 mid_pipeconf(int pipe)
 
 void psb_enable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 {
-	u32 power_island = pipe_to_island(pipe);
-
 	if ((dev_priv->pipestat[pipe] & mask) != mask) {
 		u32 reg = psb_pipestat(pipe);
 		dev_priv->pipestat[pipe] |= mask;
 		/* Enable the interrupt, clear any pending status */
-		if (power_island_get(power_island)) {
-			u32 writeVal = PSB_RVDC32(reg);
-			writeVal |= (mask | (mask >> 16));
-			PSB_WVDC32(writeVal, reg);
-			(void)PSB_RVDC32(reg);
-			power_island_put(power_island);
-		}
+		u32 writeVal = PSB_RVDC32(reg);
+		writeVal |= (mask | (mask >> 16));
+		PSB_WVDC32(writeVal, reg);
+		(void)PSB_RVDC32(reg);
 	}
 }
 
 void psb_disable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 {
-	u32 power_island = pipe_to_island(pipe);
-
 	if ((dev_priv->pipestat[pipe] & mask) != 0) {
 		u32 reg = psb_pipestat(pipe);
 		u32 writeVal;
 		dev_priv->pipestat[pipe] &= ~mask;
-		if (power_island_get(power_island)) {
-			writeVal = PSB_RVDC32(reg);
-			writeVal &= ~mask;
-			PSB_WVDC32(writeVal, reg);
-			(void)PSB_RVDC32(reg);
-			power_island_put(power_island);
-		}
+		writeVal = PSB_RVDC32(reg);
+		writeVal &= ~mask;
+		PSB_WVDC32(writeVal, reg);
+		(void)PSB_RVDC32(reg);
 	}
 }
 
 void mid_enable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 {
-	u32 power_island = pipe_to_island(pipe);
-
-	if (power_island_get(power_island)) {
-		u32 pipe_event = mid_pipe_event(pipe);
-		dev_priv->vdc_irq_mask |= pipe_event;
-		PSB_WVDC32(~dev_priv->vdc_irq_mask, PSB_INT_MASK_R);
-		PSB_WVDC32(dev_priv->vdc_irq_mask, PSB_INT_ENABLE_R);
-		power_island_put(power_island);
-	}
+	u32 pipe_event = mid_pipe_event(pipe);
+	dev_priv->vdc_irq_mask |= pipe_event;
+	PSB_WVDC32(~dev_priv->vdc_irq_mask, PSB_INT_MASK_R);
+	PSB_WVDC32(dev_priv->vdc_irq_mask, PSB_INT_ENABLE_R);
 }
 
 void mid_disable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 {
-	u32 power_island = pipe_to_island(pipe);
-
 	if (dev_priv->pipestat[pipe] == 0) {
-		if (power_island_get(power_island)) {
-			u32 pipe_event = mid_pipe_event(pipe);
-			dev_priv->vdc_irq_mask &= ~pipe_event;
-			PSB_WVDC32(~dev_priv->vdc_irq_mask, PSB_INT_MASK_R);
-			PSB_WVDC32(dev_priv->vdc_irq_mask, PSB_INT_ENABLE_R);
-			power_island_put(power_island);
-		}
+		u32 pipe_event = mid_pipe_event(pipe);
+		dev_priv->vdc_irq_mask &= ~pipe_event;
+		PSB_WVDC32(~dev_priv->vdc_irq_mask, PSB_INT_MASK_R);
+		PSB_WVDC32(dev_priv->vdc_irq_mask, PSB_INT_ENABLE_R);
 	}
 }
 
@@ -219,19 +199,20 @@ static void mid_vblank_handler(struct drm_device *dev, uint32_t pipe)
 		(*dev_priv->psb_vsync_handler)(dev, pipe);
 }
 
+#ifdef CONFIG_SUPPORT_HDMI
 /**
  * Display controller interrupt handler for pipe hdmi audio underrun.
  *
  */
-static void mdfld_pipe_hdmi_audio_underrun(struct drm_device *dev)
+void hdmi_do_audio_underrun_wq(struct work_struct *work)
 {
-	struct drm_psb_private *dev_priv =
-	    (struct drm_psb_private *)dev->dev_private;
+	struct drm_psb_private *dev_priv = container_of(work,
+			struct drm_psb_private, hdmi_audio_underrun_wq);
 	void *had_pvt_data = dev_priv->had_pvt_data;
 	enum had_event_type event_type = HAD_EVENT_AUDIO_BUFFER_UNDERRUN;
 
 	if (dev_priv->mdfld_had_event_callbacks)
-		(*dev_priv->mdfld_had_event_callbacks) (event_type,
+		(*dev_priv->mdfld_had_event_callbacks)(event_type,
 							had_pvt_data);
 }
 
@@ -239,15 +220,16 @@ static void mdfld_pipe_hdmi_audio_underrun(struct drm_device *dev)
  * Display controller interrupt handler for pipe hdmi audio buffer done.
  *
  */
-static void mdfld_pipe_hdmi_audio_buffer_done(struct drm_device *dev)
+void hdmi_do_audio_bufferdone_wq(struct work_struct *work)
 {
-	struct drm_psb_private *dev_priv =
-	    (struct drm_psb_private *)dev->dev_private;
+	struct drm_psb_private *dev_priv = container_of(work,
+			struct drm_psb_private, hdmi_audio_bufferdone_wq);
 
 	if (dev_priv->mdfld_had_event_callbacks)
 		(*dev_priv->mdfld_had_event_callbacks)
 		    (HAD_EVENT_AUDIO_BUFFER_DONE, dev_priv->had_pvt_data);
 }
+#endif
 
 void psb_te_timer_func(unsigned long data)
 {
@@ -402,13 +384,15 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		schedule_work(&dev_priv->te_work);
 	}
 
+#ifdef CONFIG_SUPPORT_HDMI
 	if (pipe_stat_val & PIPE_HDMI_AUDIO_UNDERRUN_STATUS) {
-		mdfld_pipe_hdmi_audio_underrun(dev);
+		schedule_work(&dev_priv->hdmi_audio_underrun_wq);
 	}
 
 	if (pipe_stat_val & PIPE_HDMI_AUDIO_BUFFER_DONE_STATUS) {
-		mdfld_pipe_hdmi_audio_buffer_done(dev);
+		schedule_work(&dev_priv->hdmi_audio_bufferdone_wq);
 	}
+#endif
 }
 
 /**
@@ -785,7 +769,6 @@ int psb_enable_vblank(struct drm_device *dev, int pipe)
 	uint32_t reg_val = 0;
 	uint32_t pipeconf_reg = mid_pipeconf(pipe);
 	mdfld_dsi_encoder_t encoder_type;
-	u32 power_island = pipe_to_island(pipe);
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -794,10 +777,7 @@ int psb_enable_vblank(struct drm_device *dev, int pipe)
 			(pipe != 1))
 		return mdfld_enable_te(dev, pipe);
 
-	if (power_island_get(power_island)) {
-		reg_val = REG_READ(pipeconf_reg);
-		power_island_put(power_island);
-	}
+	reg_val = REG_READ(pipeconf_reg);
 
 	if (!(reg_val & PIPEACONF_ENABLE))
 		return -EINVAL;
@@ -851,7 +831,6 @@ u32 psb_get_vblank_counter(struct drm_device *dev, int pipe)
 	uint32_t pipeconf_reg = PIPEACONF;
 	uint32_t reg_val = 0;
 	uint32_t high1 = 0, high2 = 0, low = 0, count = 0;
-	u32 power_island = pipe_to_island(pipe);
 
 	switch (pipe) {
 	case 0:
@@ -870,9 +849,6 @@ u32 psb_get_vblank_counter(struct drm_device *dev, int pipe)
 		DRM_ERROR("%s, invalded pipe.\n", __func__);
 		return 0;
 	}
-
-	if (!power_island_get(power_island))
-		return 0;
 
 	reg_val = REG_READ(pipeconf_reg);
 
@@ -899,8 +875,6 @@ u32 psb_get_vblank_counter(struct drm_device *dev, int pipe)
 	count = (high1 << 8) | low;
 
  psb_get_vblank_counter_exit:
-
-	power_island_put(power_island);
 
 	return count;
 }
@@ -947,7 +921,6 @@ int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 	int vtot_reg = VTOTAL_A;
 	int dsl_reg = PIPEADSL;
 	int vblank_reg = VBLANK_A;
-	u32 power_island = pipe_to_island(pipe);
 	int ret = 0;
 
 	switch (pipe) {
@@ -970,12 +943,8 @@ int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 		return 0;
 	}
 
-	if (!power_island_get(power_island))
-		return 0;
-
 	if (!REG_READ(pipeconf_reg)) {
 		DRM_DEBUG_DRIVER("Failed to get scanoutpos in pipe %d\n", pipe);
-		power_island_put(power_island);
 		return 0;
 	}
 
@@ -993,8 +962,6 @@ int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 
 	/* Query vblank area. */
 	vbl = REG_READ(vblank_reg);
-
-	power_island_put(power_island);
 
 	/* Test position against vblank region. */
 	vbl_start = vbl & 0x1fff;
@@ -1028,12 +995,8 @@ int mdfld_enable_te(struct drm_device *dev, int pipe)
 	unsigned long irqflags;
 	uint32_t reg_val = 0;
 	uint32_t pipeconf_reg = mid_pipeconf(pipe);
-	u32 power_island = pipe_to_island(pipe);
 
-	if (power_island_get(power_island)) {
-		reg_val = REG_READ(pipeconf_reg);
-		power_island_put(power_island);
-	}
+	reg_val = REG_READ(pipeconf_reg);
 
 	if (!(reg_val & PIPEACONF_ENABLE))
 		return -EINVAL;

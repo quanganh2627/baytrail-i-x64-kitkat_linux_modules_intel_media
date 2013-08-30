@@ -29,6 +29,7 @@
 #include "dc_ospm.h"
 #include "pmu_tng.h"
 #include "tng_wa.h"
+#include <asm/intel-mid.h>
 
 #define BZ96571
 
@@ -78,10 +79,16 @@ static bool disp_a_power_up(struct drm_device *dev,
 
 	ret = pmu_nc_set_power_state(PMU_DISP_A, OSPM_ISLAND_UP, DSP_SS_PM);
 
-#if A0_WORKAROUNDS
-	if (!ret)
-		apply_A0_workarounds(OSPM_DISPLAY_ISLAND, 0);
-#endif
+	/*
+         * This workarounds are only needed for TNG A0/A1 silicon.
+         * Any TNG SoC which is newer than A0/A1 won't need this.
+         */
+        if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
+                intel_mid_soc_stepping() < 1)
+        {
+		if (!ret)
+			apply_A0_workarounds(OSPM_DISPLAY_ISLAND, 0);
+	}
 
 	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
 

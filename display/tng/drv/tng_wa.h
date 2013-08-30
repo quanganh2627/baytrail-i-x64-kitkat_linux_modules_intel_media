@@ -30,8 +30,6 @@
 
 #include "psb_drv.h"
 
-#define A0_WORKAROUNDS			1	/* 1 to enable */
-
 extern struct drm_device *gpDrmDevice;
 
 /* Apply the A0 Workaround */

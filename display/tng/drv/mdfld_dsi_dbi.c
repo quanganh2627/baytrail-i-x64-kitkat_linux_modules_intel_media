@@ -344,6 +344,8 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(regs->device_ready_reg,
 		REG_READ(regs->device_ready_reg) & ~(DSI_DEVICE_READY));
 
+	udelay(1);
+
 	/*D-PHY parameter*/
 	REG_WRITE(regs->dphy_param_reg, ctx->dphy_param);
 
@@ -477,6 +479,8 @@ reset_recovery:
 	if (p_funcs && p_funcs->exit_deep_standby)
 		p_funcs->exit_deep_standby(dsi_config);
 
+	msleep(90);
+
 	if (__dbi_power_on(dsi_config)) {
 		DRM_ERROR("Failed to init display controller!\n");
 		err = -EAGAIN;
@@ -534,7 +538,6 @@ power_on_err:
 */
 int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 {
-	u32 val = 0;
 	struct mdfld_dsi_hw_registers *regs;
 	struct mdfld_dsi_hw_context *ctx;
 	struct drm_device *dev;
@@ -543,6 +546,7 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	int pipe2_enabled;
 	int err = 0;
 	u32 power_island = 0;
+	int retry;
 
 	if (!dsi_config)
 		return -EINVAL;
@@ -555,12 +559,19 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	dev_priv = dev->dev_private;
 
 	/*Disable plane*/
-	val = ctx->dspcntr;
-	REG_WRITE(regs->dspcntr_reg, (val & ~BIT31));
+	REG_WRITE(regs->dspcntr_reg, 0);
 
-	/*Disable pipe and overlay & cursor panel assigned to this pipe*/
-	val = ctx->pipeconf;
-	REG_WRITE(regs->pipeconf_reg, ((val | 0x000c0000) & ~BIT31));
+	/*Disable pipe*/
+	REG_WRITE(regs->pipeconf_reg, 0);
+
+	retry = 10000;
+	while (--retry && (REG_READ(regs->pipeconf_reg) & BIT30))
+		udelay(3);
+
+	if (!retry) {
+		DRM_ERROR("Failed to disable pipe\n");
+		goto power_off_err;
+	}
 
 	/*Disable DSI PLL*/
 	pipe0_enabled = (REG_READ(PIPEACONF) & BIT31) ? 1 : 0;
@@ -576,9 +587,6 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 		DRM_ERROR("Failed to enter ULPS\n");
 		goto power_off_err;
 	}
-
-	REG_WRITE(regs->mipi_reg,
-	      REG_READ(regs->mipi_reg) & (~PASS_FROM_SPHY_TO_AFE));
 power_off_err:
 
 	power_island = pipe_to_island(dsi_config->pipe);

@@ -1365,7 +1365,10 @@ static int psb_do_init(struct drm_device *dev)
 	}
 
 	PSB_DEBUG_INIT("Init MSVDX\n");
+	power_island_get(OSPM_VIDEO_DEC_ISLAND);
 	psb_msvdx_init(dev);
+	power_island_put(OSPM_VIDEO_DEC_ISLAND);
+
 #ifdef SUPPORT_VSP
 	VSP_DEBUG("Init VSP\n");
 	vsp_init(dev);
@@ -1778,12 +1781,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	PSB_DEBUG_INIT("Begin to init MSVDX/Topaz\n");
 
-	ret = psb_do_init(dev);
-	if (ret)
-		return ret;
-
-	ospm_post_init(dev);
-
 	/*initialize the MSI for MRST */
 	if (IS_MID(dev)) {
 		if (pci_enable_msi(dev->pdev)) {
@@ -1807,6 +1804,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	dev_priv->pipestat[0] = 0;
 	dev_priv->pipestat[1] = 0;
 	dev_priv->pipestat[2] = 0;
+	spin_lock_init(&dev_priv->irqmask_lock);
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 	PSB_WVDC32(0x00000000, PSB_INT_ENABLE_R);
 	PSB_WVDC32(0xFFFFFFFF, PSB_INT_MASK_R);
@@ -1854,6 +1852,10 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	if (ret)
 		return ret;
 
+	ret = psb_do_init(dev);
+	if (ret)
+		return ret;
+
 	/* initialize HDMI Hotplug interrupt forwarding
 	 * notifications for user mode
 	 */
@@ -1875,6 +1877,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	atomic_set(&dev_priv->hotplug_wq_done, 0);
 	INIT_WORK(&dev_priv->hdmi_hotplug_wq, hdmi_do_hotplug_wq);
 	INIT_WORK(&dev_priv->hdmi_audio_wq, hdmi_do_audio_wq);
+	INIT_WORK(&dev_priv->hdmi_audio_underrun_wq, hdmi_do_audio_underrun_wq);
+	INIT_WORK(&dev_priv->hdmi_audio_bufferdone_wq, hdmi_do_audio_bufferdone_wq);
 #endif
 
 	/*Intel drm driver load is done, continue doing pvr load */
@@ -2800,7 +2804,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 	s64 nsecs = 0;
 	int ret = 0;
 
-	mutex_lock(&dev_priv->vsync_lock);
 	if (arg->vsync_operation_mask) {
 		pipe = arg->vsync.pipe;
 
@@ -2815,8 +2818,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
-			mutex_lock(&dev->mode_config.mutex);
-
+			/* TODO: find a clean way to protect vblank_enabled */
 			if (dev->vblank_enabled[pipe]) {
 				vblwait.request.type =
 					(_DRM_VBLANK_RELATIVE |
@@ -2834,15 +2836,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 							pipe);
 			}
 
-			mutex_unlock(&dev->mode_config.mutex);
-
 			getrawmonotonic(&now);
 			nsecs = timespec_to_ns(&now);
 
 			arg->vsync.timestamp = (uint64_t)nsecs;
 
-			mutex_unlock(&dev_priv->vsync_lock);
-			return 0;
+			return ret;
 		}
 
 		if (!pipe)
@@ -2863,7 +2862,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		}
 	}
 
-	mutex_unlock(&dev_priv->vsync_lock);
 	return ret;
 }
 

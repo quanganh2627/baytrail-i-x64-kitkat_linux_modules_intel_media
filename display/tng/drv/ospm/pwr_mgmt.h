@@ -105,7 +105,7 @@ struct power_ops {
 };
 
 struct _ospm_data_ {
-	spinlock_t	ospm_lock;
+	struct mutex ospm_lock;
 
 	/* drm device */
 	struct drm_device	*dev;
@@ -117,7 +117,6 @@ struct ospm_power_island *get_island_ptr(u32 hw_island);
 bool ospm_power_suspend(void);
 void ospm_power_resume(void);
 void ospm_power_init(struct drm_device *dev);
-void ospm_post_init(struct drm_device *dev);
 void ospm_power_uninit(void);
 
 /* Power up */

@@ -336,14 +336,20 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	if (gfx_all & GFX_SLC_SSC)
 		ret = GFX_POWER_UP(PMU_SLC);
 
-#if A0_WORKAROUNDS
-	/**
-	 * If turning some power on, and the power to be on includes SLC,
-	 * and SLC was not previously on, then setup some registers.
+	/*
+	 * This workarounds are only needed for TNG A0/A1 silicon.
+	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-	if (gfx_all & GFX_SLC_SSC)
-		apply_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
-#endif
+        if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
+		intel_mid_soc_stepping() < 1)
+	{
+		/**
+		* If turning some power on, and the power to be on includes SLC,
+		* and SLC was not previously on, then setup some registers.
+		*/
+		if (gfx_all & GFX_SLC_SSC)
+			apply_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
+	}
 
 	if (gfx_all & GFX_SDKCK_SSC)
 		ret = GFX_POWER_UP(PMU_SDKCK);
