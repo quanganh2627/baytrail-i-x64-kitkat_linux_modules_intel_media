@@ -329,6 +329,35 @@ enum {
 #define MDFLD_PLANE_MAX_WIDTH		2048
 #define MDFLD_PLANE_MAX_HEIGHT		2048
 
+#define IS_POULSBO(dev) 0
+
+#define IS_MDFLD(dev) (((dev)->pci_device & 0xfff8) == 0x0130)
+#define IS_CTP(dev) (((dev->pci_device & 0xffff) == 0x08c0) ||	\
+		((dev->pci_device & 0xffff) == 0x08c7) ||  \
+		((dev->pci_device & 0xffff) == 0x08c8))
+#define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180 || ((dev)->pci_device & 0xfff8) == 0x1480)
+
+#if defined(CONFIG_DRM_CTP)
+#define IS_TNG_B0(dev) 		0
+#elif defined(CONFIG_DRM_VXD_BYT)
+#define IS_TNG_B0(dev) 		0
+#else
+#ifndef GFX_KERNEL_3_10_FIX 	/*waiting for function to identify stepping*/
+#define IS_TNG_B0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && (intel_mid_soc_stepping() == 1))
+#else
+#define IS_TNG_B0(dev) 	0
+#endif
+#endif
+
+
+#define IS_MID(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
+#define IS_FLDS(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
+#define IS_MSVDX(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
+#define IS_TOPAZ(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
+
+#define IS_MSVDX_MEM_TILE(dev) ((IS_MRFLD(dev)) || (IS_CTP(dev)))
+
+
 /*
  *User options.
  */
@@ -1305,22 +1334,6 @@ static inline void WRAPPER_REGISTER_WRITE(struct drm_device *dev, uint32_t reg,
   (((_val) >> (_base ## _ALIGNSHIFT)) << (_base ## _SHIFT))
 #define PSB_ALPLM(_val, _base)			\
   ((((_val) >> (_base ## _ALIGNSHIFT)) << (_base ## _SHIFT)) & (_base ## _MASK))
-
-#define IS_POULSBO(dev) 0
-
-#define IS_MDFLD(dev) (((dev)->pci_device & 0xfff8) == 0x0130)
-#define IS_CTP(dev) (((dev->pci_device & 0xffff) == 0x08c0) ||	\
-		((dev->pci_device & 0xffff) == 0x08c7) ||  \
-		((dev->pci_device & 0xffff) == 0x08c8))
-#define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180 || ((dev)->pci_device & 0xfff8) == 0x1480)
-#define IS_TNG_B0(dev) (((dev)->pci_device & 0xffff) == 0x1181)
-
-#define IS_MID(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
-#define IS_FLDS(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
-#define IS_MSVDX(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
-#define IS_TOPAZ(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
-
-#define IS_MSVDX_MEM_TILE(dev) ((IS_MRFLD(dev)) || (IS_CTP(dev)))
 
 extern int drm_psb_ospm;
 extern int drm_psb_cpurelax;

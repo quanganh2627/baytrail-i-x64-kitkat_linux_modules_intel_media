@@ -58,15 +58,10 @@ static bool vsp_power_up(struct drm_device *dev,
 	 * This workarounds are only needed for TNG A0/A1 silicon.
 	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
-			intel_mid_soc_stepping() < 1)
+	if (!IS_TNG_B0(dev))
 	{
-#endif
 		apply_A0_workarounds(OSPM_VIDEO_VPP_ISLAND, 1);
-#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
 	}
-#endif
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_VPP, OSPM_ISLAND_UP, VSP_SS_PM0);
