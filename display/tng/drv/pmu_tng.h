@@ -153,6 +153,7 @@
 #define IP_FREQ_320_00 0x09        /* 0b01001 320.00 */
 #define IP_FREQ_355_56 0x08        /* 0b01000 355.56 */
 #define IP_FREQ_400_00 0x07        /* 0b00111 400.00 */
+#define IP_FREQ_457_14 0x06        /* 0b00110 457.14 */
 #define IP_FREQ_533_33 0x05        /* 0b00101 533.33 */
 #define IP_FREQ_640_00 0x04        /* 0b00100 640.00 */
 #define IP_FREQ_800_00 0x03        /* 0b00011 800.00 */

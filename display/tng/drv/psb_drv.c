@@ -117,6 +117,10 @@ u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
 int drm_psb_msvdx_tiling = 0;
 int drm_msvdx_bottom_half;
 int drm_hdmi_hpd_auto;
+int drm_vsp_burst = 0;
+int drm_vsp_force_up_freq = 0;
+int drm_vsp_force_down_freq = 0;
+int drm_vsp_single_int = 0;
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -147,7 +151,10 @@ MODULE_PARM_DESC(vsp_pm, "Power on/off the VSP");
 MODULE_PARM_DESC(ved_pm, "Power on/off the Msvdx");
 MODULE_PARM_DESC(vec_pm, "Power on/off the Topaz");
 MODULE_PARM_DESC(hdmi_hpd_auto, "HDMI hot-plug auto test flag");
-
+MODULE_PARM_DESC(vsp_burst, "VSP burst mode enable");
+MODULE_PARM_DESC(vsp_force_up_freq, "force VSP running at certain freq");
+MODULE_PARM_DESC(vsp_force_down_freq, "force VSP power down at certain freq");
+MODULE_PARM_DESC(vsp_single_int, "force VSP VPP generate one irq per command group");
 
 module_param_named(enable_color_conversion, drm_psb_enable_color_conversion,
 					int, 0600);
@@ -185,7 +192,10 @@ module_param_named(te_delay, drm_psb_te_timer_delay, int, 0600);
 module_param_named(decode_flag, drm_decode_flag, int, 0600);
 #endif
 module_param_named(hdmi_hpd_auto, drm_hdmi_hpd_auto, int, 0600);
-
+module_param_named(vsp_burst, drm_vsp_burst, int, 0600);
+module_param_named(vsp_force_up_freq, drm_vsp_force_up_freq, int, 0600);
+module_param_named(vsp_force_down_freq, drm_vsp_force_down_freq, int, 0600);
+module_param_named(vsp_single_int, drm_vsp_single_int, int, 0600);
 
 #ifndef MODULE
 /* Make ospm configurable via cmdline firstly,

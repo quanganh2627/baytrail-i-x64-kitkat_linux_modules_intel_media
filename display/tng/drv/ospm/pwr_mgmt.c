@@ -716,6 +716,8 @@ void ospm_apm_power_down_vsp(struct drm_device *dev)
 	int ret;
 	struct ospm_power_island *p_island;
 	unsigned long flags;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 
 	PSB_DEBUG_PM("Power down VPP...\n");
 	p_island = get_island_ptr(OSPM_VIDEO_VPP_ISLAND);
@@ -725,28 +727,33 @@ void ospm_apm_power_down_vsp(struct drm_device *dev)
 		return;
 	}
 
-	spin_lock_irqsave(&g_ospm_data->ospm_lock, flags);
+	mutex_lock(&g_ospm_data->ospm_lock);
 
 	if (!ospm_power_is_hw_on(OSPM_VIDEO_VPP_ISLAND))
 		goto out;
 
-	if (atomic_read(&p_island->ref_count)) {
+	if (atomic_read(&p_island->ref_count))
 		PSB_DEBUG_PM("VPP ref_count has been set(%d), bypass\n",
 			     atomic_read(&p_island->ref_count));
+
+	if (vsp_priv->vsp_cmd_num > 0) {
+		VSP_DEBUG("command in VSP, by pass\n");
 		goto out;
 	}
 
 	ret = p_island->p_funcs->power_down(
-			g_ospm_data->dev,
-			p_island);
+		g_ospm_data->dev,
+		p_island);
 
 	/* set the island state */
-	if (ret)
+	if (ret) {
 		p_island->island_state = OSPM_POWER_OFF;
+		atomic_set(&p_island->ref_count, 0);
+	}
 
 	PSB_DEBUG_PM("Power down VPP done\n");
 out:
-	spin_unlock_irqrestore(&g_ospm_data->ospm_lock, flags);
+	mutex_unlock(&g_ospm_data->ospm_lock);
 	return;
 }
 

@@ -30,6 +30,7 @@
 
 #include "pwr_mgmt.h"
 #include "psb_msvdx.h"
+#include "vsp.h"
 
 #define PMU_VPP			0x1
 #define PMU_ENC			0x1

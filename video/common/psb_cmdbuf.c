@@ -929,7 +929,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 
 		if (vsp_priv->fw_loaded_by_punit &&
 		    vsp_priv->vsp_state == VSP_STATE_IDLE)
-			power_island_put(OSPM_VIDEO_VPP_ISLAND);
+			ospm_apm_power_down_vsp(dev);
 
 		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
 			ret = -EBUSY;

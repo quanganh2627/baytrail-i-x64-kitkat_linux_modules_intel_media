@@ -89,7 +89,7 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 	wr = vsp_priv->ctrl->ack_wr;
 	msg_num = wr > rd ? wr - rd : wr == rd ? 0 :
 		VSP_ACK_QUEUE_SIZE - (rd - wr);
-	PSB_DEBUG_GENERAL("ack rd %d wr %d, msg_num %d, size %d\n",
+	VSP_DEBUG("ack rd %d wr %d, msg_num %d, size %d\n",
 		  rd, wr, msg_num, VSP_ACK_QUEUE_SIZE);
 
 	sequence = vsp_priv->current_sequence;
@@ -172,9 +172,9 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			cmd_wr = vsp_priv->ctrl->cmd_wr;
 			VSP_DEBUG("cmd_rd=%d, cmd_wr=%d\n", cmd_rd, cmd_wr);
 
-			if (vsp_priv->fw_loaded_by_punit &&
-			    vsp_priv->vsp_state == VSP_STATE_ACTIVE) {
-				vsp_priv->vsp_state = VSP_STATE_IDLE;
+			if (vsp_priv->fw_loaded_by_punit) {
+				if (vsp_priv->vsp_state == VSP_STATE_ACTIVE)
+					vsp_priv->vsp_state = VSP_STATE_IDLE;
 				break;
 			}
 
@@ -333,7 +333,7 @@ bool vsp_interrupt(void *pvData)
 	bool ret = true;
 	uint32_t sequence;
 
-	PSB_DEBUG_GENERAL("got vsp interrupt\n");
+	VSP_DEBUG("got vsp interrupt\n");
 
 	if (pvData == NULL) {
 		DRM_ERROR("VSP: vsp %s, Invalid params\n", __func__);
@@ -359,23 +359,24 @@ bool vsp_interrupt(void *pvData)
 		(void)PSB_RVDC32(PSB_INT_IDENTITY_R);
 	}
 
-	/* handle the response message */
-	spin_lock(&vsp_priv->lock);
-	sequence = vsp_handle_response(dev_priv);
-	spin_unlock(&vsp_priv->lock);
-
-	/* handle fence info */
-	if (sequence != vsp_priv->current_sequence) {
-		vsp_priv->current_sequence = sequence;
-		psb_fence_handler(dev, VSP_ENGINE_VPP);
+	if (vsp_priv->fw_loaded_by_punit) {
+		tasklet_hi_schedule(&vsp_priv->vsp_irq_tasklet);
 	} else {
-		VSP_DEBUG("will not handle fence for %x vs current %x\n",
-			  sequence, vsp_priv->current_sequence);
-	}
+		/* handle the response message */
+		spin_lock(&vsp_priv->lock);
+		sequence = vsp_handle_response(dev_priv);
+		spin_unlock(&vsp_priv->lock);
 
-	if (vsp_priv->fw_loaded_by_punit &&
-	    vsp_priv->vsp_state == VSP_STATE_IDLE)
-		ospm_apm_power_down_vsp(dev);
+		/* handle fence info */
+		if (sequence != vsp_priv->current_sequence) {
+			vsp_priv->current_sequence = sequence;
+			psb_fence_handler(dev, VSP_ENGINE_VPP);
+		} else {
+			VSP_DEBUG("will not handle fence for %x "
+					"vs current %x\n",
+					sequence, vsp_priv->current_sequence);
+		}
+	}
 
 	VSP_DEBUG("will leave interrupt\n");
 	return ret;
@@ -593,7 +594,7 @@ int vsp_send_command(struct drm_device *dev,
 				cur_cell_cmd->context, cur_cell_cmd->type,
 				cur_cell_cmd->buffer, cur_cell_cmd->size,
 				cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
-			PSB_DEBUG_GENERAL("send %.8x cmd to VSP",
+			VSP_DEBUG("send %.8x cmd to VSP",
 					cur_cell_cmd->type);
 			num_cmd++;
 			cur_cmd++;
@@ -856,6 +857,11 @@ int vsp_fence_surfaces(struct drm_file *priv,
 		surf_handler = pic_param->output_picture[idx].surface_id;
 		VSP_DEBUG("handling surface id %x\n", surf_handler);
 
+		if (drm_vsp_single_int) {
+			pic_param->output_picture[idx].irq = 0;
+			continue;
+		}
+
 		surf_bo = ttm_buffer_object_lookup(tfile, surf_handler);
 		if (surf_bo == NULL) {
 			DRM_ERROR("VSP: failed to find %x surface\n",
@@ -1030,8 +1036,9 @@ out:
 	return ret;
 }
 
-uint32_t vsp_fence_poll(struct drm_psb_private *dev_priv)
+void vsp_fence_poll(struct drm_device *dev)
 {
+	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	unsigned int rd, wr;
 	unsigned int idx;
@@ -1040,27 +1047,28 @@ uint32_t vsp_fence_poll(struct drm_psb_private *dev_priv)
 	unsigned long irq_flags;
 	struct vss_response_t *msg;
 
-	PSB_DEBUG_GENERAL("polling vsp msg\n");
+	VSP_DEBUG("polling vsp msg\n");
+
+	if (vsp_priv->vsp_state == VSP_STATE_HANG &&
+	    vsp_priv->vsp_state == VSP_STATE_DOWN &&
+	    vsp_priv->vsp_state == VSP_STATE_SUSPEND)
+		return;
 
 	sequence = vsp_priv->current_sequence;
 
 	spin_lock_irqsave(&vsp_priv->lock, irq_flags);
 
-	if (vsp_priv->vsp_state == VSP_STATE_DOWN ||
-	    vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
-		VSP_DEBUG("VSP is in OFF state.Don't poll anything!\n");
-		spin_unlock_irqrestore(&vsp_priv->lock, irq_flags);
-		goto out;
-	}
 	/* handle the response message */
 	sequence = vsp_handle_response(dev_priv);
 
 	spin_unlock_irqrestore(&vsp_priv->lock, irq_flags);
 
-	if (sequence != vsp_priv->current_sequence)
+	if (sequence != vsp_priv->current_sequence) {
 		vsp_priv->current_sequence = sequence;
+		psb_fence_handler(dev, VSP_ENGINE_VPP);
+	}
 out:
-	return sequence;
+	return;
 }
 
 void vsp_new_context(struct drm_device *dev)
@@ -1137,7 +1145,14 @@ void vsp_rm_context(struct drm_device *dev, int ctx_type)
 
 	vsp_priv->ctrl->entry_kind = vsp_exit;
 
-	ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
+	/* in case of power mode 0, HW always active,
+	 * set state to idle here for check idle func */
+	if (vsp_priv->fw_loaded_by_punit) {
+		vsp_priv->vsp_state = VSP_STATE_IDLE;
+		ospm_apm_power_down_vsp(dev);
+	} else {
+		ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
+	}
 
 	vsp_priv->current_sequence = 0;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
@@ -1239,6 +1254,38 @@ void psb_powerdown_vsp(struct work_struct *work)
 		PSB_DEBUG_PM("The VSP could NOT be powered off!\n");
 	else
 		PSB_DEBUG_PM("The VSP has been powered off!\n");
+
+	return;
+}
+
+/* vsp irq tasklet function */
+void vsp_irq_task(unsigned long data)
+{
+	struct drm_device *dev = (struct drm_device *)data;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+	uint32_t sequence;
+
+	if (!vsp_priv)
+		return;
+
+	/* handle the response message */
+	spin_lock(&vsp_priv->lock);
+	sequence = vsp_handle_response(dev_priv);
+	spin_unlock(&vsp_priv->lock);
+
+	/* handle fence info */
+	if (sequence != vsp_priv->current_sequence) {
+		vsp_priv->current_sequence = sequence;
+		psb_fence_handler(dev, VSP_ENGINE_VPP);
+	} else {
+		VSP_DEBUG("will not handle fence for %x vs current %x\n",
+			  sequence, vsp_priv->current_sequence);
+	}
+
+	if (vsp_priv->fw_loaded_by_punit &&
+	    vsp_priv->vsp_state == VSP_STATE_IDLE)
+		ospm_apm_power_down_vsp(dev);
 
 	return;
 }

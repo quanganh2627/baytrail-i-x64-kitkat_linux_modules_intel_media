@@ -1363,6 +1363,10 @@ extern int drm_psb_cpurelax;
 extern int drm_psb_udelaydivider;
 extern int drm_psb_gl3_enable;
 extern int drm_psb_topaz_clockgating;
+extern int drm_vsp_burst;
+extern int drm_vsp_force_up_freq;
+extern int drm_vsp_force_down_freq;
+extern int drm_vsp_single_int;
 
 extern int drm_decode_flag;
 
