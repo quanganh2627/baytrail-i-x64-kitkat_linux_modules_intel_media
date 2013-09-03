@@ -2130,6 +2130,15 @@ static int32_t tng_setup_WB_mem(
                 return -1;
         }
 
+	if (0 == atomic_read(&video_ctx->mtx_ctx_bo->reserved)) {
+		PSB_DEBUG_TOPAZ("MTX context not reserved, reserve it now\n");
+		ret = ttm_bo_reserve(video_ctx->mtx_ctx_bo, true, true, false, 0);
+		if (ret) {
+			DRM_ERROR("Reserve MTX context failed.\n");
+			return -1;
+		}
+	}
+
 	ret = ttm_bo_kmap(video_ctx->mtx_ctx_bo, 0,
 			  video_ctx->mtx_ctx_bo->num_pages,
 			  &video_ctx->mtx_ctx_kmap);
