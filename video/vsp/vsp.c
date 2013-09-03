@@ -181,8 +181,8 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			if (cmd_rd == cmd_wr) {
 				if (!vsp_priv->vsp_cmd_num) {
 					PSB_DEBUG_PM("Trying to off...\n");
-					tasklet_hi_schedule(
-					&vsp_priv->vsp_suspend_tasklet);
+					schedule_delayed_work(
+						&vsp_priv->vsp_suspend_wq, 0);
 				}
 			} else {
 				PSB_DEBUG_PM("cmd_queue has data,continue.\n");
@@ -1210,11 +1210,10 @@ int psb_check_vsp_idle(struct drm_device *dev)
 }
 
 /* The tasklet function to power down VSP */
-void psb_powerdown_vsp(unsigned long data)
+void psb_powerdown_vsp(struct work_struct *work)
 {
-	struct drm_device *dev = (struct drm_device *)data;
-	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+	struct vsp_private *vsp_priv =
+		container_of(work, struct vsp_private, vsp_suspend_wq.work);
 	bool ret;
 
 	if (!vsp_priv)

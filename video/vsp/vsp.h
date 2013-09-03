@@ -256,8 +256,7 @@ struct vsp_private {
 	struct mutex vsp_mutex;
 
 	/* pm suspend wq */
-	//struct delayed_work vsp_suspend_wq;
-	struct tasklet_struct vsp_suspend_tasklet;
+	struct delayed_work vsp_suspend_wq;
 
 	/* the number of cmd will send to VSP */
 	int vsp_cmd_num;
@@ -313,7 +312,7 @@ int vsp_resume_function(struct drm_psb_private *dev_priv);
 
 extern int psb_vsp_dump_info(struct drm_psb_private *dev_priv);
 
-extern void psb_powerdown_vsp(unsigned long data);
+extern void psb_powerdown_vsp(struct work_struct *work);
 
 static inline
 unsigned int vsp_is_idle(struct drm_psb_private *dev_priv,

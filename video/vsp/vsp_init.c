@@ -267,8 +267,8 @@ int vsp_init(struct drm_device *dev)
 	spin_lock_init(&vsp_priv->lock);
 	mutex_init(&vsp_priv->vsp_mutex);
 
-	tasklet_init(&vsp_priv->vsp_suspend_tasklet,
-			psb_powerdown_vsp, (unsigned long)dev);
+	INIT_DELAYED_WORK(&vsp_priv->vsp_suspend_wq,
+			&psb_powerdown_vsp);
 
 	return 0;
 out_clean:
