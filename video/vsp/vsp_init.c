@@ -31,10 +31,9 @@
 
 #include "vsp.h"
 
-#define FW_SZ (2 * 800 * 1024)
+#define FW_SZ (2 * 1024 * 1024)
 
-#define FW_NAME "vsp_VPP_sle.bin"
-#define FW_VP8_NAME "vsp_vp8_enc.bin"
+#define FW_NAME "vsp_vpp_vp8.bin"
 
 static inline unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
 					    unsigned int processor);
@@ -86,21 +85,33 @@ int vsp_init(struct drm_device *dev)
 		"vsp_pmstate");
 
 	vsp_priv->vsp_cmd_num = 0;
-	vsp_priv->fw_loaded = 0;
+	vsp_priv->fw_loaded = VSP_FW_NONE;
 	vsp_priv->current_sequence = 0;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 	vsp_priv->dev = dev;
+	vsp_priv->coded_buf = NULL;
+
+	vsp_priv->available_recon_buffer = 0;
+	vsp_priv->context_num = 0;
 
 	dev_priv->vsp_private = vsp_priv;
 
 	VSP_DEBUG("allocate buffer for fw\n");
 	/* FIXME: assume 1 page, will modify to a proper value */
 	vsp_priv->firmware_sz = FW_SZ;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &vsp_priv->firmware);
+#else
+	ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &vsp_priv->firmware);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate VSP buffer for firmware\n");
 		goto out_clean;
@@ -108,12 +119,21 @@ int vsp_init(struct drm_device *dev)
 
 	vsp_priv->cmd_queue_sz = VSP_CMD_QUEUE_SIZE *
 		sizeof(struct vss_command_t);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev,
 				       vsp_priv->cmd_queue_sz,
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &vsp_priv->cmd_queue_bo);
+#else
+	ret = ttm_buffer_object_create(bdev,
+				       vsp_priv->cmd_queue_sz,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &vsp_priv->cmd_queue_bo);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate VSP cmd queue\n");
 		goto out_clean;
@@ -121,24 +141,42 @@ int vsp_init(struct drm_device *dev)
 
 	vsp_priv->ack_queue_sz = VSP_ACK_QUEUE_SIZE *
 		sizeof(struct vss_response_t);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev,
 				       vsp_priv->ack_queue_sz,
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &vsp_priv->ack_queue_bo);
+#else
+	ret = ttm_buffer_object_create(bdev,
+				       vsp_priv->ack_queue_sz,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &vsp_priv->ack_queue_bo);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate VSP cmd ack queue\n");
 		goto out_clean;
 	}
 
 	/* Create setting buffer */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret =  ttm_buffer_object_create(bdev,
 				       sizeof(struct vsp_settings_t),
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &vsp_priv->setting_bo);
+#else
+	ret =  ttm_buffer_object_create(bdev,
+				       sizeof(struct vsp_settings_t),
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &vsp_priv->setting_bo);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate VSP setting buffer\n");
 		goto out_clean;
@@ -147,6 +185,7 @@ int vsp_init(struct drm_device *dev)
 	/* Create context buffer */
 	context_size = VSP_CONTEXT_NUM_MAX *
 			sizeof(struct vsp_context_settings_t);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret =  ttm_buffer_object_create(bdev,
 				       context_size,
 				       ttm_bo_type_kernel,
@@ -154,6 +193,15 @@ int vsp_init(struct drm_device *dev)
 				       TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL,
 				       &vsp_priv->context_setting_bo);
+#else
+	ret =  ttm_buffer_object_create(bdev,
+				       context_size,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL,
+				       &vsp_priv->context_setting_bo);
+#endif
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to allocate context setting buffer\n");
 		goto out_clean;
@@ -218,8 +266,8 @@ int vsp_init(struct drm_device *dev)
 	spin_lock_init(&vsp_priv->lock);
 	mutex_init(&vsp_priv->vsp_mutex);
 
-	INIT_DELAYED_WORK(&vsp_priv->vsp_suspend_wq,
-			&psb_powerdown_vsp);
+	tasklet_init(&vsp_priv->vsp_suspend_tasklet,
+			psb_powerdown_vsp, (unsigned long)dev);
 
 	return 0;
 out_clean:
@@ -246,12 +294,12 @@ int vsp_deinit(struct drm_device *dev)
 		vsp_priv->ack_queue = NULL;
 	}
 	if (vsp_priv->setting) {
-		ttm_bo_kunmap(&vsp_priv->setting);
+		ttm_bo_kunmap(&vsp_priv->setting_kmap);
 		vsp_priv->setting = NULL;
 	}
 
 	if (vsp_priv->context_setting) {
-		ttm_bo_kunmap(&vsp_priv->context_setting);
+		ttm_bo_kunmap(&vsp_priv->context_setting_kmap);
 		vsp_priv->context_setting = NULL;
 	}
 
@@ -295,6 +343,8 @@ void vsp_enableirq(struct drm_device *dev)
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_CLR, clear);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_ENB, enable);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_MASK, mask);
+	/* use the Level type interrupt */
+	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_LEVEL_PULSE, 1);
 }
 
 void vsp_disableirq(struct drm_device *dev)
@@ -332,17 +382,8 @@ int vsp_init_fw(struct drm_device *dev)
 	PSB_DEBUG_GENERAL("read firmware into buffer\n");
 
 	/* read firmware img */
-	if (vsp_priv->fw_type == VSP_FW_TYPE_VP8) {
-		VSP_DEBUG("load vp8 fw\n");
-		ret = request_firmware(&raw, FW_VP8_NAME, &dev->pdev->dev);
-	} else if (vsp_priv->fw_type == VSP_FW_TYPE_VPP) {
-		VSP_DEBUG("load vpp fw\n");
-		ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
-	} else {
-		DRM_ERROR("Don't support this fw type=%d!\n",
-			vsp_priv->fw_type);
-		ret = -1;
-	}
+	VSP_DEBUG("load vsp fw\n");
+	ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
 
 	if (ret < 0 || raw == NULL) {
 		DRM_ERROR("VSP: request_firmware failed: reason %d\n", ret);
@@ -383,21 +424,31 @@ int vsp_init_fw(struct drm_device *dev)
 	VSP_DEBUG("boot_start_value %x\n", boot_header->boot_start_value);
 	VSP_DEBUG("boot_start_reg %x\n", boot_header->boot_start_reg);
 
-	/* load firmware to dmem */
-	if (raw->size > vsp_priv->firmware_sz) {
+	/* If the memory is less than FW, re-alloc it */
+	if (raw->size > (vsp_priv->firmware_sz - VSP_FIRMWARE_MEM_ALIGNMENT)) {
 		if (vsp_priv->firmware)
 			ttm_bo_unref(&vsp_priv->firmware);
 
 		VSP_DEBUG("allocate a new bo from size %d to size %d\n",
 			  vsp_priv->firmware_sz, raw->size);
 
-		vsp_priv->firmware_sz = raw->size;
+		vsp_priv->firmware_sz = raw->size + VSP_FIRMWARE_MEM_ALIGNMENT;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
 					       ttm_bo_type_kernel,
 					       DRM_PSB_FLAG_MEM_MMU |
 					       TTM_PL_FLAG_NO_EVICT,
 					       0, 0, 0, NULL,
 					       &vsp_priv->firmware);
+#else
+		ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
+					       ttm_bo_type_kernel,
+					       DRM_PSB_FLAG_MEM_MMU |
+					       TTM_PL_FLAG_NO_EVICT,
+					       0, 0, NULL,
+					       &vsp_priv->firmware);
+#endif
+
 		if (ret != 0) {
 			DRM_ERROR("VSP: failed to allocate firmware buffer\n");
 			return -1;
@@ -415,12 +466,13 @@ int vsp_init_fw(struct drm_device *dev)
 		goto out;
 	}
 
+	/* load firmware to dmem */
 	bo_ptr = ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem);
 	memcpy(bo_ptr, ptr, raw->size);
 
 	ttm_bo_kunmap(&tmp_kmap);
 
-	vsp_priv->fw_loaded = 1;
+	vsp_priv->fw_loaded = VSP_FW_LOADED;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 
 	vsp_priv->ctrl = (struct vsp_ctrl_reg *) (dev_priv->vsp_reg +
@@ -459,7 +511,7 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 	vsp_priv->setting->response_queue_size = VSP_ACK_QUEUE_SIZE;
 	vsp_priv->setting->response_queue_addr = vsp_priv->ack_queue_bo->offset;
 
-	vsp_priv->setting->max_contexts = 1;
+	vsp_priv->setting->max_contexts = VSP_CONTEXT_NUM_MAX;
 	vsp_priv->setting->contexts_array_addr =
 				vsp_priv->context_setting_bo->offset;
 
@@ -476,8 +528,14 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 	/* Set power-saving mode */
 	if (drm_vsp_pmpolicy == PSB_PMPOLICY_NOPM)
 		vsp_priv->ctrl->power_saving_mode = vsp_always_on;
-	else
+	else if (drm_vsp_pmpolicy == PSB_PMPOLICY_POWERDOWN ||
+			drm_vsp_pmpolicy == PSB_PMPOLICY_CLOCKGATING)
 		vsp_priv->ctrl->power_saving_mode = vsp_suspend_on_empty_queue;
+	else if (drm_vsp_pmpolicy == PSB_PMPOLICY_HWIDLE)
+		vsp_priv->ctrl->power_saving_mode = vsp_hw_idle_on_empty_queue;
+	else
+		vsp_priv->ctrl->power_saving_mode =
+			vsp_suspend_and_hw_idle_on_empty_queue;
 
 	/* communicate the type of init
 	 * this is the last value to write
@@ -518,7 +576,8 @@ unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
 
 	/* config icache */
 	VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_INVALID_FLAG);
-	VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_PREFETCH_FLAG);
+	/* disable ICACHE_PREFETCH_FLAG from v2.3 */
+	/* VSP_SET_FLAG(reg, SP_STAT_AND_CTRL_REG_ICACHE_PREFETCH_FLAG); */
 	SP_REG_WRITE32(SP_STAT_AND_CTRL_REG, reg, processor);
 
 	/* set icache base address: point to instructions in DDR */
@@ -553,6 +612,8 @@ void vsp_continue_function(struct drm_psb_private *dev_priv)
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int i;
 
+	vsp_priv->ctrl->entry_kind = vsp_entry_booted;
+
 	vsp_set_firmware(dev_priv, vsp_vp0);
 
 	vsp_priv->ctrl->entry_kind = vsp_entry_resume;
@@ -560,10 +621,18 @@ void vsp_continue_function(struct drm_psb_private *dev_priv)
 	vsp_priv->vsp_state = VSP_STATE_ACTIVE;
 }
 
-void vsp_resume_function(struct drm_psb_private *dev_priv)
+int vsp_resume_function(struct drm_psb_private *dev_priv)
 {
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	uint32_t pd_addr;
+	struct pci_dev *pdev = vsp_priv->dev->pdev;
+	uint32_t pd_addr, mmadr;
+
+	/* FIXME, change should be removed once bz 120324 is fixed */
+	pci_read_config_dword(pdev, 0x10, &mmadr);
+	if (mmadr == 0) {
+		DRM_ERROR("Bad PCI config!\n");
+		return -1;
+	}
 
 	vsp_priv->ctrl = (struct vsp_ctrl_reg *) (dev_priv->vsp_reg +
 						  VSP_CONFIG_REG_SDRAM_BASE +
@@ -598,5 +667,7 @@ void vsp_resume_function(struct drm_psb_private *dev_priv)
 	vsp_priv->ctrl->entry_kind = vsp_entry_resume;
 
 	vsp_priv->vsp_state = VSP_STATE_ACTIVE;
+
+	return 0;
 }
 

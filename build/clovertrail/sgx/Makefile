@@ -28,7 +28,8 @@ include_dirs := \
 	-I$(MEDIAINC)/video/common \
 	-I$(MEDIAINC)/common \
 	-Iinclude/linux \
-	-Iinclude/drm
+	-Iinclude/drm \
+	-Idrivers/staging/android
 
 ifeq ($(DISPLAY_DRIVER_DEBUG_INTERFACE), true)
 ccflags-y += -DDISPLAY_DRIVER_DEBUG_INTERFACE
@@ -37,6 +38,10 @@ endif
 ccflags-y += $(include_dirs)
 
 ccflags-y += $(PVRDEFS-y)
+
+ifeq ($(CONFIG_PVR_PROC), y)
+$(DRIVER_NAME)-objs += $(ENVDIR)/proc.o
+endif
 
 $(DRIVER_NAME)-objs +=  \
 	$(GPU_BURST_DIR)/gburstm.o \
@@ -47,7 +52,6 @@ $(DRIVER_NAME)-objs +=  \
 	$(ENVDIR)/mmap.o \
 	$(ENVDIR)/module.o \
 	$(ENVDIR)/pdump.o \
-	$(ENVDIR)/proc.o \
 	$(ENVDIR)/pvr_bridge_k.o \
 	$(ENVDIR)/pvr_debug.o \
 	$(ENVDIR)/mm.o \

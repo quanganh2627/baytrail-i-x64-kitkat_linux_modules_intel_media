@@ -124,6 +124,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "env_connection.h"
 #include "rgxsysinfo.h"
 #include "pvrsrv.h"
+#include "rgxdf.h"
 
 #if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 #include "syscommon.h"
@@ -159,6 +160,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * This is all module configuration stuff required by the linux kernel.
  */
 MODULE_SUPPORTED_DEVICE(DEVNAME);
+
+EXPORT_SYMBOL(RGXAcquireIsDevicePowered);
 
 #if defined(PVRSRV_NEED_PVR_DPF)
 #include <linux/moduleparam.h>
@@ -968,12 +971,13 @@ static int __init PVRCore_Init(void)
 #endif
 	LinuxInitMutex(&gPVRSRVLock);
 
+#ifdef CONFIG_PVR_PROC
 	if (CreateProcEntries ())
 	{
 		error = -ENOMEM;
 		return error;
 	}
-
+#endif
 	if (PVROSFuncInit() != PVRSRV_OK)
 	{
 		error = -ENOMEM;
@@ -1125,8 +1129,9 @@ init_failed:
 	PVRMMapCleanup();
 	LinuxBridgeDeInit();
 	PVROSFuncDeInit();
+#ifdef CONFIG_PVR_PROC
 	RemoveProcEntries();
-
+#endif
 	return error;
 
 } /*PVRCore_Init*/
@@ -1225,9 +1230,9 @@ static void __exit PVRCore_Cleanup(void)
 	LinuxBridgeDeInit();
 
 	PVROSFuncDeInit();
-
+#ifdef CONFIG_PVR_PROC
 	RemoveProcEntries();
-
+#endif
 	PVR_TRACE(("PVRCore_Cleanup: unloading"));
 }
 

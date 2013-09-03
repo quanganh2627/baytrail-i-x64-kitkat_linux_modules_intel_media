@@ -68,12 +68,14 @@
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/string.h>
+#include <linux/version.h>
 #include "otm_hdmi.h"
 #include "ipil_hdmi.h"
 #include "ps_hdmi.h"
 #include <asm/intel_scu_pmic.h>
 #include <asm/intel-mid.h>
 #include "psb_drv.h"
+#include "psb_powermgmt.h"
 
 /* Implementation of the Clovertrail specific PCI driver for receiving
  * Hotplug and other device status signals.
@@ -86,6 +88,8 @@
 
 /* Globals */
 static hdmi_context_t *g_context;
+
+
 
 #define PS_HDMI_MMIO_RESOURCE 0
 #define PS_VDC_OFFSET 0x00000000
@@ -102,8 +106,13 @@ static hdmi_context_t *g_context;
 #define PS_VCC330_OFF				0x24
 #define PS_VCC330_ON				0x37
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 extern int intel_scu_ipc_command(u32 cmd, u32 sub, u8 *in, u32 inlen,
 		u32 *out, u32 outlen);
+#else
+extern int intel_scu_ipc_command(int cmd, int sub, u32 *in, int inlen,
+                u32 *out, int outlen);
+#endif
 
 /* For CTP, it is required that SW pull up or pull down the
  * LS_OE GPIO pin based on cable status. This is needed before
@@ -176,6 +185,8 @@ otm_hdmi_ret_t ps_hdmi_pci_dev_init(void *context, struct pci_dev *pdev)
 	ctx->dev.id = pci_dev_revision;
 	/* Store this context for use by MSIC PCI driver */
 	g_context = ctx;
+
+	ctx->is_connected_overridden = true;
 
 	/* Handle CTP specific GPIO configuration */
 	ctx->gpio_hpd_pin = get_gpio_by_name(PS_MSIC_HPD_GPIO_PIN_NAME);
@@ -273,20 +284,21 @@ bool ps_hdmi_power_rails_off(void)
 	return true;
 }
 
-bool ps_hdmi_power_islands_on(int hw_island)
+bool ps_hdmi_power_islands_on()
 {
+	/*
+	 * If pmu_nc_set_power_state fails then accessing HW
+	 * reg would result in a crash - IERR/Fabric error.
+	 */
+	if (pmu_nc_set_power_state(OSPM_DISPLAY_B_ISLAND,
+			OSPM_ISLAND_UP, OSPM_REG_TYPE))
+		BUG();
+
 	return true;
 }
 
-void ps_hdmi_power_islands_off(int hw_island)
+void ps_hdmi_power_islands_off()
 {
-}
-
-void ps_hdmi_pmu_nc_set_power_state(int islands, int state_type, int reg)
-{
-	if (pmu_nc_set_power_state(OSPM_DISPLAY_B_ISLAND,
-				OSPM_ISLAND_UP, OSPM_REG_TYPE))
-		BUG();
 }
 
 void ps_hdmi_vblank_control(struct drm_device *dev, bool on)
@@ -322,8 +334,37 @@ bool ps_hdmi_get_cable_status(void *context)
 		ctx->is_connected = false;
 	else
 		ctx->is_connected = true;
+
+	if (g_context->override_cable_state)
+		ctx->is_connected = g_context->is_connected_overridden;
+
 	return ctx->is_connected;
 }
+
+/* get HDMI hotplug pin number */
+int ps_hdmi_get_hpd_pin(void)
+{
+	if (g_context == NULL)
+		return 0;
+
+	return g_context->gpio_hpd_pin;
+}
+
+/* override the hdmi hpd cable status */
+void ps_hdmi_override_cable_status(bool state, bool auto_state)
+{
+	if (g_context == NULL)
+		return 0;
+
+	g_context->override_cable_state = auto_state;
+
+	if (state)
+		g_context->is_connected_overridden = true;
+	else
+		g_context->is_connected_overridden = false;
+	return;
+}
+
 
 /**
  * notify security component of hdcp and hdmi cable status
@@ -357,11 +398,14 @@ void ps_hdmi_update_security_hdmi_hdcp_status(bool hdcp, bool cable)
 		in_buf[4] |= 1 << 0;
 	if (hdcp)
 		in_buf[4] |= 1 << 1;
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	/* no sub-cmd, so set "sub" argument to 0 */
 	intel_scu_ipc_command(IA_SCU_CMD, 0, in_buf, sizeof(in_buf),
 			out_buf, sizeof(out_buf)/sizeof(uint32_t));
-
+#else
+        intel_scu_ipc_command(IA_SCU_CMD, 0, (u32 *)in_buf, sizeof(in_buf),
+                        out_buf, sizeof(out_buf)/sizeof(uint32_t));
+#endif
 	pr_debug("hdcp: leave %s\n", __func__);
 	return;
 }

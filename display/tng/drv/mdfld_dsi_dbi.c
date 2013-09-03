@@ -289,6 +289,8 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	int retry;
 	int err = 0;
 	u32 guit_val = 0;
+	u32 power_island = 0;
+	u32 sprite_reg_offset = 0;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -299,6 +301,22 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	ctx = &dsi_config->dsi_hw_context;
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
+
+	power_island = pipe_to_island(dsi_config->pipe);
+
+	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
+		power_island |= OSPM_DISPLAY_MIO;
+
+	/*
+	 * FIXME: need to dynamically power un-gate DISPLAY C island for
+	 * Overlay C & Sprite D planes.
+	 */
+	if (!ctx->ovcadd || (((ctx->ovcadd & OV_PIPE_SELECT) >>
+					OV_PIPE_SELECT_POS) != OV_PIPE_B))
+		power_island |= OSPM_DISPLAY_C;
+
+	if (!power_island_get(power_island))
+		return -EAGAIN;
 
 	/* Disable PLL*/
 	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
@@ -389,6 +407,36 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	val = ctx->dspcntr | BIT31;
 	REG_WRITE(regs->dspcntr_reg, val);
 
+	if (ctx->sprite_dspcntr & BIT31) {
+		if (dsi_config->pipe == 0)
+			sprite_reg_offset = 0x3000;
+		else if (dsi_config->pipe == 2)
+			sprite_reg_offset = 0x1000;
+
+		/* Set up Sprite Plane */
+		REG_WRITE(regs->dspsize_reg + sprite_reg_offset,
+				ctx->sprite_dspsize);
+		REG_WRITE(regs->dspsurf_reg + sprite_reg_offset,
+				ctx->sprite_dspsurf);
+		REG_WRITE(regs->dsplinoff_reg + sprite_reg_offset,
+				ctx->sprite_dsplinoff);
+		REG_WRITE(regs->dsppos_reg + sprite_reg_offset,
+				ctx->sprite_dsppos);
+		REG_WRITE(regs->dspstride_reg + sprite_reg_offset,
+				ctx->sprite_dspstride);
+
+		/* enable plane */
+		REG_WRITE(regs->dspcntr_reg + sprite_reg_offset,
+				ctx->sprite_dspcntr);
+	}
+
+	/* Set up Overlay Plane */
+	if (ctx->ovaadd)
+		PSB_WVDC32(ctx->ovaadd, OV_OVADD);
+
+	if (ctx->ovcadd)
+		PSB_WVDC32(ctx->ovcadd, OVC_OVADD);
+
 	/*ready dsi adapter*/
 	REG_WRITE(regs->device_ready_reg,
 		REG_READ(regs->device_ready_reg) | DSI_DEVICE_READY);
@@ -410,8 +458,17 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		err = -EAGAIN;
 		goto power_on_err;
 	}
-	mdfld_enable_te(dev, 0);
+
+	/*
+	 * Enable TE to trigger "write_mem_start" issuing
+	 * in non-normal boot modes.
+	 */
+	if (!dev_priv->um_start)
+		mdfld_enable_te(dev, dsi_config->pipe);
+	return err;
+
 power_on_err:
+	power_island_put(power_island);
 	return err;
 }
 
@@ -428,7 +485,6 @@ static int __dbi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 	struct drm_device *dev;
 	int reset_count = 10;
 	int err = 0;
-	u32 power_island = 0;
 	struct mdfld_dsi_pkg_sender *sender
 			= mdfld_dsi_get_pkg_sender(dsi_config);
 	struct mdfld_dbi_dsr_info *dsr_info;
@@ -448,20 +504,6 @@ static int __dbi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 	ctx = &dsi_config->dsi_hw_context;
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
-
-	power_island = pipe_to_island(dsi_config->pipe);
-
-	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
-		power_island |= OSPM_DISPLAY_MIO;
-
-	/*
-	 * FIXME: need to dynamically power un-gate DISPLAY C island for
-	 * Overlay C & Sprite D planes.
-	 */
-	power_island |= OSPM_DISPLAY_C;
-
-	if (!power_island_get(power_island))
-		return -EAGAIN;
 
 	mdfld_dsi_dsr_forbid_locked(dsi_config);
 reset_recovery:
@@ -528,7 +570,6 @@ power_on_err:
 */
 int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 {
-	u32 val = 0;
 	struct mdfld_dsi_hw_registers *regs;
 	struct mdfld_dsi_hw_context *ctx;
 	struct drm_device *dev;
@@ -537,6 +578,7 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	int pipe2_enabled;
 	int err = 0;
 	u32 power_island = 0;
+	int retry;
 
 	if (!dsi_config)
 		return -EINVAL;
@@ -549,30 +591,27 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	dev_priv = dev->dev_private;
 
 	/*Disable plane*/
-	val = ctx->dspcntr;
-	REG_WRITE(regs->dspcntr_reg, (val & ~BIT31));
+	REG_WRITE(regs->dspcntr_reg, 0);
 
-	/*Disable pipe and overlay & cursor panel assigned to this pipe*/
-	val = ctx->pipeconf;
-	REG_WRITE(regs->pipeconf_reg, ((val | 0x000c0000) & ~BIT31));
+	/*Disable pipe*/
+	/* Don't disable DSR mode. */
+	REG_WRITE(regs->pipeconf_reg, (REG_READ(regs->pipeconf_reg) & ~BIT31));
 
 	/*Disable DSI PLL*/
 	pipe0_enabled = (REG_READ(PIPEACONF) & BIT31) ? 1 : 0;
 	pipe2_enabled = (REG_READ(PIPECCONF) & BIT31) ? 1 : 0;
 
 	if (!pipe0_enabled && !pipe2_enabled) {
-		REG_WRITE(regs->dpll_reg , 0x0);
-		/*power gate pll*/
-		REG_WRITE(regs->dpll_reg, BIT30);
+		/* Disable PLL*/
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
+				_DSI_LDO_EN);
 	}
 	/*enter ulps*/
 	if (__dbi_enter_ulps_locked(dsi_config)) {
 		DRM_ERROR("Failed to enter ULPS\n");
 		goto power_off_err;
 	}
-
-	REG_WRITE(regs->mipi_reg,
-	      REG_READ(regs->mipi_reg) & (~PASS_FROM_SPHY_TO_AFE));
 power_off_err:
 
 	power_island = pipe_to_island(dsi_config->pipe);
@@ -584,7 +623,10 @@ power_off_err:
 	 * FIXME: need to dynamically power gate DISPLAY C island for
 	 * Overlay C & Sprite D planes.
 	 */
-	power_island |= OSPM_DISPLAY_C;
+	/* Don't power gate Display C when Overlay C is attahced to Pipe B. */
+	if (!ctx->ovcadd || (((ctx->ovcadd & OV_PIPE_SELECT) >>
+					OV_PIPE_SELECT_POS) != OV_PIPE_B))
+		power_island |= OSPM_DISPLAY_C;
 
 	if (!power_island_put(power_island))
 		return -EINVAL;
@@ -616,7 +658,6 @@ static int __dbi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 	dev_priv = dev->dev_private;
 
 	mdfld_dsi_dsr_forbid_locked(dsi_config);
-	mdfld_disable_te(dev, 0);
 	ctx->lastbrightnesslevel = psb_brightness;
 	if (p_funcs && p_funcs->set_brightness)
 		if (p_funcs->set_brightness(dsi_config, 0))
@@ -835,22 +876,36 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 	dev = dsi_config->dev;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
+	mdfld_generic_dsi_dbi_set_power(encoder, false);
+
 	/* Turn off vsync (TE) interrupt. */
 	drm_vblank_off(dev, pipe);
 
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
-
-	mdfld_generic_dsi_dbi_set_power(encoder, false);
 }
 
 static
 void mdfld_generic_dsi_dbi_restore(struct drm_encoder *encoder)
 {
+	struct mdfld_dsi_encoder *dsi_encoder;
+	struct mdfld_dsi_config *dsi_config;
+	struct drm_device *dev;
+	int pipe;
+
+	PSB_DEBUG_ENTRY("\n");
+
 	if (!encoder)
 		return;
 
+	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
+	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
+	dev = dsi_config->dev;
+	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
+
 	mdfld_generic_dsi_dbi_set_power(encoder, true);
+
+	DCAttachPipe(pipe);
 }
 
 static

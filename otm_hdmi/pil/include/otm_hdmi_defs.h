@@ -146,6 +146,7 @@ typedef enum {
 	OTM_HDMI_ATTR_ID_BLANK_LEVEL, /* Sync pulse level */
 	OTM_HDMI_ATTR_ID_BLACK_LEVEL, /* Black Level */
 	OTM_HDMI_ATTR_ID_BURST_LEVEL, /* Burst Level */
+	OTM_HDMI_ATTR_ID_HDCP_DELAY,	/* Delay of HDCP start, waiting for TMDS to be available */
 	OTM_HDMI_ATTR_ID_HDCP_RI_RETRY,	/* RI retry delay */
 	OTM_HDMI_ATTR_ID_DVI,	/* DVI enforcement */
 	OTM_HDMI_ATTR_ID_TVOUT_TYPE, /* Current DAC configuration */

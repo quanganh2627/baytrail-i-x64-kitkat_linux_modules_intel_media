@@ -31,7 +31,11 @@
 #include <linux/version.h>
 #include <linux/dma-buf.h>
 #include "drmP.h"
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 #include "drm.h"
+#else
+#include <uapi/drm/drm.h>
+#endif
 
 
 struct ttm_bo_user_object {
@@ -230,7 +234,9 @@ static void ttm_pl_fill_rep(struct ttm_buffer_object *bo,
 	rep->map_handle = bo->addr_space_offset;
 	rep->placement = bo->mem.placement;
 	rep->handle = user_bo->base.hash.key;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	rep->sync_object_arg = (uint32_t)(unsigned long)bo->sync_obj_arg;
+#endif
 }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0))
@@ -310,6 +316,7 @@ int psb_ttm_bo_check_placement(struct ttm_buffer_object *bo,
 	return 0;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 int ttm_buffer_object_create(struct ttm_bo_device *bdev,
 			     unsigned long size,
 			     enum ttm_bo_type type,
@@ -340,6 +347,31 @@ int ttm_buffer_object_create(struct ttm_bo_device *bdev,
 
 	return ret;
 }
+#else
+int ttm_buffer_object_create(struct ttm_bo_device *bdev,
+			     unsigned long size,
+			     enum ttm_bo_type type,
+			     uint32_t flags,
+			     uint32_t page_alignment,
+			     bool interruptible,
+			     struct file *persistent_swap_storage,
+			     struct ttm_buffer_object **p_bo)
+{
+	struct ttm_placement placement = default_placement;
+	int ret;
+
+	if ((flags & TTM_PL_MASK_CACHING) == 0)
+		flags |= TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED;
+
+	placement.num_placement = 1;
+	placement.placement = &flags;
+
+	ret = ttm_bo_create(bdev, size, type, &placement, page_alignment,
+		interruptible, persistent_swap_storage, p_bo);
+
+	return ret;
+}
+#endif
 
 
 int ttm_pl_create_ioctl(struct ttm_object_file *tfile,
@@ -388,10 +420,17 @@ int ttm_pl_create_ioctl(struct ttm_object_file *tfile,
 	if ((flags & TTM_PL_MASK_CACHING) == 0)
 		flags |=  TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_bo_init(bdev, bo, req->size,
 			  ttm_bo_type_device, &placement,
 			  req->page_alignment, 0, true,
 			  NULL, acc_size, NULL, &ttm_bo_user_destroy);
+#else
+	ret = ttm_bo_init(bdev, bo, req->size,
+			  ttm_bo_type_device, &placement,
+			  req->page_alignment, true,
+			  NULL, acc_size, NULL, &ttm_bo_user_destroy);
+#endif
 	ttm_read_unlock(lock);
 	/*
 	 * Note that the ttm_buffer_object_init function
@@ -446,6 +485,10 @@ int ttm_pl_ub_create_ioctl(struct ttm_object_file *tfile,
 	size_t acc_size = ttm_bo_acc_size(bdev, req->size,
 		sizeof(struct ttm_buffer_object));
 #endif
+	if (req->user_address & ~PAGE_MASK) {
+		printk(KERN_ERR "User pointer buffer need page alignment\n");
+		return -EFAULT;
+	}
 
 	ret = ttm_mem_global_alloc(mem_glob, acc_size, false, false);
 	if (unlikely(ret != 0))
@@ -549,7 +592,7 @@ int ttm_pl_ub_create_ioctl(struct ttm_object_file *tfile,
 			  acc_size,
 			  NULL,
 			  &ttm_bo_user_destroy);
-#else
+#elif (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_bo_init(bdev,
 			  bo,
 			  req->size,
@@ -557,6 +600,18 @@ int ttm_pl_ub_create_ioctl(struct ttm_object_file *tfile,
 			  &placement,
 			  req->page_alignment,
 			  req->user_address,
+			  true,
+			  NULL,
+			  acc_size,
+			  sg,
+			  &ttm_ub_bo_user_destroy);
+#else
+	ret = ttm_bo_init(bdev,
+			  bo,
+			  req->size,
+			  ttm_bo_type_sg,
+			  &placement,
+			  req->page_alignment,
 			  true,
 			  NULL,
 			  acc_size,
@@ -710,9 +765,11 @@ int ttm_pl_setstatus_ioctl(struct ttm_object_file *tfile,
 	if (unlikely(ret != 0))
 		goto out_err1;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_bo_wait_cpu(bo, false);
 	if (unlikely(ret != 0))
 		goto out_err2;
+#endif
 
 	flags[0] = req->set_placement;
 	flags[1] = req->clr_placement;
@@ -729,7 +786,11 @@ int ttm_pl_setstatus_ioctl(struct ttm_object_file *tfile,
 	placement.num_placement = 1;
 	flags[0] = (req->set_placement | bo->mem.placement) & ~req->clr_placement;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_bo_validate(bo, &placement, true, false, false);
+#else
+	ret = ttm_bo_validate(bo, &placement, true, false);
+#endif
 	if (unlikely(ret != 0))
 		goto out_err2;
 

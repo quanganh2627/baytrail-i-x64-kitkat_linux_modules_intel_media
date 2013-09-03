@@ -5,6 +5,8 @@ DRIVER_NAME := tngdisp
 
 obj-m += $(DRIVER_NAME).o
 
+KERNELDIR ?= $(ANDROID_BUILD_TOP)/$(KERNEL_SRC_DIR)
+
 MEDIADIR=../../..
 RGXDIR=$(MEDIADIR)/graphics/rgx
 DISPLAYDIR=$(MEDIADIR)/display/tng/drv
@@ -61,6 +63,7 @@ ccflags-y += \
 	-I$(DISPINC)/drv \
 	-Iinclude/linux \
 	-Iinclude/drm \
+	-I$(KERNELDIR)/drivers/staging/android \
 	-Iarch/arm/include
 
 ccflags-y += \
@@ -181,7 +184,6 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/physmem_tdmetacode_linux.o \
 	$(RGXDIR)/services/server/env/linux/osfunc_x86.o \
 	$(RGXDIR)/services/server/env/linux/mutils.o \
-	$(RGXDIR)/services/server/env/linux/proc.o \
 	$(RGXDIR)/services/server/env/linux/mutex.o \
 	$(RGXDIR)/services/server/env/linux/osfunc.o \
 	$(RGXDIR)/services/server/env/linux/event.o \
@@ -207,6 +209,12 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/common/tlserver.o
 
 #	$(RGXDIR)/services/server/env/linux/physmem_ion.o
+
+ifeq ($(CONFIG_PVR_PROC),y)
+$(DRIVER_NAME)-y += \
+	$(RGXDIR)/services/server/env/linux/proc.o
+endif
+
 
 # WINDOW_HAS_SYNC
 merrifield_gfx-y += \
@@ -241,6 +249,10 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/devices/rgx/rgxccb.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxdebug.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxbreakpoint.o
+
+# For devfreq
+$(DRIVER_NAME)-y += \
+	$(RGXDIR)/services/server/devices/rgx/rgxdf.o
 
 $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/cmm_bridge/server_cmm_bridge.o \

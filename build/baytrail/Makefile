@@ -22,8 +22,6 @@ include_dirs := \
 
 ccflags-y += $(include_dirs)
 
-ccflags-y += -DPSB_MSVDX_FW_LOADED_BY_HOST
-
 $(DRIVER_NAME)-objs += \
 	$(BAYTRAILDIR)/vxd_drv.o \
 	$(VIDEOCOMDIR)/psb_ttm_glue.o \

@@ -59,9 +59,9 @@
 #include <linux/spinlock.h>
 #include <linux/thermal.h>
 #include <linux/uaccess.h>
-
+#include <linux/version.h>
 #include <asm/intel-mid.h>
-
+#include <linux/proc_fs.h>
 #include <linux/module.h>
 
 #define GBURST_DEBUG 1
@@ -276,6 +276,13 @@ unsigned long long timestamp(void)
 	__asm__ volatile("rdtsc" : "=a" (a), "=d" (d));
 	return ((unsigned long long)a) | (((unsigned long long)d) << 32);
 }
+
+#if !(LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+typedef int (read_proc_t)(char *page, char **start, off_t off,
+            int count, int *eof, void *data);
+typedef int (write_proc_t)(struct file *file, const char __user *buffer,
+        unsigned long count, void *data);
+#endif
 
 /**
  * pfs_data - Structure to describe one file under /proc/gburst.
@@ -1118,8 +1125,10 @@ static void request_desired_burst_mode(struct gburst_pvt_s *gbprv)
 		return;
 
 	if (gbprv->gbp_offscreen_rendering) {
-		reqbits = PWRGT_CNT_BURST_REQUEST_M_533;
-		set_state_pwrgt_cnt(gbprv, reqbits);
+		if (!GBURST_BURST_REQUESTED(gbprv)) {
+			reqbits = PWRGT_CNT_BURST_REQUEST_M_533;
+			set_state_pwrgt_cnt(gbprv, reqbits);
+		}
 	} else {
 
 		rva = desired_burst_state_query(gbprv, &whymsg
@@ -1235,11 +1244,17 @@ static int thread_action(struct gburst_pvt_s *gbprv)
 
 	if (delta > FRAME_DURATION)
 		gbprv->gbp_num_of_vsync_limited_frames = 0;
-	if (delta > OFFSCREEN_TIME)
+	if (delta > OFFSCREEN_TIME) {
 		gbprv->gbp_offscreen_rendering = 1;
+		hrt_cancel(gbprv);
+	}
 
 	if (!gbprv->gbp_offscreen_rendering) {
 		utilpct = gburst_stats_gfx_hw_perf_record();
+
+		if (mprm_verbosity >= 4)
+			printk(GBURST_ALERT "util: %d %%\n", utilpct);
+
 		if (utilpct < 0) {
 			/**
 			 * This should only fail if not initialized and is
@@ -1687,6 +1702,16 @@ static int generate_dump_string(struct gburst_pvt_s *gbprv, size_t buflen,
 			GBURST_HEADING "hrt_enable_state_actual = %d\n",
 			tmpv0);
 	}
+
+	ix = ut_isnprintf(ix, buf, buflen,
+		GBURST_HEADING
+		"vsync_limited_frames mode = %d\n",
+		(gbprv->gbp_num_of_vsync_limited_frames >= VSYNC_FRAMES));
+
+	ix = ut_isnprintf(ix, buf, buflen,
+		GBURST_HEADING
+		"offscreen_rendering mode = %d\n",
+		gbprv->gbp_offscreen_rendering);
 
 	ix = ut_isnprintf(ix, buf, buflen,
 		GBURST_HEADING
@@ -2725,7 +2750,9 @@ static void pfs_init(struct gburst_pvt_s *gbprv)
 	const struct pfs_data *pfsdat;
 	int fmode;
 	int ix;
-
+#if !(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+    struct file_operations *pfd_proc_fops;
+#endif
 	/* Create /proc/gburst */
 	if (!gbprv->gbp_proc_gburst) {
 		/**
@@ -2749,18 +2776,35 @@ static void pfs_init(struct gburst_pvt_s *gbprv)
 			fmode &= ~0444;
 		if (!pfsdat->pfd_func_write)
 			fmode &= ~0222;
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 		pdehdl = create_proc_entry(pfsdat->pfd_file_name, fmode,
 			gbprv->gbp_proc_gburst);
+#else
+                pfd_proc_fops = kzalloc(sizeof(struct file_operations), GFP_KERNEL);
+                if(!pfd_proc_fops) {
+                    printk(GBURST_ALERT "Error creating gburst proc file: %s\n",
+                              pfsdat->pfd_file_name);
+                    continue;
+                }
+               pfd_proc_fops->read = pfsdat->pfd_func_read;
+               pfd_proc_fops->write = pfsdat->pfd_func_write;
+
+               pdehdl = proc_create_data(pfsdat->pfd_file_name, fmode, 
+                               gbprv->gbp_proc_gburst, pfd_proc_fops, gbprv);
+#endif
+
 		gbprv->gbp_pfs_handle[ix] = pdehdl;
 		if (!pdehdl) {
 			printk(GBURST_ALERT "Error creating gburst proc file: %s\n",
 				pfsdat->pfd_file_name);
-		} else {
+		}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)) 
+                else {
 			pdehdl->read_proc = pfsdat->pfd_func_read;
 			pdehdl->write_proc = pfsdat->pfd_func_write;
 			pdehdl->data = (void *) gbprv;
 		}
+#endif
 	}
 }
 

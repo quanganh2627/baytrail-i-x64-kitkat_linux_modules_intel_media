@@ -99,10 +99,24 @@ config MDFD_DUAL_MIPI
 
 config SUPPORT_HDMI
         bool "SUPPORT_HDMI"
-        depends on DRM_MDFLD || DRM_CTP || DRM_I915
-        default y
+        depends on DRM_MDFLD || DRM_CTP || DRM_I915 || DRM_MRFLD
+        default n
         help
           Choose this option to support HDMI.
+
+config CTP_DPST
+        bool "CTP_DPST"
+        depends on DRM_MDFLD || DRM_CTP
+        default n
+        help
+          Choose this option to support DPST.
+
+config PVR_PROC
+        bool "PVR_PROC"
+        depends on DRM_MDFLD || DRM_CTP || DRM_MRFLD
+        default y
+        help
+          Choose this option to support PVR proc debug interface.
 
 config MDFD_GL3
 	bool "Enable GL3 Cache for GUNIT"
@@ -313,30 +327,6 @@ config MID_DSI_DPU
 	help
 	  xxxxxx
 
-config SUPPORT_HDMI
-        bool "SUPPORT_HDMI_DISPLAY"
-        depends on DRM_MDFLD || DRM_CTP || DRM_MRFLD
-        default n
-        help
-          xxxxxx
-
-config SUPPORT_MIPI_H8C7_VID_DISPLAY
-	bool "Support CMI panel on Merrifield"
-	depends on DRM_MRFLD
-	default n
-	help
-	  xxxxxx
-
-config SUPPORT_JDI_CMD_DISPLAY
-	bool "Support JDI CMD panel on Merrifield"
-	depends on DRM_MRFLD
-	default n
-	help
-		support for JDI command panel
-		xxxxxx
-		xxxxxx
-		xxxxxx
-
 config GFX_RTPM
 	bool "Enable GFX runtime_pm"
 	depends on DRM_INTEL_HANDSET
@@ -368,5 +358,6 @@ config DRM_VXD_BYT
        bool "Enable vxd on intel by default"
        depends on DRM_I915
        default n
+       select DRM_TTM
        help
          Choose this option if you want to enable VXD decoding for Baylake platform

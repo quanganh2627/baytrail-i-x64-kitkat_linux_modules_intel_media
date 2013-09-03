@@ -44,13 +44,16 @@
 #endif
 #include <linux/atomic.h>
 
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #define SUPPORT_EARLY_SUSPEND 1
+#endif
+#include <asm/intel_scu_pmic.h>
 
 #if SUPPORT_EARLY_SUSPEND
 #include <linux/earlysuspend.h>
 #endif /* if SUPPORT_EARLY_SUSPEND */
 
-#include <asm/intel_scu_pmic.h>
 #include <linux/mutex.h>
 #include <linux/gpio.h>
 #include "mdfld_dsi_dbi_dsr.h"

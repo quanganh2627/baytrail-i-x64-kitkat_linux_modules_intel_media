@@ -234,14 +234,6 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 	PSB_DEBUG_ENTRY("mode = %d, pipe = %d\n", mode, pipe);
 
-	if (mode != DRM_MODE_DPMS_ON) {
-		/* Turn off vsync interrupt. */
-		drm_vblank_off(dev, pipe);
-
-		/* Make the pending flip request as completed. */
-		DCUnAttachPipe(pipe);
-	}
-
 #ifndef CONFIG_SUPPORT_TOSHIBA_MIPI_DISPLAY
 	/**
 	 * MIPI dpms
@@ -413,6 +405,8 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 		psb_intel_crtc_load_lut(crtc);
 
+		DCAttachPipe(pipe);
+
 		/* Give the overlay scaler a chance to enable
 		   if it's on this pipe */
 		/* psb_intel_crtc_dpms_video(crtc, true); TODO */
@@ -474,6 +468,12 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 #endif
 			}
 		}
+
+		/* Turn off vsync interrupt. */
+		drm_vblank_off(dev, pipe);
+
+		/* Make the pending flip request as completed. */
+		DCUnAttachPipe(pipe);
 		break;
 	}
 
@@ -507,7 +507,6 @@ static int mrfld_crtc_mode_set(struct drm_crtc *crtc,
 		return mdfld_crtc_dsi_mode_set(crtc, dsi_config, mode,
 				adjusted_mode, x, y, old_fb);
 	} else {
-		power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI);
 		android_hdmi_crtc_mode_set(crtc, mode, adjusted_mode,
 				x, y, old_fb);
 
@@ -2528,7 +2527,7 @@ static int mrfld_s3d_crtc_mode_set(struct drm_crtc *crtc,
 	REG_WRITE(dsppos_reg, 0);
 
 	if (psb_intel_output)
-		drm_connector_property_get_value(&psb_intel_output->base,
+		drm_object_property_get_value(&psb_intel_output->base->base,
 						 dev->
 						 mode_config.scaling_mode_property,
 						 &scalingType);

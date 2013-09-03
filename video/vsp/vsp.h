@@ -79,6 +79,7 @@
 #define VSP_CONFIG_REG_SDRAM_BASE 0x1A0000
 #define VSP_CONFIG_REG_START 0x8
 
+#define VSP_FIRMWARE_MEM_ALIGNMENT 4096
 /* #define VP8_ENC_DEBUG 1 */
 
 static const unsigned int vsp_processor_base[] = {
@@ -171,10 +172,17 @@ extern int drm_vsp_pmpolicy;
 
 /* The status of vsp hardware */
 enum vsp_power_state {
+	VSP_STATE_HANG = -1,
 	VSP_STATE_DOWN = 0,
 	VSP_STATE_SUSPEND,
 	VSP_STATE_IDLE,
 	VSP_STATE_ACTIVE
+};
+
+/* The status of firmware */
+enum vsp_firmware_state {
+	VSP_FW_NONE = 0,
+	VSP_FW_LOADED
 };
 
 #define VSP_CONFIG_SIZE 16
@@ -248,20 +256,25 @@ struct vsp_private {
 	struct mutex vsp_mutex;
 
 	/* pm suspend wq */
-	struct delayed_work vsp_suspend_wq;
+	//struct delayed_work vsp_suspend_wq;
+	struct tasklet_struct vsp_suspend_tasklet;
 
 	/* the number of cmd will send to VSP */
 	int vsp_cmd_num;
 
 	unsigned int fw_type;
+	struct VssProcPictureVP8 ref_frame_buffers[4];
+	int available_recon_buffer;
+	int rec_surface_id;
 
-#ifdef VP8_ENC_DEBUG
 	/* save the address of vp8 cmd_buffer for now */
 	struct VssVp8encPictureParameterBuffer *vp8_encode_frame_cmd;
+	struct ttm_bo_kmap_obj vp8_encode_frame__kmap;
 
 	void *coded_buf;
 	struct ttm_bo_kmap_obj coded_buf_kmap;
-#endif
+	struct ttm_buffer_object *coded_buf_bo;
+	int context_num;
 };
 
 extern int vsp_init(struct drm_device *dev);
@@ -287,7 +300,7 @@ extern int vsp_cmdbuf_vpp(struct drm_file *priv,
 extern uint32_t vsp_fence_poll(struct drm_psb_private *dev_priv);
 
 extern void vsp_new_context(struct drm_device *dev);
-extern void vsp_rm_context(struct drm_device *dev);
+extern void vsp_rm_context(struct drm_device *dev, int ctx_type);
 extern uint32_t psb_get_default_pd_addr(struct psb_mmu_driver *driver);
 
 extern int psb_vsp_save_context(struct drm_device *dev);
@@ -296,11 +309,11 @@ extern int psb_check_vsp_idle(struct drm_device *dev);
 
 void vsp_init_function(struct drm_psb_private *dev_priv);
 void vsp_continue_function(struct drm_psb_private *dev_priv);
-void vsp_resume_function(struct drm_psb_private *dev_priv);
+int vsp_resume_function(struct drm_psb_private *dev_priv);
 
 extern int psb_vsp_dump_info(struct drm_psb_private *dev_priv);
 
-extern void psb_powerdown_vsp(struct work_struct *work);
+extern void psb_powerdown_vsp(unsigned long data);
 
 static inline
 unsigned int vsp_is_idle(struct drm_psb_private *dev_priv,

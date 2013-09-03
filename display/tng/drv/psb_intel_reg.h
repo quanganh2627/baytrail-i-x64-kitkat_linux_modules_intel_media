@@ -398,6 +398,7 @@
 #define LVDS_B0B3_POWER_DOWN		(0 << 2)
 #define LVDS_B0B3_POWER_UP		(3 << 2)
 
+#define PIPEADSL 0x70000
 #define PIPEACONF 0x70008
 #define PIPEACONF_ENABLE	(1<<31)
 #define PIPEACONF_DISABLE	0
@@ -419,6 +420,7 @@
 #define PIPECONF_PLANE_OFF 	(1<<19)
 #define PIPECONF_CURSOR_OFF 	(1<<18)
 
+#define PIPEBDSL 0x71000
 #define PIPEBCONF 0x71008
 #define PIPEBCONF_ENABLE	(1<<31)
 #define PIPEBCONF_DISABLE	0
@@ -427,6 +429,7 @@
 #define PIPEBCONF_GAMMA 	(1<<24)
 #define PIPEBCONF_PALETTE	0
 
+#define PIPECDSL 0x72000
 #define PIPECCONF 0x72008
 
 #define PIPEBGCMAXRED		0x71010
@@ -541,10 +544,11 @@ struct dpst_guardband {
 #define DISPPLANE_32BPP				(0x7<<26)
 #define DISPPLANE_STEREO_ENABLE			(1<<25)
 #define DISPPLANE_STEREO_DISABLE		0
-#define DISPPLANE_SEL_PIPE_MASK			(1<<24)
+#define DISPPLANE_SEL_PIPE_MASK			(3<<24)
 #define DISPPLANE_SEL_PIPE_POS			24
-#define DISPPLANE_SEL_PIPE_A			0
+#define DISPPLANE_SEL_PIPE_A			(0<<24)
 #define DISPPLANE_SEL_PIPE_B			(1<<24)
+#define DISPPLANE_SEL_PIPE_C			(2<<24)
 #define DISPPLANE_SRC_KEY_ENABLE		(1<<22)
 #define DISPPLANE_SRC_KEY_DISABLE		0
 #define DISPPLANE_LINE_DOUBLE			(1<<20)
@@ -620,6 +624,7 @@ struct dpst_guardband {
 #define OV_PIPE_SELECT				(BIT6|BIT7)
 #define OV_PIPE_SELECT_POS			6
 #define OV_PIPE_A				0
+#define OV_PIPE_B				2
 #define OV_PIPE_C				1
 #define OV_OGAMC5		0x30010
 #define OV_OGAMC4		0x30014

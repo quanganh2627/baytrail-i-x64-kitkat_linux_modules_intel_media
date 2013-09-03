@@ -52,7 +52,7 @@ void DCCBFlipSprite(struct drm_device *dev,
 			struct intel_dc_sprite_ctx *ctx);
 void DCCBFlipPrimary(struct drm_device *dev,
 			struct intel_dc_primary_ctx *ctx);
-void DCCBUpdateDbiPanel(struct drm_device *dev);
+void DCCBUpdateDbiPanel(struct drm_device *dev, int pipe);
 int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
 int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
@@ -72,4 +72,6 @@ u32 DCCBGetPipeCount(void);
 bool DCCBIsSuspended(struct drm_device *dev);
 int DCCBIsPipeActive(struct drm_device *dev, int pipe);
 
+void DCCBDsrForbid(struct drm_device *dev, int pipe);
+void DCCBDsrAllow(struct drm_device *dev, int pipe);
 #endif				/* __DC_CALLBACKS_H__ */

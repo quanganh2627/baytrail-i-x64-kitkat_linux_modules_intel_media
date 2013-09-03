@@ -93,6 +93,8 @@ struct android_hdmi_priv {
 	struct delayed_work hdmi_delayed_wq;
 	void *data;
 
+	bool hdmi_suspended;
+	bool hdmi_audio_enabled;
 	bool is_hdcp_supported;
 	int monitor_type;
 	void *context;
@@ -116,6 +118,12 @@ extern void mid_hdmi_audio_init(struct android_hdmi_priv *p_hdmi_priv);
  */
 void android_hdmi_driver_init(struct drm_device *dev,
 			      void *mode_dev);
+
+
+
+
+int android_hdmi_irq_test(struct drm_device *dev);
+
 
 /**
  * This function sets the hdmi driver during bootup

@@ -29,6 +29,7 @@
 #include "dc_ospm.h"
 #include "pmu_tng.h"
 #include "tng_wa.h"
+#include <asm/intel-mid.h>
 
 #define BZ96571
 
@@ -76,11 +77,25 @@ static bool disp_a_power_up(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_DISP_A, OSPM_ISLAND_UP, DSP_SS_PM);
+#else
+	ret = pmu_set_power_state_tng(DSP_SS_PM, DPA_SSC, TNG_COMPOSITE_I0);
+#endif
 
-#if A0_WORKAROUNDS
-	if (!ret)
-		apply_A0_workarounds(OSPM_DISPLAY_ISLAND, 0);
+	/*
+	 * This workarounds are only needed for TNG A0/A1 silicon.
+	 * Any TNG SoC which is newer than A0/A1 won't need this.
+	 */
+#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
+			intel_mid_soc_stepping() < 1)
+	{
+#endif
+		if (!ret)
+			apply_A0_workarounds(OSPM_DISPLAY_ISLAND, 0);
+#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
+	}
 #endif
 
 	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
@@ -98,7 +113,11 @@ static bool disp_a_power_down(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_DISP_A, OSPM_ISLAND_DOWN, DSP_SS_PM);
+#else
+	ret = pmu_set_power_state_tng(DSP_SS_PM, DPA_SSC, TNG_COMPOSITE_D3);
+#endif
 
 	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
 
@@ -131,8 +150,11 @@ static bool disp_b_power_up(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_DISP_B, OSPM_ISLAND_UP, DSP_SS_PM);
-
+#else
+	ret = pmu_set_power_state_tng(DSP_SS_PM, DPB_SSC, TNG_COMPOSITE_I0);
+#endif
 	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
@@ -148,8 +170,11 @@ static bool disp_b_power_down(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_DISP_B, OSPM_ISLAND_DOWN, DSP_SS_PM);
-
+#else
+	ret = pmu_set_power_state_tng(DSP_SS_PM, DPB_SSC, TNG_COMPOSITE_D3);
+#endif
 	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
@@ -181,7 +206,11 @@ static bool disp_c_power_up(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_DISP_C, OSPM_ISLAND_UP, DSP_SS_PM);
+#else
+	ret = pmu_set_power_state_tng(DSP_SS_PM, DPC_SSC, TNG_COMPOSITE_I0);
+#endif
 
 	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
 
@@ -198,7 +227,11 @@ static bool disp_c_power_down(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_DISP_C, OSPM_ISLAND_DOWN, DSP_SS_PM);
+#else
+	ret = pmu_set_power_state_tng(DSP_SS_PM, DPC_SSC, TNG_COMPOSITE_D3);
+#endif
 
 	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
 
@@ -238,10 +271,14 @@ static bool mio_power_up(struct drm_device *dev,
 	udelay(50);
 	sb_write_packet(true);
 	udelay(50);
-	printk(KERN_WARNING "%s:using sideband to powerup MIO\n", __func__);
+	OSPM_DPF("%s:using sideband to powerup MIO\n", __func__);
 #else
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_MIO, OSPM_ISLAND_UP, MIO_SS_PM);
+#else
+	ret = pmu_set_power_state_tng(MIO_SS_PM, MIO_SSC, TNG_COMPOSITE_I0);
 #endif
+#endif /*BZ96571*/
 	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
@@ -257,7 +294,11 @@ static bool mio_power_down(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_MIO, OSPM_ISLAND_DOWN, MIO_SS_PM);
+#else
+	ret = pmu_set_power_state_tng(MIO_SS_PM, MIO_SSC, TNG_COMPOSITE_D3);
+#endif
 
 	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
 
@@ -290,7 +331,11 @@ static bool hdmi_power_up(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_HDMI, OSPM_ISLAND_UP, HDMIO_SS_PM);
+#else
+	ret = pmu_set_power_state_tng(HDMIO_SS_PM, HDMIO_SSC, TNG_COMPOSITE_I0);
+#endif
 
 	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
 
@@ -307,8 +352,11 @@ static bool hdmi_power_down(struct drm_device *dev,
 {
 	bool ret;
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_HDMI, OSPM_ISLAND_DOWN, HDMIO_SS_PM);
-
+#else
+	ret = pmu_set_power_state_tng(HDMIO_SS_PM, HDMIO_SSC, TNG_COMPOSITE_D3);
+#endif
 	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;

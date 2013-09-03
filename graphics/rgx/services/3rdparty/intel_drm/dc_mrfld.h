@@ -95,7 +95,7 @@ typedef struct {
 	struct mutex sFlipQueueLock;
 	/*context configure queue*/
 	struct list_head sFlipQueues[MAX_PIPE_NUM];
-	void *psLastFlip;
+	IMG_BOOL bFlipEnabled[MAX_PIPE_NUM];
 } DC_MRFLD_DEVICE;
 
 typedef struct {
@@ -111,13 +111,14 @@ enum DC_MRFLD_FLIP_STATUS {
 	DC_MRFLD_FLIP_ERROR = 0,
 	DC_MRFLD_FLIP_QUEUED,
 	DC_MRFLD_FLIP_DC_UPDATED,
-	DC_MRFLD_FLIP_FLIPPED,
+	DC_MRFLD_FLIP_DISPLAYED,
 };
 
 typedef struct {
 	struct list_head sFlips[MAX_PIPE_NUM];
 	IMG_UINT32 eFlipStates[MAX_PIPE_NUM];
 	struct DC_MRFLD_PIPE_INFO asPipeInfo[MAX_PIPE_NUM];
+	IMG_BOOL bActivePipes[MAX_PIPE_NUM];
 	IMG_UINT32 uiNumBuffers;
 	IMG_UINT32 uiRefCount;
 	IMG_HANDLE hConfigData;

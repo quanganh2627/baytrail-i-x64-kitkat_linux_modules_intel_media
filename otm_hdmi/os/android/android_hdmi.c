@@ -66,6 +66,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/kernel.h>
 #include <linux/interrupt.h>
+#include <linux/version.h>
 #include <drm/drmP.h>
 #include <drm/drm.h>
 #include <drm/drm_crtc.h>
@@ -268,8 +269,8 @@ static irqreturn_t __hdmi_irq_handler_bottomhalf(void *data)
 			* cable status to have stabilized
 			*/
 			msleep(60);
-			hdmi_status = otm_hdmi_get_cable_status(
-							hdmi_priv->context);
+			hdmi_status =
+				otm_hdmi_get_cable_status(hdmi_priv->context);
 		}
 		processed_hdmi_status = hdmi_status;
 
@@ -339,9 +340,6 @@ exit:
 			edid_ready_in_hpd = 0;
 			uevent_string = "HOTPLUG_OUT=1";
 			psb_sysfs_uevent(hdmi_priv->dev, uevent_string);
-
-			/* Keep DSPB & HDMIO islands off after plug out. */
-			otm_hdmi_power_islands_off(0);
 		}
 
 		drm_helper_hpd_irq_event(hdmi_priv->dev);
@@ -414,6 +412,16 @@ static irqreturn_t android_hdmi_irq_callback(int irq, void *data)
 
 	return __hdmi_irq_handler_bottomhalf(data);
 }
+
+int android_hdmi_irq_test(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct android_hdmi_priv *hdmi_priv = dev_priv->hdmi_priv;
+
+	return __hdmi_irq_handler_bottomhalf(hdmi_priv);
+}
+
 
 /**
  * This function sets the hdmi driver during bootup
@@ -1035,7 +1043,9 @@ edid_is_ready:
 				ret++;
 	}
 #endif
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	connector->display_info.raw_edid = NULL;
+#endif
 	/* monitor_type is being used to switch state between HDMI & DVI */
 	if (otm_hdmi_is_monitor_hdmi(hdmi_priv->context))
 		hdmi_priv->monitor_type = MONITOR_TYPE_HDMI;
@@ -1067,10 +1077,13 @@ edid_is_ready:
 
 		j++;
 	}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	/* add user mode to connector->mode list to support
 	 * DRM IOCTL attachmode
 	 */
+        /*we don't support attach mode in DRM_IOCTL in kernel3.10 now,
+         * so saftly remove below code when linux kernel version is 3.10
+         */
 	list_for_each_entry_safe(user_mode, t, &connector->user_modes, head) {
 		mode_present = 0;
 		/* check for whether user_mode is already in the mode_list */
@@ -1094,6 +1107,7 @@ edid_is_ready:
 			ret += 1;
 		}
 	}
+#endif
 
 	pref_mode_assigned = NULL;
 
@@ -1427,10 +1441,15 @@ int android_hdmi_crtc_mode_set(struct drm_crtc *crtc,
 			continue;
 		psb_intel_output = to_psb_intel_output(connector);
 	}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	if (psb_intel_output)
 		drm_connector_property_get_value(&psb_intel_output->base,
 			dev->mode_config.scaling_mode_property, &scalingType);
+#else
+        if (psb_intel_output)
+            drm_object_property_get_value(&(&psb_intel_output->base)->base,
+                    dev->mode_config.scaling_mode_property, &scalingType);
+#endif
 
 	psb_intel_crtc->scaling_type = scalingType;
 
@@ -1553,7 +1572,8 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv;
 	struct android_hdmi_priv *hdmi_priv;
-	bool data;
+	bool is_connected;
+
 	if (NULL == dev)
 		return;
 	dev_priv = dev->dev_private;
@@ -1563,18 +1583,27 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 	if (NULL == hdmi_priv)
 		return;
 
+	if (hdmi_priv->hdmi_audio_enabled) {
+		pr_err("OSPM: %s: hdmi audio is busy\n", __func__);
+		return;
+	}
+
 	/* Check if monitor is attached to HDMI connector. */
-	data = otm_hdmi_get_cable_status(hdmi_priv->context);
+	is_connected = otm_hdmi_get_cable_status(hdmi_priv->context);
 
 	otm_hdmi_save_display_registers(hdmi_priv->context,
-					data);
+					is_connected);
 
 	otm_disable_hdmi(hdmi_priv->context);
 
-	otm_hdmi_power_rails_off();
+	/* power island is turnned off by IRQ handler if device is disconnected */
+	if (is_connected && !hdmi_priv->hdmi_suspended) {
+		/* Keep DSPB & HDMIO islands off after suspending. */
+		otm_hdmi_power_islands_off();
+	}
+	hdmi_priv->hdmi_suspended = true;
 
-	/* Keep DSPB & HDMIO islands off after suspending. */
-	otm_hdmi_power_islands_off(OSPM_DISPLAY_ISLAND);
+	otm_hdmi_power_rails_off();
 
 	return;
 }
@@ -1648,7 +1677,9 @@ void android_hdmi_resume_display(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv;
 	struct android_hdmi_priv *hdmi_priv;
-	bool data;
+	bool is_connected;  /* connection status during resume */
+	bool was_connected; /* connection status before suspend */
+	hdmi_context_t *ctx;
 	if (NULL == dev)
 		return;
 	dev_priv = dev->dev_private;
@@ -1658,20 +1689,36 @@ void android_hdmi_resume_display(struct drm_device *dev)
 	if (NULL == hdmi_priv)
 		return;
 
-	/* Keep DSPB & HDMIO islands on after resuming. */
-	if (!otm_hdmi_power_islands_on(OSPM_DISPLAY_ISLAND)) {
-		pr_err("Unable to power on display island!");
+	ctx = (hdmi_context_t *)(hdmi_priv->context);
+	if (NULL == ctx)
 		return;
+
+	/* use the connection status before suspend to determine if
+	  * to power on islands. HDMI may have been plugged out
+	  * during suspend
+	*/
+	was_connected = ctx->is_connected;
+	if (was_connected && hdmi_priv->hdmi_suspended) {
+		/* Keep DSPB & HDMIO islands on after resuming. */
+		if (!otm_hdmi_power_islands_on()) {
+			pr_err("Unable to power on display island!");
+			return;
+		}
 	}
+	hdmi_priv->hdmi_suspended = false;
 
 	otm_hdmi_power_rails_on();
 	/* Check if monitor is attached to HDMI connector. */
-	data = otm_hdmi_get_cable_status(hdmi_priv->context);
+	is_connected = otm_hdmi_get_cable_status(hdmi_priv->context);
 
+	/* only restore display if there is no connection status change */
 	otm_hdmi_restore_and_enable_display(hdmi_priv->context,
-				data);
-	if (!data)
+				was_connected & is_connected);
+
+	if (!is_connected) {
+		/* power off rails, HPD will continue to work */
 		otm_hdmi_power_rails_off();
+	}
 }
 
 /**
@@ -2124,6 +2171,7 @@ android_hdmi_detect(struct drm_connector *connector,
 	struct android_hdmi_priv *hdmi_priv = NULL;
 	bool data = 0;
 	static bool first_boot = true;
+	static int prev_connection_status = connector_status_disconnected;
 	struct i2c_adapter *adapter = i2c_get_adapter(OTM_HDMI_I2C_ADAPTER_NUM);
 
 	if (NULL == connector || NULL == adapter)
@@ -2149,26 +2197,25 @@ android_hdmi_detect(struct drm_connector *connector,
 			first_boot = false;
 		}
 
-		if (connector->status == connector_status_connected)
+		if (prev_connection_status == connector_status_connected)
 			return connector_status_connected;
-		/*
-		 * Handle Hot-plug of HDMI. Display B would be power-gated
-		 * by ospm_post_init if HDMI is not detected during driver load.
-		 * This will power-up Display B if HDMI is
-		 * connected post driver load.
-		 */
-		/*
-		 * If pmu_nc_set_power_state fails then accessing HW
-		 * reg would result in a crash - IERR/Fabric error.
-		 */
-		otm_hdmi_pmu_nc_set_power_state(OSPM_DISPLAY_B_ISLAND,
-				OSPM_ISLAND_UP, OSPM_REG_TYPE);
+
+		prev_connection_status = connector_status_connected;
+
+		/* Turn on power islands and hold ref count */
+		if (!otm_hdmi_power_islands_on())
+			pr_err("otm_hdmi_power_islands_on failed!");
 
 		dev_priv->panel_desc |= DISPLAY_B;
-
 		dev_priv->bhdmiconnected = true;
+
 		return connector_status_connected;
 	} else {
+		if (prev_connection_status == connector_status_disconnected)
+			return connector_status_disconnected;
+
+		prev_connection_status = connector_status_disconnected;
+
 #ifdef OTM_HDMI_HDCP_ENABLE
 #ifdef OTM_HDMI_HDCP_ALWAYS_ENC
 		if (otm_hdmi_hdcp_disable(hdmi_priv->context))
@@ -2177,7 +2224,14 @@ android_hdmi_detect(struct drm_connector *connector,
 			pr_debug("failed to disable hdcp\n");
 #endif
 #endif
+		dev_priv->panel_desc &= ~DISPLAY_B;
+		dev_priv->bhdmiconnected = false;
+
+		/* Turn off power islands and decrement ref count */
+		otm_hdmi_power_islands_off();
+
 		otm_hdmi_power_rails_off();
+
 		return connector_status_disconnected;
 	}
 }
@@ -2266,14 +2320,20 @@ static int android_hdmi_set_property(struct drm_connector *connector,
 		default:
 			goto set_prop_error;
 		}
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 		if (drm_connector_property_get_value(connector, property, &curValue))
+#else
+                if (drm_object_property_get_value(&connector->base, property, &curValue))
+#endif
 			goto set_prop_error;
 
 		if (curValue == value)
 			goto set_prop_done;
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 		if (drm_connector_property_set_value(connector, property, value))
+#else 
+                if (drm_object_property_set_value(&connector->base, property, value))
+#endif
 			goto set_prop_error;
 
 		bTransitionFromToCentered =
@@ -2584,11 +2644,15 @@ void android_hdmi_driver_init(struct drm_device *dev,
 	drm_encoder_helper_add(encoder, &android_hdmi_enc_helper_funcs);
 	drm_connector_helper_add(connector,
 				 &android_hdmi_connector_helper_funcs);
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	drm_connector_attach_property(connector,
 					dev->mode_config.scaling_mode_property,
 					DRM_MODE_SCALE_CENTER);
-
+#else
+        drm_object_attach_property(&connector->base,
+                                        dev->mode_config.scaling_mode_property,
+                                        DRM_MODE_SCALE_CENTER);
+#endif
 	connector->display_info.subpixel_order = SubPixelHorizontalRGB;
 	connector->interlace_allowed = false;
 	connector->doublescan_allowed = false;
@@ -2614,8 +2678,6 @@ void android_hdmi_driver_init(struct drm_device *dev,
 	pr_info("%s: Done with driver init\n", __func__);
 	pr_info("Exit %s\n", __func__);
 }
-
-
 /*
  *
  * Internal scripts wrapper functions.

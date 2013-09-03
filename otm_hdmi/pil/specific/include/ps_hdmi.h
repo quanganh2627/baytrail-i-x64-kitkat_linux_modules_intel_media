@@ -96,16 +96,20 @@ bool ps_hdmi_power_rails_on(void);
 bool ps_hdmi_power_rails_off(void);
 
 /* turn on HDMI power islands */
-bool ps_hdmi_power_islands_on(int hw_island);
+bool ps_hdmi_power_islands_on(void);
 
 /* turn off HDMI power islands */
-void ps_hdmi_power_islands_off(int hw_island);
-
-/* control HDMI power islands */
-void ps_hdmi_pmu_nc_set_power_state(int islands, int state_type, int reg);
+void ps_hdmi_power_islands_off();
 
 /* control HDMI vblank interrupt */
 void ps_hdmi_vblank_control(struct drm_device *dev, bool on);
+
+/* get HDMI hotplug pin number */
+int ps_hdmi_get_hpd_pin(void);
+
+/* override the hdmi hpd cable status */
+void ps_hdmi_override_cable_status(bool state, bool auto_state);
+
 
 /**
  * hdmi interrupt handler (top half).

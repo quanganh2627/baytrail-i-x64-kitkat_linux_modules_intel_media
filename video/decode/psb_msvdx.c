@@ -507,7 +507,7 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 	if (msvdx_priv->msvdx_needs_reset) {
 		spin_unlock_irqrestore(&msvdx_priv->msvdx_lock, irq_flags);
 		PSB_DEBUG_GENERAL("MSVDX: will reset msvdx\n");
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
+
 		if (!msvdx_priv->fw_loaded_by_punit) {
 			if (psb_msvdx_core_reset(dev_priv)) {
 				ret = -EBUSY;
@@ -515,7 +515,7 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 				return ret;
 			}
 		}
-#endif
+
 		msvdx_priv->msvdx_needs_reset = 0;
 		msvdx_priv->msvdx_busy = 0;
 
@@ -553,7 +553,6 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 		spin_lock_irqsave(&msvdx_priv->msvdx_lock, irq_flags);
 	}
 
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
 	if (!msvdx_priv->fw_loaded_by_punit && !msvdx_priv->msvdx_fw_loaded) {
 		spin_unlock_irqrestore(&msvdx_priv->msvdx_lock, irq_flags);
 		PSB_DEBUG_GENERAL("MSVDX:reload FW to MTX\n");
@@ -568,7 +567,7 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 		PSB_DEBUG_GENERAL("MSVDX: load firmware successfully\n");
 		spin_lock_irqsave(&msvdx_priv->msvdx_lock, irq_flags);
 	}
-#endif
+
 	msvdx_priv->msvdx_busy = 1;
 	spin_unlock_irqrestore(&msvdx_priv->msvdx_lock, irq_flags);
 	PSB_DEBUG_GENERAL("MSVDX: commit command to HW,seq=0x%08x\n",
@@ -1226,10 +1225,10 @@ int psb_check_msvdx_idle(struct drm_device *dev)
 
 	if (msvdx_priv->fw_loaded_by_punit && msvdx_priv->rendec_init == 0)
 		return 0;
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
+
 	if (!msvdx_priv->fw_loaded_by_punit && msvdx_priv->msvdx_fw_loaded == 0)
 		return 0;
-#endif
+
 	if (msvdx_priv->msvdx_busy) {
 		PSB_DEBUG_PM("MSVDX: msvdx_busy was set, return busy.\n");
 		return -EBUSY;
@@ -1550,11 +1549,19 @@ int psb_allocate_term_buf(struct drm_device *dev,
 
 	PSB_DEBUG_INIT("MSVDX: allocate termination buffer.\n");
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(bdev, size,
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU |
 				       TTM_PL_FLAG_NO_EVICT, 0, 0, 0,
 				       NULL, term_buf);
+#else
+	ret = ttm_buffer_object_create(bdev, size,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT, 0, 0,
+				       NULL, term_buf);
+#endif
 	if (ret) {
 		DRM_ERROR("MSVDX:failed to allocate termination buffer.\n");
 		*term_buf = NULL;

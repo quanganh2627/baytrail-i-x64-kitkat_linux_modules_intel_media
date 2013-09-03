@@ -265,6 +265,9 @@ typedef struct {
 	int scaling_type; /* scaling type for HDMI display */
 	int gpio_hpd_pin; /* GPIO pin number of HDMI hotplug detection (in) */
 	int gpio_ls_en_pin; /* GPIO pin number for EDID level shifter (out) */
+	bool is_connected_overridden; /* indicate overridden cable state, set by external mean*/
+	bool override_cable_state; /*if true, cable state is indicated by is_connected_overriden;
+							if false, cable state is indicated by is_connected*/
 } hdmi_context_t;
 
 /* mapping structures between pil and ipil */

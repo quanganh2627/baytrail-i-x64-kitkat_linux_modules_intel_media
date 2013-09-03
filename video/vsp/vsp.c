@@ -36,6 +36,10 @@
 
 #define PARTITIONS_MAX 9
 
+#define REF_FRAME_LAST	0
+#define REF_FRAME_ALT	1
+#define REF_FRAME_GOLD	2
+
 static int vsp_submit_cmdbuf(struct drm_device *dev,
 			     unsigned char *cmd_start,
 			     unsigned long cmd_size);
@@ -177,8 +181,8 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			if (cmd_rd == cmd_wr) {
 				if (!vsp_priv->vsp_cmd_num) {
 					PSB_DEBUG_PM("Trying to off...\n");
-					schedule_delayed_work(
-						&vsp_priv->vsp_suspend_wq, 0);
+					tasklet_hi_schedule(
+					&vsp_priv->vsp_suspend_tasklet);
 				}
 			} else {
 				PSB_DEBUG_PM("cmd_queue has data,continue.\n");
@@ -207,13 +211,41 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			sequence = msg->buffer;
 			VSP_DEBUG("sequence %d\n", sequence);
 			VSP_DEBUG("receive vp8 encoded frame response\n");
-#ifdef VP8_ENC_DEBUG
-			struct VssVp8encPictureParameterBuffer *t =
-				vsp_priv->vp8_encode_frame_cmd;
+
+			int i;
 			struct VssVp8encEncodedFrame *encoded_frame =
 				(struct VssVp8encEncodedFrame *)
 					(vsp_priv->coded_buf);
-			int i = 0;
+			int ref_frame_surface_id;
+			VSP_DEBUG("encoded_frame.surfaceId_of_ref_frame[REF_FRAME_LAST] %x\n",
+					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_LAST]);
+			VSP_DEBUG("encoded_frame.surfaceId_of_ref_frame[REF_FRAME_ALT] %x\n",
+					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_ALT]);
+			VSP_DEBUG("encoded_frame.surfaceId_of_ref_frame[REF_FRAME_GOLD] %x\n",
+					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_GOLD]);
+
+			for (i = 0; i < 4; i++) {
+				ref_frame_surface_id = vsp_priv->ref_frame_buffers[i].surface_id;
+				VSP_DEBUG("%d: ref_frame_surface_id=%x\n",
+					   i, ref_frame_surface_id);
+				if (ref_frame_surface_id !=
+					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_LAST]
+				 && ref_frame_surface_id !=
+					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_ALT]
+				 && ref_frame_surface_id !=
+					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_GOLD])
+					break;
+			}
+
+			vsp_priv->available_recon_buffer = i;
+			VSP_DEBUG("vsp_priv->available_recon_buffer=%d\n",
+					vsp_priv->available_recon_buffer);
+
+			encoded_frame->reserved[0] = vsp_priv->rec_surface_id;
+
+#ifdef VP8_ENC_DEBUG
+			struct VssVp8encPictureParameterBuffer *t =
+					vsp_priv->vp8_encode_frame_cmd;
 			int j = 0;
 			VSP_DEBUG("VSP clock cycles from pre response %x\n",
 				  msg->vss_cc);
@@ -227,7 +259,7 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 				vsp_priv->vp8_encode_frame_cmd,
 				vsp_priv->ctrl->cmd_rd);
 
-			psb_clflush(vsp_priv->coded_buf);
+			/* psb_clflush(vsp_priv->coded_buf); */
 
 			VSP_DEBUG("size %d\n", t->encoded_frame_size);
 
@@ -235,8 +267,6 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 					encoded_frame->status);
 			VSP_DEBUG("frame flags[1=Key, 0=Non-key] %d\n",
 					encoded_frame->frame_flags);
-			VSP_DEBUG("ref frame flags %d\n",
-					encoded_frame->ref_frame_flags);
 			VSP_DEBUG("segments = %d\n",
 					encoded_frame->segments);
 			VSP_DEBUG("quantizer[0]=%d\n",
@@ -247,8 +277,8 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 					encoded_frame->partitions);
 			VSP_DEBUG("coded data start %p\n",
 					encoded_frame->coded_data);
-			VSP_DEBUG("surfaced_of_ref_frame %p\n",
-					encoded_frame->surfaced_of_ref_frame);
+			VSP_DEBUG("surfaceId_of_ref_frame %p\n",
+					encoded_frame->surfaceId_of_ref_frame);
 
 			if (encoded_frame->partitions > PARTITIONS_MAX) {
 				VSP_DEBUG("partitions num error\n");
@@ -318,6 +348,9 @@ bool vsp_interrupt(void *pvData)
 		return false;
 	} else {
 		IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_CLR, (1 << VSP_SP0_IRQ_SHIFT));
+		/* we need to clear IIR VSP bit */
+		PSB_WVDC32(_TNG_IRQ_VSP_FLAG, PSB_INT_IDENTITY_R);
+		(void)PSB_RVDC32(PSB_INT_IDENTITY_R);
 	}
 
 	/* handle the response message */
@@ -410,12 +443,18 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int ret;
 
-	if (vsp_priv->fw_loaded == 0) {
+	if (vsp_priv->fw_loaded == VSP_FW_NONE) {
 		ret = vsp_init_fw(dev);
 		if (ret != 0) {
 			DRM_ERROR("VSP: failed to load firmware\n");
 			return -EFAULT;
 		}
+	}
+
+	/* If VSP timeout, don't send cmd to hardware anymore */
+	if (vsp_priv->vsp_state == VSP_STATE_HANG) {
+		DRM_ERROR("The VSP is hang abnormally!");
+		return -EFAULT;
 	}
 
 	/* consider to invalidate/flush MMU */
@@ -444,7 +483,7 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 
 	/* If the VSP is in Suspend, need to send "Resume" */
 	if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
-		vsp_resume_function(dev_priv);
+		ret = vsp_resume_function(dev_priv);
 		VSP_DEBUG("The VSP is on suspend, send resume!\n");
 	}
 
@@ -513,7 +552,8 @@ int vsp_send_command(struct drm_device *dev,
 				else
 					continue;
 			} else if (cur_cmd->type == VspSetContextCommand ||
-				cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND) {
+				cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND ||
+				cur_cmd->type == Vss_Sys_Ref_Frame_COMMAND) {
 				VSP_DEBUG("skip VspSetContextCommand");
 				cur_cmd++;
 				cmd_size -= sizeof(*cur_cmd);
@@ -575,7 +615,9 @@ static int vsp_prehandle_command(struct drm_file *priv,
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	struct ttm_buffer_object *pic_bo_vp8;
 	struct ttm_buffer_object *coded_buf_bo;
+	struct ttm_buffer_object *ref_vp8_bo;
 	int vp8_pic_num = 0;
+	int i = 0;
 
 	cur_cmd = (struct vss_command_t *)cmd_start;
 
@@ -622,8 +664,6 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 			vsp_priv->fw_type = VSP_FW_TYPE_VPP;
 
-			if(vsp_priv->fw_loaded == 0)
-				vsp_new_context(dev_priv->dev);
 		} else if (cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND) {
 			struct vsp_context_settings_t *context_setting;
 			context_setting =
@@ -640,8 +680,44 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 			vsp_priv->fw_type = VSP_FW_TYPE_VP8;
 
-			if(vsp_priv->fw_loaded == 0)
-				vsp_new_context(dev_priv->dev);
+		} else if (cur_cmd->type == Vss_Sys_Ref_Frame_COMMAND) {
+			ref_vp8_bo =
+				ttm_buffer_object_lookup(tfile,
+					cur_cmd->reserved7);
+			if (ref_vp8_bo == NULL) {
+				DRM_ERROR("VSP: failed to find %x bo\n",
+					cur_cmd->reserved7);
+				ret = -1;
+				goto out;
+			}
+			bool is_iomem;
+			struct ttm_bo_kmap_obj vp8_ref__kmap;
+			ret = ttm_bo_kmap(ref_vp8_bo, 0,
+					ref_vp8_bo->num_pages,
+					&vp8_ref__kmap);
+			if (ret) {
+				DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
+				ttm_bo_unref(&ref_vp8_bo);
+				goto out;
+			}
+			struct VssProcPictureVP8* ref =
+				(struct VssProcPictureVP8*)
+					ttm_kmap_obj_virtual(&vp8_ref__kmap,
+							     &is_iomem);
+
+			ref = ((char *)ref)+256;
+			for (i = 0; i<4; i++) {
+			vsp_priv->ref_frame_buffers[i] = ref[i];
+			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d]=%x\n",
+					i,vsp_priv->ref_frame_buffers[i]);
+			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d].surface_id=%x\n",
+					i,vsp_priv->ref_frame_buffers[i].surface_id);
+			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d].base=%x\n",
+					i,vsp_priv->ref_frame_buffers[i].base);
+			}
+
+			ttm_bo_kunmap(&vp8_ref__kmap);
+			ttm_bo_unref(&ref_vp8_bo);
 		} else
 			/* calculate the numbers of cmd send to VSP */
 			vsp_cmd_num++;
@@ -708,6 +784,7 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 	VSP_DEBUG("finished fencing\n");
 out:
+
 	return ret;
 }
 
@@ -741,6 +818,7 @@ int vsp_fence_surfaces(struct drm_file *priv,
 			  &pic_param_kmap);
 	if (ret) {
 		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
+		ttm_bo_unref(&pic_param_bo);
 		goto out;
 	}
 
@@ -776,6 +854,8 @@ int vsp_fence_surfaces(struct drm_file *priv,
 				break;
 			}
 		}
+
+		ttm_bo_unref(&surf_bo);
 
 		BUG_ON(!list_empty(&surf_list));
 		/* create fence */
@@ -828,6 +908,7 @@ int vsp_fence_surfaces(struct drm_file *priv,
 	}
 out:
 	ttm_bo_kunmap(&pic_param_kmap);
+	ttm_bo_unref(&pic_param_bo);
 
 	return ret;
 }
@@ -858,6 +939,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 			  &vp8_encode_frame__kmap);
 	if (ret) {
 		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
+		ttm_bo_unref(&pic_param_bo);
 		goto out;
 	}
 
@@ -877,21 +959,33 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 	VSP_DEBUG("pic_param->encoded_frame_base = %p\n",
 			pic_param->encoded_frame_base);
 
-#ifdef VP8_ENC_DEBUG
-	vsp_priv->vp8_encode_frame_cmd = pic_param;
+	pic_param->recon_frame =
+		vsp_priv->ref_frame_buffers[vsp_priv->available_recon_buffer];
+	vsp_priv->rec_surface_id = pic_param->recon_frame.surface_id;
+	VSP_DEBUG("vsp_priv->rec_surface_id = %x\n",
+			vsp_priv->rec_surface_id);
+
+	vsp_priv->vp8_encode_frame_cmd = (void *)pic_param;
+
+	if (vsp_priv->coded_buf != NULL) {
+		ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
+		ttm_bo_unref(&vsp_priv->coded_buf_bo);
+		vsp_priv->coded_buf = NULL;
+	}
 	/* map coded buffer */
 	ret = ttm_bo_kmap(coded_buf_bo, 0, coded_buf_bo->num_pages,
 			  &vsp_priv->coded_buf_kmap);
 	if (ret) {
 		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
+		ttm_bo_unref(&coded_buf_bo);
 		goto out;
 	}
 
+	vsp_priv->coded_buf_bo = coded_buf_bo;
 	vsp_priv->coded_buf = (void *)
 		ttm_kmap_obj_virtual(
 				&vsp_priv->coded_buf_kmap,
 				&is_iomem);
-#endif
 
 	/* just fence pic param if this is not end command */
 	/* only send last output fence_arg back */
@@ -910,6 +1004,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 out:
 #ifndef VP8_ENC_DEBUG
 	ttm_bo_kunmap(&vp8_encode_frame__kmap);
+	ttm_bo_unref(&pic_param_bo);
 #endif
 	return ret;
 }
@@ -963,16 +1058,17 @@ void vsp_new_context(struct drm_device *dev)
 		DRM_ERROR("VSP: vsp driver is not initialized correctly\n");
 		return;
 	}
-	vsp_priv->vss_cc_acc = 0;
-	vsp_priv->fw_loaded = 0;
+
+	vsp_priv->context_num++;
 
 	return;
 }
 
-void vsp_rm_context(struct drm_device *dev)
+void vsp_rm_context(struct drm_device *dev, int ctx_type)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+	bool ret;
 
 	dev_priv = dev->dev_private;
 	if (dev_priv == NULL) {
@@ -989,13 +1085,47 @@ void vsp_rm_context(struct drm_device *dev)
 	if (vsp_priv->ctrl == NULL)
 		return;
 
+	VSP_DEBUG("ctx_type=%d\n", ctx_type);
+	if (VAEntrypointEncSlice == ctx_type) {
+		if (vsp_priv->coded_buf != NULL) {
+			ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
+			ttm_bo_unref(&vsp_priv->coded_buf_bo);
+			vsp_priv->coded_buf = NULL;
+		}
+		struct vsp_context_settings_t *context_setting;
+		context_setting =
+			&(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8]);
+		context_setting->app_id = 0;
+		context_setting->usage = vsp_context_unused;
+		context_setting->state_buffer_size = 0;
+		context_setting->state_buffer_addr = 0;
+	 } else {
+		struct vsp_context_settings_t *context_setting;
+		context_setting =
+			&(vsp_priv->context_setting[VSP_CONTEXT_NUM_VPP]);
+		context_setting->app_id = 0;
+		context_setting->usage = vsp_context_unused;
+		context_setting->state_buffer_size = 0;
+		context_setting->state_buffer_addr = 0;
+	 }
+
+	vsp_priv->context_num--;
+	if (vsp_priv->context_num >= 1) {
+		return;
+	}
+
 	vsp_priv->ctrl->entry_kind = vsp_exit;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
-	vsp_priv->fw_loaded = 0;
+
+	ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
+
+	vsp_priv->fw_loaded = VSP_FW_NONE;
 	vsp_priv->current_sequence = 0;
 
-	schedule_delayed_work(&vsp_priv->vsp_suspend_wq, 0);
-	VSP_DEBUG("VSP: OK. Power down the HW!\n");
+	if (ret == false)
+		PSB_DEBUG_PM("Couldn't power down VSP!");
+	else
+		PSB_DEBUG_PM("VSP: OK. Power down the HW!\n");
 
 	/* FIXME: frequency should change */
 	VSP_PERF("the total time spend on VSP is %ld ms\n",
@@ -1009,6 +1139,9 @@ int psb_vsp_save_context(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int i;
+
+	if (vsp_priv->fw_loaded == VSP_FW_NONE)
+		return 0;
 
 	/* save the VSP config registers */
 	for (i = 2; i < VSP_CONFIG_SIZE; i++)
@@ -1032,11 +1165,14 @@ int psb_check_vsp_idle(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	int i;
+	int cmd_rd, cmd_wr;
 
 	if (vsp_priv->fw_loaded == 0 || vsp_priv->vsp_state == VSP_STATE_DOWN)
 		return 0;
 
-	if (vsp_priv->vsp_cmd_num ||  vsp_priv->vsp_state == VSP_STATE_ACTIVE) {
+	cmd_rd = vsp_priv->ctrl->cmd_rd;
+	cmd_wr = vsp_priv->ctrl->cmd_wr;
+	if (cmd_rd != cmd_wr ||  vsp_priv->vsp_state == VSP_STATE_ACTIVE) {
 		PSB_DEBUG_PM("VSP: there is command need to handle!\n");
 		return -EBUSY;
 	}
@@ -1054,7 +1190,38 @@ int psb_check_vsp_idle(struct drm_device *dev)
 		return -EBUSY;
 	}
 
+	if (!vsp_is_idle(dev_priv, vsp_vp0)) {
+		PSB_DEBUG_PM("VSP: vp0 return busy!\n");
+		return -EBUSY;
+	}
+	if (!vsp_is_idle(dev_priv, vsp_vp1)) {
+		PSB_DEBUG_PM("VSP: vp1 return busy!\n");
+		return -EBUSY;
+	}
+
+
 	return 0;
+}
+
+/* The tasklet function to power down VSP */
+void psb_powerdown_vsp(unsigned long data)
+{
+	struct drm_device *dev = (struct drm_device *)data;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+	bool ret;
+
+	if (!vsp_priv)
+		return;
+
+	ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
+
+	if (ret == false)
+		PSB_DEBUG_PM("The VSP could NOT be powered off!\n");
+	else
+		PSB_DEBUG_PM("The VSP has been powered off!\n");
+
+	return;
 }
 
 int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
@@ -1063,7 +1230,7 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	unsigned int reg, i, j, *cmd_p;
 
 	/* config info */
-	for (i = 2; i < VSP_CONFIG_SIZE; i++) {
+	for (i = 0; i < VSP_CONFIG_SIZE; i++) {
 		CONFIG_REG_READ32(i, &reg);
 		VSP_DEBUG("partition1_config_reg_d%d=%x\n", i, reg);
 	}
@@ -1094,13 +1261,57 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	VSP_DEBUG("context_settings(addr):%x\n",
 			vsp_priv->context_setting_bo->offset);
 	VSP_DEBUG("context_settings.app_id:%d\n",
-			vsp_priv->context_setting->app_id);
+			vsp_priv->context_setting[0].app_id);
 	VSP_DEBUG("context_setting->state_buffer_size:0x%x\n",
-			vsp_priv->context_setting->state_buffer_size);
+			vsp_priv->context_setting[0].state_buffer_size);
 	VSP_DEBUG("context_setting->state_buffer_addr:%x\n",
-			vsp_priv->context_setting->state_buffer_addr);
+			vsp_priv->context_setting[0].state_buffer_addr);
 	VSP_DEBUG("context_settings.usage:%d\n",
-			vsp_priv->context_setting->usage);
+			vsp_priv->context_setting[0].usage);
+
+	VSP_DEBUG("context_settings(addr):%x\n",
+			vsp_priv->context_setting_bo->offset);
+	VSP_DEBUG("context_settings.app_id:%d\n",
+			vsp_priv->context_setting[1].app_id);
+	VSP_DEBUG("context_setting->state_buffer_size:0x%x\n",
+			vsp_priv->context_setting[1].state_buffer_size);
+	VSP_DEBUG("context_setting->state_buffer_addr:%x\n",
+			vsp_priv->context_setting[1].state_buffer_addr);
+	VSP_DEBUG("context_settings.usage:%d\n",
+			vsp_priv->context_setting[1].usage);
+
+
+	/* dump dma register */
+	VSP_DEBUG("partition1_dma_external_ch[0..23]_pending_req_cnt\n");
+	for (i=0; i <= 23; i++) {
+		MM_READ32(0x150010, i * 0x20, &reg);
+		if (reg != 0)
+			VSP_DEBUG("partition1_dma_external_ch%d_pending_req_cnt = 0x%x\n",
+					i, reg);
+	}
+
+	VSP_DEBUG("partition1_dma_external_dim[0..31]_pending_req_cnt\n");
+	for (i=0; i <= 31; i++) {
+		MM_READ32(0x151008, i * 0x20, &reg);
+		if (reg != 0)
+			VSP_DEBUG("partition1_dma_external_dim%d_pending_req_cnt = 0x%x\n",
+					i, reg);
+	}
+
+	VSP_DEBUG("partition1_dma_internal_ch[0..7]_pending_req_cnt\n");
+	for (i=0; i <= 7; i++) {
+		MM_READ32(0x160010, i * 0x20, &reg);
+		if (reg != 0)
+			VSP_DEBUG("partition1_dma_internal_ch%d_pending_req_cnt = 0x%x\n",
+					i, reg);
+	}
+	VSP_DEBUG("partition1_dma_internal_dim[0..7]_pending_req_cnt\n");
+	for (i=0; i <= 7; i++) {
+		MM_READ32(0x160408, i * 0x20, &reg);
+		if (reg != 0)
+			VSP_DEBUG("partition1_dma_internal_dim%d_pending_req_cnt = 0x%x\n",
+					i, reg);
+	}
 
 	/* IRQ registers */
 	for (i = 0; i < 6; i++) {
@@ -1244,24 +1455,6 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	}
 
 	return 0;
-}
-
-void psb_powerdown_vsp(struct work_struct *work)
-{
-	struct vsp_private *vsp_priv =
-		container_of(work, struct vsp_private, vsp_suspend_wq.work);
-	bool ret;
-
-	if (!vsp_priv)
-		return;
-
-	ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
-	if (ret == false)
-		PSB_DEBUG_PM("The VSP could NOT be powered off!\n");
-	else
-		PSB_DEBUG_PM("The VSP has been powered off!\n");
-
-	return;
 }
 
 void check_invalid_cmd_type(unsigned int cmd_type)

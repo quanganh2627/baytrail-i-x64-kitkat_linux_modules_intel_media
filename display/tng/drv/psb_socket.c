@@ -41,6 +41,7 @@
  *      on the existing kobject uevent infrastructure.
  */
 
+#include <linux/version.h>
 #include <linux/spinlock.h>
 #include <linux/string.h>
 #include <linux/kobject.h>
@@ -357,15 +358,25 @@ int __init psb_kobject_uevent_init(void)
 	   NETLINK_PSB_KOBJECT_UEVENT,
 	   DRM_GFX_SOCKET_GROUPS,
 	   NULL, NULL, THIS_MODULE); */
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	uevent_sock = netlink_kernel_create(&init_net, NETLINK_PSB_KOBJECT_UEVENT, 0x3,	/* 3 is for hotplug & dpst */
 					    NULL, NULL, THIS_MODULE);
-
+#else
+	struct netlink_kernel_cfg netlnk_cfg;
+	memset(&netlnk_cfg, 0, sizeof(struct netlink_kernel_cfg));
+	netlnk_cfg.groups = 0x3;
+	netlnk_cfg.flags = NL_CFG_F_NONROOT_RECV;
+	uevent_sock = netlink_kernel_create(&init_net, NETLINK_PSB_KOBJECT_UEVENT,
+						&netlnk_cfg);
+#endif
 	if (!uevent_sock) {
 		printk(KERN_ERR "psb_kobject_uevent: failed create socket!\n");
 		return -ENODEV;
 	}
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	netlink_set_nonroot(NETLINK_PSB_KOBJECT_UEVENT, NL_NONROOT_RECV);
-
+#endif
 	return 0;
 }
 

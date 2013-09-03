@@ -38,8 +38,11 @@
 #include <sound/initval.h>
 
 #include "intel_mid_hdmi_audio.h"
-
+#ifdef CONFIG_DRM_INTEL_HANDSET
+#include <pwr_mgmt.h>
+#else
 #include <psb_powermgmt.h>
+#endif
 
 #define PCM_INDEX		0
 #define MAX_PB_STREAMS		1
@@ -1386,12 +1389,12 @@ static int snd_intelhad_pcm_trigger(struct snd_pcm_substream *substream,
 		   */
 		caps = HDMI_AUDIO_BUFFER_DONE;
 		had_set_caps(HAD_SET_DISABLE_AUDIO_INT, &caps);
-		had_set_caps(HAD_SET_DISABLE_AUDIO, NULL);
 		intelhaddata->ops->enable_audio(substream, 0);
 		/* Reset buffer pointers */
 		intelhaddata->ops->reset_audio(1);
 		intelhaddata->ops->reset_audio(0);
 		stream->stream_status = STREAM_DROPPED;
+		had_set_caps(HAD_SET_DISABLE_AUDIO, NULL);
 		break;
 
 	default:

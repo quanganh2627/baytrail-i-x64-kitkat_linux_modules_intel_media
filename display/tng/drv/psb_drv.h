@@ -21,6 +21,10 @@
 #define _PSB_DRV_H_
 
 #include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0))
+#define GFX_KERNEL_3_10_FIX
+#define USE_GFX_INTERNAL_PM_FUNC
+#endif
 #include <linux/panel_psb_drv.h>
 
 #include <drm/drmP.h>
@@ -64,7 +68,8 @@ enum {
 	CHIP_PSB_8109 = 1,
 	CHIP_MRST_4100 = 2,
 	CHIP_MDFLD_0130 = 3,
-	CHIP_MRFLD_1180 = 4
+	CHIP_MRFLD_1180 = 4,
+	CHIP_MRFLD_1480 = 5
 };
 
 
@@ -92,6 +97,8 @@ enum {
 #define DISPLAY_PROC_ENTRY "display_status"
 #define PANEL_PROC_ENTRY "panel_status"
 #define HDMI_PROC_ENTRY "hdmi_power"
+#define GPIO_PROC_ENTRY "hdmi_gpio_control"
+
 
 #define PSB_DRM_DRIVER_DATE "2009-03-10"
 #define PSB_DRM_DRIVER_MAJOR 8
@@ -301,6 +308,7 @@ enum {
 #define PSB_PMPOLICY_NOPM		0
 #define PSB_PMPOLICY_CLOCKGATING	1
 #define PSB_PMPOLICY_POWERDOWN		2
+#define PSB_PMPOLICY_HWIDLE		3
 
 #define PSB_CGPOLICY_ON		0
 #define PSB_CGPOLICY_GFXCG_DIS		1
@@ -359,7 +367,6 @@ struct drm_psb_private {
 	int vsync_pipe;
 
 	struct mutex vsync_lock;
-	wait_queue_head_t vsync_queue;
 	atomic_t *vblank_count;
 
 	/*
@@ -896,6 +903,8 @@ struct drm_psb_private {
 	struct work_struct topaz_watchdog_wq;
 	struct work_struct hdmi_hotplug_wq;
 	struct work_struct hdmi_audio_wq;
+	struct work_struct hdmi_audio_underrun_wq;
+	struct work_struct hdmi_audio_bufferdone_wq;
 	atomic_t hotplug_wq_done;
 	int timer_available;
 
@@ -946,7 +955,6 @@ struct drm_psb_private {
 	bool b_is_in_idle;
 	void (*exit_idle) (struct drm_device * dev, u32 update_src,
 			   void *p_surfaceAddr, bool check_hw_on_only);
-	bool b_vblank_enable;
 
 	bool b_async_flip_enable;
 	/*
@@ -1068,6 +1076,10 @@ void psb_disable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask);
 void mid_enable_pipe_event(struct drm_psb_private *dev_priv, int pipe);
 
 extern u32 psb_get_vblank_counter(struct drm_device *dev, int crtc);
+extern int intel_get_vblank_timestamp(struct drm_device *dev, int pipe,
+		int *max_error, struct timeval *vblank_time, unsigned flags);
+extern int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
+		int *vpos, int *hpos);
 extern int mdfld_enable_te(struct drm_device *dev, int pipe);
 extern void mdfld_disable_te(struct drm_device *dev, int pipe);
 extern int mdfld_irq_enable_hdmi_audio(struct drm_device *dev);
@@ -1075,6 +1087,10 @@ extern int mdfld_irq_disable_hdmi_audio(struct drm_device *dev);
 extern void psb_te_timer_func(unsigned long data);
 extern void mdfld_te_handler_work(struct work_struct *te_work);
 extern void mdfld_vsync_event_work(struct work_struct *work);
+#ifdef CONFIG_SUPPORT_HDMI
+void hdmi_do_audio_underrun_wq(struct work_struct *work);
+void hdmi_do_audio_bufferdone_wq(struct work_struct *work);
+#endif
 extern u32 intel_vblank_count(struct drm_device *dev, int pipe);
 
 /*
@@ -1141,7 +1157,6 @@ struct backlight_device *psb_get_backlight_device(void);
 
 extern int drm_psb_debug;
 extern int drm_psb_no_fb;
-extern int drm_psb_disable_vsync;
 extern int drm_idle_check_interval;
 extern int drm_topaz_sbuswa;
 
@@ -1297,7 +1312,8 @@ static inline void WRAPPER_REGISTER_WRITE(struct drm_device *dev, uint32_t reg,
 #define IS_CTP(dev) (((dev->pci_device & 0xffff) == 0x08c0) ||	\
 		((dev->pci_device & 0xffff) == 0x08c7) ||  \
 		((dev->pci_device & 0xffff) == 0x08c8))
-#define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180)
+#define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180 || ((dev)->pci_device & 0xfff8) == 0x1480)
+#define IS_TNG_B0(dev) (((dev)->pci_device & 0xffff) == 0x1181)
 
 #define IS_MID(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
 #define IS_FLDS(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))

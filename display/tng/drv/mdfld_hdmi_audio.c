@@ -133,15 +133,13 @@ static int mid_hdmi_audio_write(uint32_t reg, uint32_t val)
 	if (hdmi_priv->monitor_type == MONITOR_TYPE_DVI)
 		return 0;
 
-	if (!power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI))
+	if (!is_island_on(OSPM_DISPLAY_B) || !is_island_on(OSPM_DISPLAY_HDMI))
 		return 0;
 
 	if (IS_HDMI_AUDIO_REG(reg))
 		REG_WRITE(reg, val);
 	else
 		ret = -EINVAL;
-
-	power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI);
 
 	return ret;
 }
@@ -160,15 +158,13 @@ static int mid_hdmi_audio_read(uint32_t reg, uint32_t *val)
 	if (hdmi_priv->monitor_type == MONITOR_TYPE_DVI)
 		return 0;
 
-	if (!power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI))
+	if (!is_island_on(OSPM_DISPLAY_B) || !is_island_on(OSPM_DISPLAY_HDMI))
 		return 0;
 
 	if (IS_HDMI_AUDIO_REG(reg))
 		*val = REG_READ(reg);
 	else
 		ret = -EINVAL;
-
-	power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI);
 
 	return ret;
 }
@@ -186,7 +182,7 @@ static int mid_hdmi_audio_rmw(uint32_t reg,
 	int ret = 0;
 	uint32_t val_tmp = 0;
 
-	if (!power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI))
+	if (!is_island_on(OSPM_DISPLAY_B) || !is_island_on(OSPM_DISPLAY_HDMI))
 		return 0;
 
 	if (IS_HDMI_AUDIO_REG(reg)) {
@@ -195,8 +191,6 @@ static int mid_hdmi_audio_rmw(uint32_t reg,
 	} else {
 		ret = -EINVAL;
 	}
-
-	power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI);
 
 	return ret;
 }
@@ -253,7 +247,12 @@ static int mid_hdmi_audio_set_caps(
 
 	switch (set_element) {
 	case HAD_SET_ENABLE_AUDIO:
-		if (!power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI))
+		if (hdmi_priv->hdmi_audio_enabled) {
+			pr_err("OSPM: %s: hdmi audio has been enabled\n", __func__);
+			return 0;
+		}
+		if (!is_island_on(OSPM_DISPLAY_B) ||
+				!is_island_on(OSPM_DISPLAY_HDMI))
 			return -EINVAL;
 
 		hdmib = REG_READ(hdmi_priv->hdmib_reg);
@@ -263,14 +262,22 @@ static int mid_hdmi_audio_set_caps(
 
 		REG_WRITE(hdmi_priv->hdmib_reg, hdmib);
 		REG_READ(hdmi_priv->hdmib_reg);
-
+		hdmi_priv->hdmi_audio_enabled = true;
 		break;
 	case HAD_SET_DISABLE_AUDIO:
+		if (!hdmi_priv->hdmi_audio_enabled) {
+			pr_err("OSPM: %s: hdmi audio has been disabled\n", __func__);
+			return 0;
+		}
 		hdmib = REG_READ(hdmi_priv->hdmib_reg) & ~HDMIB_AUDIO_ENABLE;
 		REG_WRITE(hdmi_priv->hdmib_reg, hdmib);
 		REG_READ(hdmi_priv->hdmib_reg);
 
-		power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI);
+		hdmi_priv->hdmi_audio_enabled = false;
+		if (dev_priv->early_suspended) {
+			/* suspend hdmi display if device has been suspended */
+			android_hdmi_suspend_display(dev);
+		}
 		break;
 	case HAD_SET_ENABLE_AUDIO_INT:
 		if (*((u32 *)capabilties) & HDMI_AUDIO_UNDERRUN)

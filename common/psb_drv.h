@@ -62,6 +62,7 @@ extern u32 DISP_PLANEB_STATUS;
 extern int drm_psb_use_cases_control;
 extern int dpst_level;
 
+
 extern struct ttm_bo_driver psb_ttm_bo_driver;
 
 enum {
@@ -98,6 +99,8 @@ enum {
 #define DISPLAY_PROC_ENTRY "display_status"
 #define PANEL_PROC_ENTRY "panel_status"
 #define CSC_PROC_ENTRY "csc_control"
+#define GPIO_PROC_ENTRY "hdmi_gpio_control"
+
 
 #define PSB_DRM_DRIVER_DATE "2009-03-10"
 #define PSB_DRM_DRIVER_MAJOR 8

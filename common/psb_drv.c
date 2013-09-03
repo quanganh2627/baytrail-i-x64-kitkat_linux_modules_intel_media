@@ -25,7 +25,12 @@
 #include <linux/notifier.h>
 #include <linux/spinlock.h>
 #include <drm/drm_pciids.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #include <asm/intel_scu_pmic.h>
+#else
+#include <asm/intel_scu_ipc.h>
+#endif
 #include <asm/intel-mid.h>
 #include "psb_drm.h"
 #include "psb_drv.h"
@@ -99,7 +104,10 @@ int gamma_setting[129] = {0};
 int csc_setting[6] = {0};
 int gamma_number = 129;
 int csc_number = 6;
+#ifdef CONFIG_CTP_DPST
 int dpst_level = 3;
+#endif
+int drm_hdmi_hpd_auto;
 
 int drm_psb_msvdx_tiling = 1;
 int drm_msvdx_bottom_half;
@@ -147,8 +155,10 @@ MODULE_PARM_DESC(enable_color_conversion, "Enable display side color conversion"
 MODULE_PARM_DESC(enable_gamma, "Enable display side gamma");
 MODULE_PARM_DESC(use_cases_control, "Use to enable and disable use cases");
 MODULE_PARM_DESC(pm_history, "whether to dump pm history when SGX HWR");
+#ifdef CONFIG_CTP_DPST
 MODULE_PARM_DESC(dpst_level, "dpst aggressive level: 0~5");
-
+#endif
+MODULE_PARM_DESC(hdmi_hpd_auto, "HDMI hot-plug auto test flag");
 
 module_param_named(debug, drm_psb_debug, int, 0600);
 module_param_named(psb_enable_cabc, drm_psb_enable_cabc, int, 0600);
@@ -178,7 +188,10 @@ module_param_named(psb_use_cases_control, drm_psb_use_cases_control, int, 0600);
 module_param_named(pm_history, drm_psb_dump_pm_history, int, 0600);
 module_param_array_named(gamma_adjust, gamma_setting, int, &gamma_number, 0600);
 module_param_array_named(csc_adjust, csc_setting, int, &csc_number, 0600);
+#ifdef CONFIG_CTP_DPST
 module_param_named(dpst_level, dpst_level, int, 0600);
+#endif
+module_param_named(hdmi_hpd_auto, drm_hdmi_hpd_auto, int, 0600);
 
 #ifndef MODULE
 /* Make ospm configurable via cmdline firstly, and others can be enabled if needed. */
@@ -484,6 +497,7 @@ static int psb_get_dc_info_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
+#ifdef CONFIG_CTP_DPST
 static int psb_hist_enable_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 static int psb_hist_status_ioctl(struct drm_device *dev, void *data,
@@ -498,6 +512,7 @@ static int psb_gamma_ioctl(struct drm_device *dev, void *data,
 			   struct drm_file *file_priv);
 static int psb_dpst_bl_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file_priv);
+#endif
 static int psb_dpu_query_ioctl(struct drm_device *dev, void *data,
 			       struct drm_file *file_priv);
 static int psb_dpu_dsr_on_ioctl(struct drm_device *dev, void *data,
@@ -538,8 +553,10 @@ static int psb_enable_ied_session_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 static int psb_disable_ied_session_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
+#ifdef CONFIG_CTP_DPST
 extern int psb_dpst_get_level_ioctl(struct drm_device *dev, void *data,
 		struct drm_file *file_priv);
+#endif
 
 /* wrapper for PVR ioctl functions to avoid direct call */
 int PVRDRM_Dummy_ioctl2(struct drm_device *dev, void *arg,
@@ -600,7 +617,7 @@ int SYSPVRDBGDrivIoctl2(struct drm_device *dev, IMG_VOID *arg,
 #endif
 
 #define PSB_IOCTL_DEF(ioctl, func, flags) \
-	[DRM_IOCTL_NR(ioctl) - DRM_COMMAND_BASE] = {ioctl, flags, func}
+	[DRM_IOCTL_NR(ioctl) - DRM_COMMAND_BASE] = {ioctl, flags, func, ioctl}
 
 static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_KMS_OFF, psbfb_kms_off_ioctl,
@@ -639,6 +656,7 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(PVR_DRM_DISP_IOCTL, PVRDRM_Dummy_ioctl2, 0),
 	PSB_IOCTL_DEF(PVR_DRM_IS_MASTER_IOCTL, PVRDRMIsMaster2, DRM_MASTER),
 	PSB_IOCTL_DEF(PVR_DRM_UNPRIV_IOCTL, PVRDRMUnprivCmd2, DRM_UNLOCKED),
+#ifdef CONFIG_CTP_DPST
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_HIST_ENABLE,
 	psb_hist_enable_ioctl,
 	DRM_AUTH),
@@ -651,6 +669,7 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_GAMMA, psb_gamma_ioctl, DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_DPST_BL, psb_dpst_bl_ioctl, DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_DPST_LEVEL, psb_dpst_get_level_ioctl, DRM_AUTH),
+#endif
 #if defined(PDUMP)
 	PSB_IOCTL_DEF(PVR_DRM_DBGDRV_IOCTL, SYSPVRDBGDrivIoctl2, 0),
 #endif
@@ -1439,6 +1458,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	bdev = &dev_priv->bdev;
 
 	hdmi_state = 0;
+	drm_hdmi_hpd_auto = 0;
 	dev_priv->ied_enabled = false;
 	dev_priv->ied_context = NULL;
 	dev_priv->bhdmiconnected = false;
@@ -2388,6 +2408,7 @@ static int psb_dc_state_ioctl(struct drm_device *dev, void * data,
 	return -EINVAL;
 }
 
+#ifdef CONFIG_CTP_DPST
 static int psb_dpst_bl_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file_priv)
 {
@@ -2402,6 +2423,7 @@ static int psb_dpst_bl_ioctl(struct drm_device *dev, void *data,
 #endif
 	return 0;
 }
+#endif
 
 static int psb_adb_ioctl(struct drm_device *dev, void *data,
 			 struct drm_file *file_priv)
@@ -2418,6 +2440,7 @@ static int psb_adb_ioctl(struct drm_device *dev, void *data,
 	return 0;
 }
 
+#ifdef CONFIG_CTP_DPST
 static int psb_hist_enable_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv)
 {
@@ -2634,6 +2657,7 @@ static int psb_update_guard_ioctl(struct drm_device *dev, void *data,
 
 	return 0;
 }
+#endif
 
 static int psb_mode_operation_ioctl(struct drm_device *dev, void *data,
 				    struct drm_file *file_priv)
@@ -3902,6 +3926,7 @@ static long psb_unlocked_ioctl(struct file *filp, unsigned int cmd,
 	return ret;
 }
 
+#ifdef DISPLAY_DRIVER_DEBUG_INTERFACE
 static int psb_blc_proc_show(struct seq_file *seq, void *v)
 {
 	struct drm_minor *minor = (struct drm_minor *) seq->private;
@@ -3923,7 +3948,11 @@ static int psb_blc_proc_show(struct seq_file *seq, void *v)
 
 static int psb_blc_proc_open(struct inode *inode, struct file *file)
 {
-	return single_open(file, psb_blc_proc_show, PDE(inode)->data);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+	return single_open(file, psb_blc_proc_show, PDE(inode));
+#else
+	return single_open(file, psb_blc_proc_show, PDE_DATA(inode));
+#endif
 }
 
 static const struct file_operations psb_blc_proc_fops = {
@@ -4464,18 +4493,135 @@ static int csc_control_write(struct file *file, const char *buffer,
 	return count;
 }
 
-/* When a client dies:
- *    - Check for and clean up flipped page state
- */
-void psb_driver_preclose(struct drm_device *dev, struct drm_file *priv)
+#ifdef CONFIG_SUPPORT_HDMI
+int gpio_control_read(char *buf, char **start, off_t offset, int request,
+				     int *eof, void *data)
 {
+	unsigned int value = 0;
+	unsigned int pin_num = otm_hdmi_get_hpd_pin();
+	if (pin_num)
+		value = gpio_get_value(pin_num);
+
+	printk(KERN_ALERT "read pin_num: %8d value:%8d\n", pin_num, value);
+	return 0;
 }
 
-static void psb_remove(struct pci_dev *pdev)
+int gpio_control_write(struct file *file, const char *buffer,
+				      unsigned long count, void *data)
 {
-	struct drm_device *dev = pci_get_drvdata(pdev);
-	drm_put_dev(dev);
+	char buf[2];
+	int  gpio_control;
+	int result = 0;
+	unsigned int pin_num = otm_hdmi_get_hpd_pin();
+	bool auto_state = drm_hdmi_hpd_auto;
+
+	if (!pin_num)
+		return -EINVAL;
+
+	if (count != sizeof(buf)) {
+		return -EINVAL;
+	} else {
+		if (copy_from_user(buf, buffer, count))
+			return -EINVAL;
+		if (buf[count-1] != '\n')
+			return -EINVAL;
+		gpio_control = buf[0] - '0';
+
+		printk(KERN_ALERT "GPIO set pin:%8d\n", pin_num);
+		printk(KERN_ALERT "value:%8d\n", gpio_control);
+
+		switch (gpio_control) {
+		case 0x0:
+			result = gpio_direction_output(pin_num, 0);
+			otm_hdmi_override_cable_status(false, auto_state);
+			if (result) {
+				printk(KERN_ALERT "Failed set GPIO as output\n");
+				return -EINVAL;
+			}
+			break;
+		case 0x1:
+			result = gpio_direction_output(pin_num, 0);
+			otm_hdmi_override_cable_status(true, auto_state);
+			if (result) {
+				printk(KERN_ALERT "Failed set GPIO as output\n");
+				return -EINVAL;
+			}
+			break;
+		default:
+			printk(KERN_ALERT "invalied parameters\n");
+		}
+
+		result = gpio_direction_input(pin_num);
+		if (result) {
+			printk(KERN_ALERT "Failed set GPIO as input\n");
+			return -EINVAL;
+		}
+
+	}
+	return count;
 }
+#endif
+
+#if !(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+static const struct file_operations psb_gpio_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = gpio_control_read,
+       .write = gpio_control_write,
+};
+
+static const struct file_operations psb_ospm_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = psb_ospm_read,
+       .write = psb_ospm_write,
+};
+
+static const struct file_operations psb_rtpm_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = psb_rtpm_read,
+       .write = psb_rtpm_write,
+};
+
+static const struct file_operations psb_display_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = psb_display_register_read,
+       .write = psb_display_register_write,
+};
+
+static const struct file_operations psb_panel_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = psb_panel_register_read,
+       .write = psb_panel_register_write,
+};
+
+static const struct file_operations psb_csc_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = csc_control_read,
+       .write = csc_control_write,
+ };
+#endif
+
+#ifdef CONFIG_SUPPORT_HDMI
+static int psb_hdmi_proc_init(struct drm_minor *minor)
+{
+	struct proc_dir_entry *gpio_setting;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+	gpio_setting = create_proc_entry(GPIO_PROC_ENTRY,
+				0644, minor->proc_root);
+#else
+        gpio_setting = proc_create_data(GPIO_PROC_ENTRY,
+                                0644, minor->proc_root, &psb_gpio_proc_fops, minor);
+#endif
+	if (!gpio_setting)
+		return -1;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+	gpio_setting->write_proc = gpio_control_write;
+	gpio_setting->read_proc = gpio_control_read;
+	gpio_setting->data = (void *)minor;
+#endif
+
+	return 0;
+}
+#endif
 
 static int psb_proc_init(struct drm_minor *minor)
 {
@@ -4485,6 +4631,8 @@ static int psb_proc_init(struct drm_minor *minor)
 	struct proc_dir_entry *ent_display_status;
 	struct proc_dir_entry *ent_panel_status;
 	struct proc_dir_entry *csc_setting;
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	ent = create_proc_entry(OSPM_PROC_ENTRY, 0644, minor->proc_root);
 	rtpm = create_proc_entry(RTPM_PROC_ENTRY, 0644, minor->proc_root);
 	ent_display_status = create_proc_entry(DISPLAY_PROC_ENTRY, 0644, minor->proc_root);
@@ -4492,10 +4640,21 @@ static int psb_proc_init(struct drm_minor *minor)
 			 0644, minor->proc_root);
 	ent1 = proc_create_data(BLC_PROC_ENTRY, 0, minor->proc_root, &psb_blc_proc_fops, minor);
 	csc_setting = create_proc_entry(CSC_PROC_ENTRY, 0644, minor->proc_root);
+#else
+        ent = proc_create_data(OSPM_PROC_ENTRY, 0644, minor->proc_root, &psb_ospm_proc_fops, minor);
+        rtpm = proc_create_data(RTPM_PROC_ENTRY, 0644, minor->proc_root, &psb_rtpm_proc_fops, minor);
+        ent_display_status = proc_create_data(DISPLAY_PROC_ENTRY, 0644, minor->proc_root,
+                 &psb_display_proc_fops, minor);
+        ent_panel_status = proc_create_data(PANEL_PROC_ENTRY, 0644, minor->proc_root,
+                &psb_panel_proc_fops, minor);
+        ent1 = proc_create_data(BLC_PROC_ENTRY, 0, minor->proc_root, &psb_blc_proc_fops, minor);
+        csc_setting = proc_create_data(CSC_PROC_ENTRY, 0644, minor->proc_root, &psb_csc_proc_fops, minor);
+#endif
 
 	if (!ent || !ent1 || !rtpm || !ent_display_status || !ent_panel_status
-		 || !csc_setting)
+		|| !csc_setting)
 		return -1;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	ent->read_proc = psb_ospm_read;
 	ent->write_proc = psb_ospm_write;
 	ent->data = (void *)minor;
@@ -4510,6 +4669,11 @@ static int psb_proc_init(struct drm_minor *minor)
 	csc_setting->write_proc = csc_control_write;
 	csc_setting->read_proc = csc_control_read;
 	csc_setting->data = (void *)minor;
+#endif
+#ifdef CONFIG_SUPPORT_HDMI
+	psb_hdmi_proc_init(minor);
+#endif
+
 	return 0;
 }
 
@@ -4518,7 +4682,24 @@ static void psb_proc_cleanup(struct drm_minor *minor)
 	remove_proc_entry(OSPM_PROC_ENTRY, minor->proc_root);
 	remove_proc_entry(RTPM_PROC_ENTRY, minor->proc_root);
 	remove_proc_entry(BLC_PROC_ENTRY, minor->proc_root);
+#ifdef CONFIG_SUPPORT_HDMI
+	remove_proc_entry(GPIO_PROC_ENTRY, minor->proc_root);
+#endif
 	return;
+}
+#endif /* DISPLAY_DRIVER_DEBUG_INTERFACE */
+
+/* When a client dies:
+ *    - Check for and clean up flipped page state
+ */
+void psb_driver_preclose(struct drm_device *dev, struct drm_file *priv)
+{
+}
+
+static void psb_remove(struct pci_dev *pdev)
+{
+	struct drm_device *dev = pci_get_drvdata(pdev);
+	drm_put_dev(dev);
 }
 
 static const struct dev_pm_ops psb_pm_ops = {
@@ -4814,7 +4995,9 @@ static int __init psb_init(void)
 	int ret;
 
 #if defined(MODULE) && defined(CONFIG_NET)
+#ifdef CONFIG_SUPPORT_HDMI
 	psb_kobject_uevent_init();
+#endif
 #endif
 
 #if 0

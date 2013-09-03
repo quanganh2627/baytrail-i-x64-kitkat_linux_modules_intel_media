@@ -82,7 +82,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(SUPPORT_DRM)
 
-#include "pvr_drm_shared.h"
 #include "pvr_drm.h"
 
 #else /* defined(SUPPORT_DRM) */

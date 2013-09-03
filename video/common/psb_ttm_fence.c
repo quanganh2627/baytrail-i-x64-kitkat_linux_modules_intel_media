@@ -29,7 +29,7 @@
 #include <linux/sched.h>
 
 #include <drm/drmP.h>
-
+#include "psb_drm.h"
 /*
  * Simple implementation for now.
  */
@@ -563,6 +563,7 @@ void ttm_fence_object_unref(struct ttm_fence_object **p_fence)
  * Placement / BO sync object glue.
  */
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 bool ttm_fence_sync_obj_signaled(void *sync_obj, void *sync_arg)
 {
 	struct ttm_fence_object *fence = (struct ttm_fence_object *)sync_obj;
@@ -570,7 +571,17 @@ bool ttm_fence_sync_obj_signaled(void *sync_obj, void *sync_arg)
 
 	return ttm_fence_object_signaled(fence, fence_types);
 }
+#else
+bool ttm_fence_sync_obj_signaled(void *sync_obj)
+{
+	struct ttm_fence_object *fence = (struct ttm_fence_object *)sync_obj;
+	uint32_t fence_types = _PSB_FENCE_TYPE_EXE;
 
+	return ttm_fence_object_signaled(fence, fence_types);
+}
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 int ttm_fence_sync_obj_wait(void *sync_obj, void *sync_arg,
 			    bool lazy, bool interruptible)
 {
@@ -579,7 +590,18 @@ int ttm_fence_sync_obj_wait(void *sync_obj, void *sync_arg,
 
 	return ttm_fence_object_wait(fence, lazy, interruptible, fence_types);
 }
+#else
+int ttm_fence_sync_obj_wait(void *sync_obj,
+			    bool lazy, bool interruptible)
+{
+	struct ttm_fence_object *fence = (struct ttm_fence_object *)sync_obj;
+	uint32_t fence_types = _PSB_FENCE_TYPE_EXE;
 
+	return ttm_fence_object_wait(fence, lazy, interruptible, fence_types);
+}
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 int ttm_fence_sync_obj_flush(void *sync_obj, void *sync_arg)
 {
 	struct ttm_fence_object *fence = (struct ttm_fence_object *)sync_obj;
@@ -587,6 +609,15 @@ int ttm_fence_sync_obj_flush(void *sync_obj, void *sync_arg)
 
 	return ttm_fence_object_flush(fence, fence_types);
 }
+#else
+int ttm_fence_sync_obj_flush(void *sync_obj)
+{
+	struct ttm_fence_object *fence = (struct ttm_fence_object *)sync_obj;
+	uint32_t fence_types = _PSB_FENCE_TYPE_EXE;
+
+	return ttm_fence_object_flush(fence, fence_types);
+}
+#endif
 
 void ttm_fence_sync_obj_unref(void **sync_obj)
 {

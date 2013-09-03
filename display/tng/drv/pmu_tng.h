@@ -174,4 +174,5 @@
 #define DEBUG_PM_CMD 1
 #endif
 
+int pmu_set_power_state_tng(u32 reg_pm0, u32 si_mask, u32 ns_mask);
 #endif /* ifndef _PMU_TNG_H_ */

@@ -32,6 +32,9 @@
 #define TOPAZHP_IRQ_ENABLED
 #define TOPAZHP_PIPE_NUM 2
 
+#define _MRFLD_B0_A_ 0
+#define _MRFLD_B0_   0
+
 #define TNG_IS_H264_ENC(codec) \
 	(codec == IMG_CODEC_H264_NO_RC || \
 	codec == IMG_CODEC_H264_VBR  || \
@@ -57,6 +60,15 @@
 
 #define MAX_CMD_SIZE		4096
 
+#define SHIFT_MTX_MSG_PRIORITY          (7)
+#define MASK_MTX_MSG_PRIORITY           (0x1 << SHIFT_MTX_MSG_PRIORITY)
+#define SHIFT_MTX_MSG_CORE                      (8)
+#define MASK_MTX_MSG_CORE                       (0x7f << SHIFT_MTX_MSG_CORE)
+#define SHIFT_MTX_MSG_WB_INTERRUPT      (15)
+#define MASK_MTX_MSG_WB_INTERRUPT       (0x1 << SHIFT_MTX_MSG_WB_INTERRUPT)
+#define SHIFT_MTX_MSG_COUNT                     (16)
+#define MASK_MTX_MSG_COUNT                      (0xffff << SHIFT_MTX_MSG_COUNT)
+
 /*#define VERIFYFW*/
 /*#define VERIFY_CONTEXT_SWITCH*/
 
@@ -79,7 +91,6 @@ struct tng_topaz_cmd_queue {
 	uint32_t sequence;
 };
 
-#define SECURE_ALING 16
 #define SECURE_VRL_HEADER 728
 #define SECURE_FIP_HEADER 296
 
@@ -141,19 +152,12 @@ struct tng_topaz_private {
 
 	struct ttm_buffer_object *topaz_bo; /* 4K->2K/2K for writeback/sync */
 	struct ttm_bo_kmap_obj topaz_bo_kmap;
-#if 0
-	uint32_t wb_handle[MAX_CONTEXT_CNT];
-	struct ttm_buffer_object *wb_bo[MAX_CONTEXT_CNT];
-	struct ttm_bo_kmap_obj wb_bo_kmap[MAX_CONTEXT_CNT];
-	uint32_t wb_addr[MAX_CONTEXT_CNT][WB_FIFO_SIZE];
-#endif
+
 	uint32_t *topaz_mtx_wb;
 	uint32_t topaz_wb_offset;
 	uint32_t *topaz_sync_addr;
 	uint32_t topaz_sync_offset;
 	uint32_t topaz_cmd_count;
-	uint32_t high_cmd_count;
-	uint32_t low_cmd_count;
 	uint32_t core_id;
 	uint32_t topaz_wb_received;
 	uint32_t topaz_mtx_saved;
@@ -178,32 +182,10 @@ struct tng_topaz_private {
 	/* JPEG ISSUEBUF cmd count */
 	uint32_t issuebuf_cmd_count;
 
-#if 0
-	/* Firmware data section offset and size */
-	uint32_t mtx_debug_val;
-	uint32_t mtx_bank_size;
-	uint32_t mtx_ram_size;
-	uint32_t fw_data_dma_size[MAX_CONTEXT_CNT];
-	uint32_t fw_data_dma_offset[MAX_CONTEXT_CNT];
-#endif
 	/* Context parameters */
 	struct psb_video_ctx *cur_context;
 	struct psb_video_ctx *irq_context;
-#if 0
-	/* If this flag is set, bypass context saving
-	in NEW_CODEC and LEAVE_LOWPOWER */
-	int bypass_saving_ctx;
-	uint32_t ctx_cnt;
-	int context[MAX_CONTEXT_CNT];
-	struct file *ctx_list[MAX_CONTEXT_CNT];
-	struct ttm_buffer_object *data_saving_bo[MAX_CONTEXT_CNT];
-	/*struct ttm_bo_kmap_obj data_saving_kmap;*/
-	uint32_t data_saving_buf_size[MAX_CONTEXT_CNT];
-	struct ttm_buffer_object *reg_saving_bo[MAX_CONTEXT_CNT];
-	/*struct ttm_bo_kmap_obj reg_saving_kmap[MAX_CONTEXT_CNT];*/
-	uint32_t reg_saving_buf_size[MAX_CONTEXT_CNT];
-	uint32_t ctx_status[MAX_CONTEXT_CNT];
-#endif
+
 	/* topaz suspend work queue */
 	struct drm_device *dev;
 	struct delayed_work topaz_suspend_work;
@@ -279,8 +261,7 @@ uint32_t tng_wait_for_ctrl(struct drm_device *dev,
 
 int mtx_upload_fw(struct drm_device *dev,
 		  uint32_t codec,
-		  struct psb_video_ctx *video_ctx,
-		  uint32_t is_restore);
+		  struct psb_video_ctx *video_ctx);
 
 int32_t mtx_dma_read(struct drm_device *dev,
 		struct ttm_buffer_object *dst_bo,

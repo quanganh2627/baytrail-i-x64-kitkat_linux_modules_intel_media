@@ -270,4 +270,13 @@ otm_hdmi_ret_t ipil_get_pixel_clock_range(unsigned int *pc_min,
  */
 bool ipil_hdmi_is_preferred_mode(int hdisplay, int vdisplay, int refresh);
 
+/**
+ * Description: disable all planes on pipe
+ *
+ * @pipe: pipe ID
+ * @enable : true to enable planes; false to disable planes
+ *
+ */
+void ipil_enable_planes_on_pipe(uint32_t pipe, bool enable);
+
 #endif /* __IPIL_HDMI_H */

@@ -40,8 +40,6 @@
 #include <linux/module.h>
 #endif
 
-#ifdef PSB_MSVDX_FW_LOADED_BY_HOST
-
 #define UPLOAD_FW_BY_DMA 1
 #define STACKGUARDWORD          0x10101010
 #define MSVDX_MTX_DATA_LOCATION 0x82880000
@@ -76,10 +74,18 @@ int32_t psb_msvdx_alloc_fw_bo(struct drm_psb_private *dev_priv)
 	PSB_DEBUG_INIT("MSVDX: MTX mem size is 0x%08x bytes, allocate firmware BO size 0x%08x\n", msvdx_priv->mtx_mem_size,
 		       msvdx_priv->mtx_mem_size + 4096);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	ret = ttm_buffer_object_create(&dev_priv->bdev, msvdx_priv->mtx_mem_size + 4096, /* DMA may run over a page */
 				       ttm_bo_type_kernel,
 				       DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
 				       0, 0, 0, NULL, &msvdx_priv->fw);
+#else
+	ret = ttm_buffer_object_create(&dev_priv->bdev, msvdx_priv->mtx_mem_size + 4096, /* DMA may run over a page */
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU | TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL, &msvdx_priv->fw);
+#endif
+
 	if (ret) {
 		DRM_ERROR("MSVDX: allocate firmware BO fail\n");
 	}
@@ -753,5 +759,3 @@ int psb_setup_fw(struct drm_device *dev)
 out:
 	return ret;
 }
-
-#endif

@@ -623,6 +623,33 @@ otm_hdmi_ret_t otm_hdmi_hpd_deinit(void)
 }
 
 /**
+ * otm_hdmi_get_hpd_pin - get hdmi hpd pin number.
+ *
+ * No input arguments
+ *
+ * Returns - pin number
+ */
+unsigned int otm_hdmi_get_hpd_pin(void)
+{
+	unsigned int result = 0;
+	result = ps_hdmi_get_hpd_pin();
+	return result;
+}
+
+/**
+ * otm_hdmi_override_cable_status - override hdmi hpd cable status.
+ *
+ * Input: override state and auto test state
+ */
+void otm_hdmi_override_cable_status(bool state, bool auto_state)
+{
+	ps_hdmi_override_cable_status(state, auto_state);
+	return;
+}
+
+
+
+/**
  * This function fills the given table with timings
  * @unit_id	: hdmi unit revision id
  * @table	: handle to table to be filled
@@ -850,21 +877,15 @@ bool otm_hdmi_power_rails_off(void)
 }
 
 /* turn HDMI power islands on */
-bool otm_hdmi_power_islands_on(int hw_island)
+bool otm_hdmi_power_islands_on()
 {
-	return ps_hdmi_power_islands_on(hw_island);
+	return ps_hdmi_power_islands_on();
 }
 
 /* turn HDMI power islands off */
-void otm_hdmi_power_islands_off(int hw_island)
+void otm_hdmi_power_islands_off()
 {
-	ps_hdmi_power_islands_off(hw_island);
-}
-
-/* control HDMI power islands */
-void otm_hdmi_pmu_nc_set_power_state(int islands, int state_type, int reg)
-{
-	ps_hdmi_pmu_nc_set_power_state(islands, state_type, reg);
+	ps_hdmi_power_islands_off();
 }
 
 /* control HDMI vblank interrupt */
@@ -1471,6 +1492,10 @@ otm_hdmi_ret_t otm_hdmi_declare_attributes(pd_attr_declare_t declare,
 	PD_DECLARE_ATTRIBUTE_UINT(declare, table,
 		OTM_HDMI_ATTR_ID_HDCP_RI_RETRY,
 		PD_ATTR_FLAGS_RWS, get_name, 40, 0, 50);
+
+	PD_DECLARE_ATTRIBUTE_UINT(declare, table,
+		OTM_HDMI_ATTR_ID_HDCP_DELAY,
+		PD_ATTR_FLAGS_RWS, get_name, 500, 0, 1000);
 
 	LOG_EXIT(LOG_LEVEL_HIGH, rc);
 	return rc;
