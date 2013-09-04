@@ -46,7 +46,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "ttrace.h"
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 #include <linux/sw_sync.h>
+#else
+#include <sw_sync.h>
+#endif
+
 static struct sync_fence *AllocQueueFence(struct sw_sync_timeline *psTimeline, IMG_UINT32 ui32FenceValue, const char *szName)
 {
 	struct sync_fence *psFence = IMG_NULL;
@@ -1143,7 +1148,7 @@ PVRSRV_ERROR PVRSRVProcessCommand(SYS_DATA			*psSysData,
 	*/
 	if (psDeviceCommandData[psCommand->CommandType].pfnCmdProc((IMG_HANDLE)psCmdCompleteData,
 															   (IMG_UINT32)psCommand->uDataSize,
-															   psCommand->pvData) == IMG_FALSE)
+															   psCommand->pvData, bFlush) == IMG_FALSE)
 	{
 		/*
 			clean-up:
