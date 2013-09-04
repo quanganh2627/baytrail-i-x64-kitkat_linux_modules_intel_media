@@ -253,6 +253,8 @@ struct ospm_power_island *get_island_ptr(u32 hw_island)
 	return p_island;
 }
 
+static bool power_down_island(struct ospm_power_island *p_island);
+
 /**
  * power_up_island
  *
@@ -277,8 +279,12 @@ static bool power_up_island(struct ospm_power_island *p_island)
 		ret = p_island->p_funcs->power_up(g_ospm_data->dev, p_island);
 		if (ret)
 			p_island->island_state = OSPM_POWER_ON;
-		else
+		else {
+			OSPM_DPF("Power up island %x failed!\n", p_island->island);
+			if (p_island->p_dependency)
+				power_down_island(p_island->p_dependency);
 			return ret;
+		}
 	}
 
 	/* increment the ref count */
