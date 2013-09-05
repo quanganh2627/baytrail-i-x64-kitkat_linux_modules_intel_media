@@ -1,5 +1,6 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.38.4.9
+@File
+@Title          Functions for creating debugfs directories and entries.
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,33 +40,44 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_38_4_9_H_
-#define _RGXCORE_KM_1_38_4_9_H_
+#if !defined(__PVR_DEBUGFS_H__)
+#define __PVR_DEBUGFS_H__
 
-/***** Automatically generated file (6/17/2013 9:48:09 AM): Do not edit manually ********************/
-/***** Timestamp:  (6/17/2013 9:48:09 AM)************************************************************/
-/***** CS: @2160803 ******************************************************************/
+#include <linux/debugfs.h>
+#include <linux/seq_file.h>
 
+#include "img_types.h"
 
-/******************************************************************************
- * BVNC = 1.38.4.9 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 38
-#define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 9
+typedef ssize_t (PVRSRV_ENTRY_WRITE_FUNC)(const char __user *pszBuffer,
+					  size_t uiCount,
+					  loff_t uiPosition,
+					  void *pvData);
 
-/******************************************************************************
- * Errata 
- *****************************************************************************/
+typedef IMG_BOOL (PVRSRV_GET_NEXT_STAT_FUNC)(void *pvStatPtr,
+					     IMG_UINT32 uiStatNumber,
+					     IMG_INT32 *piStatData,
+					     IMG_CHAR **ppszStatFmtText);
 
+int PVRDebugFSInit(void);
+void PVRDebugFSDeInit(void);
 
+int PVRDebugFSCreateEntryDir(IMG_CHAR *pszName,
+			     struct dentry *psParentDir,
+			     struct dentry **ppsDir);
+void PVRDebugFSRemoveEntryDir(struct dentry *psDir);
 
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
+int PVRDebugFSCreateEntry(const char *pszName,
+			  void *pvDir,
+			  struct seq_operations *psReadOps,
+			  PVRSRV_ENTRY_WRITE_FUNC *pfnWrite,
+			  void *pvData,
+			  struct dentry **ppsEntry);
+void PVRDebugFSRemoveEntry(struct dentry *psEntry);
 
+void *PVRDebugFSCreateStatisticEntry(const char *pszName,
+				     void *pvDir,
+				     PVRSRV_GET_NEXT_STAT_FUNC *pfnGetNextStat,
+				     void *pvData);
+void PVRDebugFSRemoveStatisticEntry(void *pvStatEntry);
 
-
-#endif /* _RGXCORE_KM_1_38_4_9_H_ */
+#endif /* !defined(__PVR_DEBUGFS_H__) */

@@ -84,6 +84,7 @@ PVRSRVBridgeRGXInitAllocFWImgMem(IMG_UINT32 ui32BridgeID,
 	IMG_HANDLE hDevNodeInt = IMG_NULL;
 	DEVMEM_EXPORTCOOKIE * psFWCodeAllocServerExportCookieInt = IMG_NULL;
 	DEVMEM_EXPORTCOOKIE * psFWDataAllocServerExportCookieInt = IMG_NULL;
+	DEVMEM_EXPORTCOOKIE * psFWCorememAllocServerExportCookieInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXINIT_RGXINITALLOCFWIMGMEM);
 
@@ -110,10 +111,14 @@ PVRSRVBridgeRGXInitAllocFWImgMem(IMG_UINT32 ui32BridgeID,
 					hDevNodeInt,
 					psRGXInitAllocFWImgMemIN->uiFWCodeLen,
 					psRGXInitAllocFWImgMemIN->uiFWDataLen,
+					psRGXInitAllocFWImgMemIN->uiFWCoremem,
 					&psFWCodeAllocServerExportCookieInt,
 					&psRGXInitAllocFWImgMemOUT->sFWCodeDevVAddrBase,
 					&psFWDataAllocServerExportCookieInt,
-					&psRGXInitAllocFWImgMemOUT->sFWDataDevVAddrBase);
+					&psRGXInitAllocFWImgMemOUT->sFWDataDevVAddrBase,
+					&psFWCorememAllocServerExportCookieInt,
+					&psRGXInitAllocFWImgMemOUT->sFWCorememDevVAddrBase,
+					&psRGXInitAllocFWImgMemOUT->sFWCorememMetaVAddrBase);
 	/* Exit early if bridged call fails */
 	if(psRGXInitAllocFWImgMemOUT->eError != PVRSRV_OK)
 	{
@@ -133,6 +138,16 @@ PVRSRVBridgeRGXInitAllocFWImgMem(IMG_UINT32 ui32BridgeID,
 	psRGXInitAllocFWImgMemOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
 							&psRGXInitAllocFWImgMemOUT->hFWDataAllocServerExportCookie,
 							(IMG_HANDLE) psFWDataAllocServerExportCookieInt,
+							PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
+							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							);
+	if (psRGXInitAllocFWImgMemOUT->eError != PVRSRV_OK)
+	{
+		goto RGXInitAllocFWImgMem_exit;
+	}
+	psRGXInitAllocFWImgMemOUT->eError = PVRSRVAllocHandle(psConnection->psHandleBase,
+							&psRGXInitAllocFWImgMemOUT->hFWCorememAllocServerExportCookie,
+							(IMG_HANDLE) psFWCorememAllocServerExportCookieInt,
 							PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE,
 							PVRSRV_HANDLE_ALLOC_FLAG_NONE
 							);
@@ -212,6 +227,7 @@ PVRSRVBridgeRGXInitFirmware(IMG_UINT32 ui32BridgeID,
 					ui32RGXFWAlignChecksInt,
 					psRGXInitFirmwareIN->ui32ConfigFlags,
 					psRGXInitFirmwareIN->ui32LogType,
+					psRGXInitFirmwareIN->ui32FilterFlags,
 					&psRGXInitFirmwareIN->sClientBVNC);
 
 
@@ -329,6 +345,7 @@ PVRSRVBridgeRGXInitDevPart2(IMG_UINT32 ui32BridgeID,
 	IMG_HANDLE hDevNodeInt = IMG_NULL;
 	RGX_INIT_COMMAND *psInitScriptInt = IMG_NULL;
 	RGX_INIT_COMMAND *psDbgScriptInt = IMG_NULL;
+	RGX_INIT_COMMAND *psDbgBusScriptInt = IMG_NULL;
 	RGX_INIT_COMMAND *psDeinitScriptInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXINIT_RGXINITDEVPART2);
@@ -378,6 +395,26 @@ PVRSRVBridgeRGXInitDevPart2(IMG_UINT32 ui32BridgeID,
 			}
 	
 	{
+		psDbgBusScriptInt = OSAllocMem(RGX_MAX_DBGBUS_COMMANDS * sizeof(RGX_INIT_COMMAND));
+		if (!psDbgBusScriptInt)
+		{
+			psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+	
+			goto RGXInitDevPart2_exit;
+		}
+	}
+
+			/* Copy the data over */
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psRGXInitDevPart2IN->psDbgBusScript, RGX_MAX_DBGBUS_COMMANDS * sizeof(RGX_INIT_COMMAND))
+				|| (OSCopyFromUser(NULL, psDbgBusScriptInt, psRGXInitDevPart2IN->psDbgBusScript,
+				RGX_MAX_DBGBUS_COMMANDS * sizeof(RGX_INIT_COMMAND)) != PVRSRV_OK) )
+			{
+				psRGXInitDevPart2OUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
+
+				goto RGXInitDevPart2_exit;
+			}
+	
+	{
 		psDeinitScriptInt = OSAllocMem(RGX_MAX_DEINIT_COMMANDS * sizeof(RGX_INIT_COMMAND));
 		if (!psDeinitScriptInt)
 		{
@@ -416,8 +453,15 @@ PVRSRVBridgeRGXInitDevPart2(IMG_UINT32 ui32BridgeID,
 					hDevNodeInt,
 					psInitScriptInt,
 					psDbgScriptInt,
+					psDbgBusScriptInt,
 					psDeinitScriptInt,
-					psRGXInitDevPart2IN->ui32KernelCatBase,
+					psRGXInitDevPart2IN->ui32ui32KernelCatBaseIdReg,
+					psRGXInitDevPart2IN->ui32KernelCatBaseId,
+					psRGXInitDevPart2IN->ui32ui32KernelCatBaseReg,
+					psRGXInitDevPart2IN->ui32ui32KernelCatBaseWordSize,
+					psRGXInitDevPart2IN->ui32ui32KernelCatBaseAlignShift,
+					psRGXInitDevPart2IN->ui32ui32KernelCatBaseShift,
+					psRGXInitDevPart2IN->ui64ui64KernelCatBaseMask,
 					psRGXInitDevPart2IN->ui32DeviceFlags,
 					psRGXInitDevPart2IN->ui32RGXActivePMConf);
 
@@ -428,6 +472,8 @@ RGXInitDevPart2_exit:
 		OSFreeMem(psInitScriptInt);
 	if (psDbgScriptInt)
 		OSFreeMem(psDbgScriptInt);
+	if (psDbgBusScriptInt)
+		OSFreeMem(psDbgBusScriptInt);
 	if (psDeinitScriptInt)
 		OSFreeMem(psDeinitScriptInt);
 

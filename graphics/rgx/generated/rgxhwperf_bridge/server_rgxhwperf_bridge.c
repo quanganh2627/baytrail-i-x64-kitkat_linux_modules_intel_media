@@ -46,7 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "img_defs.h"
 
-#include "rgxdebug.h"
+#include "rgxhwperf.h"
 
 
 #include "common_rgxhwperf_bridge.h"

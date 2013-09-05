@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.37.4.4
+@File
+@Title          Resource Information (RI) Management
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    Client side part of RI management
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,34 +41,15 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_37_4_4_H_
-#define _RGXCORE_KM_1_37_4_4_H_
+#ifndef RI_TYPEDEFS_H
+#define RI_TYPEDEFS_H
 
-/***** Automatically generated file (6/17/2013 9:47:54 AM): Do not edit manually ********************/
-/***** Timestamp:  (6/17/2013 9:47:54 AM)************************************************************/
-/***** CS: @2141125 ******************************************************************/
+#include "img_types.h"
 
+#define RI_MAX_TEXT_LEN 80
 
-/******************************************************************************
- * BVNC = 1.37.4.4 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 37
-#define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 4
+typedef struct RI_SUBLIST_ENTRY RI_ENTRY;
+typedef RI_ENTRY* RI_HANDLE;
 
-/******************************************************************************
- * Errata 
- *****************************************************************************/
+#endif /* #ifndef RI_TYPEDEFS_H */
 
-#define FIX_HW_BRN_38344
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-
-
-#endif /* _RGXCORE_KM_1_37_4_4_H_ */

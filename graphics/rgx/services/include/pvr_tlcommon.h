@@ -52,8 +52,7 @@ extern "C" {
 
 
 /*! Handle type for stream descriptor objects as created by this API */
-typedef struct _PVRSRVTL_STREAM_DESC_* PVRSRVTL_SD;
-
+typedef IMG_HANDLE PVRSRVTL_SD;
 
 
 /*! Maximum stream name length including the null byte */
@@ -175,11 +174,13 @@ typedef enum _PVRSRVTL_PACKETTYPE_
 
 /*! Flags for use with PVRSRVTLOpenStream
  * 0x01 - Do not block in PVRSRVTLAcquireData() when no bytes are available
- * 0x02 - When the stream does not exist block in PVRSRVTLOpenStream() until it does
+ * 0x02 - When the stream does not exist wait for a bit (2s) in
+ *        PVRSRVTLOpenStream() and then exit with a timeout error if it still
+ *        does not exist.
  */
 #define PVRSRV_STREAM_FLAG_NONE                 (1U<<0)
 #define PVRSRV_STREAM_FLAG_ACQUIRE_NONBLOCKING  (1U<<1)
-#define PVRSRV_STREAM_FLAG_OPEN_BLOCKING        (1U<<2)
+#define PVRSRV_STREAM_FLAG_OPEN_WAIT            (1U<<2)
 
 #if defined (__cplusplus)
 }

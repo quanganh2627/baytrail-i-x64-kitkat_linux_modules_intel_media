@@ -924,7 +924,7 @@ PVRSRV_ERROR LMA_MMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 	PVR_UNREFERENCED_PARAMETER(psMemHandle);
 	PVR_UNREFERENCED_PARAMETER(uiSize);
 
-	PhysHeapDevPAddrToCpuPAddr(psDevNode->psPhysHeap, &sCpuPAddr, psDevPAddr);
+	PhysHeapDevPAddrToCpuPAddr(psDevNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL], &sCpuPAddr, psDevPAddr);
 	*pvPtr = OSMapPhysToLin(sCpuPAddr,
 							OSGetPageSize(),
 							0);
@@ -963,9 +963,10 @@ IMG_VOID LMA_MMUPxUnmap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 ******************************************************************************/
 static PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterDevice(PVRSRV_DEVICE_CONFIG *psDevConfig)
 {
-	PVRSRV_DATA			*psPVRSRVData = PVRSRVGetPVRSRVData();
-	PVRSRV_ERROR		eError;
-	PVRSRV_DEVICE_NODE	*psDeviceNode;
+	PVRSRV_DATA				*psPVRSRVData = PVRSRVGetPVRSRVData();
+	PVRSRV_ERROR			eError;
+	PVRSRV_DEVICE_NODE		*psDeviceNode;
+	PVRSRV_DEVICE_PHYS_HEAP	physHeapIndex;
 
 	/* Allocate device node */
 	psDeviceNode = OSAllocMem(sizeof(PVRSRV_DEVICE_NODE));
@@ -980,22 +981,28 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterDevice(PVRSRV_DEVICE_CONFIG *psDe
 	/* set device state */
 	psDeviceNode->eDevState = PVRSRV_DEVICE_STATE_INIT;
 
-	eError = PhysHeapAcquire(psDevConfig->ui32PhysHeapID, &psDeviceNode->psPhysHeap);
+	eError = PhysHeapAcquire(psDevConfig->aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL], &psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL]);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRegisterDevice : Failed to acquire physcial memory heap"));
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRegisterDevice : Failed to acquire PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL physical memory heap"));
+		goto e1;
+	}
+	eError = PhysHeapAcquire(psDevConfig->aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL], &psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL]);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRegisterDevice : Failed to acquire PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL physical memory heap"));
 		goto e1;
 	}
 
 	/* Do we have card memory? If so create an RA to manage it */
-	if (PhysHeapGetType(psDeviceNode->psPhysHeap) == PHYS_HEAP_TYPE_LMA)
+	if (PhysHeapGetType(psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL]) == PHYS_HEAP_TYPE_LMA)
 	{
 		RA_BASE_T uBase;
 		RA_LENGTH_T uSize;
 		IMG_CPU_PHYADDR sCpuPAddr;
 		IMG_UINT64 ui64Size;
 
-		eError = PhysHeapGetAddress(psDeviceNode->psPhysHeap, &sCpuPAddr);
+		eError = PhysHeapGetAddress(psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL], &sCpuPAddr);
 		if (eError != PVRSRV_OK)
 		{
 			/* We can only get here if there is a bug in this module */
@@ -1003,7 +1010,7 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterDevice(PVRSRV_DEVICE_CONFIG *psDe
 			return eError;
 		}
 
-		eError = PhysHeapGetSize(psDeviceNode->psPhysHeap, &ui64Size);
+		eError = PhysHeapGetSize(psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL], &ui64Size);
 		if (eError != PVRSRV_OK)
 		{
 			/* We can only get here if there is a bug in this module */
@@ -1015,7 +1022,7 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterDevice(PVRSRV_DEVICE_CONFIG *psDe
 		PVR_DPF((PVR_DBG_MESSAGE, "Creating RA for card memory 0x%016llx-0x%016llx",
 				 (IMG_UINT64) sCpuPAddr.uiAddr, sCpuPAddr.uiAddr + ui64Size));
 
-		OSSNPrintf(psDeviceNode->szRAName, sizeof(psDeviceNode->szRAName), 
+		OSSNPrintf(psDeviceNode->szRAName, sizeof(psDeviceNode->szRAName),
 											"%s card mem",
 											psDevConfig->pszName);
 
@@ -1034,7 +1041,7 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterDevice(PVRSRV_DEVICE_CONFIG *psDe
 						uSize,
 						0,					/* No flags */
 						IMG_NULL,			/* No private data */
-						OSGetPageSize(),	/* Use host page size, keeps things simple */
+						OSGetPageShift(),	/* Use host page size, keeps things simple */
 						IMG_NULL,			/* No Import */
 						IMG_NULL,			/* No free import */
 						IMG_NULL);			/* No import handle */
@@ -1049,31 +1056,40 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterDevice(PVRSRV_DEVICE_CONFIG *psDe
 		psDeviceNode->pfnMMUPxMap = LMA_MMUPxMap;
 		psDeviceNode->pfnMMUPxUnmap = LMA_MMUPxUnmap;
 		psDeviceNode->uiMMUPxLog2AllocGran = OSGetPageShift();
-		psDeviceNode->pfnCreateRamBackedPMR = PhysmemNewLocalRamBackedPMR;
 		psDeviceNode->ui32Flags = PRVSRV_DEVICE_FLAGS_LMA;
-
-		/*
-			FIXME: We might want PT memory to come from a different heap so it
-			would make sense to specify the HeapID for it, but need to think
-			if/how this would affect how we do the CPU <> Dev physical address
-			translation.
-		*/
-		psDeviceNode->pszMMUPxPDumpMemSpaceName = PhysHeapPDumpMemspaceName(psDeviceNode->psPhysHeap);
+		psDeviceNode->pfnCreateRamBackedPMR[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL] = PhysmemNewLocalRamBackedPMR;
 	}
 	else
 	{
-		PVR_DPF((PVR_DBG_MESSAGE, "===== OS System memory, no local card memory"));
+		PVR_DPF((PVR_DBG_MESSAGE, "===== OS System memory only, no local card memory"));
 
+		/* else we only have OS system memory */
 		psDeviceNode->pfnMMUPxAlloc = OSMMUPxAlloc;
 		psDeviceNode->pfnMMUPxFree = OSMMUPxFree;
 		psDeviceNode->pfnMMUPxMap = OSMMUPxMap;
 		psDeviceNode->pfnMMUPxUnmap = OSMMUPxUnmap;
-		psDeviceNode->uiMMUPxLog2AllocGran = OSGetPageShift();
-		psDeviceNode->pfnCreateRamBackedPMR = PhysmemNewOSRamBackedPMR;
-
-		/* See above FIXME */
-		psDeviceNode->pszMMUPxPDumpMemSpaceName = PhysHeapPDumpMemspaceName(psDeviceNode->psPhysHeap);
+		psDeviceNode->pfnCreateRamBackedPMR[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL] = PhysmemNewOSRamBackedPMR;
 	}
+
+	if (PhysHeapGetType(psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL]) == PHYS_HEAP_TYPE_LMA)
+	{
+		PVR_DPF((PVR_DBG_MESSAGE, "===== Local card memory only, no OS system memory"));
+		psDeviceNode->pfnCreateRamBackedPMR[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL] = PhysmemNewLocalRamBackedPMR;
+	}
+	else
+	{
+		PVR_DPF((PVR_DBG_MESSAGE, "===== OS System memory, 2nd phys heap"));
+		psDeviceNode->pfnCreateRamBackedPMR[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL] = PhysmemNewOSRamBackedPMR;
+	}
+
+	/*
+		FIXME: We might want PT memory to come from a different heap so it
+		would make sense to specify the HeapID for it, but need to think
+		if/how this would affect how we do the CPU <> Dev physical address
+		translation.
+	*/
+	psDeviceNode->pszMMUPxPDumpMemSpaceName = PhysHeapPDumpMemspaceName(psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL]);
+	psDeviceNode->uiMMUPxLog2AllocGran = OSGetPageShift();
 
 	/* Add the devnode to our list so we can unregister it later */
 	psPVRSRVData->apsRegisteredDevNodes[psPVRSRVData->ui32RegisteredDevices++] = psDeviceNode;
@@ -1095,6 +1111,7 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterDevice(PVRSRV_DEVICE_CONFIG *psDe
 		goto e3;
 	}
 
+
 	PVR_DPF((PVR_DBG_MESSAGE, "Registered device %d of type %d", psDeviceNode->sDevId.ui32DeviceIndex, psDeviceNode->sDevId.eDeviceType));
 	PVR_DPF((PVR_DBG_MESSAGE, "Register bank address = 0x%08lx", (unsigned long)psDevConfig->sRegsCpuPBase.uiAddr));
 	PVR_DPF((PVR_DBG_MESSAGE, "IRQ = %d", psDevConfig->ui32IRQ));
@@ -1112,8 +1129,14 @@ e3:
 		RA_Delete(psDeviceNode->psLocalDevMemArena);
 	}
 e2:
-	PhysHeapRelease(psDeviceNode->psPhysHeap);
 e1:
+	for(physHeapIndex=0; physHeapIndex < PVRSRV_DEVICE_PHYS_HEAP_LAST; physHeapIndex++)
+	{
+		if (psDeviceNode->apsPhysHeap[physHeapIndex])
+		{
+			PhysHeapRelease(psDeviceNode->apsPhysHeap[physHeapIndex]);
+		}
+	}
 	OSFreeMem(psDeviceNode);
 e0:
 	return eError;
@@ -1150,16 +1173,28 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterExtDevice(PVRSRV_DEVICE_NODE *psDeviceNo
 													IMG_UINT32 ui32PhysHeapID)
 {
 	PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();
+	PHYS_HEAP   *psPhysHeapTmp;
+	PVRSRV_DEVICE_PHYS_HEAP eDevPhysHeap;
 	PVRSRV_ERROR eError;
 
 	psDeviceNode->ui32RefCount = 1;
 
-	eError = PhysHeapAcquire(ui32PhysHeapID, &psDeviceNode->psPhysHeap);
+	eError = PhysHeapAcquire(ui32PhysHeapID, &psPhysHeapTmp);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRegisterExtDevice: Failed to acquire physcial memory heap"));
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRegisterExtDevice: Failed to acquire physical memory heap"));
 		goto e0;
-	}		
+	}
+	if (PhysHeapGetType(psPhysHeapTmp) == PHYS_HEAP_TYPE_LMA)
+	{
+		eDevPhysHeap = PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL;
+	}
+	else
+	{
+		eDevPhysHeap = PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL;
+	}
+	psDeviceNode->apsPhysHeap[eDevPhysHeap] = psPhysHeapTmp;
+
 	/* allocate a unique device id */
 	eError = AllocateDeviceID(psPVRSRVData, &psDeviceNode->sDevId.ui32DeviceIndex);
 	if (eError != PVRSRV_OK)
@@ -1177,7 +1212,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterExtDevice(PVRSRV_DEVICE_NODE *psDeviceNo
 
 	return PVRSRV_OK;
 e1:
-	PhysHeapRelease(psDeviceNode->psPhysHeap);
+	PhysHeapRelease(psDeviceNode->apsPhysHeap[eDevPhysHeap]);
 e0:
 	return eError;
 }
@@ -1185,10 +1220,17 @@ e0:
 IMG_VOID IMG_CALLCONV PVRSRVUnregisterExtDevice(PVRSRV_DEVICE_NODE *psDeviceNode)
 {
 	PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();
+	PVRSRV_DEVICE_PHYS_HEAP eDevPhysHeap;
 
 	List_PVRSRV_DEVICE_NODE_Remove(psDeviceNode);
 	(IMG_VOID)FreeDeviceID(psPVRSRVData, psDeviceNode->sDevId.ui32DeviceIndex);
-	PhysHeapRelease(psDeviceNode->psPhysHeap);
+	for (eDevPhysHeap = 0; eDevPhysHeap < PVRSRV_DEVICE_PHYS_HEAP_LAST; eDevPhysHeap++)
+	{
+		if (psDeviceNode->apsPhysHeap[eDevPhysHeap])
+		{
+			PhysHeapRelease(psDeviceNode->apsPhysHeap[eDevPhysHeap]);
+		}
+	}
 }
 
 static PVRSRV_ERROR PVRSRVFinaliseSystem_SetPowerState_AnyCb(PVRSRV_DEVICE_NODE *psDeviceNode, va_list va)
@@ -1453,8 +1495,9 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVAcquireDeviceDataKM (IMG_UINT32			ui32DevIndex,
 ******************************************************************************/
 static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDeviceNode)
 {
-	PVRSRV_DATA			*psPVRSRVData = PVRSRVGetPVRSRVData();
-	PVRSRV_ERROR		eError;
+	PVRSRV_DATA				*psPVRSRVData = PVRSRVGetPVRSRVData();
+	PVRSRV_DEVICE_PHYS_HEAP ePhysHeapIdx;
+	PVRSRV_ERROR			eError;
 
 	eError = PVRSRVPowerLock();
 	if (eError != PVRSRV_OK)
@@ -1504,7 +1547,13 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 	/* deallocate id and memory */
 	(IMG_VOID)FreeDeviceID(psPVRSRVData, psDeviceNode->sDevId.ui32DeviceIndex);
 
-	PhysHeapRelease(psDeviceNode->psPhysHeap);
+	for (ePhysHeapIdx = 0; ePhysHeapIdx < PVRSRV_DEVICE_PHYS_HEAP_LAST; ePhysHeapIdx++)
+	{
+		if (psDeviceNode->apsPhysHeap[ePhysHeapIdx])
+		{
+			PhysHeapRelease(psDeviceNode->apsPhysHeap[ePhysHeapIdx]);
+		}
+	}
 
 	OSFreeMem(psDeviceNode);
 	/*not nulling pointer, out of scope*/

@@ -71,6 +71,8 @@ typedef struct _CONNECTION_DATA_
 	IMG_HANDLE		hOsPrivateData;
 
 	IMG_PVOID		hSecureData;
+
+	IMG_HANDLE      hProcessStats;
 } CONNECTION_DATA;
 
 PVRSRV_ERROR PVRSRVConnectionConnect(IMG_PVOID *ppvPrivData, IMG_PVOID pvOSData);

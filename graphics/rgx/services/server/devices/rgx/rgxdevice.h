@@ -58,13 +58,39 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  ******************************************************************************
  * Device state flags
  *****************************************************************************/
-#define RGXKM_DEVICE_STATE_ZERO_FREELIST		(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed freelists */
+#define RGXKM_DEVICE_STATE_ZERO_FREELIST		(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed free lists */
+#define RGXKM_DEVICE_STATE_FTRACE_EN			(0x1 << 1)		/*!< Used to enable device FTrace thread to consume HWPerf data */
 
 #define RGXFWIF_GPU_STATS_WINDOW_SIZE_US					1000000
 #define RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE				10000
-#define RGXFWIF_GPU_STATS_NUMBER_OF_RENDERS_BETWEEN_RECALC	10
+
+/*!
+ ******************************************************************************
+ * GPU DVFS History CB
+ *****************************************************************************/
+
+#define RGX_GPU_DVFS_HIST_SIZE 100  /* History size must NOT be greater than 16384 (2^14) */
+
+typedef struct _RGX_GPU_DVFS_HIST_
+{
+	IMG_UINT32               ui32CurrentDVFSId;              /*!< Current history entry index */
+	IMG_UINT32				 aui32DVFSClockCB[RGX_GPU_DVFS_HIST_SIZE];   /*!< Circular buffer of DVFS clock history in Hz */
+} RGX_GPU_DVFS_HIST;
+
+typedef struct _RGXFWIF_GPU_UTIL_STATS_
+{
+	IMG_BOOL				bValid;				/* if TRUE, statistict are valid, otherwise there was not enough data to calculate the ratios */
+	IMG_UINT32				ui32GpuStatActive;	/* GPU active  ratio expressed in 0,01% units */
+	IMG_UINT32				ui32GpuStatBlocked; /* GPU blocked ratio expressed in 0,01% units */
+	IMG_UINT32				ui32GpuStatIdle;    /* GPU idle    ratio expressed in 0,01% units */
+} RGXFWIF_GPU_UTIL_STATS;
 
 typedef struct _PVRSRV_STUB_PBDESC_ PVRSRV_STUB_PBDESC;
+
+/*!
+ ******************************************************************************
+ * RGX Device info
+ *****************************************************************************/
 
 typedef struct _PVRSRV_RGXDEV_INFO_
 {
@@ -98,7 +124,13 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	DEVMEM_CONTEXT			*psKernelDevmemCtx;
 	DEVMEM_HEAP				*psFirmwareHeap;
 	MMU_CONTEXT				*psKernelMMUCtx;
-	IMG_UINT32				ui32KernelCatBase;
+	IMG_UINT32				ui32KernelCatBaseIdReg;
+	IMG_UINT32				ui32KernelCatBaseId;
+	IMG_UINT32				ui32KernelCatBaseReg;
+	IMG_UINT32				ui32KernelCatBaseWordSize;
+	IMG_UINT32				ui32KernelCatBaseAlignShift;
+	IMG_UINT32				ui32KernelCatBaseShift;
+	IMG_UINT64				ui64KernelCatBaseMask;
 
 	IMG_VOID				*pvDeviceMemoryHeap;
 	
@@ -122,13 +154,16 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 
 	IMG_UINT32				ui32ClkGateStatusReg;
 	IMG_UINT32				ui32ClkGateStatusMask;
-	RGX_SCRIPTS				sScripts;
+	RGX_SCRIPTS				*psScripts;
 
 	DEVMEM_MEMDESC			*psRGXFWCodeMemDesc;
 	DEVMEM_EXPORTCOOKIE		sRGXFWCodeExportCookie;
 
 	DEVMEM_MEMDESC			*psRGXFWDataMemDesc;
 	DEVMEM_EXPORTCOOKIE		sRGXFWDataExportCookie;
+
+	DEVMEM_MEMDESC			*psRGXFWCorememMemDesc;
+	DEVMEM_EXPORTCOOKIE		sRGXFWCorememExportCookie;
 
 	DEVMEM_MEMDESC			*psRGXFWIfTraceBufCtlMemDesc;
 	RGXFWIF_TRACEBUF		*psRGXFWIfTraceBuf;
@@ -175,10 +210,17 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	 * 'Enable HWPerf' on in the ConfigFlags sent to the FW. FW stores this
 	 * bit in the RGXFW_CTL.ui32StateFlags member. They may also get
 	 * set by the API RGXCtrlHWPerf(). Thus these members may be 0 if HWPerf is
-	 * not enabled as these members are created and destroyed on demand.
+	 * not enabled as these members are created on demand and destroyed at
+	 * driver unload.
 	 */
 	POS_LOCK 				hLockHWPerfStream;
 	IMG_HANDLE				hHWPerfStream;
+#if defined(SUPPORT_GPUTRACE_EVENTS)
+	IMG_HANDLE				hGPUTraceCmdCompleteHandle;
+	IMG_BOOL				bFTraceGPUEventsEnabled;
+	IMG_HANDLE				hGPUTraceTLConnection;
+	IMG_HANDLE				hGPUTraceTLStream;
+#endif
 
 	/* If we do 10 deferred memory allocations per second, then the ID would warp around after 13 years */
 	IMG_UINT32				ui32ZSBufferCurrID;	/*!< ID assigned to the next deferred devmem allocation */
@@ -206,20 +248,17 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	IMG_UINT32  ui32LastGEOTimeouts;
 
 	/* GPU DVFS History and GPU Utilization stats */
-	RGXFWIF_GPU_DVFS_HIST	*psGpuDVFSHistory;
-	IMG_VOID				(*pfnUpdateGpuUtilStats) (PVRSRV_DEVICE_NODE *psDeviceNode);
-	IMG_UINT32				ui32GpuUtilTransitionsCountSample;
-	IMG_UINT32				ui32GpuStatActive;	/* GPU active  ratio expressed in 0,01% units */
-	IMG_UINT32				ui32GpuStatBlocked; /* GPU blocked ratio expressed in 0,01% units */
-	IMG_UINT32				ui32GpuStatIdle;    /* GPU idle    ratio expressed in 0,01% units */
+	RGX_GPU_DVFS_HIST*      psGpuDVFSHistory;
+	RGXFWIF_GPU_UTIL_STATS	(*pfnGetGpuUtilStats) (PVRSRV_DEVICE_NODE *psDeviceNode);
 
+	IMG_BOOL				bIgnoreFurtherIRQs;
 } PVRSRV_RGXDEV_INFO;
 
 
 
 typedef struct _RGX_TIMING_INFORMATION_
 {
-	IMG_UINT32			ui32CoreClockSpeed;
+	IMG_UINT32			ui32CoreClockSpeed; /* In HZs */
 	IMG_BOOL			bEnableActivePM;
 	IMG_BOOL			bEnableRDPowIsland;
 	IMG_UINT32			ui32ActivePMLatencyms;

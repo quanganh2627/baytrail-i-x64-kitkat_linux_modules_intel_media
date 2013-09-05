@@ -67,7 +67,8 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeAllocSyncPrimitiveBlock(IMG_HANDLE 
 	hDevNodeInt = (IMG_HANDLE) hDevNode;
 
 	eError =
-		PVRSRVAllocSyncPrimitiveBlockKM(hBridge,
+		PVRSRVAllocSyncPrimitiveBlockKM(hBridge
+		,
 					hDevNodeInt,
 					&psSyncHandleInt,
 					pui32SyncPrimVAddr,

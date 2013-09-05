@@ -82,9 +82,14 @@ typedef struct _TL_STREAM_
                                                            using this flag will need to manually signal when
                                                            appropriate using the TLStreamSync() API */
 
+	IMG_VOID			(*pfProducerCallback)(IMG_VOID); /*!< Optional producer callback of type TL_STREAM_SOURCECB */
+	IMG_PVOID			pvProducerUserData;	             /*!< Producer callback user data */
+
 	volatile IMG_UINT32 ui32Read; 				/*!< Pointer to the beginning of available data */
 	volatile IMG_UINT32 ui32Write;				/*!< Pointer to already committed data which are ready to be
 													 copied to user space*/
+	IMG_UINT32          ui32BufferUt;           /*!< Buffer utilisation high watermark, see
+	                                             * TL_BUFFER_UTILIZATION in tlstream.c */
 	IMG_UINT32 			ui32Pending;			/*!< Count pending bytes reserved in buffer */
 	IMG_UINT32 			ui32Size; 				/*!< Buffer size */
 	IMG_BYTE 			*pbyBuffer;				/*!< Actual data buffer */
@@ -157,7 +162,7 @@ typedef struct _TL_GDATA_
 	IMG_PVOID  psRgxDevNode;        /* Device node to use for buffer allocations */
 	IMG_HANDLE hTLEventObj;         /* Global TL signal object, new streams, etc */
 
-	IMG_UINT   uiClientCnt;         /* Counter to track the number of client connections. */
+	IMG_UINT   uiClientCnt;         /* Counter to track the number of client stream connections. */
 	PTL_SNODE  psHead;              /* List of Streams, only 1 node supported at present */
 
 } TL_GLOBAL_DATA, *PTL_GLOBAL_DATA;

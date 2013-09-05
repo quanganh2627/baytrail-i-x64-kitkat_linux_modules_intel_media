@@ -75,7 +75,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 
 #if defined(PVR_RI_DEBUG)
-#include "ri_server.h"
+#include "client_ri_bridge.h"
 #endif 
 
 /* ourselves */
@@ -433,7 +433,7 @@ _UnrefAndMaybeDestroy(PMR *psPMR)
             PVRSRV_ERROR eError;
 
 			/* Delete RI entry */
-			eError = RIDeletePMREntryKM ((RI_HANDLE)psPMR->hRIHandle);
+			eError = BridgeRIDeletePMREntry (IMG_NULL, psPMR->hRIHandle);
 		}
 #endif /* if defined(PVR_RI_DEBUG) */
 		psCtx = psPMR->psContext;
@@ -472,7 +472,9 @@ PMRCreatePMR(PHYS_HEAP *psPhysHeap,
              const IMG_CHAR *pszPDumpFlavour,
              const PMR_IMPL_FUNCTAB *psFuncTab,
              PMR_IMPL_PRIVDATA pvPrivData,
-             PMR **ppsPMRPtr)
+             PMR **ppsPMRPtr,
+             IMG_HANDLE *phPDumpAllocInfo,
+             IMG_BOOL bForcePersistent)
 {
     PMR *psPMR = IMG_NULL;
     PVRSRV_ERROR eError;
@@ -502,12 +504,22 @@ PMRCreatePMR(PHYS_HEAP *psPhysHeap,
 #if defined(PVR_RI_DEBUG)
 	{
 		/* Attach RI information */
-		eError = RIWritePMREntryKM (psPMR,
-									(IMG_CHAR *)pszPDumpFlavour,
-									uiLogicalSize,
-									(RI_HANDLE*)&psPMR->hRIHandle);
+		eError = BridgeRIWritePMREntry (IMG_NULL,
+										psPMR,
+										(IMG_CHAR *)pszPDumpFlavour,
+										uiLogicalSize,
+										&psPMR->hRIHandle);
 	}
 #endif  /* if defined(PVR_RI_DEBUG) */
+
+	if (phPDumpAllocInfo)
+	{
+		PDumpPMRMallocPMR(psPMR,
+						  (uiChunkSize * ui32NumPhysChunks),
+						  1ULL<<uiLog2ContiguityGuarantee,
+						  bForcePersistent,
+						  phPDumpAllocInfo);
+	}
 
     return PVRSRV_OK;
 

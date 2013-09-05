@@ -218,6 +218,27 @@ PVRSRVDumpDebugInfoKM(IMG_UINT32 ui32VerbLevel)
 	return PVRSRV_OK;
 }
 
+/*
+	PVRSRVGetDevClockSpeedKM
+*/
+PVRSRV_ERROR
+PVRSRVGetDevClockSpeedKM(PVRSRV_DEVICE_NODE *psDeviceNode,
+						 IMG_PUINT32  pui32RGXClockSpeed)
+{
+	PVRSRV_ERROR eError = PVRSRV_OK;
+	PVR_ASSERT(psDeviceNode->pfnDeviceClockSpeed != IMG_NULL);
+
+	eError = psDeviceNode->pfnDeviceClockSpeed(psDeviceNode, pui32RGXClockSpeed);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_WARNING, "PVRSRVGetDevClockSpeedKM: "
+				"Could not get device clock speed (%d)!",
+				eError));
+	}
+
+	return eError;
+}
+
 
 /*
 	PVRSRVHWOpTimeoutKM

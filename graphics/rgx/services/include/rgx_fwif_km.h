@@ -49,7 +49,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxdefs_km.h"
 #include "pvr_debug.h"
 #include "dllist.h"
-#include "rgx_hwperf.h"
 
 
 #if defined(RGX_FIRMWARE)
@@ -136,8 +135,13 @@ typedef struct _RGXFWIF_TACTX_STATE_
 	/* FW-accessible TA state which must be written out to memory on context store */
 	IMG_UINT64	RGXFW_ALIGN uTAReg_VDM_CALL_STACK_POINTER;		 /* To store in mid-TA */
 	IMG_UINT64	RGXFW_ALIGN uTAReg_VDM_CALL_STACK_POINTER_Init;	 /* Initial value (in case is 'lost' due to a lock-up */
-	IMG_UINT64	RGXFW_ALIGN uTAReg_VDM_BATCH;
-	
+	IMG_UINT64	RGXFW_ALIGN uTAReg_VDM_BATCH;	
+	IMG_UINT64	RGXFW_ALIGN uTAReg_VBS_SO_PRIM0;
+	IMG_UINT64	RGXFW_ALIGN uTAReg_VBS_SO_PRIM1;
+	IMG_UINT64	RGXFW_ALIGN uTAReg_VBS_SO_PRIM2;
+	IMG_UINT64	RGXFW_ALIGN uTAReg_VBS_SO_PRIM3;
+	IMG_UINT64	RGXFW_ALIGN uTAReg_TE_STATE;
+
 #if defined(DEBUG)
 	/* Number of stores on this context */
 	IMG_UINT32  ui32NumStores;
@@ -151,7 +155,7 @@ typedef struct _RGXFWIF_3DCTX_STATE_
 	IMG_UINT32	RGXFW_ALIGN au3DReg_ISP_STORE[8];
 	IMG_UINT64	RGXFW_ALIGN u3DReg_PM_DEALLOCATED_MASK_STATUS;
 	IMG_UINT64	RGXFW_ALIGN u3DReg_PM_PDS_MTILEFREE_STATUS;
-	
+
 #if defined(DEBUG)
 	/* Number of stores on this context */
 	IMG_UINT32  ui32NumStores;
@@ -252,8 +256,13 @@ typedef struct _RGXFWIF_FWRAYCONTEXT_
 {
 	RGXFWIF_FWCOMMONCONTEXT	sSHGContext;				/*!< Firmware context for the SHG */
 	RGXFWIF_FWCOMMONCONTEXT	sRTUContext;				/*!< Firmware context for the RTU */
-
+	PRGXFWIF_CCCB_CTL		psCCBCtl[DPX_MAX_RAY_CONTEXTS];
+	PRGXFWIF_CCCB			psCCB[DPX_MAX_RAY_CONTEXTS];
+	IMG_UINT32				ui32NextFC;
+	IMG_UINT32				ui32ActiveFCMask;
 } RGXFWIF_FWRAYCONTEXT;
+
+#define RGXFWIF_INVALID_FRAME_CONTEXT (0xFFFFFFFF)
 
 /*!
     BIF requester selection
@@ -407,11 +416,17 @@ typedef struct _RGXFWIF_CORECLKSPEEDCHANGE_DATA_
 	IMG_UINT32	ui32NewClockSpeed; 			/*!< New clock speed */
 } RGXFWIF_CORECLKSPEEDCHANGE_DATA;
 
+/* This macro value must always be greater than or equal to 
+ * RGX_HWPERF_MAX_BLKS for all valid BVNCs. This is asserted in 
+ * rgxsrvinit.c. This macro is defined with a constant to avoid a KM 
+ * dependency */
+ #define RGXFWIF_HWPERF_CTRL_BLKS_MAX	32
+
 typedef struct _RGXFWIF_HWPERF_CTRL_BLKS_
 {
-	IMG_BOOL				bEnable;
-	IMG_UINT32				ui32NumBlocks; 						/*!< Number of block IDs in the array */
-	IMG_UINT8				aeBlockIDs[RGX_HWPERF_MAX_BLKS];	/*!< Array of RGX_HWPERF_CNTBLK_ID values */
+	IMG_BOOL	bEnable;
+	IMG_UINT32	ui32NumBlocks;                              /*!< Number of block IDs in the array */
+	IMG_UINT8	aeBlockIDs[RGXFWIF_HWPERF_CTRL_BLKS_MAX];   /*!< Array of RGX_HWPERF_CNTBLK_ID values */
 } RGXFWIF_HWPERF_CTRL_BLKS;
 
 
@@ -551,8 +566,6 @@ typedef struct _RGXFWIF_INIT_
 
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sPDSExecBase;
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sUSCExecBase;
-	IMG_DEV_VIRTADDR		RGXFW_ALIGN sPrimIDBase;
-	IMG_DEV_VIRTADDR		RGXFW_ALIGN sRootIDBase;
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sResultDumpBase;
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sDPXControlStreamBase;
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sRTUHeapBase;
@@ -561,6 +574,7 @@ typedef struct _RGXFWIF_INIT_
 	IMG_BOOL				bFrameworkAfterInit;
 	IMG_BOOL				bEnableHWPerf;
 	IMG_UINT32				uiPowerSync;
+	IMG_UINT32				ui32FilterFlags;
 
 	/* Kernel CCBs */
 	PRGXFWIF_CCB_CTL		psKernelCCBCtl[RGXFWIF_DM_MAX];
@@ -605,9 +619,6 @@ typedef struct _RGXFWIF_INIT_
 	
 	/* APM latency in ms before signalling IDLE to the host */
 	IMG_UINT32				ui32ActivePMLatencyms;
-
-	/* Snapshot of CR Timer taken when bFirmwareStarted is set */
-	IMG_UINT64				RGXFW_ALIGN ui64CRTimerInitSnapshot;
 
 	/* Flag to be set by the Firmware after successful start */
 	IMG_BOOL				bFirmwareStarted;
@@ -660,24 +671,6 @@ typedef struct _RGXFW_UNITTESTS_
 	RGXFW_UNITTEST2 sUnitTest2;
 
 } RGXFW_UNITTESTS;
-
-/*!
- ******************************************************************************
- * GPU DVFS History CB
- *****************************************************************************/
-#define RGXFWIF_GPU_DVFS_HIST_SIZE		100	/* History size must NOT be greater than 16384 (2^14) */
-typedef struct _RGXFWIF_GPU_DVFS_HIST_ENTRY_
-{
-	IMG_UINT64				ui64CRTimerStamp;	/*!< CR Timer value at DVFS transition */
-	IMG_UINT32				ui32OSTimeStamp;	/*!< OS Time stamp at DVFS transition */
-	IMG_UINT32				ui32DVFSClock;		/*!< New DVFS clock value */
-} RGXFWIF_GPU_DVFS_HIST_ENTRY;
-
-typedef struct _RGXFWIF_GPU_DVFS_HIST_
-{
-	IMG_UINT32						ui32CurrentDVFSId;						/*!< Current history entry index */
-	RGXFWIF_GPU_DVFS_HIST_ENTRY		asCB[RGXFWIF_GPU_DVFS_HIST_SIZE];		/*!< Circular buffer of DVFS transitions history */
-} RGXFWIF_GPU_DVFS_HIST;
 
 #endif /*  __RGX_FWIF_KM_H__ */
 

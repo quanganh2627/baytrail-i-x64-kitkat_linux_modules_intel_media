@@ -98,47 +98,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(_WIN32)
 #if defined(UNDER_CE)
-	/* This may need to be _stdcall */
-	#define IMG_CALLCONV __cdecl
-	#define IMG_INTERNAL
-	#define IMG_RESTRICT
-	#define C_CALLCONV	__cdecl
-
-	#define IMG_EXPORT
-	#define	IMG_IMPORT	IMG_EXPORT 
-
-	#if defined DEBUG
-		#define IMG_ABORT() __debugbreak();	
-	#else
-		#define IMG_ABORT()	for(;;);
-	#endif
-	#define abort() IMG_ABORT()
-
-	#if defined(x86)
-		#define i386
-	#endif
-
-	#define snprintf sprintf_s
-	#define vsnprintf vsprintf_s
-	#define strdup _strdup
-
-	/*
-	   Catch failures to declare whether inclusion is KM/UM side. Unlike other OSs like
-	   Linux, WinCE includes the same header (windows.h) on both sides, so there is no
-	   built-in way to distinguish. This check verifies the build files are set to build
-	   or or the other.
-    */
-	#ifndef WINDOWSCE_HOST_SIDE_TOOLS
-	#	ifdef WINDOWSCE_TARGET_UM_COMPONENT
-	#		ifdef WINDOWSCE_TARGET_KM_COMPONENT
-	#			error build-file component cannot be both UM and KM.
-	#		endif
-	#	else
-	#		ifndef WINDOWSCE_TARGET_KM_COMPONENT
-	#			error Must specify whether this component is a UM or KM component.
-	#		endif
-	#   endif
-	#endif /* WINDOWSCE_HOST_SIDE_TOOLS */
+	#include "windowsce_img_defs.h"
 #else
 	#define IMG_CALLCONV __stdcall
 	#define IMG_INTERNAL

@@ -167,7 +167,7 @@ TLDeInit(IMG_VOID)
 
 	if (sTLGlobalData.uiClientCnt)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "TLDeInit transport layer but %d clients still connected", sTLGlobalData.uiClientCnt));
+		PVR_DPF((PVR_DBG_ERROR, "TLDeInit transport layer but %d client streams are still connected", sTLGlobalData.uiClientCnt));
 		sTLGlobalData.uiClientCnt = 0;
 	}
 

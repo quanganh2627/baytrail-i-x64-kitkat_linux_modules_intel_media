@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.60.2.6
+@File
+@Title          Client bridge header for pvrtl
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    Exports the client bridge functions for pvrtl
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,33 +41,42 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_60_2_6_H_
-#define _RGXCORE_KM_1_60_2_6_H_
+#ifndef CLIENT_PVRTL_BRIDGE_H
+#define CLIENT_PVRTL_BRIDGE_H
 
-/***** Automatically generated file (6/17/2013 9:49:12 AM): Do not edit manually ********************/
-/***** Timestamp:  (6/17/2013 9:49:12 AM)************************************************************/
-/***** CS: @2157835 ******************************************************************/
+#include "pvr_bridge_client.h"
+
+#include "common_pvrtl_bridge.h"
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeTLConnect(IMG_HANDLE hBridge);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeTLDisconnect(IMG_HANDLE hBridge);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeTLOpenStream(IMG_HANDLE hBridge,
+							  IMG_CHAR *puiName,
+							  IMG_UINT32 ui32Mode,
+							  IMG_HANDLE *phSD,
+							  DEVMEM_SERVER_EXPORTCOOKIE *phClientBUFExportCookie);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeTLCloseStream(IMG_HANDLE hBridge,
+							   IMG_HANDLE hSD);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeTLAcquireData(IMG_HANDLE hBridge,
+							   IMG_HANDLE hSD,
+							   IMG_UINT32 *pui32ReadOffset,
+							   IMG_UINT32 *pui32ReadLen);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeTLReleaseData(IMG_HANDLE hBridge,
+							   IMG_HANDLE hSD,
+							   IMG_UINT32 ui32ReadOffset,
+							   IMG_UINT32 ui32ReadLen);
+
+IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeTLTestIoctl(IMG_HANDLE hBridge,
+							 IMG_UINT32 ui32Cmd,
+							 IMG_BYTE *psIn1,
+							 IMG_UINT32 ui32In2,
+							 IMG_UINT32 *pui32Out1,
+							 IMG_UINT32 *pui32Out2);
 
 
-/******************************************************************************
- * BVNC = 1.60.2.6 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 60
-#define RGX_BVNC_KM_N 2
-#define RGX_BVNC_KM_C 6
-
-/******************************************************************************
- * Errata 
- *****************************************************************************/
-
-
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-
-
-#endif /* _RGXCORE_KM_1_60_2_6_H_ */
+#endif /* CLIENT_PVRTL_BRIDGE_H */

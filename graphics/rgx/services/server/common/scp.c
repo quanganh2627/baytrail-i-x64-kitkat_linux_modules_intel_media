@@ -409,6 +409,52 @@ static void _SCPDumpFence(const char *psczName, struct sync_fence *psFence)
 }
 #endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 
+/*************************************************************************/ /*!
+@Function       _SCPDumpCommand
+
+@Description    Dump a SCP command
+
+@Input          psCommand               Command to dump
+
+@Return         None
+*/
+/*****************************************************************************/
+static IMG_VOID _SCPDumpCommand(SCP_COMMAND *psCommand)
+{
+	IMG_UINT32 i;
+
+	PVR_LOG(("\tCommand type = %d (@%p)", psCommand->ui32CmdType, psCommand));
+
+	if (psCommand->ui32CmdType == SCP_COMMAND_CALLBACK)
+	{
+		for (i = 0; i < psCommand->ui32SyncCount; i++)
+		{
+			SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
+		   
+			/*
+				Only dump this sync if there is a fence operation on it
+			*/
+			if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE)
+			{
+				PVR_LOG(("\t\tFenced on 0x%08x = 0x%08x (?= 0x%08x)",
+						ServerSyncGetFWAddr(psSCPSyncData->psSync),
+						psSCPSyncData->ui32Fence,
+						ServerSyncGetValue(psSCPSyncData->psSync)));
+			}
+		}
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+		if (psCommand->psAcquireFence)
+		{
+			_SCPDumpFence("Acquire Fence", psCommand->psAcquireFence);
+		}
+		if (psCommand->psReleaseFence)
+		{
+			_SCPDumpFence("Release Fence", psCommand->psReleaseFence);
+		}
+#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
+	}
+}
+
 /*****************************************************************************
  *                    Public interface functions                             *
  *****************************************************************************/
@@ -777,23 +823,17 @@ IMG_VOID SCPCommandComplete(SCP_CONTEXT *psContext)
 				__FUNCTION__, psCommand, psContext, bContinue);
 
 	}
-
 }
 
 IMG_EXPORT
 IMG_VOID IMG_CALLCONV SCPDumpStatus(SCP_CONTEXT *psContext)
 {
-	SCP_COMMAND *psCommand;
 	/*
 		Acquire the lock to ensure that the SCP isn't run while
 		while we're dumping info
 	*/
 	OSLockAcquire(psContext->hLock);
 
-	/* Dump the command we're pending on */
-	psCommand = (SCP_COMMAND *)((IMG_UINT8 *)psContext->pvCCB +
-				psContext->ui32DepOffset);
-       
 	PVR_LOG(("Pending command:"));
 	if (psContext->ui32DepOffset == psContext->ui32ReadOffset)
 	{
@@ -801,39 +841,38 @@ IMG_VOID IMG_CALLCONV SCPDumpStatus(SCP_CONTEXT *psContext)
 	}
 	else
 	{
-		IMG_UINT32 i;
-               
-		PVR_LOG(("\tCommand type = %d", psCommand->ui32CmdType));
+		SCP_COMMAND *psCommand;
 
-		if (psCommand->ui32CmdType == SCP_COMMAND_CALLBACK)
+		/* Dump the command we're pending on */
+		psCommand = (SCP_COMMAND *)((IMG_UINT8 *)psContext->pvCCB +
+		            psContext->ui32DepOffset);
+		_SCPDumpCommand(psCommand);
+	}
+	
+	PVR_LOG(("Active command(s):"));
+	if (psContext->ui32DepOffset == psContext->ui32ReadOffset)
+	{
+		PVR_LOG(("\tNone"));
+	}
+	else
+	{
+		SCP_COMMAND *psCommand;
+		IMG_UINT32 ui32ReadOffset = psContext->ui32ReadOffset;
+		
+		while (ui32ReadOffset != psContext->ui32DepOffset)
 		{
-			for (i = 0; i < psCommand->ui32SyncCount; i++)
-			{
-				SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
-               
-				/*
-					Only dump this sync if there is a fence operation on it
-				*/
-				if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE)
-				{
-					PVR_LOG(("\t\tFenced on 0x%08x = 0x%08x (?= 0x%08x)",
-							ServerSyncGetFWAddr(psSCPSyncData->psSync),
-							psSCPSyncData->ui32Fence,
-							ServerSyncGetValue(psSCPSyncData->psSync)));
-				}
-			}
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-			if (psCommand->psAcquireFence)
-			{
-				_SCPDumpFence("Acquire Fence", psCommand->psAcquireFence);
-			}
-			if (psCommand->psReleaseFence)
-			{
-				_SCPDumpFence("Release Fence", psCommand->psReleaseFence);
-			}
-#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
+			psCommand = (SCP_COMMAND *)((IMG_UINT8 *)psContext->pvCCB +
+			            ui32ReadOffset);
+
+			_SCPDumpCommand(psCommand);
+
+			/* processed cmd so update queue */
+			UPDATE_CCB_OFFSET(ui32ReadOffset,
+							  psCommand->ui32CmdSize,
+							  psContext->ui32CCBSize);
 		}
 	}
+
 	OSLockRelease(psContext->hLock);
 }
 

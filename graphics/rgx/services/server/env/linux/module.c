@@ -115,7 +115,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvkm.h"
 #include "connection_server.h"
 #include "handle.h"
+
+#ifdef CONFIG_PVR_PROC
 #include "proc.h"
+#endif
+
+#include "pvr_debugfs.h"
 #include "pvrmodule.h"
 #include "private_data.h"
 #include "driverlock.h"
@@ -124,6 +129,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "env_connection.h"
 #include "rgxsysinfo.h"
 #include "pvrsrv.h"
+#include "process_stats.h"
 #include "rgxdf.h"
 
 #if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
@@ -139,6 +145,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 #include "pvr_sync.h"
+#endif
+
+#if defined(SUPPORT_GPUTRACE_EVENTS)
+#include "pvr_gputrace.h"
+#endif
+
+#if defined(SUPPORT_KERNEL_HWPERF)
+#include "rgxapi_km.h"
 #endif
 
 /*
@@ -193,6 +207,18 @@ EXPORT_SYMBOL(SysUninstallDeviceLISR);
 #endif
 
 EXPORT_SYMBOL(PVRSRVCheckStatus);
+
+#if defined(SUPPORT_KERNEL_HWPERF)
+EXPORT_SYMBOL(RGXHWPerfConnect);
+EXPORT_SYMBOL(RGXHWPerfDisconnect);
+EXPORT_SYMBOL(RGXHWPerfControl);
+EXPORT_SYMBOL(RGXHWPerfConfigureAndEnableCounters);
+EXPORT_SYMBOL(RGXHWPerfDisableCounters);
+EXPORT_SYMBOL(RGXHWPerfAcquireData);
+EXPORT_SYMBOL(RGXHWPerfReleaseData);
+#endif
+
+extern IMG_BOOL gbSystemActivePMEnabled;
 
 #if defined(PVR_LDM_DEVICE_CLASS) && !defined(SUPPORT_DRM)
 /*
@@ -289,11 +315,13 @@ static struct platform_device_id powervr_id_table[] = {
 static LDM_DRV powervr_driver = {
 #if defined(PVR_LDM_PLATFORM_MODULE)
 	.driver = {
-		.name		= DRVNAME,
+		.name	= DRVNAME,
+		.pm	= &powervr_dev_pm_ops,
 	},
 #endif
 #if defined(PVR_LDM_PCI_MODULE)
 	.name		= DRVNAME,
+	.driver.pm	= &powervr_dev_pm_ops,
 #endif
 #if defined(PVR_LDM_PCI_MODULE) || defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
 	.id_table = powervr_id_table,
@@ -352,19 +380,6 @@ static int PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *id)
 {
 	PVR_TRACE(("PVRSRVDriverProbe(pDevice=%p)", pDevice));
 
-#if 0
-	/* Some systems require device-specific system initialisation.
-	 * E.g. this lets the OS track a device's dependencies on various
-	 * system hardware.
-	 *
-	 * Note: some systems use this to enable HW that SysAcquireData
-	 * will depend on, therefore it must be called first.
-	 */
-	if (PerDeviceSysInitialise((IMG_PVOID)pDevice) != PVRSRV_OK)
-	{
-		return -EINVAL;
-	}
-#endif	
 	/* SysInitialise only designed to be called once.
 	 */
 	if (bCalledSysInit == IMG_FALSE)
@@ -408,35 +423,23 @@ static int PVRSRVDriverRemove(LDM_DEV *pDevice)
 static void PVRSRVDriverRemove(LDM_DEV *pDevice)
 #endif
 {
-	PVR_TRACE(("PVRSRVDriverRemove(pDevice=%p)", pDevice));
+	PVR_TRACE(("PVRSRVDriverRemove (pDevice=%p)", pDevice));
 
-#if defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL)
-	if (gPVRPowerLevel != 0)
-	{
-		if (PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_ON, IMG_TRUE) == PVRSRV_OK)
-		{
-			gPVRPowerLevel = 0;
-		}
-	}
+#if defined(SUPPORT_DRM)
+#if defined(LDM_PLATFORM)
+	drm_platform_exit(&sPVRDRMDriver, pDevice);
 #endif
-	(IMG_VOID)PVRSRVDeInit();
-
-	gpsPVRLDMDev = IMG_NULL;
-
-#if 0
-	if (PerDeviceSysDeInitialise((IMG_PVOID)pDevice) != PVRSRV_OK)
-	{
-		return -EINVAL;
-	}
+#if defined(LDM_PCI)
+	drm_put_dev(gpsPVRDRMDev);
 #endif
-
-#if defined (PVR_LDM_PLATFORM_MODULE)
+#else	/* defined(SUPPORT_DRM) */
+	PVRSRVSystemDeInit();
+#endif	/* defined(SUPPORT_DRM) */
+#if defined(LDM_PLATFORM)
 	return 0;
 #endif
-#if defined (PVR_LDM_PCI_MODULE)
-	return;
-#endif
 }
+
 #endif /* defined(PVR_LDM_MODULE) */
 
 
@@ -925,9 +928,9 @@ check_auth_exit:
  the device.  In other environments the device may be created either through
  devfs or sysfs.
 
- Readable proc-filesystem entries under /proc/pvr are created with
- CreateProcEntries().  These can be read at runtime to get information about
- the device (eg. 'cat /proc/pvr/vm')
+ Readable and/or writable debugfs entries under /sys/kernel/debug/pvr are
+ created with PVRDebugFSCreateEntry().  These can be read at runtime to get
+ information about the device (eg. 'cat /sys/kernel/debug/pvr/nodes')
 
  __init places the function in a special memory section that the kernel frees
  once the function has been run.  Refer also to module_init() macro call below.
@@ -1170,6 +1173,12 @@ static void __exit PVRCore_Cleanup(void)
 {
 	PVR_TRACE(("PVRCore_Cleanup"));
 
+#if defined(SUPPORT_GPUTRACE_EVENTS)
+	PVRGpuTraceDeInit();
+#endif
+
+	PVRDebugRemoveDebugFSEntries();
+
 #if defined(SUPPORT_DRM_AUTH_IMPORT)
 	BUG_ON(!list_empty(&sDRMAuthListHead));
 #endif
@@ -1182,6 +1191,7 @@ static void __exit PVRCore_Cleanup(void)
 #if defined(PVR_LDM_DEVICE_CLASS)
 	device_destroy(psPvrClass, MKDEV(AssignedMajorNumber, 0));
 	class_destroy(psPvrClass);
+
 #endif
 
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,22))
@@ -1261,21 +1271,24 @@ int PVRSRVRGXSetPowerState(struct drm_device *dev, int ePVRState)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;
 
-	LinuxLockMutex(&gsPMMutex);
+	if (! gbSystemActivePMEnabled) {
+		LinuxLockMutex(&gsPMMutex);
 
-	LinuxLockMutex(&gPVRSRVLock);
+		LinuxLockMutex(&gPVRSRVLock);
 
-	eError = PVRSRVSetPowerStateKM(ePVRState, IMG_FALSE);
+		eError = PVRSRVSetPowerStateKM(ePVRState, IMG_FALSE);
 
-	if (eError != PVRSRV_OK) {
+		if (eError != PVRSRV_OK) {
+			LinuxUnLockMutex(&gPVRSRVLock);
+			LinuxUnLockMutex(&gsPMMutex);
+			return 0;
+		}
+
 		LinuxUnLockMutex(&gPVRSRVLock);
+
 		LinuxUnLockMutex(&gsPMMutex);
-		return 0;
 	}
-
-	LinuxUnLockMutex(&gPVRSRVLock);
-
-	LinuxUnLockMutex(&gsPMMutex);
 
 	return 1;
 }
+

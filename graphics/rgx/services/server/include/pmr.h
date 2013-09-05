@@ -207,7 +207,9 @@ PMRCreatePMR(PHYS_HEAP *psPhysHeap,
              const IMG_CHAR *pszPDumpFlavour,
              const PMR_IMPL_FUNCTAB *psFuncTab,
              PMR_IMPL_PRIVDATA pvPrivData,
-             PMR **ppsPMRPtr);
+             PMR **ppsPMRPtr,
+             IMG_HANDLE *phPDumpAllocInfo,
+             IMG_BOOL bForcePersistent);
 
 /*
  * PMRLockSysPhysAddresses()

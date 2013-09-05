@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.31.4.10
+@File			ri_server.h
+@Title          Resource Information abstraction
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description	Resource Information (RI) functions
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,34 +41,43 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_31_4_10_H_
-#define _RGXCORE_KM_1_31_4_10_H_
+#ifndef _RI_SERVER_H_
+#define _RI_SERVER_H_
 
-/***** Automatically generated file (6/17/2013 9:49:11 AM): Do not edit manually ********************/
-/***** Timestamp:  (6/17/2013 9:49:11 AM)************************************************************/
-/***** CS: @949011 ******************************************************************/
+#include <img_defs.h>
+#include <ri_typedefs.h>
+#include <pmr.h>
+#include <pvrsrv_error.h>
 
+PVRSRV_ERROR RIWritePMREntryKM(PMR *hPMR,
+					   	   	   IMG_CHAR ai8TextA[RI_MAX_TEXT_LEN+1],
+					   	   	   IMG_SIZE_T uiLogicalSize,
+					   	   	   RI_HANDLE *phRIHandle);
 
-/******************************************************************************
- * BVNC = 1.31.4.10 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 31
-#define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 10
+PVRSRV_ERROR RIWriteMEMDESCEntryKM(PMR *hPMR,
+					   	   	   	   IMG_CHAR ai8TextB[RI_MAX_TEXT_LEN+1],
+					   	   	   	   IMG_SIZE_T uiAddr,
+					   	   	   	   IMG_SIZE_T uiOffset,
+					   	   	   	   IMG_SIZE_T uiSize,
+					   	   	   	   IMG_BOOL bIsImport,
+					   	   	   	   RI_HANDLE *phRIHandle);
 
-/******************************************************************************
- * Errata 
- *****************************************************************************/
+PVRSRV_ERROR RIUpdateMEMDESCAddrKM(RI_HANDLE hRIHandle,
+					   	   	   	   IMG_SIZE_T uiAddr);
 
-#define FIX_HW_BRN_38344
+PVRSRV_ERROR RIDeletePMREntryKM(RI_HANDLE hRIHandle);
+PVRSRV_ERROR RIDeleteMEMDESCEntryKM(RI_HANDLE hRIHandle);
 
+PVRSRV_ERROR RIDeleteListKM(IMG_VOID);
 
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
+PVRSRV_ERROR RIDumpListKM(PMR *hPMR);
 
+PVRSRV_ERROR RIDumpAllKM(IMG_VOID);
 
+PVRSRV_ERROR RIDumpProcessKM(IMG_PID pid);
 
-#endif /* _RGXCORE_KM_1_31_4_10_H_ */
+IMG_BOOL RIGetListEntryKM(IMG_PID pid,
+						  IMG_HANDLE **ppHandle,
+						  IMG_CHAR **ppszEntryString);
+
+#endif /* #ifndef _RI_SERVER_H _*/

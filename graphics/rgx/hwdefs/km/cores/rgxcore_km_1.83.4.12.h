@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.V.4.30
+@Title          RGX Core BVNC 1.83.4.12
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,24 +39,33 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_V_4_30_H_
-#define _RGXCONFIG_KM_1_V_4_30_H_
+#ifndef _RGXCORE_KM_1_83_4_12_H_
+#define _RGXCORE_KM_1_83_4_12_H_
 
-/***** Automatically generated file (6/17/2013 9:47:53 AM): Do not edit manually ********************/
-/***** Timestamp:  (6/17/2013 9:47:53 AM)************************************************************/
+/***** Automatically generated file (8/8/2013 3:03:18 PM): Do not edit manually ********************/
+/***** Timestamp:  (8/8/2013 3:03:18 PM)************************************************************/
+/***** CS: @2552143 ******************************************************************/
 
-#define RGX_BNC_KM_B 1
-#define RGX_BNC_KM_N 4
-#define RGX_BNC_KM_C 30
 
 /******************************************************************************
- * DDK Defines
+ * BVNC = 1.83.4.12 
  *****************************************************************************/
-#define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
-#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
-#define RGX_FEATURE_AXI_ACELITE 
-#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
-#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
+#define RGX_BVNC_KM_B 1
+#define RGX_BVNC_KM_V 83
+#define RGX_BVNC_KM_N 4
+#define RGX_BVNC_KM_C 12
+
+/******************************************************************************
+ * Errata 
+ *****************************************************************************/
 
 
-#endif /* _RGXCONFIG_1_V_4_30_H_ */
+
+ 
+/******************************************************************************
+ * Enhancements 
+ *****************************************************************************/
+
+
+
+#endif /* _RGXCORE_KM_1_83_4_12_H_ */

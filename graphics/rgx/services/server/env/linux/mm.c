@@ -46,6 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "mutils.h"
 #include "pvr_debug.h"
 #include "mm.h"
+#include "process_stats.h"
 #include "pvrsrv_memallocflags.h"
 #include "devicemem_server_utils.h"
 
@@ -79,6 +80,14 @@ _IORemapWrapper(IMG_CPU_PHYADDR BasePAddr,
 				break;
 	}
 
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	PVRSRVStatsAddMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_IOREMAP,
+                                 pvIORemapCookie,
+                                 BasePAddr,
+                                 ui32Bytes,
+                                 IMG_NULL);
+#endif
+
     PVR_UNREFERENCED_PARAMETER(pszFileName);
     PVR_UNREFERENCED_PARAMETER(ui32Line);
 
@@ -91,5 +100,11 @@ _IOUnmapWrapper(IMG_VOID *pvIORemapCookie, IMG_CHAR *pszFileName, IMG_UINT32 ui3
 {
     PVR_UNREFERENCED_PARAMETER(pszFileName);
     PVR_UNREFERENCED_PARAMETER(ui32Line);
+
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_IOREMAP,
+                                    pvIORemapCookie);
+#endif
+
     iounmap(pvIORemapCookie);
 }

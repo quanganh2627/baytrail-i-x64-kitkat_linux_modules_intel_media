@@ -61,6 +61,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "connection_server.h"
 #include "env_connection.h"
 
+#include <linux/err.h>
+#include <linux/slab.h>
 #include <linux/ion.h>
 #include <linux/scatterlist.h>
 
@@ -511,18 +513,15 @@ PhysmemImportIon(CONNECTION_DATA *psConnection,
 						  "PMRION",
 						  &_sPMRIonFuncTab,
 						  psPrivData,
-						  &psPMR);
+						  &psPMR,
+						  &hPDumpAllocInfo,
+						  IMG_FALSE);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to create PMR", __func__));
 		goto fail_pmrcreate;
 	}
 
-	PDumpPMRMallocPMR(psPMR,
-					  psPrivData->uiSize,
-					  PAGE_SIZE,
-	                  IMG_FALSE,
-					  &hPDumpAllocInfo);
 	psPrivData->hPDumpAllocInfo = hPDumpAllocInfo;
 	psPrivData->bPDumpMalloced = IMG_TRUE;
 

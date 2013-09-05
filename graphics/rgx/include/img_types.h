@@ -108,6 +108,13 @@ typedef __int64			IMG_INT64,  *IMG_PINT64;
 /* Linux kernel mode does not use floating point */
 typedef float			IMG_FLOAT,	*IMG_PFLOAT;
 typedef double			IMG_DOUBLE, *IMG_PDOUBLE;
+
+typedef union _IMG_UINT32_FLOAT_
+{
+	IMG_UINT32 ui32;
+	IMG_FLOAT f;
+} IMG_UINT32_FLOAT;
+
 #endif
 
 

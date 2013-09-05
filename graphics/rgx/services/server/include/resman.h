@@ -112,7 +112,6 @@ enum {
 	RESMAN_TYPE_RGX_FWIF_ZSBUFFER,					/*!< FW ZS-Buffer structure */
 	RESMAN_TYPE_RGX_POPULATION,						/*!< ZS-Buffer population structure */
 	RESMAN_TYPE_RGX_FWIF_FREELIST,					/*! < FW FREELIST structure */
-	RESMAN_TYPE_RGX_RAY_CONTEXT,					/*!< RGX Ray Context Resource */
 
 	/* KERNEL: */
 	RESMAN_TYPE_KERNEL_DEVICEMEM_ALLOCATION,		/*!< Device Memory Allocation Resource */

@@ -751,7 +751,9 @@ _NewOSAllocPagesPMR(PVRSRV_DEVICE_NODE *psDevNode,
     IMG_BOOL bPoisonOnAlloc;
     IMG_BOOL bPoisonOnFree;
     IMG_BOOL bOnDemand = ((uiFlags & PVRSRV_MEMALLOCFLAG_NO_OSPAGES_ON_ALLOC) > 0);
-    IMG_UINT32 ui32CPUCacheFlags = (IMG_UINT32) DevmemCPUCacheMode(uiFlags);
+	IMG_BOOL bCpuLocal = ((uiFlags & PVRSRV_MEMALLOCFLAG_CPU_LOCAL) > 0);
+	IMG_UINT32 ui32CPUCacheFlags = (IMG_UINT32) DevmemCPUCacheMode(uiFlags);
+
 
     if (uiFlags & PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC)
     {
@@ -835,7 +837,11 @@ _NewOSAllocPagesPMR(PVRSRV_DEVICE_NODE *psDevNode,
     {
     	PDUMPCOMMENT("Deferred Allocation PMR (UMA)");
     }
-    eError = PMRCreatePMR(psDevNode->psPhysHeap,
+    if (bCpuLocal)
+    {
+    	PDUMPCOMMENT("CPU_LOCAL allocation requested");
+    }
+    eError = PMRCreatePMR(psDevNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL],
                           uiSize,
                           uiChunkSize,
                           ui32NumPhysChunks,
@@ -846,17 +852,13 @@ _NewOSAllocPagesPMR(PVRSRV_DEVICE_NODE *psDevNode,
                           "PMROSAP",
                           &_sPMROSPFuncTab,
                           psPrivData,
-                          &psPMR);
+                          &psPMR,
+                          &hPDumpAllocInfo,
+    					  IMG_FALSE);
     if (eError != PVRSRV_OK)
     {
         goto errorOnCreate;
     }
-
-    PDumpPMRMallocPMR(psPMR,
-                    uiChunkSize * ui32NumPhysChunks,
-                    1U<<uiLog2PageSize,
-	                IMG_FALSE,
-                    &hPDumpAllocInfo);
 
 	psPrivData->hPDumpAllocInfo = hPDumpAllocInfo;
 	psPrivData->bPDumpMalloced = IMG_TRUE;

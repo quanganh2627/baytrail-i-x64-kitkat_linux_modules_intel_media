@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.V.2.6
+@File			Apollo.h
+@Title          System Description Header
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    This header provides system-specific declarations and macros
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,24 +41,53 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_V_2_6_H_
-#define _RGXCONFIG_KM_1_V_2_6_H_
+#if !defined(__APOLLO_H__)
+#define __APOLLO_H__
 
-/***** Automatically generated file (6/17/2013 9:49:12 AM): Do not edit manually ********************/
-/***** Timestamp:  (6/17/2013 9:49:12 AM)************************************************************/
+#define TC_SYSTEM_NAME			"Rogue Test Chip"
 
-#define RGX_BNC_KM_B 1
-#define RGX_BNC_KM_N 2
-#define RGX_BNC_KM_C 6
+/* Valid values for the TC_MEMORY_CONFIG configuration option */
+#define TC_MEMORY_LOCAL			(1)
+#define TC_MEMORY_HOST			(2)
+#define TC_MEMORY_HYBRID		(3)
+#define TC_MEMORY_DIRECT_MAPPED		(4)
 
-/******************************************************************************
- * DDK Defines
- *****************************************************************************/
-#define RGX_FEATURE_SLC_SIZE_IN_BYTES (256*1024)
-#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
-#define RGX_FEATURE_AXI_ACELITE 
-#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
-#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
+#define RGX_TC_CORE_CLOCK_SPEED		(90000000)
+#define RGX_TC_MEM_CLOCK_SPEED		(65000000)
+
+#if defined(SUPPORT_DISPLAY_CLASS)
+/* Memory reserved for use by the PDP DC. */
+#define RGX_TC_RESERVE_DC_MEM_SIZE	(32 * 1024 * 1024)
+#endif
+
+#if defined(SUPPORT_ION)
+/* Memory reserved for use by ion. */
+#define RGX_TC_RESERVE_ION_MEM_SIZE	(384 * 1024 * 1024)
+#endif
 
 
-#endif /* _RGXCONFIG_1_V_2_6_H_ */
+/* Apollo reg on base register 0 */
+#define SYS_APOLLO_REG_PCI_BASENUM	(0)
+#define SYS_APOLLO_REG_REGION_SIZE	(0x00010000)
+
+#define SYS_APOLLO_REG_SYS_OFFSET	(0x0000)
+#define SYS_APOLLO_REG_SYS_SIZE		(0x0400)
+
+#define SYS_APOLLO_REG_PLL_OFFSET	(0x1000)
+#define SYS_APOLLO_REG_PLL_SIZE		(0x0400)
+
+#define SYS_APOLLO_REG_PDP_OFFSET	(0xC000)
+#define SYS_APOLLO_REG_PDP_SIZE		(0x0400)
+
+/* RGX reg on base register 1 */
+#define SYS_RGX_REG_PCI_BASENUM		(1)
+#define SYS_RGX_REG_REGION_SIZE		(0x00004000)
+
+/* Device memory (including HP mapping) on base register 2 */
+#define SYS_DEV_MEM_PCI_BASENUM		(2)
+/* number of bytes that are broken */
+#define SYS_DEV_MEM_BROKEN_BYTES	(1024 * 1024)
+#define SYS_DEV_MEM_REGION_SIZE		(0x40000000 - SYS_DEV_MEM_BROKEN_BYTES)
+
+#endif /* if !defined(__APOLLO_H__) */
+

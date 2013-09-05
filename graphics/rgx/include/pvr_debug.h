@@ -230,6 +230,9 @@ IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVDebugAssertFail(const IMG_CHAR *pszFile,
 	/* Get rid of the double bracketing */
 	#define PVR_DPF(x) __PVR_DPF x
 
+	#define PVR_LOG_ERROR(_rc, _call) \
+		PVR_DPF((PVR_DBG_ERROR, "%s() failed (%s) in %s()", _call, PVRSRVGETERRORSTRING(_rc), __func__));
+
 	#define PVR_LOG_IF_ERROR(_rc, _call) do \
 		{ if (_rc != PVRSRV_OK) \
 			PVR_DPF((PVR_DBG_ERROR, "%s() failed (%s) in %s()", _call, PVRSRVGETERRORSTRING(_rc), __func__)); \
@@ -290,6 +293,7 @@ IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVDebugPrintfDumpCCB(void);
 
 	#define PVR_DPF(X)  /*!< Null Implementation of PowerVR Debug Printf (does nothing) */
 
+	#define PVR_LOG_ERROR(_rc, _call) (void)(_rc)
 	#define PVR_LOG_IF_ERROR(_rc, _call) (void)(_rc)
 	#define PVR_LOGR_IF_ERROR(_rc, _call) do { if (_rc != PVRSRV_OK) { return (_rc); } MSC_SUPPRESS_4127 } while(0)
 	#define PVR_LOGRN_IF_ERROR(_rc, _call) do { if (_rc != PVRSRV_OK) { return; } MSC_SUPPRESS_4127 } while(0)

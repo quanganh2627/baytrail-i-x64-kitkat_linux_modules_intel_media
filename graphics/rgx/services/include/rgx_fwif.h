@@ -48,7 +48,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgx_fwif_shared.h"
 
 #include "pvr_tlcommon.h"
-#include "rgx_hwperf.h"
 
 /*************************************************************************/ /*!
  Logging type
@@ -88,11 +87,15 @@ typedef IMG_VOID (*PFN_RGXFW_LOG) (const IMG_CHAR* pszFmt, ...);
  ******************************************************************************
  * HWPERF
  *****************************************************************************/
-/* Size of the Firmware L1 HWPERF buffer in bytes (128KB). Accessed by the
+/* Size of the Firmware L1 HWPERF buffer in bytes (256KB). Accessed by the
  * Firmware and host driver. */
 #define RGXFW_HWPERF_L1_SIZE_MIN		(0x04000)
-#define RGXFW_HWPERF_L1_SIZE_DEFAULT    (0x20000)
-#define RGXFW_HWPERF_L1_PADDING_DEFAULT (RGX_HWPERF_V2_MAX_PACKET_SIZE)
+#define RGXFW_HWPERF_L1_SIZE_DEFAULT    (0x40000)
+/* This padding value must always be greater than or equal to 
+ * RGX_HWPERF_V2_MAX_PACKET_SIZE for all valid BVNCs. This is asserted in 
+ * rgxsrvinit.c. This macro is defined with a constant to avoid a KM 
+ * dependency */
+#define RGXFW_HWPERF_L1_PADDING_DEFAULT (0x800)
 
 /*!
  ******************************************************************************
@@ -105,7 +108,7 @@ typedef IMG_VOID (*PFN_RGXFW_LOG) (const IMG_CHAR* pszFmt, ...);
 /*! Total size of RGXFWIF_TRACEBUF dword (needs to be a multiple of RGXFW_TRACE_BUFFER_LINESIZE) */
 #define RGXFW_TRACE_BUFFER_SIZE		(400*RGXFW_TRACE_BUFFER_LINESIZE)
 #define RGXFW_TRACE_BUFFER_ASSERT_SIZE 200
-#define RGXFW_THREAD_NUM 2
+#define RGXFW_THREAD_NUM 1
 
 #define RGXFW_POLL_TYPE_SET 0x80000000
 
@@ -156,7 +159,6 @@ typedef struct _RGXFWIF_TRACEBUF_
 {
 	IMG_UINT32				ui32LogType;
 	RGXFWIF_POW_STATE		ePowState;
-	IMG_UINT64				RGXFW_ALIGN ui64CRTimerSnapshot;
 	RGXFWIF_TRACEBUF_SPACE	sTraceBuf[RGXFW_THREAD_NUM];
 
 	IMG_UINT16				aui16HwrDmLockedUpCount[RGXFWIF_DM_MAX];
@@ -172,8 +174,15 @@ typedef struct _RGXFWIF_TRACEBUF_
 	volatile IMG_UINT32		ui32HWPerfRIdx;
 	volatile IMG_UINT32		ui32HWPerfWIdx;
 	volatile IMG_UINT32		ui32HWPerfWrapCount;
-	IMG_UINT32				ui32HWPerfSize; /* constant after setup, needed in FW */
+	IMG_UINT32				ui32HWPerfSize;      /* Constant after setup, needed in FW */
+	IMG_UINT32				ui32HWPerfDropCount; /* The number of times the FW drops a packet due to buffer full */
 	
+	/* These next three items are only valid at runtime whe the FW is built
+	 * with RGX_HWPERF_UTILIZATION defined in rgxfw_hwperf.c */
+	IMG_UINT32				ui32HWPerfUt;        /* Buffer utilisation, high watermark of bytes in use */
+	IMG_UINT32				ui32FirstDropOrdinal;/* The ordinal of the first packet the FW dropped */
+	IMG_UINT32              ui32LastDropOrdinal; /* The ordinal of the last packet the FW dropped */
+
 	IMG_UINT32				ui32InterruptCount;
 } RGXFWIF_TRACEBUF;
 
@@ -200,19 +209,17 @@ typedef struct _RGXFWIF_TRACEBUF_
 #define RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(entry)	(((entry)&RGXFWIF_GPU_UTIL_FWCB_TIMER_MASK)>>RGXFWIF_GPU_UTIL_FWCB_TIMER_SHIFT)
 
 #define RGXFWIF_GPU_UTIL_FWCB_ENTRY_ADD(cb, crtimer, state) do {														\
-		/* Combine all the informations about current state transition into a single 64-bit word */						\
+		/* Combine all the information about current state transition into a single 64-bit word */						\
 		(cb)->aui64CB[(cb)->ui32WriteOffset & RGXFWIF_GPU_UTIL_FWCB_MASK] =												\
 			(((IMG_UINT64)(crtimer) << RGXFWIF_GPU_UTIL_FWCB_TIMER_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_TIMER_MASK) |			\
 			(((IMG_UINT64)(state) << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_STATE_MASK) |			\
 			(((IMG_UINT64)(cb)->ui32CurrentDVFSId << RGXFWIF_GPU_UTIL_FWCB_ID_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_ID_MASK);	\
+		/* Make sure the value is written to the memory before advancing write offset */								\
+		RGXFW_MEM_FENCE();																								\
 		/* Advance the CB write offset */																				\
 		(cb)->ui32WriteOffset++;																						\
 		/* Cache current transition in cached memory */																	\
 		(cb)->ui32LastGpuUtilState = (state);																			\
-		/* Notify the host about a new GPU state transition */															\
-		(cb)->ui32GpuUtilTransitionsCount++;																			\
-		/* Reset render counter */																						\
-		(cb)->ui32GpuUtilRendersCount = 0;																				\
 	} while (0)
 
 typedef IMG_UINT64 RGXFWIF_GPU_UTIL_FWCB_ENTRY;
@@ -222,8 +229,6 @@ typedef struct _RGXFWIF_GPU_UTIL_FWCB_
 	IMG_UINT32	ui32WriteOffset;
 	IMG_UINT32	ui32LastGpuUtilState;
 	IMG_UINT32	ui32CurrentDVFSId;
-	IMG_UINT32	ui32GpuUtilTransitionsCount;
-	IMG_UINT32	ui32GpuUtilRendersCount;
 	RGXFWIF_GPU_UTIL_FWCB_ENTRY	RGXFW_ALIGN aui64CB[RGXFWIF_GPU_UTIL_FWCB_SIZE];
 } RGXFWIF_GPU_UTIL_FWCB;
 
@@ -248,15 +253,27 @@ typedef struct _RGXFWIF_HWRINFOBUF_
 #define RGXFWIF_INICFG_CTXSWITCH_CDM_EN		(0x1 << 2)
 #define RGXFWIF_INICFG_CTXSWITCH_MODE_RAND	(0x1 << 3)
 #define RGXFWIF_INICFG_CTXSWITCH_SRESET_EN	(0x1 << 4)
-#define RGXFWIF_INICFG_2ND_THREAD_EN		(0x1 << 5)
+#define RGXFWIF_INICFG_RSVD					(0x1 << 5)
 #define RGXFWIF_INICFG_POW_RASCALDUST		(0x1 << 6)
 #define RGXFWIF_INICFG_HWPERF_EN			(0x1 << 7)
 #define RGXFWIF_INICFG_HWR_EN				(0x1 << 8)
 #define RGXFWIF_INICFG_CHECK_MLIST_EN		(0x1 << 9)
 #define RGXFWIF_INICFG_DISABLE_CLKGATING_EN (0x1 << 10)
-#define RGXFWIF_INICFG_ALL					(0x000007FFU)
+#define RGXFWIF_INICFG_POLL_COUNTERS_EN		(0x1 << 11)
+#define RGXFWIF_INICFG_VDM_CTX_STORE_MODE_INDEX		(RGX_CR_VDM_CONTEXT_STORE_MODE_MODE_INDEX << 12)
+#define RGXFWIF_INICFG_VDM_CTX_STORE_MODE_INSTANCE	(RGX_CR_VDM_CONTEXT_STORE_MODE_MODE_INSTANCE << 12)
+#define RGXFWIF_INICFG_VDM_CTX_STORE_MODE_LIST		(RGX_CR_VDM_CONTEXT_STORE_MODE_MODE_LIST << 12)
+#define RGXFWIF_INICFG_VDM_CTX_STORE_MODE_CLRMSK	(0xFFFFCFFFU)
+#define RGXFWIF_INICFG_VDM_CTX_STORE_MODE_SHIFT		(12)
+#if defined(RGX_FEATURE_RAY_TRACING)
+#define RGXFWIF_INICFG_SHG_BYPASS_EN		(0x1 << 14)
+#endif
+#define RGXFWIF_INICFG_ALL					(0x00007FDFU)
 #define RGXFWIF_SRVCFG_DISABLE_PDP_EN 		(0x1 << 31)
 #define RGXFWIF_SRVCFG_ALL					(0x80000000U)
+#define RGXFWIF_FILTCFG_TRUNCATE_HALF		(0x1 << 3)
+#define RGXFWIF_FILTCFG_TRUNCATE_INT		(0x1 << 2)
+#define RGXFWIF_FILTCFG_NEW_FILTER_MODE		(0x1 << 1)
 
 #define RGXFWIF_INICFG_CTXSWITCH_DM_ALL		(RGXFWIF_INICFG_CTXSWITCH_TA_EN | \
 											 RGXFWIF_INICFG_CTXSWITCH_3D_EN | \

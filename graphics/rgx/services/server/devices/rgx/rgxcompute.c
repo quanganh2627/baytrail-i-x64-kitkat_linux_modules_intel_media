@@ -278,7 +278,7 @@ PVRSRV_ERROR PVRSRVRGXKickCDMKM(RGX_SERVER_COMPUTE_CONTEXT	*psComputeContext,
 
 
 	/*
-		We should reserved space in the kerenl CCB here and fill in the command
+		We should reserved space in the kernel CCB here and fill in the command
 		directly.
 		This is so if there isn't space in the kernel CCB we can return with
 		retry back to services client before we take any operations

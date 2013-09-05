@@ -120,38 +120,4 @@ IMG_VOID RGXDebugRequestProcess(PVRSRV_RGXDEV_INFO	*psDevInfo,
 PVRSRV_ERROR RGXQueryDMState(PVRSRV_RGXDEV_INFO *psDevInfo, RGXFWIF_DM eDM, RGXFWIF_DM_STATE *peState, RGXFWIF_DEV_VIRTADDR *psComCtxDevVAddr);
 
 
-/******************************************************************************
- * RGX HW Performance Data Transport Routines
- *****************************************************************************/
-
-IMG_VOID RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO* psDevInfo);
-PVRSRV_ERROR RGXHWPerfDataStoreCB(PVRSRV_DEVICE_NODE* psDevInfo);
-
-PVRSRV_ERROR RGXHWPerfInit(PVRSRV_RGXDEV_INFO *psRgxDevInfo);
-IMG_VOID RGXHWPerfDeinit(PVRSRV_RGXDEV_INFO *psRgxDevInfo);
-
-
-/******************************************************************************
- * RGX HW Performance Profiling API(s)
- *****************************************************************************/
-
-PVRSRV_ERROR PVRSRVRGXCtrlHWPerfKM(
-		PVRSRV_DEVICE_NODE*	psDeviceNode,
-		IMG_BOOL			bEnable,
-		IMG_UINT64 			ui64Mask);
-
-
-PVRSRV_ERROR PVRSRVRGXConfigEnableHWPerfCountersKM(
-		PVRSRV_DEVICE_NODE* 		psDeviceNode,
-		IMG_UINT32 					ui32ArrayLen,
-		RGX_HWPERF_CONFIG_CNTBLK* 	psBlockConfigs);
-
-PVRSRV_ERROR PVRSRVRGXCtrlHWPerfCountersKM(
-		PVRSRV_DEVICE_NODE*		psDeviceNode,
-		IMG_BOOL				bEnable,
-	    IMG_UINT32 				ui32ArrayLen,
-	    IMG_UINT8*				psBlockIDs);
-
-
-
 #endif /* __RGXDEBUG_H__ */

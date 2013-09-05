@@ -1,6 +1,8 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.32.4.19
+@File
+@Title          RGX HW Performance header file
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    Header for the RGX HWPerf functions
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -39,33 +41,68 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_32_4_19_H_
-#define _RGXCORE_KM_1_32_4_19_H_
+#ifndef RGXHWPERF_H_
+#define RGXHWPERF_H_
+  
+#include "img_types.h"
+#include "img_defs.h"
+#include "pvrsrv_error.h"
 
-/***** Automatically generated file (5/24/2013 4:03:20 PM): Do not edit manually ********************/
-/***** Timestamp:  (5/24/2013 4:03:20 PM)************************************************************/
-/***** CS: @2283467 ******************************************************************/
+#include "device.h"
+#include "rgxdevice.h"
+#include "rgx_hwperf_km.h"
 
 
 /******************************************************************************
- * BVNC = 1.32.4.19 
+ * RGX HW Performance Data Transport Routines
  *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 32
-#define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 19
+
+PVRSRV_ERROR RGXHWPerfDataStoreCB(PVRSRV_DEVICE_NODE* psDevInfo);
+
+PVRSRV_ERROR RGXHWPerfInit(PVRSRV_DEVICE_NODE *psRgxDevInfo, IMG_BOOL bEnable);
+IMG_VOID RGXHWPerfDeinit(void);
+
 
 /******************************************************************************
- * Errata 
+ * RGX HW Performance Profiling API(s)
  *****************************************************************************/
 
+PVRSRV_ERROR PVRSRVRGXCtrlHWPerfKM(
+		PVRSRV_DEVICE_NODE*	psDeviceNode,
+		IMG_BOOL			bEnable,
+		IMG_UINT64 			ui64Mask);
 
 
- 
+PVRSRV_ERROR PVRSRVRGXConfigEnableHWPerfCountersKM(
+		PVRSRV_DEVICE_NODE* 		psDeviceNode,
+		IMG_UINT32 					ui32ArrayLen,
+		RGX_HWPERF_CONFIG_CNTBLK* 	psBlockConfigs);
+
+PVRSRV_ERROR PVRSRVRGXCtrlHWPerfCountersKM(
+		PVRSRV_DEVICE_NODE*		psDeviceNode,
+		IMG_BOOL				bEnable,
+	    IMG_UINT32 				ui32ArrayLen,
+	    IMG_UINT8*				psBlockIDs);
+
 /******************************************************************************
- * Enhancements 
+ * RGX HW Performance To FTrace Profiling API(s)
  *****************************************************************************/
 
+#if defined(SUPPORT_GPUTRACE_EVENTS)
+
+PVRSRV_ERROR RGXHWPerfFTraceGPUInit(PVRSRV_RGXDEV_INFO *psDevInfo);
+IMG_VOID RGXHWPerfFTraceGPUDeInit(PVRSRV_RGXDEV_INFO *psDevInfo);
+
+IMG_VOID RGXHWPerfFTraceGPUEnqueueEvent(PVRSRV_RGXDEV_INFO *psDevInfo,
+		IMG_UINT32 ui32FrameNum, IMG_UINT32 ui32RTData,
+		const IMG_CHAR* pszJobType);
+
+IMG_VOID RGXHWPerfFTraceGPUEventsEnabledSet(IMG_BOOL bNewValue);
+IMG_BOOL RGXHWPerfFTraceGPUEventsEnabled(IMG_VOID);
+
+IMG_VOID RGXHWPerfFTraceGPUThread(IMG_PVOID pvData);
+
+#endif
 
 
-#endif /* _RGXCORE_KM_1_32_4_19_H_ */
+#endif /* RGXHWPERF_H_ */

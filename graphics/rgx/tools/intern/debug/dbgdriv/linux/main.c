@@ -61,8 +61,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <asm/uaccess.h>
 
 #if defined(SUPPORT_DRM)
-#include "drmP.h"
-#include "drm.h"
+#include <drm/drmP.h>
 #endif
 
 #include "img_types.h"
@@ -82,6 +81,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(SUPPORT_DRM)
 
+#include "pvr_drm_shared.h"
 #include "pvr_drm.h"
 
 #else /* defined(SUPPORT_DRM) */

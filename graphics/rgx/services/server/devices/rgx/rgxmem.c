@@ -353,8 +353,13 @@ PVRSRV_ERROR RGXRegisterMemoryContext(PVRSRV_DEVICE_NODE	*psDeviceNode,
 			/*
 			 * Dump the Page Cat tag in the mem context (symbolic address)
 			 */
-			eError = MMU_PDumpWritePageCatBase(psMMUContext, aszName, uiOffset, 0);
-
+			eError = MMU_PDumpWritePageCatBase(psMMUContext,
+												aszName,
+												uiOffset,
+												8, /* 64-bit register write */
+												0,
+												0,
+												0);
 			if (eError != PVRSRV_OK)
 			{
 				PVR_DPF((PVR_DBG_ERROR,"RGXRegisterMemoryContext: Failed to acquire Page Catalogue address (%u)",

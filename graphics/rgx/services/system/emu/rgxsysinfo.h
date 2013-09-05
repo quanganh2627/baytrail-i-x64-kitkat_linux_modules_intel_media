@@ -45,8 +45,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __SYSINFO_H__
 
 /*!< System specific poll/timeout details */
-#define MAX_HW_TIME_US				(5000000)
-#define WAIT_TRY_COUNT				(10000)
+#define MAX_HW_TIME_US                 (5000000)
+#define FATAL_ERROR_DETECTION_POLL_MS  (50000)
+#define WAIT_TRY_COUNT                 (10000)
 
 #define SYS_DEVICE_COUNT 3 /* RGX, DISPLAY (external), BUFFER (external) */
 #define SYS_PHYS_HEAP_COUNT 2

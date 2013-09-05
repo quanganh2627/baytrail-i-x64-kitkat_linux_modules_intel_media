@@ -51,6 +51,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifndef _RGXMMUDEFS_KM_H_
 #define _RGXMMUDEFS_KM_H_
+
+#include "img_types.h"
+
 /*
 
 		Encoding of DM (note value 0x6 not used)
