@@ -264,6 +264,13 @@ bool ps_hdmi_power_islands_on()
 			OSPM_UHB_FORCE_POWER_ON);
 }
 
+bool ps_hdmi_hdcp_power_islands_on()
+{
+	return ospm_power_using_hw_begin(OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI,
+			OSPM_UHB_FORCE_POWER_ON);
+}
+
+
 void ps_hdmi_power_islands_off()
 {
 	ospm_power_using_hw_end(OSPM_DISPLAY_HDMI | OSPM_DISPLAY_B);

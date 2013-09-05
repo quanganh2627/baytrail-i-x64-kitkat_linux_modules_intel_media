@@ -1078,7 +1078,9 @@ static void hdcp_task_event_handler(struct work_struct *work)
 	if (hdcp_context == NULL || hwq == NULL)
 		goto EXIT_HDCP_HANDLER;
 
-	if (!otm_hdmi_power_islands_on())
+
+
+	if (!otm_hdmi_hdcp_power_islands_on())
 		goto EXIT_HDCP_HANDLER;
 
 	switch (msg) {
@@ -1264,12 +1266,12 @@ bool otm_hdmi_hdcp_set_power_save(hdmi_context_t *hdmi_context,
 {
 	int msg = HDCP_SET_POWER_SAVE_STATUS;
 	bool *p_suspend = NULL;
-	suspend = !!(suspend);
 
 	if (hdmi_context == NULL || hdcp_context == NULL)
 		return false;
 
 	if (hdcp_context->suspend != suspend) {
+		hdcp_context->suspend = suspend;
 		p_suspend = kmalloc(sizeof(bool), GFP_KERNEL);
 		if (p_suspend != NULL) {
 			*p_suspend = suspend;
