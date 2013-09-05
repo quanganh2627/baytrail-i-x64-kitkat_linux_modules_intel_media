@@ -21,10 +21,6 @@
 #define _PSB_DRV_H_
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0))
-#define GFX_KERNEL_3_10_FIX
-#define USE_GFX_INTERNAL_PM_FUNC
-#endif
 #include <linux/panel_psb_drv.h>
 
 #include <drm/drmP.h>
@@ -342,11 +338,7 @@ enum {
 #elif defined(CONFIG_DRM_VXD_BYT)
 #define IS_TNG_B0(dev) 		0
 #else
-#ifndef GFX_KERNEL_3_10_FIX 	/*waiting for function to identify stepping*/
 #define IS_TNG_B0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && (intel_mid_soc_stepping() == 1))
-#else
-#define IS_TNG_B0(dev) 	0
-#endif
 #endif
 
 

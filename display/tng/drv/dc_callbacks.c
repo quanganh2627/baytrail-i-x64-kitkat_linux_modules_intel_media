@@ -365,10 +365,6 @@ static void _OverlayWaitFlip(struct drm_device *dev, u32 ovstat_reg)
 
 	if (!retry){
 		DRM_ERROR("OVADD flip timeout!\n");
-#ifdef GFX_KERNEL_3_10_FIX
-		printk("Disp: power status = 0x%08lX\n",
-			intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
-#endif
 	}
 }
 int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
@@ -390,9 +386,6 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 		ovadd_reg = OVC_OVADD;
 		ovstat_reg = OVC_DOVCSTA;
 		power_islands |= OSPM_DISPLAY_C;
-#ifdef GFX_KERNEL_3_10_FIX
-		DRM_ERROR("Display C %d\n", index);
-#endif
 	}
 
 	if (power_island_get(power_islands)) {

@@ -1893,7 +1893,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	/*Intel drm driver load is done, continue doing pvr load */
 	DRM_DEBUG("Pvr driver load\n");
 
-#ifndef GFX_KERNEL_3_10_FIX
 	/* init display manager */
 	dispmgr_start(dev);
 
@@ -1901,7 +1900,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	* SH This hooks dpst with the device.
 	*/
 	dpst_init(dev, 5, 1);
-#endif
 
 	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 
@@ -3009,7 +3007,6 @@ static long psb_unlocked_ioctl(struct file *filp, unsigned int cmd,
 	return ret;
 }
 
-#ifndef GFX_KERNEL_3_10_FIX
 static int psb_blc_proc_show(struct seq_file *seq, void *v)
 {
 	struct drm_minor *minor = (struct drm_minor *)seq->private;
@@ -3045,7 +3042,6 @@ static const struct file_operations psb_blc_proc_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
-#endif
 
 #if KEEP_UNUSED_CODE_DRIVER_DISPATCH
 static int psb_rtpm_read(char *buf, char **start, off_t offset, int request,
@@ -3594,8 +3590,8 @@ fun_exit:
 #endif /* if KEEP_UNUSED_CODE_DRIVER_DISPATCH */
 
 #ifdef CONFIG_SUPPORT_HDMI
-int gpio_control_read(char *buf, char **start, off_t offset, int request,
-				     int *eof, void *data)
+ssize_t gpio_control_read(struct file *file, char *buffer,
+				      size_t count, loff_t *offset)
 {
 	unsigned int value = 0;
 	unsigned int pin_num = otm_hdmi_get_hpd_pin();
@@ -3606,14 +3602,19 @@ int gpio_control_read(char *buf, char **start, off_t offset, int request,
 	return 0;
 }
 
-int gpio_control_write(struct file *file, const char *buffer,
-				      unsigned long count, void *data)
+ssize_t gpio_control_write(struct file *file, const char *buffer,
+				      size_t count, loff_t *offset)
 {
 	char buf[2];
 	int  gpio_control;
-	int result = 0;
 	bool auto_state = drm_hdmi_hpd_auto;
-	struct drm_minor *minor = (struct drm_minor *)data;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+	struct drm_minor *minor =
+		(struct drm_minor *) PDE_DATA(file_inode(file));
+#else
+	struct drm_minor *minor =
+		(struct drm_minor *) PDE(file->f_path.dentry->d_inode)->data;
+#endif
 	struct drm_device *dev = minor->dev;
 
 	if (count != sizeof(buf)) {
@@ -3635,26 +3636,40 @@ int gpio_control_write(struct file *file, const char *buffer,
 			android_hdmi_irq_test(dev);
 			break;
 		default:
-			printk(KERN_ALERT "invalied parameters\n");
+			printk(KERN_ALERT "invalid parameters\n");
 		}
 	}
 	return count;
 }
 
+static int psb_hdmi_proc_open(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static int psb_hdmi_proc_close(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static struct file_operations psb_hdmi_proc_fops = {
+	.owner	= THIS_MODULE,
+	.open	= psb_hdmi_proc_open,
+	.read	= gpio_control_read,
+	.write	= gpio_control_write,
+	.release= psb_hdmi_proc_close,
+};
+
 static int psb_hdmi_proc_init(struct drm_minor *minor)
 {
 	struct proc_dir_entry *gpio_setting;
 
-	gpio_setting = create_proc_entry(GPIO_PROC_ENTRY,
-				0644, minor->proc_root);
+	gpio_setting = proc_create_data(GPIO_PROC_ENTRY,
+				0644, minor->proc_root,
+				&psb_hdmi_proc_fops, minor);
 
 	if (!gpio_setting)
 		return -1;
-
-	gpio_setting->write_proc = gpio_control_write;
-	gpio_setting->read_proc = gpio_control_read;
-	gpio_setting->data = (void *)minor;
-
 
 	return 0;
 }
@@ -3679,7 +3694,6 @@ static int psb_proc_init(struct drm_minor *minor)
 #ifdef CONFIG_SUPPORT_HDMI
 	psb_hdmi_proc_init(minor);
 #endif
-
 	return 0;
 }
 

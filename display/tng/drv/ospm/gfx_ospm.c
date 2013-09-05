@@ -464,9 +464,6 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 		}
 	}
 
-#ifdef GFX_KERNEL_3_10_FIX
-	return true;
-#endif
 	OSPM_DPF("Pre-power-off Status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
