@@ -383,6 +383,12 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	unsigned long cmd_page_offset = arg->cmdbuf_offset & ~PAGE_MASK;
 	struct ttm_bo_kmap_obj cmd_kmap;
 	bool is_iomem;
+	uint32_t invalid_mmu = 0;
+
+	/* check if mmu should be invalidated */
+	invalid_mmu = atomic_cmpxchg(&dev_priv->vsp_mmu_invaldc, 1, 0);
+	if (invalid_mmu && psb_check_vsp_idle(dev) == 0)
+		INVALID_MMU;
 
 	memset(&cmd_kmap, 0, sizeof(cmd_kmap));
 	vsp_priv->vsp_cmd_num = 1;

@@ -472,6 +472,7 @@ struct drm_psb_private {
 	 * VSP
 	 */
 	uint8_t *vsp_reg;
+	atomic_t vsp_mmu_invaldc;
 	void *vsp_private;
 
 	/*

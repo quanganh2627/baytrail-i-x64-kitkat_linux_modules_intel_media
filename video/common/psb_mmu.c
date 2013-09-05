@@ -195,8 +195,7 @@ static void psb_mmu_flush_pd_locked(struct psb_mmu_driver *driver,
 #endif
 		} else if (driver->mmu_type == VSP_MMU) {
 #ifdef SUPPORT_VSP
-			struct drm_psb_private *dev_priv = driver->dev_priv;
-			INVALID_MMU;
+			atomic_set(&driver->dev_priv->vsp_mmu_invaldc, 1);
 #endif
 		} else {
 			DRM_ERROR("MMU: invalid MMU type %d\n",
@@ -231,8 +230,7 @@ void psb_mmu_flush(struct psb_mmu_driver *driver, int rc_prot)
 #endif
 	} else if (driver->mmu_type == VSP_MMU) {
 #ifdef SUPPORT_VSP
-		struct drm_psb_private *dev_priv = driver->dev_priv;
-		INVALID_MMU;
+		atomic_set(&driver->dev_priv->vsp_mmu_invaldc, 1);
 #endif
 	} else {
 		DRM_ERROR("MMU: invalid MMU type %d\n", driver->mmu_type);
