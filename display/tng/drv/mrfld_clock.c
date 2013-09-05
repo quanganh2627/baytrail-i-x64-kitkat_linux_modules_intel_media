@@ -455,3 +455,29 @@ void mrfld_setup_dpll(struct drm_device *dev, int clk)
 	dpll_tmp = 0x00541f00;
 	intel_mid_msgbus_write32(HDMIPHY_PORT, DPLL_STAGER_CTL_REG2, dpll_tmp);
 }
+
+void enable_HFPLL(struct drm_device *dev)
+{
+	uint32_t pll_select = 0, ctrl_reg5 = 0;
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+
+	/* Enable HFPLL for B0 command mode panel */
+	if ((IS_TNG_B0(dev)) &&
+		(dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DBI)) {
+			pll_select = intel_mid_msgbus_read32(CCK_PORT,
+						DSI_PLL_CTRL_REG);
+			ctrl_reg5 = intel_mid_msgbus_read32(CCK_PORT,
+						FUSE_OVERRIDE_FREQ_CNTRL_REG5);
+
+			pll_select &= ~(_DSI_MUX_SEL_CCK_DSI1 |
+					_DSI_MUX_SEL_CCK_DSI0);
+
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
+					pll_select | _DSI_CCK_PLL_SELECT);
+			ctrl_reg5 |= (1 << 7) | 0xF;
+			intel_mid_msgbus_write32(CCK_PORT,
+					FUSE_OVERRIDE_FREQ_CNTRL_REG5,
+					ctrl_reg5);
+	}
+}

@@ -370,6 +370,14 @@ struct psb_context;
 struct psb_validate_buffer;
 struct psb_video_ctx;
 
+/*  enum mdfld_dsi_encoder_t is required by mdfld_output.h */
+
+typedef enum {
+	MDFLD_DSI_ENCODER_DBI = 0,
+	MDFLD_DSI_ENCODER_DPI,
+} mdfld_dsi_encoder_t;
+
+
 struct drm_psb_private {
 	/*
 	 * DSI info.
@@ -998,6 +1006,7 @@ struct drm_psb_private {
 	//RAJESH
 	struct mdfld_dsi_encoder *encoder0;
 	struct mdfld_dsi_encoder *encoder2;
+	mdfld_dsi_encoder_t mipi_encoder_type;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
 	/*psb fb dev */
@@ -1231,15 +1240,37 @@ extern int drm_topaz_sbuswa;
  */
 #define DRM_DRIVER_PRIVATE_T struct drm_psb_private
 
+#define MAX_READ_COUNT		0x3
 static inline uint32_t REGISTER_READ(struct drm_device *dev, uint32_t reg)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	int i = 0;
 	int reg_val = ioread32(dev_priv->vdc_reg + (reg));
+
+	/* we might need to re-read registers if B0 video mode panel */
+	if ((IS_TNG_B0(dev)) &&
+		(dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DPI)) {
+		if (!reg_val) {
+			for (i = 0; i < MAX_READ_COUNT; i++) {
+				reg_val = ioread32(dev_priv->vdc_reg + (reg));
+				if (reg_val)
+					break;
+			}
+		}
+
+		if (i == MAX_READ_COUNT) {
+			PSB_DEBUG_REG("Register (reg = 0x%x) read failure.\n",
+					reg);
+		}
+	}
+
 	PSB_DEBUG_REG("reg = 0x%x. reg_val = 0x%x. \n", reg, reg_val);
 	return reg_val;
 }
 
 #define REG_READ(reg)	       REGISTER_READ(dev, (reg))
+
+
 static inline void REGISTER_WRITE(struct drm_device *dev, uint32_t reg,
 				  uint32_t val)
 {
@@ -1277,11 +1308,9 @@ static inline void REGISTER_WRITE8(struct drm_device *dev,
 
 #define PSB_ALIGN_TO(_val, _align) \
   (((_val) + ((_align) - 1)) & ~((_align) - 1))
-#define PSB_WVDC32(_val, _offs) \
-  iowrite32(_val, dev_priv->vdc_reg + (_offs));
 
-#define PSB_RVDC32(_offs) \
-  ioread32(dev_priv->vdc_reg + (_offs))
+#define PSB_WVDC32(_val, _offs)		REG_WRITE(_offs, _val)
+#define PSB_RVDC32(_offs)		REG_READ(_offs)
 
 static inline uint32_t RGX_REGISTER_READ(struct drm_device *dev, uint32_t reg)
 {

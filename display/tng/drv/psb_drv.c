@@ -71,6 +71,8 @@
 #include "psb_dpst_func.h"
 
 #include "mdfld_dsi_dbi_dsr.h"
+#include "mrfld_clock.h"
+
 
 #define KEEP_UNUSED_CODE 0
 #define KEEP_UNUSED_CODE_S3D 0
@@ -1190,7 +1192,11 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 		pVBT->Size = 0;
 		return false;
 	}
+
 	dev_priv->panel_id = PanelID;
+	dev_priv->mipi_encoder_type = is_panel_vid_or_cmd(dev_priv->dev);
+	enable_HFPLL(dev_priv->dev);
+
 	return true;
 }
 

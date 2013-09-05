@@ -41,14 +41,6 @@
 #include "psb_powermgmt.h"
 
 #include <asm/intel-mid.h>
-
-/*  enum mdfld_dsi_encoder_t is required by mdfld_output.h */
-
-typedef enum {
-	MDFLD_DSI_ENCODER_DBI = 0,
-	MDFLD_DSI_ENCODER_DPI,
-} mdfld_dsi_encoder_t;
-
 #include "mdfld_output.h"
 
 /*mdfld DSI controller registers*/

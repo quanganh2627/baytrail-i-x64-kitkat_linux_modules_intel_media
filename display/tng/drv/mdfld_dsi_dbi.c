@@ -292,6 +292,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	u32 guit_val = 0;
 	u32 power_island = 0;
 	u32 sprite_reg_offset = 0;
+	uint32_t pll_select = 0, ctrl_reg5 = 0;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -319,23 +320,51 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	if (!power_island_get(power_island))
 		return -EAGAIN;
 
-	/* Disable PLL*/
-	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-	guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, _DSI_LDO_EN);
+	if (IS_TNG_B0(dev)) {
+		/* Disable PLL*/
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
+		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		intel_mid_msgbus_write32(CCK_PORT,
+						DSI_PLL_CTRL_REG,
+						guit_val | _DSI_LDO_EN);
 
-	/* Program PLL */
-	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
+		/* Program PLL */
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
 
-	guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-			((guit_val & ~_P1_POST_DIV_MASK) |
-			 (ctx->dpll & _P1_POST_DIV_MASK)));
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
+				((guit_val & ~_P1_POST_DIV_MASK) |
+				 (ctx->dpll & _P1_POST_DIV_MASK)));
 
-	ctx->dpll |= DPLL_VCO_ENABLE;
-	ctx->dpll &= ~_DSI_LDO_EN;
+		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		guit_val &= ~_DSI_LDO_EN;
 
-	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, ctx->dpll);
+		ctx->dpll |= DPLL_VCO_ENABLE;
+		ctx->dpll &= ~_DSI_LDO_EN;
+
+		intel_mid_msgbus_write32(CCK_PORT,
+						DSI_PLL_CTRL_REG,
+						ctx->dpll | guit_val);
+	} else {
+		/* Disable PLL*/
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
+		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		intel_mid_msgbus_write32(CCK_PORT,
+					DSI_PLL_CTRL_REG,
+					_DSI_LDO_EN);
+
+		/* Program PLL */
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
+
+		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
+				((guit_val & ~_P1_POST_DIV_MASK) |
+				 (ctx->dpll & _P1_POST_DIV_MASK)));
+
+		ctx->dpll |= DPLL_VCO_ENABLE;
+		ctx->dpll &= ~_DSI_LDO_EN;
+
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, ctx->dpll);
+	}
 
 	/* Wait for DSI PLL lock */
 	retry = 10000;

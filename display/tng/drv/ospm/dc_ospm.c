@@ -29,6 +29,7 @@
 #include "dc_ospm.h"
 #include "pmu_tng.h"
 #include "tng_wa.h"
+#include "mrfld_clock.h"
 #include <asm/intel-mid.h>
 
 /***********************************************************
@@ -73,6 +74,8 @@ static bool disp_a_power_up(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
 	bool ret;
+
+	enable_HFPLL(dev);
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_DISP_A, OSPM_ISLAND_UP, DSP_SS_PM);
