@@ -1095,12 +1095,15 @@ static int mdfld__intel_pipe_set_base(struct drm_crtc *crtc, int x, int y,
 
 	/* Try to attach/de-attach Plane B to an existing swap chain,
 	 * especially with another frame buffer inserted into GTT. */
+	/* TODO: remove it since there's no swap chain anymore*/
+#if 0
 	eError = MRSTLFBChangeSwapChainProperty(&Start, Size, pipe);
 	if ((eError != MRST_OK) && (eError != MRST_ERROR_INIT_FAILURE)) {
 		DRM_ERROR("Failed to attach/de-attach pipe %d.\n", pipe);
 		ret = -EINVAL;
 		goto psb_intel_pipe_set_base_exit;
 	}
+#endif
 
 	REG_WRITE(dspstride, crtc->fb->pitches[0]);
 	dspcntr = REG_READ(dspcntr_reg);
