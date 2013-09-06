@@ -43,8 +43,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __ENV_PERPROC_H__
 
 #include <linux/list.h>
-#include <linux/proc_fs.h>
 
+#include "proc.h"
 #include "services.h"
 #include "handle.h"
 
@@ -61,6 +61,8 @@ typedef struct _PVRSRV_ENV_PER_PROCESS_DATA_
 	IMG_CHAR azIonClientName[ION_CLIENT_NAME_SIZE];
 #endif
 } PVRSRV_ENV_PER_PROCESS_DATA;
+
+IMG_VOID RemovePerProcessProcDir(PVRSRV_ENV_PER_PROCESS_DATA *psEnvPerProc);
 
 PVRSRV_ERROR LinuxMMapPerProcessConnect(PVRSRV_ENV_PER_PROCESS_DATA *psEnvPerProc);
 

@@ -161,7 +161,7 @@ PVRSRV_ERROR PVRSRVPowerLock(IMG_UINT32	ui32CallerID,
 {
 	PVRSRV_ERROR	eError;
 	SYS_DATA	*psSysData;
-	IMG_UINT32		ui32Timeout = 500;
+	IMG_UINT32	ui32Timeout = 1000000;
 	IMG_BOOL	bTryLock = (ui32CallerID == ISR_ID);
 
 	SysAcquireData(&psSysData);
@@ -189,7 +189,7 @@ PVRSRV_ERROR PVRSRVPowerLock(IMG_UINT32	ui32CallerID,
 			break;
 		}
 
-		OSSleepms(2);
+		OSWaitus(1);
 		ui32Timeout--;
 	} while (ui32Timeout > 0);
 

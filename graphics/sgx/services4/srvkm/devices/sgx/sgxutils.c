@@ -62,13 +62,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifdef __linux__
 #include <linux/kernel.h>	// sprintf
 #include <linux/string.h>	// strncpy, strlen
-
-#ifndef CREATE_TRACE_POINTS
-#define CREATE_TRACE_POINTS
-#include <trace/events/gfx_idle.h>
-#undef CREATE_TRACE_POINTS
-#endif
-
 #else
 #include <stdio.h>
 #endif
@@ -155,14 +148,12 @@ IMG_VOID SGXTestActivePowerEvent (PVRSRV_DEVICE_NODE	*psDeviceNode,
 	{
 		psDevInfo->bSGXIdle = IMG_TRUE;
 		SysSGXIdleTransition(psDevInfo->bSGXIdle);
-		trace_gfx_idle_entry(smp_processor_id());
 	}
 	else if (psDevInfo->bSGXIdle &&
 			((psSGXHostCtl->ui32InterruptFlags & PVRSRV_USSE_EDM_INTERRUPT_IDLE) == 0))
 	{
 		psDevInfo->bSGXIdle = IMG_FALSE;
 		SysSGXIdleTransition(psDevInfo->bSGXIdle);
-		trace_gfx_idle_exit(smp_processor_id());
 	}
 #endif /* SYS_SUPPORTS_SGX_IDLE_CALLBACK */
 
@@ -200,7 +191,6 @@ IMG_VOID SGXTestActivePowerEvent (PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 		/* Microkernel is idle and is requesting to be powered down. */
 		psSGXHostCtl->ui32InterruptClearFlags |= PVRSRV_USSE_EDM_INTERRUPT_ACTIVE_POWER;
-		trace_gfx_idle_poweroff(smp_processor_id());
 
 		/* Suspend pdumping. */
 		PDUMPSUSPEND();
@@ -723,8 +713,9 @@ PVRSRV_ERROR SGXScheduleCCBCommandKM(PVRSRV_DEVICE_NODE		*psDeviceNode,
 	}
 	else
 	{
-		PVR_DPF((PVR_DBG_ERROR,"SGXScheduleCCBCommandKM failed to acquire lock - "
+		PVR_DPF((PVR_DBG_ERROR,"SGXScheduleCCBCommandKM failed to power up device - "
 				 "ui32CallerID:%d eError:%u", ui32CallerID, eError));
+		PVRSRVPowerUnlock(ui32CallerID);
 		return eError;
 	}
 
@@ -749,9 +740,17 @@ PVRSRV_ERROR SGXScheduleProcessQueuesKM(PVRSRV_DEVICE_NODE *psDeviceNode)
 {
 	PVRSRV_ERROR 		eError;
 	PVRSRV_SGXDEV_INFO 	*psDevInfo = psDeviceNode->pvDevice;
-	SGXMKIF_HOST_CTL	*psHostCtl = psDevInfo->psKernelSGXHostCtlMemInfo->pvLinAddrKM;
+	SGXMKIF_HOST_CTL	*psHostCtl;
 	IMG_UINT32			ui32PowerStatus;
 	SGXMKIF_COMMAND		sCommand = {0};
+
+	if (psDevInfo->psKernelSGXHostCtlMemInfo == IMG_NULL)
+	{
+		/* Part2 hasn't run yet, we can't do anything */
+		return PVRSRV_OK;
+	}
+
+	psHostCtl = psDevInfo->psKernelSGXHostCtlMemInfo->pvLinAddrKM;
 
 	ui32PowerStatus = psHostCtl->ui32PowerStatus;
 	if ((ui32PowerStatus & PVRSRV_USSE_EDM_POWMAN_NO_WORK) != 0)

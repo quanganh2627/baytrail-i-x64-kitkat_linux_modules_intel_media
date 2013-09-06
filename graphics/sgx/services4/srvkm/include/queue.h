@@ -43,6 +43,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef QUEUE_H
 #define QUEUE_H
 
+#if defined(SUPPORT_PVRSRV_DEVICE_CLASS)
 
 #if defined(__cplusplus)
 extern "C" {
@@ -75,13 +76,10 @@ extern "C" {
 	IMG_UINT32			ui32AllocSize;		/*!< allocated size*/
 	PFN_QUEUE_COMMAND_COMPLETE	pfnCommandComplete;	/*!< Command complete callback */
 	IMG_HANDLE					hCallbackData;		/*!< Command complete callback data */
-	IMG_UINT32					ui32Stamp;
-	unsigned long               ulQueueTime;
-	IMG_UINT32			ui32DevIndex;
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-        IMG_VOID                        *pvCleanupFence;        /*!< Sync fence to 'put' after timeline inc() */
-        IMG_VOID                        *pvTimeline;            /*!< Android sync timeline to inc() */
+	IMG_VOID			*pvCleanupFence;	/*!< Sync fence to 'put' after timeline inc() */
+	IMG_VOID			*pvTimeline;		/*!< Android sync timeline to inc() */
 #endif
  }COMMAND_COMPLETE_DATA, *PCOMMAND_COMPLETE_DATA;
 
@@ -146,6 +144,8 @@ PVRSRV_ERROR PVRSRVRemoveCmdProcListKM(IMG_UINT32	ui32DevIndex,
 #if defined (__cplusplus)
 }
 #endif
+
+#endif /* defined(SUPPORT_PVRSRV_DEVICE_CLASS) */
 
 #endif /* QUEUE_H */
 

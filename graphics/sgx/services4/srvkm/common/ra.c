@@ -185,7 +185,6 @@ struct _RA_ARENA_
 	/* import interface, if provided */
 	IMG_BOOL (*pImportAlloc)(IMG_VOID *,
 							 IMG_SIZE_T uSize,
-							 IMG_SIZE_T uAlignment,
 							 IMG_SIZE_T *pActualSize,
 							 BM_MAPPING **ppsMapping,
 							 IMG_UINT32 uFlags,
@@ -222,8 +221,8 @@ struct _RA_ARENA_
 #if defined(CONFIG_PROC_FS) && defined(DEBUG)
 #define PROC_NAME_SIZE		64
 
-	struct proc_dir_entry* pProcInfo;
-	struct proc_dir_entry* pProcSegs;
+	struct pvr_proc_dir_entry* pProcInfo;
+	struct pvr_proc_dir_entry* pProcSegs;
 
 	IMG_BOOL bInitProcEntry;
 #endif
@@ -234,13 +233,11 @@ IMG_VOID RA_Dump (RA_ARENA *pArena);
 #endif
 
 #if defined(CONFIG_PROC_FS) && defined(DEBUG)
-
 static void RA_ProcSeqShowInfo(struct seq_file *sfile, void* el);
 static void* RA_ProcSeqOff2ElementInfo(struct seq_file * sfile, loff_t off);
 
 static void RA_ProcSeqShowRegs(struct seq_file *sfile, void* el);
 static void* RA_ProcSeqOff2ElementRegs(struct seq_file * sfile, loff_t off);
-
 #endif /* defined(CONFIG_PROC_FS) && defined(DEBUG) */
 
 #ifdef USE_BM_FREESPACE_CHECK
@@ -1166,8 +1163,7 @@ RA_Create (IMG_CHAR *name,
 	}
 
 	pArena->name = name;
-	pArena->pImportAlloc = (void *)((imp_alloc != IMG_NULL)
-					? imp_alloc : &_RequestAllocFail);
+	pArena->pImportAlloc = (imp_alloc!=IMG_NULL) ? imp_alloc : &_RequestAllocFail;
 	pArena->pImportFree = imp_free;
 	pArena->pBackingStoreFree = backingstore_free;
 	pArena->pImportHandle = pImportHandle;
@@ -1195,13 +1191,13 @@ RA_Create (IMG_CHAR *name,
 		IMG_INT ret;
 		IMG_CHAR szProcInfoName[PROC_NAME_SIZE];
 		IMG_CHAR szProcSegsName[PROC_NAME_SIZE];
-		struct proc_dir_entry* (*pfnCreateProcEntrySeq)(const IMG_CHAR *,
+		struct pvr_proc_dir_entry* (*pfnCreateProcEntrySeq)(const IMG_CHAR *,
 										 IMG_VOID*,
 										 pvr_next_proc_seq_t,
 										 pvr_show_proc_seq_t,
 										 pvr_off2element_proc_seq_t,
 										 pvr_startstop_proc_seq_t,
-										 write_proc_t);
+										 pvr_proc_write_t);
 
 		pArena->bInitProcEntry = !PVRSRVGetInitServerState(PVRSRV_INIT_SERVER_SUCCESSFUL);
 
@@ -1311,7 +1307,7 @@ RA_Delete (RA_ARENA *pArena)
 	}
 #if defined(CONFIG_PROC_FS) && defined(DEBUG)
 	{
-		IMG_VOID (*pfnRemoveProcEntrySeq)(struct proc_dir_entry*);
+		IMG_VOID (*pfnRemoveProcEntrySeq)(struct pvr_proc_dir_entry*);
 
 		pfnRemoveProcEntrySeq = pArena->bInitProcEntry ? RemoveProcEntrySeq : RemovePerProcessProcEntrySeq;
 
@@ -1470,11 +1466,20 @@ RA_Alloc (RA_ARENA *pArena,
 		IMG_UINTPTR_T import_base;
 		IMG_SIZE_T uImportSize = uSize;
 
+		/*
+			Ensure that we allocate sufficient space to meet the uAlignment
+			constraint
+		 */
+		if (uAlignment > pArena->uQuantum)
+		{
+			uImportSize += (uAlignment - 1);
+		}
+
 		/* ensure that we import according to the quanta of this arena */
 		uImportSize = ((uImportSize + pArena->uQuantum - 1)/pArena->uQuantum)*pArena->uQuantum;
 
 		bResult =
-			pArena->pImportAlloc (pArena->pImportHandle, uImportSize, uAlignment, &uImportSize,
+			pArena->pImportAlloc (pArena->pImportHandle, uImportSize, &uImportSize,
 								  &psImportMapping, uFlags,
 								  pvPrivData, ui32PrivDataLength, &import_base);
 		if (bResult)
@@ -1969,11 +1974,9 @@ RA_Dump (RA_ARENA *pArena)
 
 #if defined(CONFIG_PROC_FS) && defined(DEBUG)
 
-
 static void RA_ProcSeqShowInfo(struct seq_file *sfile, void* el)
 {
-	PVR_PROC_SEQ_HANDLERS *handlers = (PVR_PROC_SEQ_HANDLERS*)sfile->private;
-	RA_ARENA *pArena = (RA_ARENA *)handlers->data;
+	RA_ARENA *pArena = (RA_ARENA *)PVRProcGetData(sfile->private);
 	IMG_UINTPTR_T off = (IMG_UINTPTR_T)el;
 
 	switch (off)
@@ -2029,8 +2032,7 @@ static void* RA_ProcSeqOff2ElementInfo(struct seq_file * sfile, loff_t off)
 
 static void RA_ProcSeqShowRegs(struct seq_file *sfile, void* el)
 {
-	PVR_PROC_SEQ_HANDLERS *handlers = (PVR_PROC_SEQ_HANDLERS*)sfile->private;
-	RA_ARENA *pArena = (RA_ARENA *)handlers->data;
+	RA_ARENA *pArena = (RA_ARENA *)PVRProcGetData(sfile->private);
 	BT *pBT = (BT*)el;
 
 	if (el == PVR_PROC_SEQ_START_TOKEN)
@@ -2049,8 +2051,7 @@ static void RA_ProcSeqShowRegs(struct seq_file *sfile, void* el)
 
 static void* RA_ProcSeqOff2ElementRegs(struct seq_file * sfile, loff_t off)
 {
-	PVR_PROC_SEQ_HANDLERS *handlers = (PVR_PROC_SEQ_HANDLERS*)sfile->private;
-	RA_ARENA *pArena = (RA_ARENA *)handlers->data;
+	RA_ARENA *pArena = (RA_ARENA *)PVRProcGetData(sfile->private);
 	BT *pBT = 0;
 
 	if(off == 0)
@@ -2060,7 +2061,6 @@ static void* RA_ProcSeqOff2ElementRegs(struct seq_file * sfile, loff_t off)
 
 	return (void*)pBT;
 }
-
 #endif /* defined(CONFIG_PROC_FS) && defined(DEBUG) */
 
 

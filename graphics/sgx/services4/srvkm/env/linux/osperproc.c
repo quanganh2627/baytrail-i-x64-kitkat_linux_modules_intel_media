@@ -43,9 +43,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "osperproc.h"
 
 #include "env_perproc.h"
-#include "proc.h"
 
 #if defined (SUPPORT_ION)
+#include <linux/err.h>
 #include "ion.h"
 extern struct ion_device *gpsIonDev;
 #endif
@@ -89,14 +89,7 @@ PVRSRV_ERROR OSPerProcessPrivateDataInit(IMG_HANDLE *phOsPrivateData)
 	OSSNPrintf(psEnvPerProc->azIonClientName, ION_CLIENT_NAME_SIZE, "pvr_ion_client-%d", OSGetCurrentProcessIDKM());
 	psEnvPerProc->psIONClient =
 		ion_client_create(gpsIonDev,
-#if defined(CONFIG_ION_OMAP)
-						  /*1 << ION_HEAP_TYPE_SYSTEM_CONTIG |*/
-						    1 << ION_HEAP_TYPE_SYSTEM
-						  | 1 << OMAP_ION_HEAP_TYPE_TILER
-#else /* defined(CONFIG_ION_OMAP) */
-						  -1
-#endif /* defined(CONFIG_ION_OMAP) */
-						  , psEnvPerProc->azIonClientName);
+						  psEnvPerProc->azIonClientName);
  
 	if (IS_ERR_OR_NULL(psEnvPerProc->psIONClient))
 	{
@@ -108,10 +101,6 @@ PVRSRV_ERROR OSPerProcessPrivateDataInit(IMG_HANDLE *phOsPrivateData)
 
 	return PVRSRV_OK;
 }
-
-#ifdef CONFIG_PVR_PROC
-IMG_VOID RemovePerProcessProcDir(PVRSRV_ENV_PER_PROCESS_DATA *psPerProc);
-#endif
 
 PVRSRV_ERROR OSPerProcessPrivateDataDeInit(IMG_HANDLE hOsPrivateData)
 {
@@ -129,9 +118,7 @@ PVRSRV_ERROR OSPerProcessPrivateDataDeInit(IMG_HANDLE hOsPrivateData)
 	LinuxMMapPerProcessDisconnect(psEnvPerProc);
 
 	/* Remove per process /proc entries */
-#ifdef CONFIG_PVR_PROC
 	RemovePerProcessProcDir(psEnvPerProc);
-#endif
 
 	eError = OSFreeMem(PVRSRV_OS_NON_PAGEABLE_HEAP,
 				sizeof(PVRSRV_ENV_PER_PROCESS_DATA),
