@@ -200,6 +200,9 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 		goto err_out;
 	}
 
+	if (iPipe != DC_PIPE_B)
+		DCCBDsrForbid(gpsDevice->psDrmDevice, iPipe);
+
 	for (i = 0; i < uiNumBuffers; i++) {
 		if (pasBuffers[i].eFlipOp == DC_MRFLD_FLIP_SURFACE) {
 			/*No context attach just flip the primary surface*/
@@ -251,13 +254,16 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	}
 
 	/* Issue "write_mem_start" for command mode panel. */
-	if (!iPipe)
-		DCCBUpdateDbiPanel(gpsDevice->psDrmDevice);
+	if (iPipe != DC_PIPE_B)
+		DCCBUpdateDbiPanel(gpsDevice->psDrmDevice, iPipe);
 
 	psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DC_UPDATED;
 
 	bUpdated = IMG_TRUE;
 err_out:
+	if (iPipe != DC_PIPE_B)
+		DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
+
 	power_island_put(psFlip->uiPowerIslands);
 	return bUpdated;
 }

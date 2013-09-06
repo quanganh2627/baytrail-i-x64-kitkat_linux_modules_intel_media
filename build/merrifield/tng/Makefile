@@ -99,6 +99,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/mrfld_clock.o \
 	$(DISPLAYDIR)/psb_irq.o \
 	$(DISPLAYDIR)/tng_wa.o \
+	$(DISPLAYDIR)/pmu_tng.o \
 	$(DISPLAYDIR)/jdi_vid.o \
 	$(DISPLAYDIR)/jdi_cmd.o \
 	$(DISPLAYDIR)/cmi_vid.o \
@@ -111,7 +112,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/ospm/video_ospm.o \
 	$(DISPLAYDIR)/ospm/early_suspend.o
 
-ifneq ($(CONFIG_SUPPORT_HDMI),)
+ifeq ($(CONFIG_SUPPORT_HDMI),y)
 # Platform independent library
 $(DRIVER_NAME)-objs += \
 	$(OTM_HDMI_SRC)/pil/common/otm_hdmi.o \

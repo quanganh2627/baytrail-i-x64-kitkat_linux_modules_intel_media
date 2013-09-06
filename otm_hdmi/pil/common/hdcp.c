@@ -151,6 +151,9 @@ struct hdcp_context_t {
 			/*!< single-thread workqueue handling HDCP events */
 	unsigned int ri_retry;
 			/*!< time delay (msec) to re-try Ri check */
+	unsigned int hdcp_delay;
+			/*!< time delay (msec) to wait for TMDS to be ready */
+	bool hdmi; /* HDMI or DVI*/
 };
 
 /* Global instance of local context */
@@ -677,16 +680,20 @@ static bool hdcp_stage1_authentication(bool *is_repeater)
 	uint8_t retry = 0;
 	uint16_t rx_r0 = 0;
 
-	/* wait for sink to receive TMDS */
-	msleep(500);
+	/* Wait (up to 2s) for HDMI sink to be in HDMI mode */
+	retry = 40;
+	if (hdcp_context->hdmi) {
+		while (retry--) {
+			if (hdcp_read_bstatus(&bstatus.value) == false)
+				return false;
+			if (bstatus.hdmi_mode)
+				break;
+			msleep(50);
+			pr_debug("hdcp: waiting for sink to be in HDMI mode\n");
+		}
+	}
 
-	/* Read BSTATUS */
-	if (hdcp_read_bstatus(&bstatus.value) == false)
-		return false;
-
-	/* wait for sink to be in hdmi mode */
-	if (!bstatus.hdmi_mode)
-		msleep(200);
+	pr_debug("hdcp: bstatus: %04x\n", bstatus.value);
 
 	/* Read BKSV */
 	if (hdcp_read_bksv(bksv, HDCP_KSV_SIZE) == false)
@@ -891,6 +898,9 @@ static bool hdcp_start(void)
 {
 	bool is_repeater = false;
 
+	/* Make sure TMDS is available */
+	msleep(hdcp_context->hdcp_delay);
+
 	pr_debug("hdcp: start\n");
 
 	/* Increment Auth Check Counter */
@@ -1068,7 +1078,9 @@ static void hdcp_task_event_handler(struct work_struct *work)
 	if (hdcp_context == NULL || hwq == NULL)
 		goto EXIT_HDCP_HANDLER;
 
-	if (!otm_hdmi_power_islands_on())
+
+
+	if (!otm_hdmi_hdcp_power_islands_on())
 		goto EXIT_HDCP_HANDLER;
 
 	switch (msg) {
@@ -1254,12 +1266,12 @@ bool otm_hdmi_hdcp_set_power_save(hdmi_context_t *hdmi_context,
 {
 	int msg = HDCP_SET_POWER_SAVE_STATUS;
 	bool *p_suspend = NULL;
-	suspend = !!(suspend);
 
 	if (hdmi_context == NULL || hdcp_context == NULL)
 		return false;
 
 	if (hdcp_context->suspend != suspend) {
+		hdcp_context->suspend = suspend;
 		p_suspend = kmalloc(sizeof(bool), GFP_KERNEL);
 		if (p_suspend != NULL) {
 			*p_suspend = suspend;
@@ -1454,6 +1466,8 @@ bool otm_hdmi_hdcp_enable(hdmi_context_t *hdmi_context,
 				 hdmi_attr.content._uint.value :
 				 3 * hdcp_context->video_refresh_interval;
 
+	hdcp_context->hdmi = otm_hdmi_is_monitor_hdmi(hdmi_context);
+
 	pr_debug("hdcp: schedule HDCP enable\n");
 
 #ifdef OTM_HDMI_HDCP_ALWAYS_ENC
@@ -1520,6 +1534,8 @@ bool otm_hdmi_hdcp_disable(hdmi_context_t *hdmi_context)
 bool otm_hdmi_hdcp_init(hdmi_context_t *hdmi_context,
 	int (*ddc_rd_wr)(bool, uint8_t, uint8_t, uint8_t *, int))
 {
+	otm_hdmi_attribute_t hdmi_attr;
+	otm_hdmi_ret_t       rc;
 
 	if (hdmi_context == NULL ||
 	    ddc_rd_wr == NULL ||
@@ -1575,6 +1591,17 @@ bool otm_hdmi_hdcp_init(hdmi_context_t *hdmi_context,
 
 	/* store i2c function pointer used for ddc read/write */
 	hdcp_context->ddc_read_write = ddc_rd_wr;
+
+	/* Find hdcp delay
+	 * If attribute not set, default to 500ms
+	 */
+	rc = otm_hdmi_get_attribute(hdmi_context,
+				OTM_HDMI_ATTR_ID_HDCP_DELAY,
+				&hdmi_attr, false);
+
+	hdcp_context->hdcp_delay = (rc == OTM_HDMI_SUCCESS) ?
+			hdmi_attr.content._uint.value :
+			500;
 
 	/* perform any hardware initializations */
 	if (ipil_hdcp_init() == true) {

@@ -27,7 +27,7 @@
 #include "mdfld_dsi_dbi_dsr.h"
 #include "mdfld_dsi_pkg_sender.h"
 
-#define DSR_COUNT 15
+#define DSR_COUNT 2
 
 static int exit_dsr_locked(struct mdfld_dsi_config *dsi_config)
 {
@@ -130,17 +130,6 @@ static int enter_dsr_locked(struct mdfld_dsi_config *dsi_config, int level)
 		return 0;
 	}
 
-	/*
-	 * if DSR_EXITED < level < DSR_ENTERED_LEVEL1, we only have the display
-	 * controller components turned off instead of power gate them.
-	 * this is useful for HDMI & WIDI.
-	 */
-	if (!ospm_power_using_hw_begin(OSPM_DISPLAY_ISLAND,
-		OSPM_UHB_FORCE_POWER_ON)) {
-		DRM_ERROR("Failed power on display island\n");
-		return -EINVAL;
-	}
-
 	PSB_DEBUG_ENTRY("mdfld_dsi_dsr: entering DSR level 0\n");
 
 	err = mdfld_dsi_wait_for_fifos_empty(sender);
@@ -150,10 +139,16 @@ static int enter_dsr_locked(struct mdfld_dsi_config *dsi_config, int level)
 		return err;
 	}
 
+	/*
+	 * To set the vblank_enabled to false with drm_vblank_off(), as
+	 * vblank_disable_and_save() would be scheduled late (<= 5s), and it
+	 * would cause drm_vblank_get() fail to turn on vsync interrupt
+	 * immediately.
+	 */
+	drm_vblank_off(dev, dsi_config->pipe);
+
 	/*turn off dbi interface put in ulps*/
 	__dbi_power_off(dsi_config);
-
-	ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
 
 	PSB_DEBUG_ENTRY("entered\n");
 	return 0;
@@ -256,7 +251,7 @@ int mdfld_dsi_dsr_report_te(struct mdfld_dsi_config *dsi_config)
 	 * is active or not.
 	 * Currently, we simply enter DSR LEVEL0 when HDMI is connected
 	 */
-	dsr_level = DSR_ENTERED_LEVEL1;
+	dsr_level = DSR_ENTERED_LEVEL0;
 
 	mutex_lock(&dsi_config->context_lock);
 
@@ -362,7 +357,6 @@ int mdfld_dsi_dsr_allow_locked(struct mdfld_dsi_config *dsi_config)
 
 	if (!dsr->dsr_enabled)
 		goto allow_out;
-
 
 	if (!dsr->ref_count)
 		goto allow_out;

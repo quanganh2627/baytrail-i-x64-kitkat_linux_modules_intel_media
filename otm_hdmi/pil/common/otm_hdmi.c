@@ -882,6 +882,13 @@ bool otm_hdmi_power_islands_on()
 	return ps_hdmi_power_islands_on();
 }
 
+/* turn HDMI power islands on */
+bool otm_hdmi_hdcp_power_islands_on()
+{
+	return ps_hdmi_hdcp_power_islands_on();
+}
+
+
 /* turn HDMI power islands off */
 void otm_hdmi_power_islands_off()
 {
@@ -1492,6 +1499,10 @@ otm_hdmi_ret_t otm_hdmi_declare_attributes(pd_attr_declare_t declare,
 	PD_DECLARE_ATTRIBUTE_UINT(declare, table,
 		OTM_HDMI_ATTR_ID_HDCP_RI_RETRY,
 		PD_ATTR_FLAGS_RWS, get_name, 40, 0, 50);
+
+	PD_DECLARE_ATTRIBUTE_UINT(declare, table,
+		OTM_HDMI_ATTR_ID_HDCP_DELAY,
+		PD_ATTR_FLAGS_RWS, get_name, 500, 0, 1000);
 
 	LOG_EXIT(LOG_LEVEL_HIGH, rc);
 	return rc;

@@ -24,6 +24,13 @@
  * Jackie Li<yaodong.li@intel.com>
  */
 
+
+#include <linux/version.h>
+#include <linux/gfp.h>
+#include <linux/sched.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0))
+#include <linux/sched/rt.h>
+#endif
 #include "mdfld_dsi_esd.h"
 #include "mdfld_dsi_dbi.h"
 #include "mdfld_dsi_pkg_sender.h"
@@ -40,6 +47,9 @@ static bool intel_dsi_dbi_esd_detection(struct mdfld_dsi_config *dsi_config)
 	u32 data = 0;
 	struct drm_device *dev = dsi_config->dev;
 
+#ifdef GFX_KERNEL_3_10_FIX
+	return false;
+#endif
 	PSB_DEBUG_ENTRY("esd\n");
 
 	ret = mdfld_dsi_get_power_mode(dsi_config,

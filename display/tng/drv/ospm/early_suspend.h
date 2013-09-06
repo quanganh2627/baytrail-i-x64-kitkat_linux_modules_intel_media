@@ -31,7 +31,9 @@
 #include <linux/types.h>
 #include <drm/drmP.h>
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
 void intel_media_early_suspend_init(struct drm_device *dev);
 void intel_media_early_suspend_uninit(void);
+#endif
 
 #endif /* _INTEL_MEDIA_EARLY_SUSPEND_H_ */

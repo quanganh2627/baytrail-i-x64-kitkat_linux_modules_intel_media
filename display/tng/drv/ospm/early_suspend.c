@@ -25,6 +25,8 @@
  *    Hitesh K. Patel <hitesh.k.patel@intel.com>
  */
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+
 #include <linux/earlysuspend.h>
 #include <linux/mutex.h>
 #ifdef COFNIG_GFX_RTPM
@@ -139,3 +141,5 @@ void intel_media_early_suspend_uninit(void)
 {
 	unregister_early_suspend(&intel_media_early_suspend);
 }
+
+#endif

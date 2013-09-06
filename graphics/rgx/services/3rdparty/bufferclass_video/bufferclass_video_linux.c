@@ -900,8 +900,11 @@ BC_Camera_Bridge(BC_Video_ioctl_package * psBridge, unsigned long pAddr)
 #define DRM_IOCTL_BUFFER_CLASS_VIDEO \
 	DRM_IOWR(DRM_COMMAND_BASE + PVR_DRM_BC_CMD, BC_Video_ioctl_package)
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #define IOCTL_DEF(ioctl, func, flags) {ioctl, flags, func}
-
+#else
+#define IOCTL_DEF(ioctl, func, flags) {ioctl, flags, func, ioctl}
+#endif
 struct drm_ioctl_desc sBCdrmIoctls[] = {
 	IOCTL_DEF(DRM_IOCTL_BUFFER_CLASS_VIDEO, BCVideoBridge, DRM_AUTH)
 };

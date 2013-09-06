@@ -210,9 +210,21 @@ static void dispmgr_nl_exit(void)
 static int dispmgr_nl_init(void)
 {
 	int ret = 0;
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	nl_sk = netlink_kernel_create(&init_net,
 				      NETLINK_DISPMGR,
 				      0, nl_recv_msg, NULL, THIS_MODULE);
+#else
+        struct netlink_kernel_cfg cfg = {
+                 .groups         = 0,
+                 .input          = nl_recv_msg,
+                 .cb_mutex       = NULL,
+                 .flags          = THIS_MODULE,
+	};
+
+	nl_sk = netlink_kernel_create(&init_net, NETLINK_DISPMGR, &cfg);
+#endif
 
 	if (!nl_sk) {
 		printk(KERN_ALERT "kdispmgr: error creating netlink socket.\n");

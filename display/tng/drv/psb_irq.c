@@ -104,10 +104,20 @@ static inline u32 mid_pipeconf(int pipe)
 
 void psb_enable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 {
-	if ((dev_priv->pipestat[pipe] & mask) != mask) {
+	u32 reg = psb_pipestat(pipe);
+	dev_priv->pipestat[pipe] |= mask;
+	/* Enable the interrupt, clear any pending status */
+	u32 writeVal = PSB_RVDC32(reg);
+
+	writeVal |= (mask | (mask >> 16));
+	PSB_WVDC32(writeVal, reg);
+	(void)PSB_RVDC32(reg);
+}
+
+void psb_recover_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
+{
+	if ((dev_priv->pipestat[pipe] & mask) == mask) {
 		u32 reg = psb_pipestat(pipe);
-		dev_priv->pipestat[pipe] |= mask;
-		/* Enable the interrupt, clear any pending status */
 		u32 writeVal = PSB_RVDC32(reg);
 		writeVal |= (mask | (mask >> 16));
 		PSB_WVDC32(writeVal, reg);
@@ -117,15 +127,14 @@ void psb_enable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 
 void psb_disable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 {
-	if ((dev_priv->pipestat[pipe] & mask) != 0) {
-		u32 reg = psb_pipestat(pipe);
-		u32 writeVal;
-		dev_priv->pipestat[pipe] &= ~mask;
-		writeVal = PSB_RVDC32(reg);
-		writeVal &= ~mask;
-		PSB_WVDC32(writeVal, reg);
-		(void)PSB_RVDC32(reg);
-	}
+	u32 reg = psb_pipestat(pipe);
+	u32 writeVal;
+
+	dev_priv->pipestat[pipe] &= ~mask;
+	writeVal = PSB_RVDC32(reg);
+	writeVal &= ~mask;
+	PSB_WVDC32(writeVal, reg);
+	(void)PSB_RVDC32(reg);
 }
 
 void mid_enable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
@@ -263,6 +272,7 @@ void mdfld_te_handler_work(struct work_struct *work)
 		container_of(work, struct drm_psb_private, te_work);
 	int pipe = dev_priv->te_pipe;
 	struct drm_device *dev = dev_priv->dev;
+	struct mdfld_dsi_config *dsi_config = NULL;
 
 	drm_handle_vblank(dev, pipe);
 
@@ -270,7 +280,9 @@ void mdfld_te_handler_work(struct work_struct *work)
 		if (dev_priv->psb_vsync_handler != NULL)
 			(*dev_priv->psb_vsync_handler)(dev, pipe);
 
-		mdfld_dsi_dsr_report_te(dev_priv->dsi_configs[0]);
+		dsi_config = (pipe == 0) ? dev_priv->dsi_configs[0] :
+			dev_priv->dsi_configs[1];
+		mdfld_dsi_dsr_report_te(dsi_config);
 	} else {
 #ifdef CONFIG_MID_DSI_DPU
 		mdfld_dpu_update_panel(dev);
@@ -1008,6 +1020,31 @@ int mdfld_enable_te(struct drm_device *dev, int pipe)
 
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 	PSB_DEBUG_ENTRY("%s: Enabled TE for pipe %d\n", __func__, pipe);
+
+	return 0;
+}
+
+/*
+ * It is used to recover TE interrupt in case pysical stat mismatch with logical stat
+ */
+int mdfld_recover_te(struct drm_device *dev, int pipe)
+{
+	struct drm_psb_private *dev_priv =
+	    (struct drm_psb_private *)dev->dev_private;
+	unsigned long irqflags;
+	uint32_t reg_val = 0;
+	uint32_t pipeconf_reg = mid_pipeconf(pipe);
+
+	reg_val = REG_READ(pipeconf_reg);
+
+	if (!(reg_val & PIPEACONF_ENABLE))
+		return -EINVAL;
+
+	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
+
+	psb_recover_pipestat(dev_priv, pipe, PIPE_TE_ENABLE);
+
+	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 
 	return 0;
 }

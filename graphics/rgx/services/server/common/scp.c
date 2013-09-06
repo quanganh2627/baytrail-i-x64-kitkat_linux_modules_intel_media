@@ -54,7 +54,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 #include <linux/file.h>
 #include <linux/seq_file.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 #include <linux/sw_sync.h>
+#else
+#include <sw_sync.h>
+#endif
 static PVRSRV_ERROR AllocReleaseFence(struct sw_sync_timeline *psTimeline, const char *szName, IMG_UINT32 ui32FenceVal, int *piFenceFd)
 {
 	struct sync_fence *psFence = IMG_NULL;

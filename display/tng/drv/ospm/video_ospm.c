@@ -32,6 +32,7 @@
 #include "tng_topaz.h"
 #include "tng_wa.h"
 #include <asm/intel-mid.h>
+#include "pmu_tng.h"
 #ifdef CONFIG_GFX_RTPM
 #include <linux/pm_runtime.h>
 #endif
@@ -54,16 +55,24 @@ static bool vsp_power_up(struct drm_device *dev,
 	if (p_island->island_state == OSPM_POWER_ON)
 		return true;
 	/*
-         * This workarounds are only needed for TNG A0/A1 silicon.
-         * Any TNG SoC which is newer than A0/A1 won't need this.
-         */
-        if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
-                intel_mid_soc_stepping() < 1)
-        {
+	 * This workarounds are only needed for TNG A0/A1 silicon.
+	 * Any TNG SoC which is newer than A0/A1 won't need this.
+	 */
+#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
+	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
+			intel_mid_soc_stepping() < 1)
+	{
+#endif
 		apply_A0_workarounds(OSPM_VIDEO_VPP_ISLAND, 1);
+#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
 	}
+#endif
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_VPP, OSPM_ISLAND_UP, VSP_SS_PM0);
+#else
+	pm_ret = pmu_set_power_state_tng(VSP_SS_PM0, VSP_SSC, TNG_COMPOSITE_I0);
+#endif
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state ON failed!\n");
 		return false;
@@ -93,7 +102,11 @@ static bool vsp_power_down(struct drm_device *dev,
 	/* save VSP registers */
 	psb_vsp_save_context(dev);
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_VPP, OSPM_ISLAND_DOWN, VSP_SS_PM0);
+#else
+	pm_ret = pmu_set_power_state_tng(VSP_SS_PM0, VSP_SSC, TNG_COMPOSITE_D3);
+#endif
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state OFF failed!\n");
 		return false;
@@ -134,7 +147,11 @@ static bool ved_power_up(struct drm_device *dev,
 	struct drm_psb_private *dev_priv = dev->dev_private;
 
 	PSB_DEBUG_PM("powering up ved\n");
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_DEC, OSPM_ISLAND_UP, VED_SS_PM0);
+#else
+	pm_ret = pmu_set_power_state_tng(VED_SS_PM0, VED_SSC, TNG_COMPOSITE_I0);
+#endif
 	if (pm_ret) {
 		PSB_DEBUG_PM("power up ved failed\n");
 		return false;
@@ -166,7 +183,11 @@ static bool ved_power_down(struct drm_device *dev,
 
 	psb_msvdx_save_context(dev);
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_DEC, OSPM_ISLAND_DOWN, VED_SS_PM0);
+#else
+	pm_ret = pmu_set_power_state_tng(VED_SS_PM0, VED_SSC, TNG_COMPOSITE_D3);
+#endif
 	if (pm_ret) {
 		PSB_DEBUG_PM("power down ved failed\n");
 		return false;
@@ -205,7 +226,11 @@ static bool vec_power_up(struct drm_device *dev,
 	int pm_ret = 0;
 
 	PSB_DEBUG_PM("powering up vec\n");
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_ENC, OSPM_ISLAND_UP, VEC_SS_PM0);
+#else
+	pm_ret = pmu_set_power_state_tng(VEC_SS_PM0, VEC_SSC, TNG_COMPOSITE_I0);
+#endif
 	if (pm_ret) {
 		PSB_DEBUG_PM("power up vec failed\n");
 		return false;
@@ -250,8 +275,12 @@ static bool vec_power_down(struct drm_device *dev,
 		PSB_DEBUG_PM("TOPAZ: Set VEC frequency to 200MHZ " \
 			"before power down\n");
 
+#ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_ENC, \
 		OSPM_ISLAND_DOWN, VEC_SS_PM0);
+#else
+	pm_ret = pmu_set_power_state_tng(VEC_SS_PM0, VEC_SSC, TNG_COMPOSITE_D3);
+#endif
 	if (pm_ret) {
 		DRM_ERROR("Power down ved failed\n");
 		return false;

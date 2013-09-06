@@ -43,6 +43,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __SERVICES_PROC_H__
 #define __SERVICES_PROC_H__
 
+#ifdef CONFIG_PVR_PROC
+
 #include <linux/version.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,0))
 #include <asm/system.h>		// va_list etc
@@ -110,4 +112,5 @@ struct proc_dir_entry* CreateProcEntrySeq (
 
 IMG_VOID RemoveProcEntrySeq(struct proc_dir_entry* proc_entry);
 
+#endif
 #endif

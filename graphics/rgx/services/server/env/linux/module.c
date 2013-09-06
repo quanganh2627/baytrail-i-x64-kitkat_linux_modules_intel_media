@@ -971,12 +971,13 @@ static int __init PVRCore_Init(void)
 #endif
 	LinuxInitMutex(&gPVRSRVLock);
 
+#ifdef CONFIG_PVR_PROC
 	if (CreateProcEntries ())
 	{
 		error = -ENOMEM;
 		return error;
 	}
-
+#endif
 	if (PVROSFuncInit() != PVRSRV_OK)
 	{
 		error = -ENOMEM;
@@ -1128,8 +1129,9 @@ init_failed:
 	PVRMMapCleanup();
 	LinuxBridgeDeInit();
 	PVROSFuncDeInit();
+#ifdef CONFIG_PVR_PROC
 	RemoveProcEntries();
-
+#endif
 	return error;
 
 } /*PVRCore_Init*/
@@ -1228,9 +1230,9 @@ static void __exit PVRCore_Cleanup(void)
 	LinuxBridgeDeInit();
 
 	PVROSFuncDeInit();
-
+#ifdef CONFIG_PVR_PROC
 	RemoveProcEntries();
-
+#endif
 	PVR_TRACE(("PVRCore_Cleanup: unloading"));
 }
 

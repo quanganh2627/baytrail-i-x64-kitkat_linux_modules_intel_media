@@ -83,11 +83,7 @@ bool gbdispstatus = true;
 int drm_psb_disable_vsync = 1;
 int drm_psb_no_fb;
 int drm_psb_force_pipeb;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 int drm_msvdx_pmpolicy = PSB_PMPOLICY_POWERDOWN;
-#else
-int drm_msvdx_pmpolicy = PSB_PMPOLICY_NOPM;
-#endif
 int drm_psb_cpurelax;
 int drm_psb_udelaydivider = 1;
 int drm_topaz_pmpolicy = PSB_PMPOLICY_POWERDOWN;

@@ -281,7 +281,11 @@ static int psbfb_mmap(struct fb_info *info, struct vm_area_struct *vma)
 		vma->vm_ops = &psbfb_vm_ops;
 		vma->vm_private_data = (void *)psbfb;
 		vma->vm_flags |=
-		    VM_RESERVED | VM_IO | VM_MIXEDMAP | VM_DONTEXPAND;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
+			VM_RESERVED | VM_IO | VM_MIXEDMAP | VM_DONTEXPAND;
+#else
+			VM_IO | VM_MIXEDMAP | VM_DONTEXPAND;
+#endif
 	} else {
 		/*using IMG meminfo, can I use pvrmmap to map it? */
 

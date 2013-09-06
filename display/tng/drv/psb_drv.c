@@ -48,7 +48,6 @@
 
 #include <asm/intel_scu_ipc.h>
 #include <asm/intel-mid.h>
-#include <linux/panel_psb_drv.h>
 
 #include "mdfld_dsi_dbi.h"
 #ifdef CONFIG_MID_DSI_DPU
@@ -71,6 +70,7 @@
 /* SH DPST */
 #include "psb_dpst_func.h"
 
+#include "mdfld_dsi_dbi_dsr.h"
 
 #define KEEP_UNUSED_CODE 0
 #define KEEP_UNUSED_CODE_S3D 0
@@ -115,8 +115,6 @@ u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
 int drm_psb_msvdx_tiling = 0;
 int drm_msvdx_bottom_half;
 int drm_hdmi_hpd_auto;
-
-
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -567,9 +565,15 @@ static int user_printk_ioctl(struct drm_device *dev, void *data,
 static int psb_drm_hdmi_test_ioctl(struct drm_device *,
 				   void *, struct drm_file *);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #define PSB_IOCTL_DEF(ioctl, func, flags) \
 	 [DRM_IOCTL_NR(ioctl) - DRM_COMMAND_BASE] = \
 	 {ioctl, flags, func}
+#else
+#define PSB_IOCTL_DEF(ioctl, func, flags) \
+	 [DRM_IOCTL_NR(ioctl) - DRM_COMMAND_BASE] = \
+	 {ioctl, flags, func, ioctl}
+#endif
 
 static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_KMS_OFF, psbfb_kms_off_ioctl,
@@ -592,8 +596,13 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 		      DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_STOLEN_MEMORY, psb_stolen_memory_ioctl,
 		      DRM_AUTH),
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_REGISTER_RW, psb_register_rw_ioctl,
 		      DRM_AUTH),
+#else
+	PSB_IOCTL_DEF(DRM_IOCTL_PSB_REGISTER_RW, psb_register_rw_ioctl,
+		      DRM_AUTH | DRM_UNLOCKED),
+#endif
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_GTT_MAP,
 		      psb_gtt_map_meminfo_ioctl,
 		      DRM_AUTH),
@@ -1884,6 +1893,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	/*Intel drm driver load is done, continue doing pvr load */
 	DRM_DEBUG("Pvr driver load\n");
 
+#ifndef GFX_KERNEL_3_10_FIX
 	/* init display manager */
 	dispmgr_start(dev);
 
@@ -1891,6 +1901,9 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	* SH This hooks dpst with the device.
 	*/
 	dpst_init(dev, 5, 1);
+#endif
+
+	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:
@@ -2796,7 +2809,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct drm_psb_vsync_set_arg *arg = data;
-	struct mdfld_dsi_config *dsi_config;
+	struct mdfld_dsi_config *dsi_config = NULL;
 	struct timespec now;
 	uint32_t pipe;
 	union drm_wait_vblank vblwait;
@@ -2817,6 +2830,11 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			arg->vsync.vsync_count = (uint64_t)vbl_count;
 		}
 
+		if (!pipe)
+			dsi_config = dev_priv->dsi_configs[0];
+		else if (pipe == 2)
+			dsi_config = dev_priv->dsi_configs[1];
+
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
 			/* TODO: find a clean way to protect vblank_enabled */
 			if (dev->vblank_enabled[pipe]) {
@@ -2829,11 +2847,17 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					vblwait.request.type |=
 						_DRM_VBLANK_SECONDARY;
 
+				mdfld_dsi_dsr_forbid(dsi_config);
+
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
-				if (ret)
+				if (ret) {
 					DRM_ERROR("Fail to get pipe %d vsync\n",
 							pipe);
+					schedule_work(&dev_priv->reset_panel_work);
+				}
+
+				mdfld_dsi_dsr_allow(dsi_config);
 			}
 
 			getrawmonotonic(&now);
@@ -2844,21 +2868,18 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			return ret;
 		}
 
-		if (!pipe)
-			dsi_config = dev_priv->dsi_configs[0];
-		else if (pipe == 2)
-			dsi_config = dev_priv->dsi_configs[1];
-
 		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
-			/* mdfld_dsi_dsr_forbid(dsi_config); */
+			mdfld_dsi_dsr_forbid(dsi_config);
+
 			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
 				ret = drm_vblank_get(dev, pipe);
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
-			/* mdfld_dsi_dsr_allow(dsi_config); */
 			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
 				drm_vblank_put(dev, pipe);
+
+			mdfld_dsi_dsr_allow(dsi_config);
 		}
 	}
 
@@ -2870,6 +2891,7 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct drm_psb_register_rw_arg *arg = data;
+	struct mdfld_dsi_config *dsi_config = NULL;
 	u32 power_island = 0;
 
 	if (arg->overlay_write_mask != 0) {
@@ -2910,6 +2932,10 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				return -EINVAL;
 			}
 
+			/*forbid dsr which will restore regs*/
+			dsi_config = dev_priv->dsi_configs[0];
+			mdfld_dsi_dsr_forbid(dsi_config);
+
 			if (arg->overlay_write_mask & OV_REGRWBITS_OGAM_ALL) {
 				PSB_WVDC32(arg->overlay.OGAMC5, ov_ogamc5_reg);
 				PSB_WVDC32(arg->overlay.OGAMC4, ov_ogamc4_reg);
@@ -2918,6 +2944,9 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				PSB_WVDC32(arg->overlay.OGAMC1, ov_ogamc1_reg);
 				PSB_WVDC32(arg->overlay.OGAMC0, ov_ogamc0_reg);
 			}
+
+			/*allow entering dsr*/
+			mdfld_dsi_dsr_allow(dsi_config);
 
 			power_island_put(power_island);
 		}
@@ -2980,6 +3009,7 @@ static long psb_unlocked_ioctl(struct file *filp, unsigned int cmd,
 	return ret;
 }
 
+#ifndef GFX_KERNEL_3_10_FIX
 static int psb_blc_proc_show(struct seq_file *seq, void *v)
 {
 	struct drm_minor *minor = (struct drm_minor *)seq->private;
@@ -3001,7 +3031,11 @@ static int psb_blc_proc_show(struct seq_file *seq, void *v)
 
 static int psb_blc_proc_open(struct inode *inode, struct file *file)
 {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)
 	return single_open(file, psb_blc_proc_show, PDE(inode)->data);
+#else
+	return single_open(file, psb_blc_proc_show, PDE_DATA(inode));
+#endif
 }
 
 static const struct file_operations psb_blc_proc_fops = {
@@ -3011,6 +3045,7 @@ static const struct file_operations psb_blc_proc_fops = {
 	.llseek = seq_lseek,
 	.release = single_release,
 };
+#endif
 
 #if KEEP_UNUSED_CODE_DRIVER_DISPATCH
 static int psb_rtpm_read(char *buf, char **start, off_t offset, int request,
@@ -3404,6 +3439,7 @@ static int psb_display_register_write(struct file *file, const char *buffer,
 	struct drm_device *dev = minor->dev;
 	struct drm_psb_private *dev_priv =
 	    (struct drm_psb_private *)dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = dev_priv->dsi_configs[0];
 	int reg_val = 0;
 	char buf[256];
 	char op = '0';
@@ -3465,6 +3501,10 @@ static int psb_display_register_write(struct file *file, const char *buffer,
 			MDFLD_DSR_MIPI_CONTROL, 0, 0);
 #endif
 	}
+
+	/*forbid dsr which will restore regs*/
+	mdfld_dsi_dsr_forbid(dsi_config);
+
 	if (op == 'r') {
 		if (reg >= 0xa000) {
 			reg_val = REG_READ(reg);
@@ -3545,6 +3585,9 @@ static int psb_display_register_write(struct file *file, const char *buffer,
 		}
 	}
 fun_exit:
+	/*allow entering dsr*/
+	mdfld_dsi_dsr_allow(dsi_config);
+
 	power_island_put(OSPM_DISPLAY_ISLAND);
 	return count;
 }
@@ -3616,7 +3659,7 @@ static int psb_hdmi_proc_init(struct drm_minor *minor)
 	return 0;
 }
 
-#endif
+#endif /* CONFIG_SUPPORT_HDMI */
 
 /* When a client dies:
  *    - Check for and clean up flipped page state
@@ -3631,7 +3674,6 @@ static void psb_remove(struct pci_dev *pdev)
 	drm_put_dev(dev);
 }
 
-
 static int psb_proc_init(struct drm_minor *minor)
 {
 #ifdef CONFIG_SUPPORT_HDMI
@@ -3641,8 +3683,6 @@ static int psb_proc_init(struct drm_minor *minor)
 	return 0;
 }
 
-
-
 static void psb_proc_cleanup(struct drm_minor *minor)
 {
 #ifdef CONFIG_SUPPORT_HDMI
@@ -3650,7 +3690,6 @@ static void psb_proc_cleanup(struct drm_minor *minor)
 #endif
 	return;
 }
-
 
 static const struct dev_pm_ops psb_pm_ops = {
 	.runtime_suspend = rtpm_suspend,

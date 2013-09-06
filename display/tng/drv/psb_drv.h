@@ -21,6 +21,10 @@
 #define _PSB_DRV_H_
 
 #include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0))
+#define GFX_KERNEL_3_10_FIX
+#define USE_GFX_INTERNAL_PM_FUNC
+#endif
 #include <linux/panel_psb_drv.h>
 
 #include <drm/drmP.h>
@@ -1077,6 +1081,7 @@ extern int intel_get_vblank_timestamp(struct drm_device *dev, int pipe,
 extern int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 		int *vpos, int *hpos);
 extern int mdfld_enable_te(struct drm_device *dev, int pipe);
+extern int mdfld_recover_te(struct drm_device *dev, int pipe);
 extern void mdfld_disable_te(struct drm_device *dev, int pipe);
 extern int mdfld_irq_enable_hdmi_audio(struct drm_device *dev);
 extern int mdfld_irq_disable_hdmi_audio(struct drm_device *dev);

@@ -397,14 +397,14 @@ static int mdfld_dsi_connector_set_property(struct drm_connector *connector,
 			goto set_prop_error;
 		}
 
-		if (drm_connector_property_get_value(connector, property,
+		if (drm_object_property_get_value(&connector->base, property,
 					&curValue))
 			goto set_prop_error;
 
 		if (curValue == value)
 			goto set_prop_done;
 
-		if (drm_connector_property_set_value(connector, property,
+		if (drm_object_property_set_value(&connector->base, property,
 					value))
 			goto set_prop_error;
 
@@ -430,7 +430,7 @@ static int mdfld_dsi_connector_set_property(struct drm_connector *connector,
 		}
 	} else if (!strcmp(property->name, "backlight") && encoder) {
 		PSB_DEBUG_ENTRY("backlight level = %d\n", (int)value);
-		if (drm_connector_property_set_value(connector, property,
+		if (drm_object_property_set_value(&connector->base, property,
 					value))
 			goto set_prop_error;
 		else {
@@ -981,11 +981,11 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 	connector->doublescan_allowed = false;
 
 	/*attach properties*/
-	drm_connector_attach_property(connector,
+	drm_object_attach_property(&connector->base,
 			dev->mode_config.scaling_mode_property,
 			DRM_MODE_SCALE_FULLSCREEN);
 
-	drm_connector_attach_property(connector,
+	drm_object_attach_property(&connector->base,
 			dev_priv->backlight_property,
 			MDFLD_DSI_BRIGHTNESS_MAX_LEVEL);
 
@@ -996,11 +996,13 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 		goto dsi_init_err0;
 	}
 
+#if 0
 	/*init panel error detector*/
 	if (mdfld_dsi_error_detector_init(dev, dsi_connector)) {
 		DRM_ERROR("Failed to init dsi_error detector");
 		goto dsi_init_err1;
 	}
+#endif
 
 	/*create DBI & DPI encoders*/
 	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {

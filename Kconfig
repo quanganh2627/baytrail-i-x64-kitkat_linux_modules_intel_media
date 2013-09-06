@@ -99,8 +99,8 @@ config MDFD_DUAL_MIPI
 
 config SUPPORT_HDMI
         bool "SUPPORT_HDMI"
-        depends on DRM_MDFLD || DRM_CTP || DRM_I915
-        default y
+        depends on DRM_MDFLD || DRM_CTP || DRM_I915 || DRM_MRFLD
+        default n
         help
           Choose this option to support HDMI.
 
@@ -113,8 +113,8 @@ config CTP_DPST
 
 config PVR_PROC
         bool "PVR_PROC"
-        depends on DRM_MDFLD || DRM_CTP
-        default n
+        depends on DRM_MDFLD || DRM_CTP || DRM_MRFLD
+        default y
         help
           Choose this option to support PVR proc debug interface.
 
@@ -326,30 +326,6 @@ config MID_DSI_DPU
 	default n
 	help
 	  xxxxxx
-
-config SUPPORT_HDMI
-        bool "SUPPORT_HDMI_DISPLAY"
-        depends on DRM_MDFLD || DRM_CTP || DRM_MRFLD
-        default n
-        help
-          xxxxxx
-
-config SUPPORT_MIPI_H8C7_VID_DISPLAY
-	bool "Support CMI panel on Merrifield"
-	depends on DRM_MRFLD
-	default n
-	help
-	  xxxxxx
-
-config SUPPORT_JDI_CMD_DISPLAY
-	bool "Support JDI CMD panel on Merrifield"
-	depends on DRM_MRFLD
-	default n
-	help
-		support for JDI command panel
-		xxxxxx
-		xxxxxx
-		xxxxxx
 
 config GFX_RTPM
 	bool "Enable GFX runtime_pm"
