@@ -1334,7 +1334,7 @@ PVRSRV_ERROR PVRSRVCreateDCSwapChainKM (PVRSRV_PER_PROCESS_DATA	*psPerProc,
 	OSMemSet (psSwapChain, 0, sizeof(PVRSRV_DC_SWAPCHAIN));
 
 	/* Create a command queue for the swapchain	*/
-	eError = PVRSRVCreateCommandQueueKM(1024, &psQueue);
+	eError = PVRSRVCreateCommandQueueKM(2048, &psQueue);
 	if(eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVCreateDCSwapChainKM: Failed to create CmdQueue"));
@@ -1452,7 +1452,7 @@ ErrorExit:
 
 	for(i=0; i<ui32BufferCount; i++)
 	{
-		if(psSwapChain->asBuffer[i].sDeviceClassBuffer.psKernelSyncInfo)
+		if(psSwapChain && psSwapChain->asBuffer[i].sDeviceClassBuffer.psKernelSyncInfo)
 		{
 			PVRSRVKernelSyncInfoDecRef(psSwapChain->asBuffer[i].sDeviceClassBuffer.psKernelSyncInfo, IMG_NULL);
 		}

@@ -62,8 +62,6 @@ typedef struct _PVRSRV_ENV_PER_PROCESS_DATA_
 #endif
 } PVRSRV_ENV_PER_PROCESS_DATA;
 
-IMG_VOID RemovePerProcessProcDir(PVRSRV_ENV_PER_PROCESS_DATA *psEnvPerProc);
-
 PVRSRV_ERROR LinuxMMapPerProcessConnect(PVRSRV_ENV_PER_PROCESS_DATA *psEnvPerProc);
 
 IMG_VOID LinuxMMapPerProcessDisconnect(PVRSRV_ENV_PER_PROCESS_DATA *psEnvPerProc);

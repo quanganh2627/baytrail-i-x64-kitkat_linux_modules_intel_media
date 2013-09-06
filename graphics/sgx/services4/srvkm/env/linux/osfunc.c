@@ -119,7 +119,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if defined(EMULATOR)
 #define EVENT_OBJECT_TIMEOUT_MS		(2000)
 #else
-#define EVENT_OBJECT_TIMEOUT_MS		(100)
+#define EVENT_OBJECT_TIMEOUT_MS		(500)
 #endif /* EMULATOR */
 
 #if !defined(DEBUG_LINUX_MEMORY_ALLOCATIONS)
@@ -715,6 +715,16 @@ IMG_VOID OSWaitus(IMG_UINT32 ui32Timeus)
 
 IMG_VOID OSSleepms(IMG_UINT32 ui32Timems)
 {
+	/*
+	 * Accrording to the timers-howto.txt in kernel doc,
+	 * the sleep time is ( 10us - 20ms), we should use
+	 * usleep_range() instead of msleep(), otherwise will
+	 * often sleep longer (~20 ms actual sleep for any
+	 * value given in the 1~20ms range).
+	 */
+	if (ui32Timems < 20)
+		usleep_range(ui32Timems*1000, ui32Timems*1000+100);
+	else
     msleep(ui32Timems);
 }
 
@@ -2953,10 +2963,10 @@ PVRSRV_ERROR OSEventObjectCreateKM(const IMG_CHAR *pszName, PVRSRV_EVENTOBJECT *
     
     if(psEventObject)
     {
-        if(pszName)
+	if (pszName && strlen(pszName) < EVENTOBJNAME_MAXLENGTH)
         {
             /* copy over the event object name */
-            strncpy(psEventObject->szName, pszName, EVENTOBJNAME_MAXLENGTH);
+            strncpy(psEventObject->szName, pszName, EVENTOBJNAME_MAXLENGTH - 1);
         }
         else
         {
@@ -4221,6 +4231,15 @@ static void x86_flush_cache_range(const void *pvStart, const void *pvEnd)
 	IMG_BYTE *pbStart = (IMG_BYTE *)pvStart;
 	IMG_BYTE *pbEnd = (IMG_BYTE *)pvEnd;
 	IMG_BYTE *pbBase;
+#define CACHE_SIZE_THRESHOLD (236 << 10)
+	/* From experimental data, when flushing data size more than 236K,
+	** it is better to use wbinvb rather than clflush to flush cache
+	** one block by one block.
+	*/
+	if ((int)pvEnd - (int)pvStart > CACHE_SIZE_THRESHOLD) {
+		wbinvd_on_all_cpus();
+		return ;
+	}
 
 	pbEnd = (IMG_BYTE *)ROUND_UP((IMG_UINTPTR_T)pbEnd,
 								 boot_cpu_data.x86_clflush_size);

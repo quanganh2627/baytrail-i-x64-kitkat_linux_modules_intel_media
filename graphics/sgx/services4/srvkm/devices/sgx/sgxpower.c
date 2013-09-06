@@ -47,6 +47,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sgx_mkif_km.h"
 #include "sgxutils.h"
 #include "pdump_km.h"
+#include <linux/history_record.h>
+
+#if (defined CONFIG_GPU_BURST) || (defined CONFIG_GPU_BURST_MODULE)
+#include <gburst_interface.h>
+#endif
 
 extern IMG_UINT32 g_ui32HostIRQCountSample;
 
@@ -71,6 +76,7 @@ static PVRSRV_ERROR SGXAddTimer(PVRSRV_DEVICE_NODE		*psDeviceNode,
 }
 #endif /* SUPPORT_HW_RECOVERY*/
 
+extern IMG_UINT32 g_ui32HostIRQCountSample;
 
 /*!
 ******************************************************************************
@@ -247,7 +253,8 @@ static IMG_VOID SGXStartTimer(PVRSRV_SGXDEV_INFO	*psDevInfo)
 static IMG_VOID SGXPollForClockGating (PVRSRV_SGXDEV_INFO	*psDevInfo,
 									   IMG_UINT32			ui32Register,
 									   IMG_UINT32			ui32RegisterValue,
-									   IMG_CHAR				*pszComment)
+									   IMG_CHAR				*pszComment,
+									IMG_BOOL	bRetry)
 {
 	PVR_UNREFERENCED_PARAMETER(psDevInfo);
 	PVR_UNREFERENCED_PARAMETER(ui32Register);
@@ -266,8 +273,10 @@ static IMG_VOID SGXPollForClockGating (PVRSRV_SGXDEV_INFO	*psDevInfo,
 						IMG_FALSE) != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"SGXPollForClockGating: %s failed.", pszComment));
+		if(!bRetry){
 		SGXDumpDebugInfo(psDevInfo, IMG_FALSE);
 		PVR_DBG_BREAK;
+	}
 	}
 	#endif /* NO_HARDWARE */
 
@@ -306,6 +315,10 @@ PVRSRV_ERROR SGXPrePowerState (IMG_HANDLE				hDevHandle,
 		SGXMKIF_COMMAND		sCommand = {0};
 		IMG_UINT32			ui32Core;
 		IMG_UINT32			ui32CoresEnabled;
+
+#if (defined CONFIG_GPU_BURST) || (defined CONFIG_GPU_BURST_MODULE)
+		gburst_interface_power_state_set(0);
+#endif /* if (defined CONFIG_GPU_BURST) || (defined CONFIG_GPU_BURST_MODULE) */
 
 		#if defined(SUPPORT_HW_RECOVERY)
 		/* Disable timer callback for HW recovery */
@@ -377,6 +390,7 @@ PVRSRV_ERROR SGXPrePowerState (IMG_HANDLE				hDevHandle,
 							IMG_FALSE) != PVRSRV_OK)
 		{
 			PVR_DPF((PVR_DBG_ERROR,"SGXPrePowerState: Wait for pending interrupts failed."));
+			interrupt_dump_history();
 			SGXDumpDebugInfo(psDevInfo, IMG_FALSE);
 			PVR_DBG_BREAK;
 		}
@@ -386,6 +400,9 @@ PVRSRV_ERROR SGXPrePowerState (IMG_HANDLE				hDevHandle,
 #else
 		ui32CoresEnabled = 1;
 #endif
+#define HOST_WORKAROUND_CLOCK_LOCKUP
+#define ON_LOCKUP_RESET_SLAVE_CORES
+//#define ON_LOCKUP_FORCE_CLOCKS_OFF
 
 		for (ui32Core = 0; ui32Core < ui32CoresEnabled; ui32Core++)
 		{
@@ -393,7 +410,50 @@ PVRSRV_ERROR SGXPrePowerState (IMG_HANDLE				hDevHandle,
 			SGXPollForClockGating(psDevInfo,
 								  SGX_MP_CORE_SELECT(psDevInfo->ui32ClkGateStatusReg, ui32Core),
 								  psDevInfo->ui32ClkGateStatusMask,
-								  "Wait for SGX clock gating");
+								  "Wait for SGX clock gating", IMG_TRUE);
+#if defined HOST_WORKAROUND_CLOCK_LOCKUP
+#if defined ON_LOCKUP_RESET_SLAVE_CORES
+			{
+				IMG_UINT32 ui32Status = OSReadHWReg(psDevInfo->pvRegsBaseKM, SGX_MP_CORE_SELECT(psDevInfo->ui32ClkGateStatusReg, ui32Core));
+
+				if ((ui32Status & (EUR_CR_CLKGATESTATUS_TA_CLKS_MASK | EUR_CR_CLKGATESTATUS_IDXFIFO_CLKS_MASK | EUR_CR_CLKGATESTATUS_MTE_CLKS_MASK | EUR_CR_CLKGATESTATUS_DPM_CLKS_MASK | EUR_CR_CLKGATESTATUS_TE_CLKS_MASK)) != 0)
+				{
+					OSWriteHWReg(psDevInfo->pvRegsBaseKM,
+								 EUR_CR_SOFT_RESET,
+								 EUR_CR_SOFT_RESET_VDM_RESET_MASK | EUR_CR_SOFT_RESET_MTE_RESET_MASK | EUR_CR_SOFT_RESET_IDXFIFO_RESET_MASK | EUR_CR_SOFT_RESET_DPM_RESET_MASK | EUR_CR_SOFT_RESET_TE_RESET_MASK);
+                                       ui32Status = OSReadHWReg(psDevInfo->pvRegsBaseKM,
+                                                   		 EUR_CR_SOFT_RESET);
+					OSWriteHWReg(psDevInfo->pvRegsBaseKM,
+								 EUR_CR_SOFT_RESET,
+								 0);
+	
+					/* Wait for SGX clock gating. */
+					SGXPollForClockGating(psDevInfo,
+										  SGX_MP_CORE_SELECT(psDevInfo->ui32ClkGateStatusReg, ui32Core),
+										  psDevInfo->ui32ClkGateStatusMask,
+										  "Wait for SGX clock gating",
+										  IMG_FALSE);
+				}
+			}
+#endif
+#if defined ON_LOCKUP_FORCE_CLOCKS_OFF
+			{
+				IMG_UINT32 ui32Status = OSReadHWReg(psDevInfo->pvRegsBaseKM, SGX_MP_CORE_SELECT(psDevInfo->ui32ClkGateStatusReg, ui32Core));
+
+				if ((ui32Status & (EUR_CR_CLKGATESTATUS_TA_CLKS_MASK | EUR_CR_CLKGATESTATUS_IDXFIFO_CLKS_MASK | EUR_CR_CLKGATESTATUS_MTE_CLKS_MASK)) != 0)
+				{
+					IMG_UINT32 ui32ClockControl = OSReadHWReg(psDevInfo->pvRegsBaseKM, SGX_MP_CORE_SELECT(EUR_CR_CLKGATECTL, ui32Core));
+	
+					/* Force clocks to be off for TA, MTE and IDXFIFO */
+					ui32ClockControl &= ~(EUR_CR_CLKGATECTL_MTE_CLKG_MASK | EUR_CR_CLKGATECTL_TA_CLKG_MASK | EUR_CR_CLKGATECTL_IDXFIFO_CLKG_MASK);
+					OSWriteHWReg(psDevInfo->pvRegsBaseKM,
+								 SGX_MP_CORE_SELECT(EUR_CR_CLKGATECTL, ui32Core),
+								 ui32ClockControl);
+				}
+			}
+#endif
+#endif
+
 		}
 
 		#if defined(SGX_FEATURE_MP)
@@ -401,12 +461,12 @@ PVRSRV_ERROR SGXPrePowerState (IMG_HANDLE				hDevHandle,
 		SGXPollForClockGating(psDevInfo,
 							  psDevInfo->ui32MasterClkGateStatusReg,
 							  psDevInfo->ui32MasterClkGateStatusMask,
-							  "Wait for SGX master clock gating");
+							  "Wait for SGX master clock gating", IMG_FALSE);
 
 		SGXPollForClockGating(psDevInfo,
 							  psDevInfo->ui32MasterClkGateStatus2Reg,
 							  psDevInfo->ui32MasterClkGateStatus2Mask,
-							  "Wait for SGX master clock gating (2)");
+							  "Wait for SGX master clock gating (2)", IMG_FALSE);
 		#endif /* SGX_FEATURE_MP */
 
 		if (eNewPowerState == PVRSRV_DEV_POWER_STATE_OFF)
@@ -418,6 +478,18 @@ PVRSRV_ERROR SGXPrePowerState (IMG_HANDLE				hDevHandle,
 				PVR_DPF((PVR_DBG_ERROR,"SGXPrePowerState: SGXDeinitialise failed: %u", eError));
 				return eError;
 			}
+		}
+		else
+		{
+			#if defined(SUPPORT_HW_RECOVERY)
+			PVRSRV_ERROR	eError;
+
+			eError = OSDisableTimer(psDevInfo->hTimer);
+			if (eError != PVRSRV_OK)
+			{
+				PVR_DPF((PVR_DBG_ERROR,"SGXStartTimer : Failed to enable host timer"));
+			}
+			#endif /* SUPPORT_HW_RECOVERY */
 		}
 	}
 
@@ -506,6 +578,10 @@ PVRSRV_ERROR SGXPostPowerState (IMG_HANDLE				hDevHandle,
 		}
 
 		SGXStartTimer(psDevInfo);
+
+#if (defined CONFIG_GPU_BURST) || (defined CONFIG_GPU_BURST_MODULE)
+		gburst_interface_power_state_set(1);
+#endif /* if (defined CONFIG_GPU_BURST) || (defined CONFIG_GPU_BURST_MODULE) */
 	}
 
 	return PVRSRV_OK;
@@ -555,16 +631,15 @@ PVRSRV_ERROR SGXPreClockSpeedChange (IMG_HANDLE				hDevHandle,
 				PDUMPRESUME();
 				return eError;
 			}
-		}
-		else
-		{
+		} else {
 			#if defined(SUPPORT_HW_RECOVERY)
 			PVRSRV_ERROR	eError;
 
 			eError = OSDisableTimer(psDevInfo->hTimer);
-			if (eError != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_ERROR,"SGXStartTimer : Failed to enable host timer"));
+			if (eError != PVRSRV_OK) {
+				PVR_DPF((PVR_DBG_ERROR,
+				"OSDisableTimer : "
+				"Failed to disable host timer"));
 			}
 			#endif /* SUPPORT_HW_RECOVERY */
 		}

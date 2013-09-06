@@ -1795,6 +1795,11 @@ BM_Wrap (	IMG_HANDLE hDevMemHeap,
 		}
 	}
 #endif
+
+	if (psSysAddr == IMG_NULL) {
+		PVR_DPF((PVR_DBG_ERROR, "Invalid parameter."));
+		return IMG_FALSE;
+	}
 	/*
 	 * Insert the System Physical Address of the first page into the hash so we can optimise multiple wraps of the
 	 * same memory.
