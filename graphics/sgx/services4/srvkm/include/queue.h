@@ -76,6 +76,9 @@ extern "C" {
 	IMG_UINT32			ui32AllocSize;		/*!< allocated size*/
 	PFN_QUEUE_COMMAND_COMPLETE	pfnCommandComplete;	/*!< Command complete callback */
 	IMG_HANDLE					hCallbackData;		/*!< Command complete callback data */
+	IMG_UINT32					ui32Stamp;
+	unsigned long               ulQueueTime;
+	IMG_UINT32			ui32DevIndex;
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 	IMG_VOID			*pvCleanupFence;	/*!< Sync fence to 'put' after timeline inc() */

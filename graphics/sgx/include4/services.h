@@ -233,11 +233,12 @@ typedef enum _PVRSRV_DEVICE_TYPE_
 	PVRSRV_DEVICE_TYPE_SGX				= 7,
 
 	PVRSRV_DEVICE_TYPE_VGX				= 8,
+	PVRSRV_DEVICE_TYPE_TOPAZ			= 9,
 
 	/* 3rd party devices take ext type */
-	PVRSRV_DEVICE_TYPE_EXT				= 9,
+	PVRSRV_DEVICE_TYPE_EXT				= 10,
 
-    PVRSRV_DEVICE_TYPE_LAST             = 9,
+	PVRSRV_DEVICE_TYPE_LAST				= 10,
 
 	PVRSRV_DEVICE_TYPE_FORCE_I32		= 0x7fffffff
 

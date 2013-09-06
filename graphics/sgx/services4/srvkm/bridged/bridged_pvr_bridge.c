@@ -103,8 +103,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * which functions should be excluded (like the shared srvclient bridge code)
  * so that ports may choose to override certain things. */
 
-/* For the purpose of maintainability, it is intended that this file should not
- * contain large amounts of OS specific #ifdefs. Headers are fine, and perhaps
+/* For the purpose of maintainability, it is intended that this file should not * contain large amounts of OS specific #ifdefs. Headers are fine, and perhaps
  * a few one liners, but for anything more, please find a way to add e.g.
  * an osfunc.c abstraction or override the entire function in question within
  * env,*,pvr_bridge_k.c
@@ -2872,6 +2871,8 @@ PVRSRVSwapToDCBuffer2BW(IMG_UINT32 ui32BridgeID,
 	IMG_VOID *pvDispClassInfo;
 	IMG_VOID *pvSwapChain;
 	IMG_UINT32 i;
+	IMG_PVOID psSwapMemInfos[10];
+	IMG_PVOID psSwapSyncInfos[10];
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 	int iReleaseFd = get_unused_fd();
@@ -2916,11 +2917,37 @@ PVRSRVSwapToDCBuffer2BW(IMG_UINT32 ui32BridgeID,
 		return -EFAULT;
 	}
 
+	if(psSwapDispClassBufferIN->ui32NumMemInfos > 10)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVSwapToDCBuffer2BW: Invalid NumMemInfos"));
+		return -EINVAL;
+	}
+
+	if(CopyFromUserWrapper(psPerProc,
+						   ui32BridgeID,
+						   &psSwapMemInfos[0],
+						   psSwapDispClassBufferIN->ppsKernelMemInfos,
+						   psSwapDispClassBufferIN->ui32NumMemInfos * (sizeof(IMG_HANDLE))) != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVSwapToDCBuffer2BW: Failed to copy kernel mem infos"));
+		return -EFAULT;
+	}
+
 	if(!OSAccessOK(PVR_VERIFY_WRITE,
 				   psSwapDispClassBufferIN->ppsKernelSyncInfos,
 				   sizeof(IMG_HANDLE) * psSwapDispClassBufferIN->ui32NumMemInfos))
 	{
 		PVR_DPF((PVR_DBG_ERROR, "PVRSRVSwapToDCBuffer2BW: Access check failed for ppsKernelSyncInfos"));
+		return -EFAULT;
+	}
+
+	if(CopyFromUserWrapper(psPerProc,
+						   ui32BridgeID,
+						   &psSwapSyncInfos[0],
+						   psSwapDispClassBufferIN->ppsKernelSyncInfos,
+						   psSwapDispClassBufferIN->ui32NumMemInfos * (sizeof(IMG_HANDLE))) != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "PVRSRVSwapToDCBuffer2BW: Failed to copy kernel sync infos"));
 		return -EFAULT;
 	}
 
@@ -2931,7 +2958,7 @@ PVRSRVSwapToDCBuffer2BW(IMG_UINT32 ui32BridgeID,
 		psSwapDispClassBufferOUT->eError =
 			PVRSRVLookupHandle(psPerProc->psHandleBase,
 							   (IMG_PVOID *)&psKernelMemInfo,
-							   psSwapDispClassBufferIN->ppsKernelMemInfos[i],
+							   psSwapMemInfos[i],
 							   PVRSRV_HANDLE_TYPE_MEM_INFO);
 		if(psSwapDispClassBufferOUT->eError != PVRSRV_OK)
 		{
@@ -2943,7 +2970,6 @@ PVRSRVSwapToDCBuffer2BW(IMG_UINT32 ui32BridgeID,
 #if !defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 		{
 			PVRSRV_KERNEL_SYNC_INFO *psKernelSyncInfo;
-
 			psSwapDispClassBufferOUT->eError =
 				PVRSRVLookupHandle(psPerProc->psHandleBase,
 								   (IMG_PVOID *)&psKernelSyncInfo,
@@ -3469,6 +3495,11 @@ _SetDispatchTableEntry(IMG_UINT32 ui32Index,
 	/* INTEGRATION_POINT: Enable this to dump out the dispatch table entries */
 	PVR_DPF((PVR_DBG_WARNING, "%s: %d %s %s", __FUNCTION__, ui32Index, pszIOCName, pszFunctionName));
 #endif
+
+	if (ui32Index >= BRIDGE_DISPATCH_TABLE_ENTRY_COUNT) {
+		PVR_DPF((PVR_DBG_ERROR, "Invalid parameters."));
+		return;
+	}
 
 	/* We should never be over-writing a previous entry.
 	 * If we are, tell the world about it.

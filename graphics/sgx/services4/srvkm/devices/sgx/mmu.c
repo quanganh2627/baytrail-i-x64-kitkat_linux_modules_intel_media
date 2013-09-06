@@ -928,6 +928,11 @@ _AllocPageTableMemory (MMU_HEAP *pMMUHeap,
 	}
 #else
 	/* Zero the page table. */
+	if(!psPTInfoList->PTPageCpuVAddr)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "_AllocPageTableMemory: ERROR invalid parameter"));
+		return IMG_FALSE;
+	}
 	OSMemSet(psPTInfoList->PTPageCpuVAddr, 0, pMMUHeap->ui32PTSize);
 #endif
 	MakeKernelPageReadOnly(psPTInfoList->PTPageCpuVAddr);
@@ -1562,14 +1567,14 @@ _DeferredAllocPagetables(MMU_HEAP *pMMUHeap, IMG_DEV_VIRTADDR DevVAddr, IMG_UINT
 				}
 			}
 
-#if !defined(SGX_FEATURE_MULTIPLE_MEM_CONTEXTS)
+//#if !defined(SGX_FEATURE_MULTIPLE_MEM_CONTEXTS)
 			/* This is actually not to do with multiple mem contexts, but to do with the directory cache.
 			   In the 1 context implementation of the MMU, the directory "cache" is actually a copy of the
 			   page directory memory, and requires updating whenever the page directory changes, even if there
 			   was no previous value in a particular entry
 			 */
 			MMU_InvalidateDirectoryCache(pMMUHeap->psMMUContext->psDevInfo);
-#endif
+//#endif
 #if defined(FIX_HW_BRN_31620)
 			/* If this PT is not in the requested range then save it and null out the main PTInfo */
 			if (((ui32PDIndex + i) < ui32PDRequestStart) || ((ui32PDIndex + i) > ui32PDRequestEnd))
@@ -2628,9 +2633,9 @@ MMU_InsertHeap(MMU_CONTEXT *psMMUContext, MMU_HEAP *psMMUHeap)
 	IMG_UINT32 *pui32PDCpuVAddr = (IMG_UINT32 *) psMMUContext->pvPDCpuVAddr;
 	IMG_UINT32 *pui32KernelPDCpuVAddr = (IMG_UINT32 *) psMMUHeap->psMMUContext->pvPDCpuVAddr;
 	IMG_UINT32 ui32PDEntry;
-#if !defined(SGX_FEATURE_MULTIPLE_MEM_CONTEXTS)
+//#if !defined(SGX_FEATURE_MULTIPLE_MEM_CONTEXTS)
 	IMG_BOOL bInvalidateDirectoryCache = IMG_FALSE;
-#endif
+//#endif
 
 	/* advance to the first entry */
 	pui32PDCpuVAddr += psMMUHeap->psDevArena->BaseDevVAddr.uiAddr >> psMMUHeap->ui32PDShift;
@@ -2681,9 +2686,9 @@ MMU_InsertHeap(MMU_CONTEXT *psMMUContext, MMU_HEAP *psMMUHeap)
 				PDUMPPDENTRIES(&psMMUHeap->sMMUAttrib, psMMUContext->hPDOSMemHandle, (IMG_VOID *) &pui32PDCpuVAddr[ui32PDEntry], sizeof(IMG_UINT32), 0, IMG_FALSE, PDUMP_PD_UNIQUETAG, PDUMP_PT_UNIQUETAG);
 			}
 		#endif
-#if !defined(SGX_FEATURE_MULTIPLE_MEM_CONTEXTS)
+//#if !defined(SGX_FEATURE_MULTIPLE_MEM_CONTEXTS)
 			bInvalidateDirectoryCache = IMG_TRUE;
-#endif
+//#endif
 		}
 	}
 
@@ -2691,7 +2696,7 @@ MMU_InsertHeap(MMU_CONTEXT *psMMUContext, MMU_HEAP *psMMUHeap)
 	DisableHostAccess(psMMUContext);
 #endif
 
-#if !defined(SGX_FEATURE_MULTIPLE_MEM_CONTEXTS)
+//#if !defined(SGX_FEATURE_MULTIPLE_MEM_CONTEXTS)
 	if (bInvalidateDirectoryCache)
 	{
 		/* This is actually not to do with multiple mem contexts, but to do with the directory cache.
@@ -2701,7 +2706,7 @@ MMU_InsertHeap(MMU_CONTEXT *psMMUContext, MMU_HEAP *psMMUHeap)
 		*/
 		MMU_InvalidateDirectoryCache(psMMUContext->psDevInfo);
 	}
-#endif
+//#endif
 }
 
 
@@ -3611,6 +3616,9 @@ MMU_MapScatter (MMU_HEAP *pMMUHeap,
 				 "MMU_MapScatter: devVAddr=%x, SysAddr=" SYSPADDR_FMT ", size=0x%x/0x%" SIZE_T_FMT_LEN "x",
 				  DevVAddr.uiAddr, sSysAddr.uiAddr, uCount, uSize));
 	}
+#if (SGX_FEATURE_PT_CACHE_ENTRIES_PER_LINE > 1)
+	MMU_InvalidatePageTableCache(pMMUHeap->psMMUContext->psDevInfo);
+#endif
 
 #if defined(PDUMP)
 	MMU_PDumpPageTables (pMMUHeap, MapBaseDevVAddr, uSize, IMG_FALSE, hUniqueTag);
@@ -3688,7 +3696,9 @@ MMU_MapPages (MMU_HEAP *pMMUHeap,
 		DevVAddr.uiAddr += ui32VAdvance;
 		DevPAddr.uiAddr += ui32PAdvance;
 	}
-
+#if (SGX_FEATURE_PT_CACHE_ENTRIES_PER_LINE > 1)
+	MMU_InvalidatePageTableCache(pMMUHeap->psMMUContext->psDevInfo);
+#endif
 #if defined(PDUMP)
 	MMU_PDumpPageTables (pMMUHeap, MapBaseDevVAddr, uSize, IMG_FALSE, hUniqueTag);
 #endif /* #if defined(PDUMP) */
@@ -3781,7 +3791,9 @@ MMU_MapPagesSparse (MMU_HEAP *pMMUHeap,
 		DevVAddr.uiAddr += ui32VAdvance;
 	}
 	pMMUHeap->bHasSparseMappings = IMG_TRUE;
-
+#if (SGX_FEATURE_PT_CACHE_ENTRIES_PER_LINE > 1)
+	MMU_InvalidatePageTableCache(pMMUHeap->psMMUContext->psDevInfo);
+#endif
 #if defined(PDUMP)
 	MMU_PDumpPageTables (pMMUHeap, MapBaseDevVAddr, uSizeVM, IMG_FALSE, hUniqueTag);
 #endif /* #if defined(PDUMP) */
@@ -3892,7 +3904,9 @@ MMU_MapShadow (MMU_HEAP          *pMMUHeap,
 		MapDevVAddr.uiAddr += ui32VAdvance;
 		uOffset += ui32PAdvance;
 	}
-
+#if (SGX_FEATURE_PT_CACHE_ENTRIES_PER_LINE > 1)
+	MMU_InvalidatePageTableCache(pMMUHeap->psMMUContext->psDevInfo);
+#endif
 #if defined(PDUMP)
 	MMU_PDumpPageTables (pMMUHeap, MapBaseDevVAddr, uByteSize, IMG_FALSE, hUniqueTag);
 #endif /* #if defined(PDUMP) */
@@ -4021,6 +4035,9 @@ MMU_MapShadowSparse (MMU_HEAP          *pMMUHeap,
 	}
 
 	pMMUHeap->bHasSparseMappings = IMG_TRUE;
+#if (SGX_FEATURE_PT_CACHE_ENTRIES_PER_LINE > 1)
+	MMU_InvalidatePageTableCache(pMMUHeap->psMMUContext->psDevInfo);
+#endif
 #if defined(PDUMP)
 	MMU_PDumpPageTables (pMMUHeap, MapBaseDevVAddr, uiSizeVM, IMG_FALSE, hUniqueTag);
 #endif /* #if defined(PDUMP) */
@@ -4368,6 +4385,12 @@ PVRSRV_ERROR MMU_BIFResetPDAlloc(PVRSRV_SGXDEV_INFO *psDevInfo)
 	psDevInfo->sBIFResetPDDevPAddr = SysCpuPAddrToDevPAddr(PVRSRV_DEVICE_TYPE_SGX, sMemBlockCpuPAddr);
 	psDevInfo->sBIFResetPTDevPAddr.uiAddr = psDevInfo->sBIFResetPDDevPAddr.uiAddr + SGX_MMU_PAGE_SIZE;
 	psDevInfo->sBIFResetPageDevPAddr.uiAddr = psDevInfo->sBIFResetPTDevPAddr.uiAddr + SGX_MMU_PAGE_SIZE;
+
+	if(!pui8MemBlock)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "MMU_BIFResetPDAlloc: ERROR parameter"));
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
 	/* override pointer cast warnings */
 	/* PRQA S 3305,509 2 */
 	psDevInfo->pui32BIFResetPD = (IMG_UINT32 *)pui8MemBlock;
@@ -4482,12 +4505,14 @@ PVRSRV_ERROR MMU_MapExtSystemCacheRegs(PVRSRV_DEVICE_NODE *psDeviceNode)
 	PVRSRV_SGXDEV_INFO *psDevInfo;
 	IMG_UINT32 ui32PDIndex;
 	IMG_UINT32 ui32PTIndex;
+#if defined(PDUMP)
 	PDUMP_MMU_ATTRIB sMMUAttrib;
+#endif
 
 	psDevInfo = (PVRSRV_SGXDEV_INFO*)psDeviceNode->pvDevice;
 
-	sMMUAttrib = psDevInfo->sMMUAttrib;
 #if defined(PDUMP)
+	sMMUAttrib = psDevInfo->sMMUAttrib;
 	MMU_SetPDumpAttribs(&sMMUAttrib, psDeviceNode,
 						SGX_MMU_PAGE_MASK,
 						SGX_MMU_PT_SIZE * sizeof(IMG_UINT32));
@@ -4568,13 +4593,14 @@ PVRSRV_ERROR MMU_UnmapExtSystemCacheRegs(PVRSRV_DEVICE_NODE *psDeviceNode)
 	IMG_UINT32 ui32PDIndex;
 	IMG_UINT32 ui32PTIndex;
 	IMG_UINT32 *pui32PT;
+#if defined(PDUMP)
 	PDUMP_MMU_ATTRIB sMMUAttrib;
+#endif
 
 	psDevInfo = (PVRSRV_SGXDEV_INFO*)psDeviceNode->pvDevice;
 
-	sMMUAttrib = psDevInfo->sMMUAttrib;
-
 #if defined(PDUMP)
+	sMMUAttrib = psDevInfo->sMMUAttrib;
 	MMU_SetPDumpAttribs(&sMMUAttrib, psDeviceNode,
 						SGX_MMU_PAGE_MASK,
 						SGX_MMU_PT_SIZE * sizeof(IMG_UINT32));
@@ -4587,20 +4613,22 @@ PVRSRV_ERROR MMU_UnmapExtSystemCacheRegs(PVRSRV_DEVICE_NODE *psDeviceNode)
 	ui32PDIndex = (SGX_EXT_SYSTEM_CACHE_REGS_DEVVADDR_BASE & SGX_MMU_PD_MASK) >> (SGX_MMU_PAGE_SHIFT + SGX_MMU_PT_SHIFT);
 	ui32PTIndex = (SGX_EXT_SYSTEM_CACHE_REGS_DEVVADDR_BASE & SGX_MMU_PT_MASK) >> SGX_MMU_PAGE_SHIFT;
 
+	pui32PT = NULL;
+
 	/* Only unmap it if the PT hasn't already been freed */
 	if (psDeviceNode->sDevMemoryInfo.pBMKernelContext->psMMUContext->apsPTInfoList[ui32PDIndex])
 	{
 		if (psDeviceNode->sDevMemoryInfo.pBMKernelContext->psMMUContext->apsPTInfoList[ui32PDIndex]->PTPageCpuVAddr)
 		{
 			pui32PT = (IMG_UINT32 *) psDeviceNode->sDevMemoryInfo.pBMKernelContext->psMMUContext->apsPTInfoList[ui32PDIndex]->PTPageCpuVAddr;
-		}
-	}
 
 	MakeKernelPageReadWrite(pui32PT);
 	pui32PT[ui32PTIndex] = 0;
 	MakeKernelPageReadOnly(pui32PT);
 
 	PDUMPMEMPTENTRIES(&sMMUAttrib, psDeviceNode->sDevMemoryInfo.pBMKernelContext->psMMUContext->hPDOSMemHandle, &pui32PT[ui32PTIndex], sizeof(IMG_UINT32), 0, IMG_FALSE, PDUMP_PD_UNIQUETAG, PDUMP_PT_UNIQUETAG);
+		}
+	}
 
 	return PVRSRV_OK;
 }

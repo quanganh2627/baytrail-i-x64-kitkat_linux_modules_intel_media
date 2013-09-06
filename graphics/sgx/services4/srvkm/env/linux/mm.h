@@ -179,6 +179,8 @@ struct _LinuxMemArea {
 
 	IMG_HANDLE hBMHandle;			/* Handle back to BM for this allocation */
 
+    IMG_BOOL bfromPool;
+
     /* List entry for global list of areas registered for mmap */
     struct list_head	sMMapItem;
 

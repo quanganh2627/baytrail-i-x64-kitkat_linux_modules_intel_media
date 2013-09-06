@@ -102,6 +102,10 @@ PVRSRV_ERROR OSPerProcessPrivateDataInit(IMG_HANDLE *phOsPrivateData)
 	return PVRSRV_OK;
 }
 
+#ifdef CONFIG_PVR_PROC
+IMG_VOID RemovePerProcessProcDir(PVRSRV_ENV_PER_PROCESS_DATA *psPerProc);
+#endif
+
 PVRSRV_ERROR OSPerProcessPrivateDataDeInit(IMG_HANDLE hOsPrivateData)
 {
 	PVRSRV_ERROR eError;
@@ -118,7 +122,9 @@ PVRSRV_ERROR OSPerProcessPrivateDataDeInit(IMG_HANDLE hOsPrivateData)
 	LinuxMMapPerProcessDisconnect(psEnvPerProc);
 
 	/* Remove per process /proc entries */
+#ifdef CONFIG_PVR_PROC
 	RemovePerProcessProcDir(psEnvPerProc);
+#endif
 
 	eError = OSFreeMem(PVRSRV_OS_NON_PAGEABLE_HEAP,
 				sizeof(PVRSRV_ENV_PER_PROCESS_DATA),

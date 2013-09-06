@@ -56,6 +56,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * compatible.
  */
 
+#if defined(PVRDEBUG)
+#define DEBUG
+#endif
 
 #if defined(DEBUG) || defined (INTERNAL_TEST)
 #define DEBUG_SET_OFFSET	OPTIONS_BIT0
