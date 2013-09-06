@@ -90,7 +90,7 @@ extern "C" {
 		{															\
 			PVRSRVDebugPrintf(DBGPRIV_FATAL, __FILE__, __LINE__,	\
 							  "Debug assertion failed!");			\
-			WARN_ON(1);													\
+			BUG();													\
 		}															\
 	} while (0)
 
@@ -117,7 +117,7 @@ IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVDebugAssertFail(const IMG_CHAR *pszFile,
 
 
 			#if defined(LINUX) && defined(__KERNEL__)
-				#define PVR_DBG_BREAK WARN_ON(1)
+				#define PVR_DBG_BREAK BUG()
 			#else
 				#define PVR_DBG_BREAK PVRSRVDebugAssertFail(__FILE__, __LINE__)
 			#endif

@@ -49,13 +49,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include <asm/io.h>
 #include <asm/page.h>
-
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,3,0))
-#include <asm/barrier.h>
-#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,22)) && (LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0))
 #include <asm/system.h>
 #endif
-
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
@@ -78,7 +74,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrmmap.h"
 #include "mmap.h"
 #include "env_data.h"
-#include "proc.h"
 #include "mutex.h"
 #include "lock.h"
 #include "event.h"
@@ -377,22 +372,15 @@ PVRSRV_ERROR LinuxEventObjectSignal(IMG_HANDLE hOSEventObjectList)
  @Return   PVRSRV_ERROR  :  Error code
 
 ******************************************************************************/
-#ifdef CONFIG_COUNT_GPU_BLOCKING_TIME
-#define phy_core_id(cpu) (topology_core_id(cpu))
-#endif
 PVRSRV_ERROR LinuxEventObjectWait(IMG_HANDLE hOSEventObject, IMG_UINT32 ui32MSTimeout)
 {
-#ifdef CONFIG_COUNT_GPU_BLOCKING_TIME
-	u32 phycore_id;
-	struct per_physical_core_t *pphycore;
-#endif
-
 	IMG_UINT32 ui32TimeStamp;
 	DEFINE_WAIT(sWait);
 
 	PVRSRV_LINUX_EVENT_OBJECT *psLinuxEventObject = (PVRSRV_LINUX_EVENT_OBJECT *) hOSEventObject;
 
 	IMG_UINT32 ui32TimeOutJiffies = msecs_to_jiffies(ui32MSTimeout);
+	
 	do	
 	{
 		prepare_to_wait(&psLinuxEventObject->sWait, &sWait, TASK_INTERRUPTIBLE);
@@ -405,17 +393,8 @@ PVRSRV_ERROR LinuxEventObjectWait(IMG_HANDLE hOSEventObject, IMG_UINT32 ui32MSTi
 
 		LinuxUnLockMutex(&gPVRSRVLock);		
 
-#ifdef CONFIG_COUNT_GPU_BLOCKING_TIME
-		phycore_id = phy_core_id(smp_processor_id());
-		pphycore = &per_cpu(pphycore_counts, phycore_id);
-		atomic_inc(&pphycore->wait_for_gpu_count);
-#endif
 		ui32TimeOutJiffies = (IMG_UINT32)schedule_timeout((IMG_INT32)ui32TimeOutJiffies);
 		
-#ifdef CONFIG_COUNT_GPU_BLOCKING_TIME
-		atomic_dec(&pphycore->wait_for_gpu_count);
-#endif
-
 		LinuxLockMutexNested(&gPVRSRVLock, PVRSRV_LOCK_CLASS_BRIDGE);
 #if defined(DEBUG)
 		psLinuxEventObject->ui32Stats++;
@@ -427,6 +406,7 @@ PVRSRV_ERROR LinuxEventObjectWait(IMG_HANDLE hOSEventObject, IMG_UINT32 ui32MSTi
 	finish_wait(&psLinuxEventObject->sWait, &sWait);	
 
 	psLinuxEventObject->ui32TimeStampPrevious = ui32TimeStamp;
+
 	return ui32TimeOutJiffies ? PVRSRV_OK : PVRSRV_ERROR_TIMEOUT;
 
 }

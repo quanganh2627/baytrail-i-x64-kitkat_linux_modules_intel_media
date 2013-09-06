@@ -1487,10 +1487,7 @@ static PVRSRV_ERROR AllocHandle(PVRSRV_HANDLE_BASE *psBase, IMG_HANDLE *phHandle
 		psBase->ui32FirstFreeIndex = 0;
 		PVR_ASSERT(ui32NewIndex < psBase->ui32TotalHandCount);
 	}
-	if (psNewHandle == IMG_NULL) {
-		PVR_DPF((PVR_DBG_ERROR, "Invalid parameter."));
-		return PVRSRV_ERROR_INVALID_PARAMS;
-	}
+	PVR_ASSERT(psNewHandle != IMG_NULL);
 
 	/* Handle to be returned to client */
 	hHandle = INDEX_TO_HANDLE(ui32NewIndex);
