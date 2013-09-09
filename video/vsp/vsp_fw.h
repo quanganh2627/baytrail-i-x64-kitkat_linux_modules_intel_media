@@ -452,12 +452,22 @@ enum vsp_power_saving_mode {
 struct VssProcPictureVP8 {
 	uint32_t surface_id;
 	uint32_t irq;  /* send interupt when input or output surface is ready */
-	uint32_t base; /* pointer to picture in DDR */
+	uint32_t base; /* pointer to luma picture in DDR */
+	uint32_t base_uv; /* pointer to chroma picture in DDR */
 	uint32_t height;
 	uint32_t width;
 	uint32_t stride;
 	uint32_t format; /* frame raw format */
 };
+
+/**
+ * Enumeration for recon_buffer_mode
+ */
+typedef enum {
+	vss_vp8enc_seq_param_recon_buffer_mode_per_seq = 0, /* send 4 ref/recon frame buffers at seq lvl */
+	vss_vp8enc_seq_param_recon_buffer_mode_per_pic,     /* send 1 recon frame buffer per picture */
+	vss_vp8enc_seq_param_recon_buffer_mode_cnt          /* nr of modes */
+} vss_vp8enc_seq_param_recon_buffer_mode_t;
 
 /**
  * Sequence parameter data structure.
@@ -483,6 +493,8 @@ struct VssVp8encSequenceParameterBuffer {
 	uint32_t max_intra_rate;
 	uint32_t cyclic_intra_refresh;
 	uint32_t concatenate_partitions;
+	uint32_t recon_buffer_mode;
+	struct VssProcPictureVP8 ref_frame_buffers[4];
 };
 
 struct VssVp8encEncodedFrame {
@@ -497,7 +509,7 @@ struct VssVp8encEncodedFrame {
 	uint32_t partition_id;
 	uint32_t buffer_level;
 	uint32_t quality;
-	uint32_t surfaceId_of_ref_frame[3];
+	uint32_t surfaceId_of_ref_frame[4];
 	uint32_t reserved[15];
 	uint32_t coded_data[1];
 };
