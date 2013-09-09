@@ -1214,7 +1214,7 @@ static void mdfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 	struct drm_device *dev = crtc->dev;
 	struct psb_intel_crtc *psb_intel_crtc = to_psb_intel_crtc(crtc);
 	int pipe = psb_intel_crtc->pipe;
-	int dpll_reg = DPLL_B;
+	int dpll_reg = MDFLD_DPLL_B;
 	int dspcntr_reg = DSPBCNTR;
 	int dspbase_reg = DSPBBASE;
 	int pipeconf_reg = PIPEBCONF;
@@ -1241,65 +1241,67 @@ static void mdfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 	case DRM_MODE_DPMS_ON:
 	case DRM_MODE_DPMS_STANDBY:
 	case DRM_MODE_DPMS_SUSPEND:
-		/* Enable the DPLL */
-		temp = REG_READ(dpll_reg);
-		if ((temp & DPLL_VCO_ENABLE) == 0) {
-			/*
-			 * When ungating power of DPLL, needs to wait 0.5us
-			 * before enable the VCO
-			 */
-			if (temp & MDFLD_PWR_GATE_EN) {
-				temp &= ~MDFLD_PWR_GATE_EN;
+		/* If HDMI is connected, Enable the DPLL */
+		if (android_hdmi_is_connected(dev) == true) {
+			temp = REG_READ(dpll_reg);
+			if ((temp & DPLL_VCO_ENABLE) == 0) {
+				/*
+				 * When ungating power of DPLL, needs to wait 0.5us
+				 * before enable the VCO
+				 */
+				if (temp & MDFLD_PWR_GATE_EN) {
+					temp &= ~MDFLD_PWR_GATE_EN;
+					REG_WRITE(dpll_reg, temp);
+					udelay(1);
+				}
+
 				REG_WRITE(dpll_reg, temp);
-				udelay(1);
+				REG_READ(dpll_reg);
+				udelay(500);
+
+				REG_WRITE(dpll_reg, temp | DPLL_VCO_ENABLE);
+				REG_READ(dpll_reg);
+
+				/**
+				 * wait for DSI PLL to lock
+				 * NOTE: only need to poll status of pipe 0 and pipe 1,
+				 * since both MIPI pipes share the same PLL.
+				 */
+				while ((pipe != 2) && (timeout < 20000) &&
+						!(REG_READ(pipeconf_reg) &
+							PIPECONF_DSIPLL_LOCK)) {
+					udelay(150);
+					timeout++;
+				}
 			}
 
-			REG_WRITE(dpll_reg, temp);
-			REG_READ(dpll_reg);
-			udelay(500);
+			/* Enable the pipe */
+			temp = REG_READ(pipeconf_reg);
+			if ((temp & PIPEBCONF_ENABLE) == 0) {
+				/* Enable Pipe */
+				temp |= PIPEACONF_ENABLE;
+				/* Enable Display/Overplay Planes */
+				temp &= ~PIPECONF_PLANE_OFF;
+				/* Enable Cursor Planes */
+				temp &= ~PIPECONF_CURSOR_OFF;
+				REG_WRITE(pipeconf_reg, temp);
+				REG_READ(pipeconf_reg);
 
-			REG_WRITE(dpll_reg, temp | DPLL_VCO_ENABLE);
-			REG_READ(dpll_reg);
-
-			/**
-			 * wait for DSI PLL to lock
-			 * NOTE: only need to poll status of pipe 0 and pipe 1,
-			 * since both MIPI pipes share the same PLL.
-			 */
-			while ((pipe != 2) && (timeout < 20000) &&
-					!(REG_READ(pipeconf_reg) &
-						PIPECONF_DSIPLL_LOCK)) {
-				udelay(150);
-				timeout++;
+				/* Wait for for the pipe enable to take effect. */
+				intel_wait_for_pipe_enable_disable(dev, pipe, true);
 			}
+
+			/* Enable the plane */
+			temp = REG_READ(dspcntr_reg);
+			if ((temp & DISPLAY_PLANE_ENABLE) == 0) {
+				REG_WRITE(dspcntr_reg,
+					temp | DISPLAY_PLANE_ENABLE);
+				/* Flush the plane changes */
+				REG_WRITE(dspbase_reg, REG_READ(dspbase_reg));
+			}
+
+			psb_intel_crtc_load_lut(crtc);
 		}
-
-		/* Enable the pipe */
-		temp = REG_READ(pipeconf_reg);
-		if ((temp & PIPEBCONF_ENABLE) == 0) {
-			/* Enable Pipe */
-			temp |= PIPEACONF_ENABLE;
-			/* Enable Display/Overplay Planes */
-			temp &= ~PIPECONF_PLANE_OFF;
-			/* Enable Cursor Planes */
-			temp &= ~PIPECONF_CURSOR_OFF;
-			REG_WRITE(pipeconf_reg, temp);
-			REG_READ(pipeconf_reg);
-
-			/* Wait for for the pipe enable to take effect. */
-			intel_wait_for_pipe_enable_disable(dev, pipe, true);
-		}
-
-		/* Enable the plane */
-		temp = REG_READ(dspcntr_reg);
-		if ((temp & DISPLAY_PLANE_ENABLE) == 0) {
-			REG_WRITE(dspcntr_reg,
-				temp | DISPLAY_PLANE_ENABLE);
-			/* Flush the plane changes */
-			REG_WRITE(dspbase_reg, REG_READ(dspbase_reg));
-		}
-
-		psb_intel_crtc_load_lut(crtc);
 
 		break;
 	case DRM_MODE_DPMS_OFF:
