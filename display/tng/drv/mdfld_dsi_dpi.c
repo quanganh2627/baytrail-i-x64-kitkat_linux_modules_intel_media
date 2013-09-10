@@ -794,6 +794,7 @@ static void __mdfld_dsi_dpi_set_timing(struct mdfld_dsi_config *config,
 {
 	struct mdfld_dsi_dpi_timing dpi_timing;
 	struct mdfld_dsi_hw_context *ctx;
+	struct drm_device *dev = config->dev;
 
 	if (!config) {
 		DRM_ERROR("Invalid parameters\n");
@@ -806,7 +807,10 @@ static void __mdfld_dsi_dpi_set_timing(struct mdfld_dsi_config *config,
 	mutex_lock(&config->context_lock);
 
 	/*dpi resolution*/
-	ctx->dpi_resolution = (mode->vdisplay << 16 | mode->hdisplay);
+	if (get_panel_type(dev, 0) == SHARP25x16_VID)
+		ctx->dpi_resolution = (mode->vdisplay << 16 | (mode->hdisplay / 2));
+	else
+		ctx->dpi_resolution = (mode->vdisplay << 16 | mode->hdisplay);
 
 	/*Calculate DPI timing*/
 	mdfld_dsi_dpi_timing_calculation(mode, &dpi_timing,

@@ -277,7 +277,13 @@ void DCCBFlipSprite(struct drm_device *dev,
 		PSB_WVDC32(ctx->pos, DSPAPOS + reg_offset);
 
 	if ((ctx->update_mask & SPRITE_UPDATE_SIZE)) {
-		PSB_WVDC32(ctx->size, DSPASIZE + reg_offset);
+		if (get_panel_type(dev, 0) == SHARP25x16_VID) {
+			u32 tem;
+			tem = (ctx->size & 0xFFF) / 2;
+			tem = tem | (ctx->size & 0xFFF0000);
+			PSB_WVDC32(tem, DSPASIZE + reg_offset);
+		} else
+			PSB_WVDC32(ctx->size, DSPASIZE + reg_offset);
 		PSB_WVDC32(ctx->stride, DSPASTRIDE + reg_offset);
 	}
 
@@ -334,7 +340,13 @@ void DCCBFlipPrimary(struct drm_device *dev,
 		PSB_WVDC32(ctx->pos, DSPAPOS + reg_offset);
 
 	if ((ctx->update_mask & SPRITE_UPDATE_SIZE)) {
-		PSB_WVDC32(ctx->size, DSPASIZE + reg_offset);
+		if (get_panel_type(dev, 0) == SHARP25x16_VID) {
+			u32 tem;
+			tem = (ctx->size & 0xFFF) / 2;
+			tem = tem | (ctx->size & 0xFFF0000);
+			PSB_WVDC32(tem, DSPASIZE + reg_offset);
+		} else
+			PSB_WVDC32(ctx->size, DSPASIZE + reg_offset);
 		PSB_WVDC32(ctx->stride, DSPASTRIDE + reg_offset);
 	}
 
