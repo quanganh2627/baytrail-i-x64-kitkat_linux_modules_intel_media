@@ -37,13 +37,12 @@
 #include <linux/pm_runtime.h>
 #endif
 
+static int pm_cmd_freq_get(u32 reg_freq);
 static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd);
 static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd);
 
 static void vsp_set_max_frequency(struct drm_device *dev);
 static void vsp_set_default_frequency(struct drm_device *dev);
-
-static int psb_msvdx_set_ved_freq(u32 freq_code);
 
 extern struct drm_device *gpDrmDevice;
 /***********************************************************
@@ -177,9 +176,11 @@ static bool ved_power_up(struct drm_device *dev,
 
 	iowrite32(0xffffffff, dev_priv->ved_wrapper_reg + 0);
 
-        if (!psb_msvdx_set_ved_freq(IP_FREQ_320_00))
-                PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
-                        "320MHZ after power up\n");
+	if (need_set_ved_freq) {
+		if (!psb_msvdx_set_ved_freq(IP_FREQ_320_00))
+			PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
+				"320MHZ after power up\n");
+	}
 	return ret;
 }
 
@@ -204,9 +205,11 @@ static bool ved_power_down(struct drm_device *dev,
 
 	psb_msvdx_save_context(dev);
 
-        if (!psb_msvdx_set_ved_freq(IP_FREQ_200_00))
-                PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
-                        "200MHZ after power up\n");
+	if (need_set_ved_freq) {
+		if (!psb_msvdx_set_ved_freq(IP_FREQ_200_00))
+			PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
+				"200MHZ after power up\n");
+	}
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_DEC, OSPM_ISLAND_DOWN, VED_SS_PM0);
@@ -402,6 +405,18 @@ static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd)
 	return 0;
 }
 
+static int pm_cmd_freq_get(u32 reg_freq)
+{
+	u32 freq_val;
+	int freq_code=0;
+
+	pm_cmd_freq_wait(reg_freq, NULL);
+
+	freq_val = intel_mid_msgbus_read32(PUNIT_PORT, reg_freq);
+	freq_code =(int)((freq_val>>IP_FREQ_STAT_POS) & ~IP_FREQ_VALID);
+	return freq_code;
+}
+
 static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd)
 {
 	u32 freq_val;
@@ -481,7 +496,7 @@ static void vsp_set_default_frequency(struct drm_device *dev)
 	return;
 }
 
-static int psb_msvdx_set_ved_freq(u32 freq_code)
+int psb_msvdx_set_ved_freq(u32 freq_code)
 {
        u32 freq_code_rlzd;
        int ret;
@@ -493,4 +508,14 @@ static int psb_msvdx_set_ved_freq(u32 freq_code)
        }
 
        return ret;
+}
+
+int psb_msvdx_get_ved_freq(u32 reg_freq)
+{
+	return  pm_cmd_freq_get(reg_freq);
+}
+
+void psb_set_freq_control_switch(bool config_value)
+{
+	need_set_ved_freq = config_value;
 }
