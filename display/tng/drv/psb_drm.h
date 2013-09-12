@@ -546,6 +546,7 @@ struct drm_psb_stolen_memory_arg {
 
 #define OVC_REGRWBITS_OVADD                  (1 << 2)
 #define OVC_REGRWBITS_OGAM_ALL			(1 << 3)
+#define OVSTATUS_REGRBIT_OVR_UPDT		(1 << 4)
 
 /*vsync operation*/
 #define VSYNC_ENABLE				(1 << 0)

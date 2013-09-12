@@ -2938,8 +2938,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
 				if (ret) {
-					DRM_ERROR("Fail to get pipe %d vsync\n",
-							pipe);
+					DRM_ERROR("%s: fail to get pipe %d vsync\n",
+							__func__, pipe);
 					if (pipe != 1)
 						schedule_work(&dev_priv->reset_panel_work);
 				}
@@ -2958,8 +2958,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
 			mdfld_dsi_dsr_forbid(dsi_config);
 
-			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
+			if ((pipe == 0) || (pipe == 1) || (pipe == 2)) {
 				ret = drm_vblank_get(dev, pipe);
+				if (ret != 0)
+					DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
+						__func__, pipe);
+			}
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
@@ -3047,6 +3051,21 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 		DC_MRFLD_Disable_Plane(arg->plane.type,
 				arg->plane.index, arg->plane.ctx);
 
+	if (arg->overlay_read_mask & OVSTATUS_REGRBIT_OVR_UPDT) {
+		u32 ovstat_reg = OV_DOVASTA;
+		power_island |= OSPM_DISPLAY_A;
+		if (arg->plane.index) {
+			power_island |= OSPM_DISPLAY_C;
+			ovstat_reg = OVC_DOVCSTA;
+		}
+		/* By default overlay is not updated since last vblank event*/
+		arg->plane.ctx = 1;
+		if (power_island_get(power_island)) {
+			arg->plane.ctx =
+				(PSB_RVDC32(ovstat_reg) & BIT31) == 0 ? 0 : 1;
+			power_island_put(power_island);
+		}
+	}
 	return 0;
 }
 

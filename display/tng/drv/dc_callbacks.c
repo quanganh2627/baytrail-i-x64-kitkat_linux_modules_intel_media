@@ -435,8 +435,15 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 
 	if (power_island_get(power_islands)) {
 		PSB_WVDC32(ctx, ovadd_reg);
+
+		/* in cmd mode, overlay flip will not finish until a new
+		  * "write memory start" is issued, this wait will always
+		  * time out on pipe 0. Instead of waiting here, user mode
+		  * driver needs to delay using overlay for at least one vsync after
+		  * it is disabled */
 		/*wait for overlay flipped*/
-		_OverlayWaitFlip(dev, ovstat_reg);
+		/* _OverlayWaitFlip(dev, ovstat_reg); */
+
 		power_island_put(power_islands);
 	}
 
