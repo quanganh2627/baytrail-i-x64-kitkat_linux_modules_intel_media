@@ -445,7 +445,7 @@ static PVRSRV_ERROR RGXStop(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	PVRSRV_ERROR		eError; 
 
 
-	eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDeinitCommands, RGX_MAX_DEINIT_COMMANDS, PDUMP_FLAGS_LASTFRAME | PDUMP_FLAGS_POWERTRANS);
+	eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDeinitCommands, RGX_MAX_DEINIT_COMMANDS, PDUMP_FLAGS_LASTFRAME | PDUMP_FLAGS_POWERTRANS, IMG_NULL);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXStop: RGXRunScript failed (%d)", eError));

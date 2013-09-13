@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Config BVNC 1.V.4.15
+@Title          RGX Config BVNC 1.V.4.30
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,24 +39,24 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCONFIG_KM_1_V_4_15_H_
-#define _RGXCONFIG_KM_1_V_4_15_H_
+#ifndef _RGXCONFIG_KM_1_V_4_30_H_
+#define _RGXCONFIG_KM_1_V_4_30_H_
 
-/***** Automatically generated file (8/20/2013 10:56:12 AM): Do not edit manually ********************/
-/***** Timestamp:  (8/20/2013 10:56:12 AM)************************************************************/
+/***** Automatically generated file (8/20/2013 10:56:07 AM): Do not edit manually ********************/
+/***** Timestamp:  (8/20/2013 10:56:07 AM)************************************************************/
 
 #define RGX_BNC_KM_B 1
 #define RGX_BNC_KM_N 4
-#define RGX_BNC_KM_C 15
+#define RGX_BNC_KM_C 30
 
 /******************************************************************************
  * DDK Defines
  *****************************************************************************/
-#define RGX_FEATURE_SLC_SIZE_IN_BYTES (256*1024)
+#define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
 #define RGX_FEATURE_PHYS_BUS_WIDTH (40)
 #define RGX_FEATURE_AXI_ACELITE 
 #define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
 #define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 
 
-#endif /* _RGXCONFIG_1_V_4_15_H_ */
+#endif /* _RGXCONFIG_1_V_4_30_H_ */

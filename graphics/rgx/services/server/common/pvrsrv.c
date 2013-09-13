@@ -462,7 +462,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVInit(IMG_VOID)
 	IMG_UINT32 i;
 
 #if defined (SUPPORT_RGX)
-	/* FIXME find a way to do this without device-specific code here */
+	/* */
 	sRegisterDevice[PVRSRV_DEVICE_TYPE_RGX] = RGXRegisterDevice;
 #endif
 
@@ -624,7 +624,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVInit(IMG_VOID)
 	{
 		if (PVRSRVRegisterDevice(&psSysConfig->pasDevices[i]) != PVRSRV_OK)
 		{
-			/* FIXME: We should unregister devices if we fail */
+			/* */
 			return eError;
 		}
 
@@ -1083,11 +1083,8 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVRegisterDevice(PVRSRV_DEVICE_CONFIG *psDe
 	}
 
 	/*
-		FIXME: We might want PT memory to come from a different heap so it
-		would make sense to specify the HeapID for it, but need to think
-		if/how this would affect how we do the CPU <> Dev physical address
-		translation.
-	*/
+		
+*/
 	psDeviceNode->pszMMUPxPDumpMemSpaceName = PhysHeapPDumpMemspaceName(psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL]);
 	psDeviceNode->uiMMUPxLog2AllocGran = OSGetPageShift();
 
@@ -1502,7 +1499,7 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 	eError = PVRSRVPowerLock();
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVDeinitialiseDevice: Failed to acquire power lock"));
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVUnregisterDevice: Failed to acquire power lock"));
 		return eError;
 	}
 
@@ -1514,7 +1511,9 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 										 IMG_TRUE);
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVDeinitialiseDevice: Failed PVRSRVSetDevicePowerStateKM call (%s)", PVRSRVGetErrorStringKM(eError)));
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVUnregisterDevice: Failed PVRSRVSetDevicePowerStateKM call (%s). Dump debug.", PVRSRVGetErrorStringKM(eError)));
+
+		PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
 
 		/* If the driver is okay then return the error, otherwise we can ignore this error. */
 		if (PVRSRVGetPVRSRVData()->eServicesState == PVRSRV_SERVICES_STATE_OK)
@@ -1524,7 +1523,7 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 		}
 		else
 		{
-			PVR_DPF((PVR_DBG_MESSAGE,"PVRSRVDeinitialiseDevice: Will continue to unregister as driver status is not OK"));
+			PVR_DPF((PVR_DBG_MESSAGE,"PVRSRVUnregisterDevice: Will continue to unregister as driver status is not OK"));
 		}
 	}
 

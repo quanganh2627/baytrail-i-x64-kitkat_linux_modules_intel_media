@@ -314,13 +314,13 @@ IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVDebugPrintfDumpCCB(void);
         PVR_DPF((PVR_DBG_CALLTRACE, "--> %s:%d entered", __func__, __LINE__))
 
 	#define PVR_DPF_ENTERED1(p1) \
-		PVR_DPF((PVR_DBG_CALLTRACE, "--> %s:%d entered (0x%x)", __func__, __LINE__, (p1)))
+		PVR_DPF((PVR_DBG_CALLTRACE, "--> %s:%d entered (0x%lx)", __func__, __LINE__, ((unsigned long)p1)))
 
 	#define PVR_DPF_RETURN_RC(a) \
         do { int _r = (a); PVR_DPF((PVR_DBG_CALLTRACE, "-< %s:%d returned %d", __func__, __LINE__, (_r))); return (_r); MSC_SUPPRESS_4127 } while (0)
 
 	#define PVR_DPF_RETURN_RC1(a,p1) \
-		do { int _r = (a); PVR_DPF((PVR_DBG_CALLTRACE, "-< %s:%d returned %d (0x%x)", __func__, __LINE__, (_r), (p1))); return (_r); MSC_SUPPRESS_4127 } while (0)
+		do { int _r = (a); PVR_DPF((PVR_DBG_CALLTRACE, "-< %s:%d returned %d (0x%lx)", __func__, __LINE__, (_r), ((unsigned long)p1))); return (_r); MSC_SUPPRESS_4127 } while (0)
 
 	#define PVR_DPF_RETURN_VAL(a) \
 		do { PVR_DPF((PVR_DBG_CALLTRACE, "-< %s:%d returned with value", __func__, __LINE__ )); return (a); MSC_SUPPRESS_4127 } while (0)

@@ -69,11 +69,8 @@ typedef struct _RGX_SERVER_TQ_CONTEXT_ RGX_SERVER_TQ_CONTEXT;
 
  @Input pvDeviceNode - device node
  
-FIXME fill this in
 
- @Return   PVRSRV_ERROR
-
-******************************************************************************/
+*/
 IMG_EXPORT
 PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(CONNECTION_DATA			*psConnection,
 										   PVRSRV_DEVICE_NODE		*psDeviceNode,

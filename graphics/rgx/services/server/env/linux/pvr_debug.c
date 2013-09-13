@@ -62,6 +62,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_uaccess.h"
 #include "pvrsrv.h"
 #include "rgxdevice.h"
+#include "rgxdebug.h"
 #include "lists.h"
 
 #if defined(PVRSRV_NEED_PVR_DPF)
@@ -278,7 +279,7 @@ static IMG_BOOL VBAppend(IMG_CHAR *pszBuf, IMG_UINT32 ui32BufSiz, const IMG_CHAR
 IMG_VOID PVRDPFInit(IMG_VOID)
 {
 	LinuxInitMutex(&gsDebugMutexNonIRQ);
-#if defined(PVRSRV_DEBUG_CCB_MAX)
+#if defined(PVRSRV_DEBUG_CCB_MAX) && defined(PVRSRV_NEED_PVR_DPF)
 	LinuxInitMutex(&gsDebugCCBMutex);
 #endif
 }
@@ -889,6 +890,203 @@ static struct seq_operations gsDebugStatusReadOps =
 	.show = _DebugStatusSeqShow,
 };
 
+/*************************************************************************/ /*!
+ Dump Debug DebugFS entry
+*/ /**************************************************************************/
+
+static void *_DebugDumpDebugCompare_AnyVaCb(PVRSRV_DEVICE_NODE *psDevNode, va_list va)
+{
+	loff_t *puiCurrentPosition = va_arg(va, loff_t *);
+	loff_t uiPosition = va_arg(va, loff_t);
+	loff_t uiCurrentPosition = *puiCurrentPosition;
+
+	(*puiCurrentPosition)++;
+
+	return (uiCurrentPosition == uiPosition) ? psDevNode : NULL;
+}
+
+static void *_DebugDumpDebugSeqStart(struct seq_file *psSeqFile, loff_t *puiPosition)
+{
+	PVRSRV_DATA *psPVRSRVData = (PVRSRV_DATA *)psSeqFile->private;
+	loff_t uiCurrentPosition = 1;
+
+	if (*puiPosition == 0)
+	{
+		return SEQ_START_TOKEN;
+	}
+
+	return List_PVRSRV_DEVICE_NODE_Any_va(psPVRSRVData->psDeviceNodeList,
+					      _DebugDumpDebugCompare_AnyVaCb,
+					      &uiCurrentPosition,
+					      *puiPosition);
+}
+
+static void _DebugDumpDebugSeqStop(struct seq_file *psSeqFile, void *pvData)
+{
+	PVR_UNREFERENCED_PARAMETER(psSeqFile);
+	PVR_UNREFERENCED_PARAMETER(pvData);
+}
+
+static void *_DebugDumpDebugSeqNext(struct seq_file *psSeqFile,
+				    void *pvData,
+				    loff_t *puiPosition)
+{
+	PVRSRV_DATA *psPVRSRVData = (PVRSRV_DATA *)psSeqFile->private;
+	loff_t uiCurrentPosition = 1;
+
+	PVR_UNREFERENCED_PARAMETER(pvData);
+
+	(*puiPosition)++;
+
+	return List_PVRSRV_DEVICE_NODE_Any_va(psPVRSRVData->psDeviceNodeList,
+					      _DebugDumpDebugCompare_AnyVaCb,
+					      &uiCurrentPosition,
+					      *puiPosition);
+}
+
+static struct seq_file *gpsDumpDebugPrintfSeqFile = IMG_NULL;
+
+static IMG_VOID _DumpDebugSeqPrintf(const IMG_CHAR* pszFormat, ...)
+{
+	if (gpsDumpDebugPrintfSeqFile)
+	{
+		IMG_CHAR  szBuffer[PVR_MAX_DEBUG_MESSAGE_LEN];
+		va_list  ArgList;
+
+		va_start(ArgList, pszFormat);
+		vsnprintf(szBuffer, PVR_MAX_DEBUG_MESSAGE_LEN, pszFormat, ArgList);
+		seq_printf(gpsDumpDebugPrintfSeqFile, "%s\n", szBuffer);
+		va_end(ArgList);
+	}
+}
+
+static int _DebugDumpDebugSeqShow(struct seq_file *psSeqFile, void *pvData)
+{
+	if (pvData != NULL  &&  pvData != SEQ_START_TOKEN)
+	{
+		PVRSRV_DEVICE_NODE *psDeviceNode = (PVRSRV_DEVICE_NODE *)pvData;
+		
+		if (psDeviceNode->pvDevice != NULL)
+		{
+			PVRSRV_RGXDEV_INFO *psDevInfo = psDeviceNode->pvDevice;
+
+			gpsDumpDebugPrintfSeqFile = psSeqFile;
+			RGXDumpDebugInfo(_DumpDebugSeqPrintf, psDevInfo);
+			gpsDumpDebugPrintfSeqFile = IMG_NULL;
+		}
+	}
+
+	return 0;
+}
+
+static struct seq_operations gsDumpDebugReadOps = 
+{
+	.start = _DebugDumpDebugSeqStart,
+	.stop  = _DebugDumpDebugSeqStop,
+	.next  = _DebugDumpDebugSeqNext,
+	.show  = _DebugDumpDebugSeqShow,
+};
+
+
+/*************************************************************************/ /*!
+ Firmware Trace DebugFS entry
+*/ /**************************************************************************/
+
+#if defined(PVRSRV_ENABLE_FW_TRACE_DEBUGFS)
+static void *_DebugFWTraceCompare_AnyVaCb(PVRSRV_DEVICE_NODE *psDevNode, va_list va)
+{
+	loff_t *puiCurrentPosition = va_arg(va, loff_t *);
+	loff_t uiPosition = va_arg(va, loff_t);
+	loff_t uiCurrentPosition = *puiCurrentPosition;
+
+	(*puiCurrentPosition)++;
+
+	return (uiCurrentPosition == uiPosition) ? psDevNode : NULL;
+}
+
+static void *_DebugFWTraceSeqStart(struct seq_file *psSeqFile, loff_t *puiPosition)
+{
+	PVRSRV_DATA *psPVRSRVData = (PVRSRV_DATA *)psSeqFile->private;
+	loff_t uiCurrentPosition = 1;
+
+	if (*puiPosition == 0)
+	{
+		return SEQ_START_TOKEN;
+	}
+
+	return List_PVRSRV_DEVICE_NODE_Any_va(psPVRSRVData->psDeviceNodeList,
+					      _DebugFWTraceCompare_AnyVaCb,
+					      &uiCurrentPosition,
+					      *puiPosition);
+}
+
+static void _DebugFWTraceSeqStop(struct seq_file *psSeqFile, void *pvData)
+{
+	PVR_UNREFERENCED_PARAMETER(psSeqFile);
+	PVR_UNREFERENCED_PARAMETER(pvData);
+}
+
+static void *_DebugFWTraceSeqNext(struct seq_file *psSeqFile,
+				    void *pvData,
+				    loff_t *puiPosition)
+{
+	PVRSRV_DATA *psPVRSRVData = (PVRSRV_DATA *)psSeqFile->private;
+	loff_t uiCurrentPosition = 1;
+
+	PVR_UNREFERENCED_PARAMETER(pvData);
+
+	(*puiPosition)++;
+
+	return List_PVRSRV_DEVICE_NODE_Any_va(psPVRSRVData->psDeviceNodeList,
+					      _DebugFWTraceCompare_AnyVaCb,
+					      &uiCurrentPosition,
+					      *puiPosition);
+}
+
+static struct seq_file *gpsFWTracePrintfSeqFile = IMG_NULL;
+
+static IMG_VOID _FWTraceSeqPrintf(const IMG_CHAR* pszFormat, ...)
+{
+	if (gpsFWTracePrintfSeqFile)
+	{
+		IMG_CHAR  szBuffer[PVR_MAX_DEBUG_MESSAGE_LEN];
+		va_list  ArgList;
+
+		va_start(ArgList, pszFormat);
+		vsnprintf(szBuffer, PVR_MAX_DEBUG_MESSAGE_LEN, pszFormat, ArgList);
+		seq_printf(gpsFWTracePrintfSeqFile, "%s\n", szBuffer);
+		va_end(ArgList);
+	}
+}
+
+static int _DebugFWTraceSeqShow(struct seq_file *psSeqFile, void *pvData)
+{
+	if (pvData != NULL  &&  pvData != SEQ_START_TOKEN)
+	{
+		PVRSRV_DEVICE_NODE *psDeviceNode = (PVRSRV_DEVICE_NODE *)pvData;
+		
+		if (psDeviceNode->pvDevice != NULL)
+		{
+			PVRSRV_RGXDEV_INFO *psDevInfo = psDeviceNode->pvDevice;
+
+			gpsFWTracePrintfSeqFile = psSeqFile;
+			RGXDumpFirmwareTrace(_FWTraceSeqPrintf, psDevInfo);
+			gpsFWTracePrintfSeqFile = IMG_NULL;
+		}
+	}
+
+	return 0;
+}
+
+static struct seq_operations gsFWTraceReadOps = 
+{
+	.start = _DebugFWTraceSeqStart,
+	.stop  = _DebugFWTraceSeqStop,
+	.next  = _DebugFWTraceSeqNext,
+	.show  = _DebugFWTraceSeqShow,
+};
+#endif
+
 
 /*************************************************************************/ /*!
  Debug level DebugFS entry
@@ -996,6 +1194,10 @@ static IMG_INT DebugLevelSet(const char __user *pcBuffer,
 static struct dentry *gpsVersionDebugFSEntry;
 static struct dentry *gpsNodesDebugFSEntry;
 static struct dentry *gpsStatusDebugFSEntry;
+static struct dentry *gpsDumpDebugDebugFSEntry;
+#if defined(PVRSRV_ENABLE_FW_TRACE_DEBUGFS)
+static struct dentry *gpsFWTraceDebugFSEntry;
+#endif
 
 #if defined(DEBUG)
 static struct dentry *gpsDebugLevelDebugFSEntry;
@@ -1042,6 +1244,30 @@ int PVRDebugCreateDebugFSEntries(void)
 		goto ErrorRemoveNodesEntry;
 	}
 
+	iResult = PVRDebugFSCreateEntry("debug_dump",
+					NULL,
+					&gsDumpDebugReadOps,
+					NULL,
+					psPVRSRVData,
+					&gpsDumpDebugDebugFSEntry);
+	if (iResult != 0)
+	{
+		goto ErrorRemoveStatusEntry;
+	}
+
+#if defined(PVRSRV_ENABLE_FW_TRACE_DEBUGFS)
+	iResult = PVRDebugFSCreateEntry("firmware_trace",
+					NULL,
+					&gsFWTraceReadOps,
+					NULL,
+					psPVRSRVData,
+					&gpsFWTraceDebugFSEntry);
+	if (iResult != 0)
+	{
+		goto ErrorRemoveDumpDebugEntry;
+	}
+#endif
+
 #if defined(DEBUG)
 	iResult = PVRDebugFSCreateEntry("debug_level",
 					NULL,
@@ -1051,17 +1277,31 @@ int PVRDebugCreateDebugFSEntries(void)
 					&gpsDebugLevelDebugFSEntry);
 	if (iResult != 0)
 	{
-		goto ErrorRemoveStatusEntry;
+#if defined(PVRSRV_ENABLE_FW_TRACE_DEBUGFS)
+		goto ErrorRemoveFWTraceLogEntry;
+#else
+		goto ErrorRemoveDumpDebugEntry;
+#endif
 	}
 #endif
 
 	return 0;
 
-#if defined(DEBUG)
+#if (defined(DEBUG) && defined(PVRSRV_ENABLE_FW_TRACE_DEBUGFS))
+ErrorRemoveFWTraceLogEntry:
+	PVRDebugFSRemoveEntry(gpsFWTraceDebugFSEntry);
+	gpsFWTraceDebugFSEntry = NULL;
+#endif
+
+#if (defined(DEBUG) || defined(PVRSRV_ENABLE_FW_TRACE_DEBUGFS))
+ErrorRemoveDumpDebugEntry:
+	PVRDebugFSRemoveEntry(gpsDumpDebugDebugFSEntry);
+	gpsDumpDebugDebugFSEntry = NULL;
+#endif
+
 ErrorRemoveStatusEntry:
 	PVRDebugFSRemoveEntry(gpsStatusDebugFSEntry);
 	gpsStatusDebugFSEntry = NULL;
-#endif
 
 ErrorRemoveNodesEntry:
 	PVRDebugFSRemoveEntry(gpsNodesDebugFSEntry);
@@ -1083,6 +1323,20 @@ void PVRDebugRemoveDebugFSEntries(void)
 		gpsDebugLevelDebugFSEntry = NULL;
 	}
 #endif
+
+#if defined(PVRSRV_ENABLE_FW_TRACE_DEBUGFS)
+	if (gpsFWTraceDebugFSEntry != NULL)
+	{
+		PVRDebugFSRemoveEntry(gpsFWTraceDebugFSEntry);
+		gpsFWTraceDebugFSEntry = NULL;
+	}
+#endif
+
+	if (gpsDumpDebugDebugFSEntry != NULL)
+	{
+		PVRDebugFSRemoveEntry(gpsDumpDebugDebugFSEntry);
+		gpsDumpDebugDebugFSEntry = NULL;
+	}
 
 	if (gpsStatusDebugFSEntry != NULL)
 	{
