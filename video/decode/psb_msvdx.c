@@ -475,6 +475,15 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	int offset = 0;
 
+	if (!msvdx_priv->fw_b0_uploaded){
+#ifdef MERRIFIELD
+		if (IS_TNG_B0(dev)){
+			tng_msvdx_fw_init("signed_msvdx_fw_mrfld_b0v1.bin", dev);
+			msvdx_priv->fw_b0_uploaded = 1;
+               }
+#endif
+       }
+
 	spin_lock_irqsave(&msvdx_priv->msvdx_lock, irq_flags);
 
 	msvdx_priv->msvdx_ctx = msvdx_ctx;
@@ -519,10 +528,15 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 		msvdx_priv->msvdx_needs_reset = 0;
 		msvdx_priv->msvdx_busy = 0;
 
-		if (psb_msvdx_init(dev)) {
-			ret = -EBUSY;
-			PSB_DEBUG_WARN("WARN: psb_msvdx_init failed.\n");
-			return ret;
+		if (msvdx_priv->fw_loaded_by_punit){
+			psb_msvdx_post_init(dev);
+		}
+		else{
+			if (psb_msvdx_init(dev)) {
+				ret = -EBUSY;
+				PSB_DEBUG_WARN("WARN: psb_msvdx_init failed.\n");
+				return ret;
+			}
 		}
 
 #ifdef CONFIG_VIDEO_MRFLD_EC
@@ -1486,8 +1500,6 @@ void psb_msvdx_clearirq(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	unsigned long mtx_int = 0;
 
-	PSB_DEBUG_IRQ("MSVDX: clear IRQ\n");
-
 	/* Clear MTX interrupt */
 	REGIO_WRITE_FIELD_LITE(mtx_int, MSVDX_INTERRUPT_STATUS, MTX_IRQ,
 			       1);
@@ -1503,7 +1515,6 @@ void psb_msvdx_disableirq(struct drm_device *dev)
 
 	unsigned long enables = 0;
 
-	PSB_DEBUG_IRQ("MSVDX: enable MSVDX MTX IRQ\n");
 	REGIO_WRITE_FIELD_LITE(enables, MSVDX_INTERRUPT_STATUS, MTX_IRQ,
 			       0);
 	PSB_WMSVDX32(enables, MSVDX_HOST_INTERRUPT_ENABLE_OFFSET);
@@ -1518,7 +1529,6 @@ void psb_msvdx_enableirq(struct drm_device *dev)
 	/* uint32_t ier = dev_priv->vdc_irq_mask | _PSB_IRQ_MSVDX_FLAG; */
 	unsigned long enables = 0;
 
-	PSB_DEBUG_IRQ("MSVDX: enable MSVDX MTX IRQ\n");
 	/* Only enable the master core IRQ*/
 	REGIO_WRITE_FIELD_LITE(enables, MSVDX_INTERRUPT_STATUS, MTX_IRQ,
 			       1);

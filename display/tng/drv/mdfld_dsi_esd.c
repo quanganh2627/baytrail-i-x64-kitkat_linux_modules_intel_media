@@ -47,9 +47,6 @@ static bool intel_dsi_dbi_esd_detection(struct mdfld_dsi_config *dsi_config)
 	u32 data = 0;
 	struct drm_device *dev = dsi_config->dev;
 
-#ifdef GFX_KERNEL_3_10_FIX
-	return false;
-#endif
 	PSB_DEBUG_ENTRY("esd\n");
 
 	ret = mdfld_dsi_get_power_mode(dsi_config,

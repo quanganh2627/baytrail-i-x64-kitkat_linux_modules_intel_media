@@ -916,6 +916,21 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 #endif
 	} else if (arg->engine == VSP_ENGINE_VPP) {
 #ifdef SUPPORT_VSP
+		if (vsp_priv->fw_loaded_by_punit) {
+			if (unlikely(vsp_priv->fw_loaded == 0)) {
+				ret = vsp_init_fw(dev);
+				if (ret != 0) {
+					DRM_ERROR("VSP: failed to init"
+						  "firmware\n");
+					goto out_err0;
+				}
+			}
+		}
+
+		if (vsp_priv->fw_loaded_by_punit &&
+		    vsp_priv->vsp_state == VSP_STATE_IDLE)
+			ospm_apm_power_down_vsp(dev);
+
 		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
 			ret = -EBUSY;
 			goto out_err0;

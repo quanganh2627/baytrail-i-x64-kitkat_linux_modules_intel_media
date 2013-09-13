@@ -1,7 +1,6 @@
-/**************************************************************************
- * Copyright (c) 2012, Intel Corporation.
- * All Rights Reserved.
-
+/*
+ * Copyright © 2010 Intel Corporation
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
@@ -17,32 +16,18 @@
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
  * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS IN THE SOFTWARE.
  *
  * Authors:
- *    Hitesh K. Patel <hitesh.k.patel@intel.com>
+ * Jackie Li<yaodong.li@intel.com>
  */
 
-#ifndef _INTEL_MEDIA_VIDEO_OSPM_H_
-#define _INTEL_MEDIA_VIDEO_OSPM_H_
+#ifndef MDFLD_DEBUGFS_H_
+#define MDFLD_DEBUGFS_H_
 
-#include "pwr_mgmt.h"
-#include "psb_msvdx.h"
-#include "vsp.h"
+extern int mdfld_debugfs_init(struct drm_minor *minor);
+extern void mdfld_debugfs_cleanup(struct drm_minor *minor);
 
-#define PMU_VPP			0x1
-#define PMU_ENC			0x1
-#define PMU_DEC			0x1
-
-void ospm_vsp_init(struct drm_device *dev,
-			struct ospm_power_island *p_island);
-
-void ospm_ved_init(struct drm_device *dev,
-			struct ospm_power_island *p_island);
-
-void ospm_vec_init(struct drm_device *dev,
-			struct ospm_power_island *p_island);
-
-#endif	/* _INTEL_MEDIA_VIDEO_OSPM_H_*/
+#endif /* MDFLD_DEBUGFS_H_ */

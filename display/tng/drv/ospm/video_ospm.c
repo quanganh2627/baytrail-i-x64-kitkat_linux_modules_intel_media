@@ -37,6 +37,12 @@
 #include <linux/pm_runtime.h>
 #endif
 
+static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd);
+static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd);
+
+static void vsp_set_max_frequency(struct drm_device *dev);
+static void vsp_set_default_frequency(struct drm_device *dev);
+
 extern struct drm_device *gpDrmDevice;
 /***********************************************************
  * vsp islands
@@ -49,6 +55,8 @@ extern struct drm_device *gpDrmDevice;
 static bool vsp_power_up(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	bool ret = true;
 	int pm_ret = 0;
 
@@ -58,15 +66,10 @@ static bool vsp_power_up(struct drm_device *dev,
 	 * This workarounds are only needed for TNG A0/A1 silicon.
 	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
-			intel_mid_soc_stepping() < 1)
+	if (!IS_TNG_B0(dev))
 	{
-#endif
 		apply_A0_workarounds(OSPM_VIDEO_VPP_ISLAND, 1);
-#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
 	}
-#endif
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_VPP, OSPM_ISLAND_UP, VSP_SS_PM0);
@@ -77,6 +80,9 @@ static bool vsp_power_up(struct drm_device *dev,
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state ON failed!\n");
 		return false;
 	}
+
+	if (vsp_priv->fw_loaded_by_punit && drm_vsp_burst)
+		vsp_set_max_frequency(dev);
 
 	PSB_DEBUG_PM("Power ON VSP!\n");
 	return ret;
@@ -90,6 +96,8 @@ static bool vsp_power_up(struct drm_device *dev,
 static bool vsp_power_down(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	bool ret = true;
 	int pm_ret = 0;
 
@@ -101,6 +109,9 @@ static bool vsp_power_down(struct drm_device *dev,
 
 	/* save VSP registers */
 	psb_vsp_save_context(dev);
+
+	if (vsp_priv->fw_loaded_by_punit && drm_vsp_burst)
+		vsp_set_default_frequency(dev);
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_VPP, OSPM_ISLAND_DOWN, VSP_SS_PM0);
@@ -327,3 +338,107 @@ void psb_ospm_post_power_down()
 	}
 }
 #endif
+
+static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd)
+{
+	int tcount;
+	u32 freq_val;
+
+	for (tcount = 0; ; tcount++) {
+		freq_val = intel_mid_msgbus_read32(PUNIT_PORT, reg_freq);
+		if ((freq_val & IP_FREQ_VALID) == 0)
+			break;
+		if (tcount > 500) {
+			DRM_ERROR("P-Unit freq request wait timeout %x",
+				freq_val);
+			return -EBUSY;
+		}
+		udelay(1);
+	}
+
+	if (freq_code_rlzd) {
+		*freq_code_rlzd = ((freq_val >> IP_FREQ_STAT_POS) &
+			IP_FREQ_MASK);
+	}
+
+	return 0;
+}
+
+static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd)
+{
+	u32 freq_val;
+	u32 freq_code_realized;
+	int rva;
+
+	rva = pm_cmd_freq_wait(reg_freq, NULL);
+	if (rva < 0) {
+		printk(KERN_ALERT "%s: pm_cmd_freq_wait 1 failed\n", __func__);
+		return rva;
+	}
+
+	freq_val = IP_FREQ_VALID | freq_code;
+	intel_mid_msgbus_write32(PUNIT_PORT, reg_freq, freq_val);
+
+	rva = pm_cmd_freq_wait(reg_freq, &freq_code_realized);
+	if (rva < 0) {
+		printk(KERN_ALERT "%s: pm_cmd_freq_wait 2 failed\n", __func__);
+		return rva;
+	}
+
+	if (p_freq_code_rlzd)
+		*p_freq_code_rlzd = freq_code_realized;
+
+	return rva;
+}
+
+static void vsp_set_max_frequency(struct drm_device *dev)
+{
+	unsigned int pci_device = dev->pci_device & 0xffff;
+	u32 freq_code_rlzd;
+	u32 freq_code;
+	int ret;
+
+	if (pci_device == 0x1180) {
+		freq_code = IP_FREQ_457_14;
+		PSB_DEBUG_PM("vsp maximum freq is 457\n");
+	} else if (pci_device == 0x1181) {
+		freq_code = IP_FREQ_400_00;
+		PSB_DEBUG_PM("vsp maximum freq is 400\n");
+	} else {
+		DRM_ERROR("invalid pci device id %x\n", pci_device);
+		return;
+	}
+
+	if (drm_vsp_force_up_freq)
+		freq_code = drm_vsp_force_up_freq;
+
+	ret = pm_cmd_freq_set(VSP_SS_PM1, freq_code, &freq_code_rlzd);
+	if (ret < 0) {
+		DRM_ERROR("failed to set freqency, current is %x\n",
+			  freq_code_rlzd);
+	}
+
+	PSB_DEBUG_PM("set maximum frequency\n");
+	return;
+}
+
+static void vsp_set_default_frequency(struct drm_device *dev)
+{
+	u32 freq_code_rlzd;
+	int ret;
+	u32 freq_code;
+
+	freq_code = IP_FREQ_200_00;
+
+	if (drm_vsp_force_down_freq)
+		freq_code = drm_vsp_force_down_freq;
+
+	ret = pm_cmd_freq_set(VSP_SS_PM1, freq_code, &freq_code_rlzd);
+	if (ret < 0) {
+		DRM_ERROR("failed to set freqency, current is %x\n",
+			  freq_code_rlzd);
+	}
+
+	PSB_DEBUG_PM("set default frequency\n");
+	return;
+}

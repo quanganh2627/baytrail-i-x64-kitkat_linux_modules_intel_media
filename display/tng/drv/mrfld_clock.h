@@ -32,6 +32,7 @@
 #define DSI_PLL_CTRL_REG		0x48
 #define _DSI_LDO_EN			(1 << 30)
 #define _P1_POST_DIV_MASK		(0x1ff << 17)
+#define _DSI_CCK_PLL_SELECT		(1 << 11)
 #define _DSI_MUX_SEL_CCK_DSI0		(1 << 10)
 #define _DSI_MUX_SEL_CCK_DSI1		(1 << 9)
 #define _CLK_EN_PLL_DSI0		(1 << 8)
@@ -41,6 +42,7 @@
 #define _DSI_PLL_LOCK			(1 << 0)
 #define DSI_PLL_DIV_REG			0x4C
 #define FUSE_OVERRIDE_FREQ_CNTRL_REG3	0x54
+#define FUSE_OVERRIDE_FREQ_CNTRL_REG5	0x68
 #define DPLL_STAGER_CTL_REG1		0x0230
 #define DPLL_STAGER_CTL_REG2		0x0430
 #define DPLL_DIV_REG			0x800C
@@ -63,5 +65,7 @@ struct mrst_clock_t {
 	int m;
 	int p1;
 };
+
+void enable_HFPLL(struct drm_device *dev);
 
 #endif

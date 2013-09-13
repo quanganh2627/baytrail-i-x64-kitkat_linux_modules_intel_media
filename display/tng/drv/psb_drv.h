@@ -21,10 +21,6 @@
 #define _PSB_DRV_H_
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0))
-#define GFX_KERNEL_3_10_FIX
-#define USE_GFX_INTERNAL_PM_FUNC
-#endif
 #include <linux/panel_psb_drv.h>
 
 #include <drm/drmP.h>
@@ -329,6 +325,31 @@ enum {
 #define MDFLD_PLANE_MAX_WIDTH		2048
 #define MDFLD_PLANE_MAX_HEIGHT		2048
 
+#define IS_POULSBO(dev) 0
+
+#define IS_MDFLD(dev) (((dev)->pci_device & 0xfff8) == 0x0130)
+#define IS_CTP(dev) (((dev->pci_device & 0xffff) == 0x08c0) ||	\
+		((dev->pci_device & 0xffff) == 0x08c7) ||  \
+		((dev->pci_device & 0xffff) == 0x08c8))
+#define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180 || ((dev)->pci_device & 0xfff8) == 0x1480)
+
+#if defined(CONFIG_DRM_CTP)
+#define IS_TNG_B0(dev) 		0
+#elif defined(CONFIG_DRM_VXD_BYT)
+#define IS_TNG_B0(dev) 		0
+#else
+#define IS_TNG_B0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && (intel_mid_soc_stepping() == 1))
+#endif
+
+
+#define IS_MID(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
+#define IS_FLDS(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
+#define IS_MSVDX(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
+#define IS_TOPAZ(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
+
+#define IS_MSVDX_MEM_TILE(dev) ((IS_MRFLD(dev)) || (IS_CTP(dev)))
+
+
 /*
  *User options.
  */
@@ -348,6 +369,14 @@ struct drm_psb_uopt {
 struct psb_context;
 struct psb_validate_buffer;
 struct psb_video_ctx;
+
+/*  enum mdfld_dsi_encoder_t is required by mdfld_output.h */
+
+typedef enum {
+	MDFLD_DSI_ENCODER_DBI = 0,
+	MDFLD_DSI_ENCODER_DPI,
+} mdfld_dsi_encoder_t;
+
 
 struct drm_psb_private {
 	/*
@@ -443,6 +472,7 @@ struct drm_psb_private {
 	 * VSP
 	 */
 	uint8_t *vsp_reg;
+	atomic_t vsp_mmu_invaldc;
 	void *vsp_private;
 
 	/*
@@ -977,6 +1007,7 @@ struct drm_psb_private {
 	//RAJESH
 	struct mdfld_dsi_encoder *encoder0;
 	struct mdfld_dsi_encoder *encoder2;
+	mdfld_dsi_encoder_t mipi_encoder_type;
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
 	/*psb fb dev */
@@ -1081,6 +1112,7 @@ extern int intel_get_vblank_timestamp(struct drm_device *dev, int pipe,
 extern int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 		int *vpos, int *hpos);
 extern int mdfld_enable_te(struct drm_device *dev, int pipe);
+extern int mdfld_recover_te(struct drm_device *dev, int pipe);
 extern void mdfld_disable_te(struct drm_device *dev, int pipe);
 extern int mdfld_irq_enable_hdmi_audio(struct drm_device *dev);
 extern int mdfld_irq_disable_hdmi_audio(struct drm_device *dev);
@@ -1209,15 +1241,37 @@ extern int drm_topaz_sbuswa;
  */
 #define DRM_DRIVER_PRIVATE_T struct drm_psb_private
 
+#define MAX_READ_COUNT		0x3
 static inline uint32_t REGISTER_READ(struct drm_device *dev, uint32_t reg)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	int i = 0;
 	int reg_val = ioread32(dev_priv->vdc_reg + (reg));
+
+	/* we might need to re-read registers if B0 video mode panel */
+	if ((IS_TNG_B0(dev)) &&
+		(dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DPI)) {
+		if (!reg_val) {
+			for (i = 0; i < MAX_READ_COUNT; i++) {
+				reg_val = ioread32(dev_priv->vdc_reg + (reg));
+				if (reg_val)
+					break;
+			}
+		}
+
+		if (i == MAX_READ_COUNT) {
+			PSB_DEBUG_REG("Register (reg = 0x%x) read failure.\n",
+					reg);
+		}
+	}
+
 	PSB_DEBUG_REG("reg = 0x%x. reg_val = 0x%x. \n", reg, reg_val);
 	return reg_val;
 }
 
 #define REG_READ(reg)	       REGISTER_READ(dev, (reg))
+
+
 static inline void REGISTER_WRITE(struct drm_device *dev, uint32_t reg,
 				  uint32_t val)
 {
@@ -1255,11 +1309,9 @@ static inline void REGISTER_WRITE8(struct drm_device *dev,
 
 #define PSB_ALIGN_TO(_val, _align) \
   (((_val) + ((_align) - 1)) & ~((_align) - 1))
-#define PSB_WVDC32(_val, _offs) \
-  iowrite32(_val, dev_priv->vdc_reg + (_offs));
 
-#define PSB_RVDC32(_offs) \
-  ioread32(dev_priv->vdc_reg + (_offs))
+#define PSB_WVDC32(_val, _offs)		REG_WRITE(_offs, _val)
+#define PSB_RVDC32(_offs)		REG_READ(_offs)
 
 static inline uint32_t RGX_REGISTER_READ(struct drm_device *dev, uint32_t reg)
 {
@@ -1306,27 +1358,15 @@ static inline void WRAPPER_REGISTER_WRITE(struct drm_device *dev, uint32_t reg,
 #define PSB_ALPLM(_val, _base)			\
   ((((_val) >> (_base ## _ALIGNSHIFT)) << (_base ## _SHIFT)) & (_base ## _MASK))
 
-#define IS_POULSBO(dev) 0
-
-#define IS_MDFLD(dev) (((dev)->pci_device & 0xfff8) == 0x0130)
-#define IS_CTP(dev) (((dev->pci_device & 0xffff) == 0x08c0) ||	\
-		((dev->pci_device & 0xffff) == 0x08c7) ||  \
-		((dev->pci_device & 0xffff) == 0x08c8))
-#define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180 || ((dev)->pci_device & 0xfff8) == 0x1480)
-#define IS_TNG_B0(dev) (((dev)->pci_device & 0xffff) == 0x1181)
-
-#define IS_MID(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
-#define IS_FLDS(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
-#define IS_MSVDX(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
-#define IS_TOPAZ(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
-
-#define IS_MSVDX_MEM_TILE(dev) ((IS_MRFLD(dev)) || (IS_CTP(dev)))
-
 extern int drm_psb_ospm;
 extern int drm_psb_cpurelax;
 extern int drm_psb_udelaydivider;
 extern int drm_psb_gl3_enable;
 extern int drm_psb_topaz_clockgating;
+extern int drm_vsp_burst;
+extern int drm_vsp_force_up_freq;
+extern int drm_vsp_force_down_freq;
+extern int drm_vsp_single_int;
 
 extern int drm_decode_flag;
 

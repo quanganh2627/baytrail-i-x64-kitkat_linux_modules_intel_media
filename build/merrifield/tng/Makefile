@@ -83,6 +83,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/psb_intel_display.o \
 	$(DISPLAYDIR)/mdfld_hdmi_audio.o \
 	$(DISPLAYDIR)/mdfld_msic.o \
+	$(DISPLAYDIR)/mdfld_debugfs.o \
 	$(DISPLAYDIR)/mdfld_csc.o \
 	$(DISPLAYDIR)/mdfld_intel_hdcp.o \
 	$(DISPLAYDIR)/psb_intel_hdmi.o \

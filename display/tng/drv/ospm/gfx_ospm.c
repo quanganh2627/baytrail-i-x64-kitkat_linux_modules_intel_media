@@ -417,20 +417,15 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	 * This workarounds are only needed for TNG A0/A1 silicon.
 	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
-		intel_mid_soc_stepping() < 1)
+	if (!IS_TNG_B0(dev))
 	{
-#endif
 		/**
 		* If turning some power on, and the power to be on includes SLC,
 		* and SLC was not previously on, then setup some registers.
 		*/
 		if (gfx_all & GFX_SLC_SSC)
 			apply_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
-#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
 	}
-#endif
 
 	if (gfx_all & GFX_SDKCK_SSC)
 		ret = GFX_POWER_UP(PMU_SDKCK);
@@ -469,9 +464,6 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 		}
 	}
 
-#ifdef GFX_KERNEL_3_10_FIX
-	return true;
-#endif
 	OSPM_DPF("Pre-power-off Status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
