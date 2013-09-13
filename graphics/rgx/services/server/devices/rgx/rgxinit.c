@@ -108,6 +108,7 @@ static IMG_VOID RGX_DeInitHeaps(DEVICE_MEMORY_INFO *psDevMemoryInfo);
 IMG_UINT32 g_ui32HostSampleIRQCount = 0;
 
 IMG_BOOL gbSystemActivePMEnabled = IMG_FALSE;
+IMG_BOOL gbSystemActivePMInit = IMG_FALSE;
 
 #if !defined(NO_HARDWARE)
 /*
@@ -443,6 +444,7 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   (eActivePMConf == RGX_ACTIVEPM_FORCE_ON);
 
 		gbSystemActivePMEnabled = bEnableAPM;
+		gbSystemActivePMInit = IMG_TRUE;
 		psRGXData->psRGXTimingInfo->bEnableActivePM = bEnableAPM;
 
 		if (bEnableAPM)

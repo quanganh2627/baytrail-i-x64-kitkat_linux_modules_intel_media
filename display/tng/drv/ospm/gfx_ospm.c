@@ -37,6 +37,9 @@
 #include "pmu_tng.h"
 #include "tng_wa.h"
 
+
+
+
 #define	USE_GFX_PM_FUNC			0
 
 /* WRAPPER Offset 0x160024 */
@@ -53,6 +56,9 @@
 
 #define GFX_POWER_DOWN(x) \
 	pmu_nc_set_power_state(x, OSPM_ISLAND_DOWN, GFX_SS_PM0)
+
+extern IMG_BOOL gbSystemActivePMEnabled;
+extern IMG_BOOL gbSystemActivePMInit;
 
 static u32 gfx_island_selected = GFX_SLC_LDO_SSC | GFX_SLC_SSC |
 	GFX_SDKCK_SSC | GFX_RSCD_SSC;
@@ -437,6 +443,9 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	OSPM_DPF("Post-power-up status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
+	if ((!gbSystemActivePMEnabled) && gbSystemActivePMInit)
+		psb_irq_preinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+
 	return !ret;
 }
 
@@ -464,6 +473,11 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 
 	OSPM_DPF("Pre-power-off Status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
+
+	if ((!gbSystemActivePMEnabled) && gbSystemActivePMInit) {
+		psb_irq_uninstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+		synchronize_irq(dev->pdev->irq);
+	}
 
 	/* power down every thing */
 	if (gfx_island_selected & GFX_RSCD_SSC)
