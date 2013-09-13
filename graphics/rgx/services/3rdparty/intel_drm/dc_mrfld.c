@@ -196,7 +196,8 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	 * off flip
 	 */
 	if (DCCBEnableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe)) {
-		DRM_ERROR("%s: failed to enable vsync on pipe %d\n", iPipe);
+		DRM_ERROR("%s: failed to enable vsync on pipe %d\n",
+				__func__, iPipe);
 		goto err_out;
 	}
 

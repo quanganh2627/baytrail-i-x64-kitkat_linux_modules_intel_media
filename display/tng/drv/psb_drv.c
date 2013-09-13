@@ -2874,7 +2874,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				if (ret) {
 					DRM_ERROR("Fail to get pipe %d vsync\n",
 							pipe);
-					schedule_work(&dev_priv->reset_panel_work);
+					if (pipe != 1)
+						schedule_work(&dev_priv->reset_panel_work);
 				}
 
 				mdfld_dsi_dsr_allow(dsi_config);

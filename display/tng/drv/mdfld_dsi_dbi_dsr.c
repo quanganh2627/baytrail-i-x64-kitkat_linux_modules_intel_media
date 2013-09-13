@@ -135,7 +135,6 @@ static int enter_dsr_locked(struct mdfld_dsi_config *dsi_config, int level)
 	err = mdfld_dsi_wait_for_fifos_empty(sender);
 	if (err) {
 		DRM_ERROR("mdfld_dsi_dsr: FIFO not empty\n");
-		ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
 		return err;
 	}
 
