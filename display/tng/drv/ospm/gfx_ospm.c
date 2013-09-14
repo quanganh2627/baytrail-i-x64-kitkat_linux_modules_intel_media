@@ -117,6 +117,9 @@ static int gpu_freq_code_to_mhz(int freq_code_in)
 	case IP_FREQ_400_00:
 		freq_mhz_out = 400;
 		break;
+	case IP_FREQ_457_14:
+		freq_mhz_out = 457;
+		break;
 	case IP_FREQ_533_33:
 		freq_mhz_out = 533;
 		break;
@@ -322,6 +325,9 @@ int gpu_freq_mhz_to_code(int freq_mhz_in, int *p_freq_out)
 	} else if (freq_mhz_in >= 533) {
 		freq_code = IP_FREQ_533_33;	/* 533.33 */
 		freq_out = 533;
+	} else if (freq_mhz_in >= 457) {
+		freq_code = IP_FREQ_457_14;	/* 457.14 */
+		freq_out = 457;
 	} else if (freq_mhz_in >= 400) {
 		freq_code = IP_FREQ_400_00;	/* 400.00 */
 		freq_out = 400;
