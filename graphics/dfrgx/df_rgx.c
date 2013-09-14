@@ -1,28 +1,30 @@
-/**
- * df_rgx.c - devfreq driver for IMG rgx graphics in Tangier.
- *
- * To-do - before merge:
- * - Ensure this driver can be loaded as a built-in or via insmod in init.rc
- *   (early on).  It hangs now, probably due to accessing frequency register
- *   when device is not yet initialized/powered.
- * - See above.  Ensure that rgx frequency control is not attempted until
- *   device is known to be ready, with power on.
- *
- * To-do:
- * - Ensure that this driver also works as built-in (not just module).
- * - Add and use utilization computation based on performance counters.
- * - Change or remove program symbol names that start with gbp_*
- * - Expose more information and control through sysfs or debugfs.
- * - Polling interval should be 5ms, so use hrtimer and separate work thread
- *   instead of using devfreq polling based on HZ.
- * - When Tangier supports frequency-changed interrupt, use it to update
- *   rgx driver notion of clock frequency.
- *
- * Notes:
- * Not using "opp" - operating power points.
- */
+/**************************************************************************
+ * Copyright (c) 2012, Intel Corporation.
+ * All Rights Reserved.
 
-/**
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Authors:
+ *    Javier Torres Castillo <javier.torres.castillo@intel.com>
+ *
+ * df_rgx.c - devfreq driver for IMG rgx graphics in Tangier.
  * Description:
  *  Early devfreq driver for rgx.  Utilization measures and on-demand
  *  frequency control will be added later.  For now, only thermal
@@ -36,7 +38,7 @@
  *      sysfs file                           initial value (KHz)
  *      ---------------------------------    -------------------
  *      /sys/class/devfreq/dfrgx/min_freq    200000
- *      /sys/class/devfreq/dfrgx/max_freq    320000
+ *      /sys/class/devfreq/dfrgx/max_freq    320000, 533000 on B0
  *  and provides current frequency from:
  *      /sys/class/devfreq/dfrgx/cur_freq
  *
@@ -80,24 +82,13 @@
 #include "dev_freq_debug.h"
 #include "dev_freq_graphics_pm.h"
 #include "df_rgx_defs.h"
+#include "df_rgx_burst.h"
 #define DFRGX_GLOBAL_ENABLE_DEFAULT 1
 
 #define DF_RGX_NAME_DEV    "dfrgx"
 #define DF_RGX_NAME_DRIVER "dfrgxdrv"
 
 #define DFRGX_HEADING DF_RGX_NAME_DEV ": "
-
-/* FIXME - Temporary limits to frequency range, pending further testing. */
-#define DF_RGX_FREQ_KHZ_MIN             200000
-#define DF_RGX_FREQ_KHZ_MAX             533000
-
-#define DF_RGX_FREQ_KHZ_MIN_INITIAL     DF_RGX_FREQ_KHZ_MIN
-
-#define DF_RGX_FREQ_KHZ_MAX_INITIAL     320000
-
-#define DF_RGX_INITIAL_FREQ_KHZ         320000
-
-#define DF_RGX_THERMAL_LIMITED_FREQ_KHZ 200000
 
 /* DF_RGX_POLLING_INTERVAL_MS - Polling interval in milliseconds.
  * FIXME - Need to have this be 5 ms, but have to workaround HZ tick usage.
@@ -174,101 +165,6 @@ MODULE_LICENSE("GPL");
  *
  * Example invocation:
  *     MODULE_VERSION("0.1");
- */
-
-
-/**
- * set_desired_frequency_khz() - Set gpu frequency.
- * @bfdata: Pointer to private data structure
- * @freq_khz: Desired frequency in KHz (not MHz).
- * Returns: <0 if error, 0 if success, but no frequency update, or
- * realized frequency in KHz.
- */
-static long set_desired_frequency_khz(struct busfreq_data *bfdata,
-	unsigned long freq_khz)
-{
-	int sts;
-	struct devfreq *df;
-	unsigned long freq_req;
-	unsigned long freq_limited;
-	unsigned long freq_mhz;
-	unsigned int freq_mhz_quantized;
-	u32 freq_code;
-	int thermal_state;
-
-	sts = 0;
-
-	/* Warning - this function may be called from devfreq_add_device,
-	 * but if it is, bfdata->devfreq will not yet be set.
-	 */
-	df = bfdata->devfreq;
-
-	if (!df) {
-	    /*
-	     * Initial call, so set initial frequency.	Limits from min_freq
-	     * and max_freq would not have been applied by caller.
-	     */
-	    freq_req = DF_RGX_INITIAL_FREQ_KHZ;
-	}
-	else if ((freq_khz == 0) && df->previous_freq)
-		freq_req = df->previous_freq;
-	else
-		freq_req = freq_khz;
-
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: entry, caller requesting %luKHz\n",
-		__func__, freq_khz);
-
-	if (freq_req < DF_RGX_FREQ_KHZ_MIN)
-		freq_limited = DF_RGX_FREQ_KHZ_MIN;
-	else if (freq_req > DF_RGX_FREQ_KHZ_MAX)
-		freq_limited = DF_RGX_FREQ_KHZ_MAX;
-	else
-		freq_limited = freq_req;
-
-	if (df && (freq_limited == df->previous_freq))
-		return df->previous_freq;
-
-	freq_mhz = freq_limited / 1000;
-
-	mutex_lock(&bfdata->lock);
-
-	if (bfdata->disabled)
-		goto out;
-
-	freq_code = gpu_freq_mhz_to_code(freq_mhz, &freq_mhz_quantized);
-
-	if (bfdata->bf_freq_mhz_rlzd != freq_mhz_quantized) {
-		sts = gpu_freq_set_from_code(freq_code);
-		if (sts < 0) {
-			DFRGX_DPF(DFRGX_DEBUG_MED,
-				"%s: error (%d) from gpu_freq_set_from_code for %uMHz\n",
-				__func__, sts, freq_mhz_quantized);
-			goto out;
-		} else {
-			bfdata->bf_freq_mhz_rlzd = sts;
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: freq MHz(requested, realized) = %u, %lu\n",
-				__func__, freq_mhz_quantized,
-				bfdata->bf_freq_mhz_rlzd);
-		}
-
-		if (df) {
-			/*
-			 * Setting df->previous_freq will be redundant
-			 * when called from target dispatch function, but
-			 * not otherwise.
-			 */
-			df->previous_freq = bfdata->bf_freq_mhz_rlzd * 1000;
-		}
-	}
-
-	sts = bfdata->bf_freq_mhz_rlzd * 1000;
-
-out:
-	mutex_unlock(&bfdata->lock);
-
-	return sts;
-}
-
 
 /**
  * df_rgx_bus_target - Request setting of a new frequency.
@@ -434,20 +330,20 @@ static int tcd_get_available_states(struct thermal_cooling_device *tcd,
 	int ret = 0;
 
 	if(is_tng_b0){
-	ret = sprintf(buf, "%d %d %d %d %d %d %d %d\n", aAvailableStateFreq[0],
-			 aAvailableStateFreq[1],
-			 aAvailableStateFreq[2],
-			 aAvailableStateFreq[3],
-			 aAvailableStateFreq[4],
-			 aAvailableStateFreq[5],
-			 aAvailableStateFreq[6],
-			 aAvailableStateFreq[7]);
+	ret = sprintf(buf, "%d %d %d %d %d %d %d %d\n", aAvailableStateFreq[0].freq,
+			 aAvailableStateFreq[1].freq,
+			 aAvailableStateFreq[2].freq,
+			 aAvailableStateFreq[3].freq,
+			 aAvailableStateFreq[4].freq,
+			 aAvailableStateFreq[5].freq,
+			 aAvailableStateFreq[6].freq,
+			 aAvailableStateFreq[7].freq);
 	}
 	else{
-	ret = sprintf(buf, "%d %d %d %d\n", aAvailableStateFreq[0],
-			 aAvailableStateFreq[1],
-			 aAvailableStateFreq[2],
-			 aAvailableStateFreq[3]);
+	ret = sprintf(buf, "%d %d %d %d\n", aAvailableStateFreq[0].freq,
+			 aAvailableStateFreq[1].freq,
+			 aAvailableStateFreq[2].freq,
+			 aAvailableStateFreq[3].freq);
 	}
 
 	return ret;
@@ -593,6 +489,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct busfreq_data *bfdata;
 	struct devfreq *df;
+	int error = 0;
 	int sts = 0;
 	int i = 0, j=0;
 
@@ -636,7 +533,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	/*Initial states*/
 	for ( i = THERMAL_COOLING_DEVICE_MAX_STATE - 1; i >= 0; i-- )
 	{
-		bfdata->gpudata[j].freq_limit = aAvailableStateFreq[i];
+		bfdata->gpudata[j].freq_limit = aAvailableStateFreq[i].freq;
 		j++;
 	}
 
@@ -684,6 +581,17 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		goto err_002;
 	}
 
+	bfdata->g_dfrgx_data.bus_freq_data = bfdata;
+	bfdata->g_dfrgx_data.g_enable = mprm_enable;
+	bfdata->g_dfrgx_data.gpu_utilization_record_index = 3; /*Index for 320 MHZ, initial freq*/
+	error = dfrgx_burst_init(&bfdata->g_dfrgx_data);
+
+	if(error){
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: dfrgx_burst_init failed!, no utilization data\n", __func__);
+		sts = -1;
+		goto err_002;
+	}
+
 	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: success\n", __func__);
 
 	return 0;
@@ -703,6 +611,8 @@ err_000:
 static int df_rgx_busfreq_remove(struct platform_device *pdev)
 {
 	struct busfreq_data *bfdata = platform_get_drvdata(pdev);
+
+	dfrgx_burst_deinit(&bfdata->g_dfrgx_data);
 
 	unregister_pm_notifier(&bfdata->pm_notifier);
 	devfreq_remove_device(bfdata->devfreq);

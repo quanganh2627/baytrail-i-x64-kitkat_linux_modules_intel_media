@@ -24,25 +24,43 @@
  * Authors:
  *    Javier Torres Castillo <javier.torres.castillo@intel.com>
  */
-#if !defined DEVFREQ_DEBUG_H
-#define  DEVFREQ_DEBUG_H
+
+#if !defined DFRGX_BURST_H
+#define  DFRGX_BURST_H
+#include <linux/types.h>
+#include <linux/ctype.h>
+#include <linux/hrtimer.h>
+#include <linux/interrupt.h>
 #include <linux/kernel.h>
-#define DF_RGX_DEV    "dfrgx"
-#define DFRGX_ALERT    KERN_ALERT DF_RGX_DEV ": "
-#define DFRGX_DEBUG_MASK	0x01
-#define DFRGX_DEBUG_HIGH	0x01
-#define DFRGX_DEBUG_MED		0x02
-#define DFRGX_DEBUG_LOW		0x04
+#include <linux/kthread.h>
+#include <linux/ktime.h>
+#include <linux/mutex.h>
+#include <linux/spinlock.h>
+#include <linux/thermal.h>
+#include <linux/uaccess.h>
+#include <linux/version.h>
+#include <linux/proc_fs.h>
+#include <linux/module.h>
 
-#define DFRGX_HWPERF_DEBUG 0
+#include <linux/mm.h>
+#include <linux/pagemap.h>
+#include <linux/hugetlb.h>
+#include <linux/slab.h>
+#include <linux/vmalloc.h>
+#include <linux/delay.h>
 
-#if (defined DFRGX_HWPERF_DEBUG) && DFRGX_HWPERF_DEBUG
-#define DFRGX_DPF(mask,...) if (mask & DFRGX_DEBUG_MASK ) \
-		{ \
-			printk(DFRGX_ALERT __VA_ARGS__); \
-		}
-#else
-#define DFRGX_DPF(mask,...)
-#endif
-#endif /*DEVFREQ_DEBUG_H*/
+#include <linux/string.h>
+#include <linux/sched.h>
+#include <linux/interrupt.h>
+#include <asm/hardirq.h>
+#include <linux/timer.h>
+#include "df_rgx_defs.h"
+#include "dev_freq_graphics_pm.h"
+
+#define DFRGX_BURST_TIMER_PERIOD_DEFAULT_USECS 5000
+
+
+int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx);
+void dfrgx_burst_deinit(struct df_rgx_data_s *g_dfrgx);
+#endif /*DFRGX_BURST*/
 

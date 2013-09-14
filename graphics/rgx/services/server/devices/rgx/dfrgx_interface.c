@@ -22,27 +22,45 @@
  * SOFTWARE.
  *
  * Authors:
+ *    Dale B. Stimson <dale.b.stimson@intel.com>
  *    Javier Torres Castillo <javier.torres.castillo@intel.com>
  */
-#if !defined DEVFREQ_DEBUG_H
-#define  DEVFREQ_DEBUG_H
-#include <linux/kernel.h>
-#define DF_RGX_DEV    "dfrgx"
-#define DFRGX_ALERT    KERN_ALERT DF_RGX_DEV ": "
-#define DFRGX_DEBUG_MASK	0x01
-#define DFRGX_DEBUG_HIGH	0x01
-#define DFRGX_DEBUG_MED		0x02
-#define DFRGX_DEBUG_LOW		0x04
 
-#define DFRGX_HWPERF_DEBUG 0
 
-#if (defined DFRGX_HWPERF_DEBUG) && DFRGX_HWPERF_DEBUG
-#define DFRGX_DPF(mask,...) if (mask & DFRGX_DEBUG_MASK ) \
-		{ \
-			printk(DFRGX_ALERT __VA_ARGS__); \
-		}
-#else
-#define DFRGX_DPF(mask,...)
-#endif
-#endif /*DEVFREQ_DEBUG_H*/
+#include <linux/module.h>
+
+#include "dfrgx_interface.h"
+
+static struct dfrgx_interface_s dfrgx_interface;
+
+
+/**
+ * dfrgx_interface_set_data() - Provide some gburst data for hooks
+ * inside the graphics driver.
+ * @dfrgx_interface_in: Data to allow callback to dfrgx burst module.
+ *
+ * Also, the symbol dependency will establish a load order dependency for
+ * the case where both the graphics driver  and the dfrgx driver are modules,
+ * ensuring that the graphics driver is loaded and initialized before gburst.
+ */
+void dfrgx_interface_set_data(struct dfrgx_interface_s *dfrgx_interface_in)
+{
+	dfrgx_interface = *dfrgx_interface_in;
+}
+
+
+/*  Leave this export in place, even if built-in, as it allows easy compilation
+    testing of gburst as a module. */
+EXPORT_SYMBOL(dfrgx_interface_set_data);
+
+
+/**
+ * gburst_interface_power_state_set() - gfx drv calls to indicate power state.
+ * @st_on: 1 if power coming on, 0 if power going off.
+ */
+void dfrgx_interface_power_state_set(int st_on)
+{
+	if (dfrgx_interface.dfrgx_power_state_set && dfrgx_interface.dfrgx_priv)
+		dfrgx_interface.dfrgx_power_state_set(dfrgx_interface.dfrgx_priv, st_on);
+}
 

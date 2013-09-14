@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright (c) 2012, Intel Corporation.
+ * Copyright (c) 2013, Intel Corporation.
  * All Rights Reserved.
 
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -24,25 +24,36 @@
  * Authors:
  *    Javier Torres Castillo <javier.torres.castillo@intel.com>
  */
-#if !defined DEVFREQ_DEBUG_H
-#define  DEVFREQ_DEBUG_H
-#include <linux/kernel.h>
-#define DF_RGX_DEV    "dfrgx"
-#define DFRGX_ALERT    KERN_ALERT DF_RGX_DEV ": "
-#define DFRGX_DEBUG_MASK	0x01
-#define DFRGX_DEBUG_HIGH	0x01
-#define DFRGX_DEBUG_MED		0x02
-#define DFRGX_DEBUG_LOW		0x04
 
-#define DFRGX_HWPERF_DEBUG 0
+#ifndef _DF_RGXHWPERF_H_
+#define _DF_RGXHWPERF_H_
 
-#if (defined DFRGX_HWPERF_DEBUG) && DFRGX_HWPERF_DEBUG
-#define DFRGX_DPF(mask,...) if (mask & DFRGX_DEBUG_MASK ) \
-		{ \
-			printk(DFRGX_ALERT __VA_ARGS__); \
-		}
-#else
-#define DFRGX_DPF(mask,...)
-#endif
-#endif /*DEVFREQ_DEBUG_H*/
+#define DF_RGX_HWPERF_DEV    "dfrgxhwperf"
+#define DFRGX_HWPERF_ALERT KERN_ALERT DF_RGX_HWPERF_DEV ": "
 
+ /*****************************************************************************
+ * Error values
+ *****************************************************************************/
+typedef enum _DFRGX_HWPERF_ERROR_
+{
+	DFRGX_HWPERF_OK,
+	DFRGX_HWPERF_OBJ_NOT_CREATED,
+	DFRGX_HWPERF_ALREADY_INITIAIZED,
+	DFRGX_HWPERF_NODE_NOT_ACQUIRED,
+	DFRGX_HWPERF_EVENTS_NOT_ENABLED,
+	DFRGX_HWPERF_COUNTERS_NOT_CONFIGURED,
+	DFRGX_HWPERF_ERROR_FORCE_I32 = 0x7fffffff
+
+} DFRGX_HW_PERF_ERROR;
+
+/******************************************************************************
+ * RGX  Profiling Server API(s)
+ *****************************************************************************/
+unsigned int gpu_rgx_utilstats_init_obj();
+
+unsigned int gpu_rgx_utilstats_deinit_obj();
+
+unsigned int gpu_rgx_get_util_stats(void* pvData);
+
+
+#endif	/* _DF_RGXHWPERF_H_*/
