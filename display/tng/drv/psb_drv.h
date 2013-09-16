@@ -151,6 +151,8 @@ enum {
 /* MSVDX MMIO region is 0x50000 - 0x57fff ==> 32KB */
 #define PSB_MSVDX_SIZE		0x10000
 
+#define PSB_IED_DRM_CNTL_STATUS		0x2208
+
 #define TNG_VSP_OFFSET		0x800000
 #define TNG_VSP_SIZE		0x400000
 
@@ -1025,6 +1027,12 @@ struct drm_psb_private {
 	 * HDMI config data 
 	 */
 	void *hdmi_priv;
+
+	/* indicate whether IED session is active */
+	/* Maximum one active IED session at any given time */
+	bool ied_enabled;
+	/* indicate which source sets ied_enabled flag */
+	struct file *ied_context;
 
 #define DRM_PSB_HDMI_FLIP_ARRAY_SIZE 4
 	void *flip_array[DRM_PSB_HDMI_FLIP_ARRAY_SIZE];
