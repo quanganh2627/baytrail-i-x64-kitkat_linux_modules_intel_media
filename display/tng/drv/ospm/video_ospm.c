@@ -247,9 +247,16 @@ static bool vec_power_up(struct drm_device *dev,
 		return false;
 	}
 
-	if (!tng_topaz_set_vec_freq(IP_FREQ_320_00))
-		PSB_DEBUG_PM("TOPAZ: Set VEC frequency to " \
-			"320MHZ after power up\n");
+	if (IS_TNG_B0(dev)) {
+		if (!tng_topaz_set_vec_freq(IP_FREQ_400_00)) {
+			PSB_DEBUG_PM("TOPAZ: Set VEC frequency to\n");
+			PSB_DEBUG_PM("400MHZ after power up\n");
+		}
+	} else {
+		if (!tng_topaz_set_vec_freq(IP_FREQ_320_00))
+			PSB_DEBUG_PM("TOPAZ: Set VEC frequency to " \
+				"320MHZ after power up\n");
+	}
 
 	if (drm_topaz_cgpolicy != PSB_CGPOLICY_ON)
 		tng_topaz_CG_disable(dev);
