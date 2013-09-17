@@ -209,6 +209,36 @@ PVRSRV_ERROR PDumpSetFrameKM(IMG_UINT32 ui32Frame)
 #endif
 }
 
+static IMG_BOOL _PDumpWillCapture(IMG_UINT32 ui32Flags)
+{
+	/*
+		FIXME:
+		We really need to know if the PDump client is connected so we can
+		check if the continuous data will be saved or not.
+	*/
+	if ((ui32Flags & PDUMP_FLAGS_PERSISTENT) || (ui32Flags & PDUMP_FLAGS_CONTINUOUS))
+	{
+		return IMG_TRUE;
+	}
+	else
+	{
+		return PDumpIsCaptureFrameKM();
+	}
+}
+
+IMG_BOOL PDumpWillCapture(IMG_UINT32 ui32Flags)
+{
+#if defined(SUPPORT_PDUMP_MULTI_PROCESS)
+	if( _PDumpIsProcessActive() )
+	{
+		return _PDumpWillCapture(ui32Flags);
+	}
+	return PVRSRV_OK;
+#else
+	return _PDumpWillCapture(ui32Flags);
+#endif
+}
+
 /**************************************************************************
  * Function Name  : PDumpRegWithFlagsKM
  * Inputs         : pszPDumpDevName, Register offset, and value to write

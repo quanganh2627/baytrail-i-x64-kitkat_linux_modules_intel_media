@@ -44,6 +44,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef __SERVICES_PROC_H__
 #define __SERVICES_PROC_H__
 
+#ifdef CONFIG_PVR_PROC
+
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0))
 #include <asm/system.h>
 #endif
@@ -92,4 +94,5 @@ void RemovePerProcessProcEntrySeq(struct pvr_proc_dir_entry* proc_entry);
 
 void *PVRProcGetData(struct pvr_proc_dir_entry* ppde);
 
+#endif
 #endif
