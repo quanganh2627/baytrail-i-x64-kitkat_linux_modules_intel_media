@@ -86,6 +86,9 @@ static bool vsp_power_up(struct drm_device *dev,
 	if (vsp_priv->fw_loaded_by_punit && drm_vsp_burst)
 		vsp_set_max_frequency(dev);
 
+	psb_irq_preinstall_islands(dev, OSPM_VIDEO_VPP_ISLAND);
+	psb_irq_postinstall_islands(dev, OSPM_VIDEO_VPP_ISLAND);
+
 	PSB_DEBUG_PM("Power ON VSP!\n");
 	return ret;
 }
@@ -108,6 +111,8 @@ static bool vsp_power_down(struct drm_device *dev,
 		PSB_DEBUG_PM("The VSP isn't in idle!\n");
 		return false;
 	}
+
+	psb_irq_uninstall_islands(dev, OSPM_VIDEO_VPP_ISLAND);
 
 	/* save VSP registers */
 	psb_vsp_save_context(dev);
