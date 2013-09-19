@@ -306,16 +306,11 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 
 	power_island = pipe_to_island(dsi_config->pipe);
 
+	/* always power on display C island for overlay c and sprite D */
+	power_island |= OSPM_DISPLAY_C;
+
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
-
-	/*
-	 * FIXME: need to dynamically power un-gate DISPLAY C island for
-	 * Overlay C & Sprite D planes.
-	 */
-	if (!ctx->ovcadd || (((ctx->ovcadd & OV_PIPE_SELECT) >>
-					OV_PIPE_SELECT_POS) != OV_PIPE_B))
-		power_island |= OSPM_DISPLAY_C;
 
 	if (!power_island_get(power_island))
 		return -EAGAIN;
@@ -645,18 +640,11 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 power_off_err:
 
 	power_island = pipe_to_island(dsi_config->pipe);
+	/* power gate display island C for overlay C and sprite D */
+	power_island |= OSPM_DISPLAY_C;
 
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
-
-	/*
-	 * FIXME: need to dynamically power gate DISPLAY C island for
-	 * Overlay C & Sprite D planes.
-	 */
-	/* Don't power gate Display C when Overlay C is attahced to Pipe B. */
-	if (!ctx->ovcadd || (((ctx->ovcadd & OV_PIPE_SELECT) >>
-					OV_PIPE_SELECT_POS) != OV_PIPE_B))
-		power_island |= OSPM_DISPLAY_C;
 
 	if (!power_island_put(power_island))
 		return -EINVAL;

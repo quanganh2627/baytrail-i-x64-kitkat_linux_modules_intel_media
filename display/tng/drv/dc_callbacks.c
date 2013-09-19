@@ -218,13 +218,6 @@ void DCCBFlipOverlay(struct drm_device *dev,
 			dsi_ctx->ovaadd = ctx->ovadd;
 		else if (ctx->index == 1)
 			dsi_ctx->ovcadd = ctx->ovadd;
-	} else {
-		/* Record the context of Overlay C attached to Pipe B. */
-		dsi_config = dev_priv->dsi_configs[0];
-		if (dsi_config) {
-			dsi_ctx = &dsi_config->dsi_hw_context;
-			dsi_ctx->ovcadd = ctx->ovadd;
-		}
 	}
 
 	PSB_WVDC32(ctx->ovadd, ovadd_reg);
@@ -460,13 +453,6 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 				dsi_ctx->ovaadd = 0;
 			else if (index == 1)
 				dsi_ctx->ovcadd = 0;
-		} else {
-			/* Record the context of Overlay C attached to Pipe B */
-			dsi_config = dev_priv->dsi_configs[0];
-			if (dsi_config) {
-				dsi_ctx = &dsi_config->dsi_hw_context;
-				dsi_ctx->ovcadd = 0;
-			}
 		}
 	}
 
