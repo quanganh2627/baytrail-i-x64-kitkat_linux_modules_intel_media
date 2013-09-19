@@ -315,7 +315,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	if (!power_island_get(power_island))
 		return -EAGAIN;
 
-	if (IS_TNG_B0(dev)) {
+	if (dev_priv->bUseHFPLL) {
 		/* Disable PLL*/
 		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
 		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);

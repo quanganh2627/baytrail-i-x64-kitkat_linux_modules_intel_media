@@ -1205,7 +1205,20 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 
 	dev_priv->panel_id = PanelID;
 	dev_priv->mipi_encoder_type = is_panel_vid_or_cmd(dev_priv->dev);
-	enable_HFPLL(dev_priv->dev);
+
+	if (IS_TNG_B0(dev)) {
+		if (dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DBI) {
+			dev_priv->bRereadZero = false;
+			dev_priv->bUseHFPLL = true;
+			enable_HFPLL(dev_priv->dev);
+		} else {
+			dev_priv->bUseHFPLL = false;
+			dev_priv->bRereadZero = true;
+		}
+	} else {
+		dev_priv->bUseHFPLL = false;
+		dev_priv->bRereadZero = false;
+	}
 
 	return true;
 }
@@ -1392,12 +1405,12 @@ static int psb_do_init(struct drm_device *dev)
 	PSB_DEBUG_INIT("Init MSVDX\n");
 
 	/* on TNG B0, VED not needed to be on here since firmware is not loaded in psb_msvdx_init */
-	if (!IS_TNG_B0(dev))
+	if (IS_TNG_A0(dev))
 		power_island_get(OSPM_VIDEO_DEC_ISLAND);
 
 	psb_msvdx_init(dev);
 
-	if (!IS_TNG_B0(dev))
+	if (IS_TNG_A0(dev))
 		power_island_put(OSPM_VIDEO_DEC_ISLAND);
 
 #ifdef SUPPORT_VSP

@@ -466,9 +466,8 @@ void enable_HFPLL(struct drm_device *dev)
 	struct drm_psb_private *dev_priv =
 		(struct drm_psb_private *)dev->dev_private;
 
-	/* Enable HFPLL for B0 command mode panel */
-	if ((IS_TNG_B0(dev)) &&
-		(dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DBI)) {
+	/* Enable HFPLL for command mode panel */
+	if (dev_priv->bUseHFPLL) {
 			pll_select = intel_mid_msgbus_read32(CCK_PORT,
 						DSI_PLL_CTRL_REG);
 			ctrl_reg5 = intel_mid_msgbus_read32(CCK_PORT,

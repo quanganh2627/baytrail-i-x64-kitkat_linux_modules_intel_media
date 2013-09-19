@@ -432,7 +432,7 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	 * This workarounds are only needed for TNG A0/A1 silicon.
 	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-	if (!IS_TNG_B0(dev))
+	if (IS_TNG_A0(dev))
 	{
 		/**
 		* If turning some power on, and the power to be on includes SLC,
@@ -515,7 +515,7 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 void ospm_gfx_init(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
-	if(IS_TNG_B0(dev))
+	if (IS_TNG_B0(dev))
 		is_tng_b0 = 1;
 
 	OSPM_DPF("%s\n", __func__);
