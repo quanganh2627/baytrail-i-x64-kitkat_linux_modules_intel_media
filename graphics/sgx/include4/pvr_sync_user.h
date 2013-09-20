@@ -59,33 +59,25 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* This matches the sw_sync create ioctl data */
 struct PVR_SYNC_CREATE_IOCTL_DATA
 {
-	/* Input: Name of this sync pt. Passed to base sync driver. */
 	char	name[32];
-
-	/* Input: An fd from a previous call to ALLOC ioctl. Cannot be <0. */
-	__s32	allocdSyncInfo;
-
-	/* Output: An fd returned from the CREATE ioctl. */
-	__s32	fence;
+	__s32	fence; /* fd of new fence */
+                   /* or fd of already alloc'd fence */
+	__s32	allocdSyncInfo; /* If this is provided (not -1) this points to a fence allocated
+	                         *  by the ALLOC_FENCE ioctl, and it's syncinfo is moved to the newly created
+							 *  fence */
 };
 
 struct PVR_SYNC_ALLOC_IOCTL_DATA
 {
-	/* Output: An fd returned from the ALLOC ioctl */
-	__s32 fence;
-
-	/* Output: IMG_TRUE if the timeline looked idle at alloc time */
-	__u32 bTimelineIdle;
+	char name[32];
+	__s32 fence; /* fd of newly alloc'd fence */
 };
 
 #define PVR_SYNC_DEBUG_MAX_POINTS 3
 
 typedef struct
 {
-	/* Output: A globally unique stamp/ID for the sync */
 	IMG_UINT64 ui64Stamp;
-
-	/* Output: The WOP snapshot for the sync */
 	IMG_UINT32 ui32WriteOpsPendingSnapshot;
 }
 PVR_SYNC_DEBUG;

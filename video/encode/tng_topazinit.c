@@ -58,18 +58,14 @@
 #define	MEM_AND_CACHE	1
 #define CACHE_ONLY	2
 
-#define FW_NAME_A0 "topazhp_fw.bin"
-#define FW_NAME_B0 "topazhp_fw_b0.bin"
+#define FIRMWARE_NAME	"topazhp_fw.bin"
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
-#ifdef CONFIG_DX_SEP54
+#ifdef CONFIG_DX_SEP54_IMAGE
 extern int sepapp_image_verify(u8 *addr, ssize_t size, u32 key_index, u32 magic_num);
-#endif
 #endif
 
 extern int drm_psb_msvdx_tiling;
 
-#ifdef MRFLD_B0_DEBUG
 /* #define TOPAZHP_ENCODE_FPGA */
 static int tng_init_error_dump_reg(struct drm_psb_private *dev_priv)
 {
@@ -270,7 +266,6 @@ static int tng_init_error_dump_reg(struct drm_psb_private *dev_priv)
 	PSB_DEBUG_TOPAZ("DMA_Per_hold %08x\n", reg_val);
 	return 0;
 }
-#endif
 
 /* static function define */
 static int32_t mtx_dmac_transfer(struct drm_psb_private *dev_priv,
@@ -290,7 +285,6 @@ static int mtx_dma_write(
 	uint32_t dst_ram_addr,
 	uint32_t size);
 
-#ifdef MRFLD_B0_DEBUG
 static int tng_error_dump_reg(struct drm_psb_private *dev_priv)
 {
 	uint32_t reg_val;
@@ -490,7 +484,6 @@ static int tng_error_dump_reg(struct drm_psb_private *dev_priv)
 	PSB_DEBUG_TOPAZ("DMA_Per_hold %08x\n", reg_val);
 	return 0;
 }
-#endif
 
 int equal_func(uint32_t reqval, uint32_t regval, uint32_t mask)
 {
@@ -627,9 +620,11 @@ void tng_topaz_mmu_enable_tiling(
 
 }
 
+#if _MRFLD_BO_A_
 static int tng_topaz_query_queue(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_cmd_queue *topaz_cmd = NULL;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	int32_t ret = -1;
 
@@ -642,6 +637,7 @@ static int tng_topaz_query_queue(struct drm_device *dev)
 	mutex_unlock(&topaz_priv->topaz_mutex);
 	return ret;
 }
+#endif
 
 void tng_powerdown_topaz(struct work_struct *work)
 {
@@ -655,24 +651,26 @@ void tng_powerdown_topaz(struct work_struct *work)
 	int32_t ret = 0;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Task start\n");
-	if (Is_Mrfld_B0()) {
-		ret = tng_topaz_query_queue(dev);
-		if (ret == 0) {
-			ret = tng_topaz_power_off(dev);
-			if (ret) {
-				DRM_ERROR("TOPAZ: Failed to power off");
-				return ret;
-			}
-		}
-		tng_topaz_dequeue_send(dev);
-	} else {
-		tng_topaz_dequeue_send(dev);
-		ret = tng_topaz_power_off(dev);
-		if (ret) {
-			DRM_ERROR("TOPAZ: Failed to power off");
-			return ret;
-		}
+#if _MRFLD_B0_A_
+	ret = tng_topaz_query_queue(dev);
+
+	if (ret == 0){
+		if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
+			power_island_put_dummy(dev);
+		else
+			power_island_put(OSPM_VIDEO_ENC_ISLAND);
 	}
+
+
+	tng_topaz_dequeue_send(dev);
+#else
+	tng_topaz_dequeue_send(dev);
+
+	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
+		power_island_put_dummy(dev);
+	else
+		power_island_put(OSPM_VIDEO_ENC_ISLAND);
+#endif
 
 out:
 	if (drm_topaz_cmdpolicy != PSB_CMDPOLICY_PARALLEL) {
@@ -952,25 +950,24 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	unsigned long imr_addr;
 	int imr_size;
 	unsigned char *imr_ptr;
-	const unsigned long tng_magic_num = 0x43455624;
+	const unsigned long tng_magic_num = 0x31304843;
 
 #ifdef VERIFYFW_INIT
 	uint32_t i, *p_buf;
 #endif
 	/* # get firmware */
-	ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
+	ret = request_firmware(&raw, FIRMWARE_NAME, &dev->pdev->dev);
 	if (ret) {
 		DRM_ERROR("TOPAZ: Request firmware failed: %d\n", ret);
 		return ret;
 	}
-
-	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size 0x%08x\n", raw->size);
-
 	if ((NULL == raw) || (raw->size < 20)) {
 		DRM_ERROR("TOPAZ: Firmware file size is not correct.\n");
 		ret = -1;
 		goto out;
 	}
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size %d\n", raw->size);
 
 	uc_ptr = (unsigned char *) raw->data;
 	if (!uc_ptr) {
@@ -986,8 +983,8 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	/* get imr 11 region start address and size */
 	imr_addr = intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,
 		TNG_IMR6L_MSG_REGADDR);
-	imr_addr <<= TNG_IMR_ADDRESS_SHIFT;
-	PSB_DEBUG_TOPAZ("IMR6 base address 0x%08x\n", imr_addr);
+	imr_addr <<= 10;
+	PSB_DEBUG_TOPAZ("IMR11 base address 0x%08x\n", imr_addr);
 	imr_size = raw->size;
 	/* FIXME: set imr_addr to default value */
 	/* imr_addr = 0x48f3000; */
@@ -995,8 +992,6 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	/* map imr 11 */
 	/* check if raw size is smaller than */
 	/* ioremap the region */
-	PSB_DEBUG_TOPAZ("ioremap IMR6 0x%08x, size 0x%08x\n",
-		imr_addr, imr_size);
 	imr_ptr = ioremap(imr_addr, imr_size);
 	if (!imr_ptr) {
 		DRM_ERROR("failed to map imr_addr\n");
@@ -1004,36 +999,19 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 		goto out;
 	}
 
-	PSB_DEBUG_TOPAZ("copy fw data to IMR6 0x%08x\n",
-		(u32)imr_ptr);
 	/* copy the firmware to imr 11 */
 	memcpy(imr_ptr, uc_ptr, raw->size);
 
-	PSB_DEBUG_TOPAZ("iounmap IMR6 0x%08x\n", imr_ptr);
 	/* unmap the region */
 	iounmap(imr_ptr);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
-#ifdef CONFIG_DX_SEP54
-	PSB_DEBUG_TOPAZ("CALL chaabi API to verify it\n");
+#ifdef CONFIG_DX_SEP54_IMAGE
 	ret = sepapp_image_verify(imr_addr, imr_size, 0,
 		tng_magic_num);
 	if (ret) {
-		DRM_ERROR("failed to verify vec firmware ret %x\n", ret);
+		DRM_ERROR("failed to verify vsp firmware ret %x\n", ret);
 		ret = -1;
 		goto out;
 	}
-#ifdef MRFLD_B0_DEBUG
-	ret = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
-		TNG_IMR6_WAC_MSG_REGADDR);
-	PSB_DEBUG_TOPAZ("TOPAZ: WAC = 0x%08x\n",
-		ret);
-	ret = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
-		TNG_IMR6_RAC_MSG_REGADDR);
-	PSB_DEBUG_TOPAZ("TOPAZ: RAC = 0x%08x\n",
-		ret);
-	udelay(10);
-#endif
-#endif
 #endif
 
 	release_firmware(raw);
@@ -1072,7 +1050,7 @@ int tng_topaz_init_fw(struct drm_device *dev)
 	uint32_t i, *p_buf;
 #endif
 	/* # get firmware */
-	ret = request_firmware(&raw, FW_NAME_A0, &dev->pdev->dev);
+	ret = request_firmware(&raw, FIRMWARE_NAME, &dev->pdev->dev);
 	if (ret) {
 		DRM_ERROR("TOPAZ: Request firmware failed: %d\n", ret);
 		return ret;
@@ -1225,7 +1203,7 @@ static void tng_set_auto_clk_gating(
 	if (codec != IMG_CODEC_JPEG) {
 		reg_val = 0;
 		TOPAZCORE_READ32(0, TOPAZHP_CR_TOPAZHP_MAN_CLOCK_GATING,
-			&reg_val);
+				 &reg_val);
 
 		/* Disable LRITC clocks */
 		reg_val = F_INSERT(reg_val, 1,
@@ -1271,10 +1249,10 @@ static void tng_get_bank_size(
 			(F_EXTRACT(video_ctx->mtx_debug_val,
 			TOPAZHP_TOP_CR_MTX_MSTR_RAM_BANKS) - 1));
 
-	PSB_DEBUG_TOPAZ("TOPAZ: Last bank ram size: %08x\n",
-		last_bank_ram_size);
-	PSB_DEBUG_TOPAZ("TOPAZ: mtx bank size: %08x, mtx ram size: %08x\n",
-		video_ctx->mtx_bank_size, video_ctx->mtx_ram_size);
+	PSB_DEBUG_TOPAZ("TOPAZ: Last bank ram size: %08x," \
+			"mtx bank size: %08x, mtx ram size: %08x\n",
+			last_bank_ram_size,
+			video_ctx->mtx_bank_size, video_ctx->mtx_ram_size);
 }
 
 /* setup fw when start a new context */
@@ -1431,7 +1409,8 @@ int tng_topaz_setup_fw(
 		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_BOOTSTATUS << 2),
 		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff);
 	if (ret) {
-		DRM_ERROR("Firmware failed to complete its setup\n");
+		DRM_ERROR("Firmware failed to complete its setup" \
+			"before continuing\n");
 		return ret;
 	}
 
@@ -1448,7 +1427,6 @@ int tng_topaz_setup_fw(
 	return ret;
 }
 
-#ifdef MRFLD_B0_DEBUG
 static int pm_cmd_wait(u32 reg_addr, u32 reg_mask)
 {
 	int tcount;
@@ -1468,7 +1446,6 @@ static int pm_cmd_wait(u32 reg_addr, u32 reg_mask)
 
 	return 0;
 }
-#endif
 
 int tng_topaz_fw_run(
 	struct drm_device *dev,
@@ -1478,6 +1455,7 @@ int tng_topaz_fw_run(
 	struct drm_psb_private *dev_priv;
 	struct tng_topaz_private *topaz_priv;
 	uint32_t verify_pc;
+	int32_t i;
 	int32_t ret = 0;
 	uint32_t reg_val = 0;
 
@@ -1486,80 +1464,64 @@ int tng_topaz_fw_run(
 
 	reg_val = codec;
 
-	PSB_DEBUG_TOPAZ("TOPAZ: check PUnit load %d fw status\n", codec);
+	PSB_DEBUG_TOPAZ("TOPAZ: check PUnit load %d fw status\n",codec);
 
-	reg_val = intel_mid_msgbus_read32(PUNIT_PORT, VEC_SS_PM0);
-	PSB_DEBUG_TOPAZ("Read R(0x%08x) V(0x%08x)\n",
-		VEC_SS_PM0, reg_val);
+	ret = pm_cmd_wait(VEC_SS_PM0, 0x03000000);
+
+	if (ret) {
+		DRM_ERROR("Error: PUnit load FW failed %d\n", ret);
+		return ret;
+	}
+
+	MULTICORE_READ32(TOPAZHP_TOP_CR_MULTICORE_HW_CFG, &reg_val);
+	PSB_DEBUG_TOPAZ("TOPAZ: HW_CFG 0x%08x\n", reg_val);
+
+	topaz_priv->topaz_num_pipes = F_EXTRACT(reg_val,
+		TOPAZHP_TOP_CR_NUM_CORES_SUPPORTED);
+
+	PSB_DEBUG_TOPAZ("TOPAZ: %d pipes\n", topaz_priv->topaz_num_pipes);
+
+	if (topaz_priv->topaz_num_pipes > TOPAZHP_PIPE_NUM) {
+		DRM_ERROR("TOPAZ: Number of pipes: 0x%x\n",
+			topaz_priv->topaz_num_pipes);
+		topaz_priv->topaz_num_pipes = TOPAZHP_PIPE_NUM;
+	}
+
+	/* Soft reset of MTX */
+	/* FIXME
+	reg_val = F_ENCODE(1, TOPAZHP_TOP_CR_IMG_TOPAZ_MTX_SOFT_RESET) |
+		  F_ENCODE(1, TOPAZHP_TOP_CR_IMG_TOPAZ_CORE_SOFT_RESET);
+
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_SRST, reg_val);
+
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_SRST, 0x0);
 
 	tng_get_bank_size(dev, video_ctx, codec);
 
-	/* clock gating */
-	reg_val = F_ENCODE(1, TOPAZHP_CR_TOPAZHP_VLC_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_DEB_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_IPE0_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_IPE1_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_SPE0_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_SPE1_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_H264COMP4X4_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_H264COMP8X8_AUTO_CLK_GATE)|
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_H264COMP16X16_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_JMCOMP_AUTO_CLK_GATE)|
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_PC_DM_AUTO_CLK_GATE) |
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_PC_DMS_AUTO_CLK_GATE)|
-		  F_ENCODE(1, TOPAZHP_CR_TOPAZHP_CABAC_AUTO_CLK_GATE);
+	tng_set_auto_clk_gating(dev, codec, 1);
+	*/
 
-	TOPAZCORE_WRITE32(0, TOPAZHP_CR_TOPAZHP_AUTO_CLOCK_GATING, reg_val);
-
-
-	/* FIFO_FLUSH */
-	/* write 0x78, 0x60, 0x300 */
+	/* flush the command FIFO - only has effect on master MTX */
 	reg_val = F_ENCODE(1, TOPAZHP_TOP_CR_CMD_FIFO_FLUSH);
+
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_TOPAZ_CMD_FIFO_FLUSH, reg_val);
-	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CMD_FIFO_WRITE,
-		0);
-		/* TOPAZHP_NON_SECURE_FW_MARKER); */
-		/* reg_val); */
+
 	MULTICORE_WRITE32(MTX_SCRATCHREG_IDLE, 0);
 
-	/* set up mmu */
-	tng_topaz_mmu_hwsetup(dev_priv);
-
-	/* write 50 */
-	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CORE_SEL_0, 0);
+	/* turn on MTX */
 	mtx_start(dev);
-	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CORE_SEL_0, 0);
 	mtx_kick(dev);
-
-#ifdef MRFLD_B0_DEBUG
-	udelay(10);
-#endif
 
 	ret = tng_topaz_wait_for_register(
 		dev_priv, CHECKFUNC_ISEQUAL,
 		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_BOOTSTATUS << 2),
 		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff);
 
-#ifdef MRFLD_B0_DEBUG
-	/* read 104 */
-	MULTICORE_READ32(TOPAZHP_TOP_CR_FIRMWARE_REG_1, &reg_val);
-	PSB_DEBUG_TOPAZ("TOPAZ: read 100 (0x%08x)\n", reg_val);
-#endif
-
 	if (ret) {
-		DRM_ERROR("Firmware failed to run on B0\n");
+		DRM_ERROR("Firmware failed to complete its setup" \
+			"before continuing\n");
 		return ret;
 	}
-
-	/* flush cache */
-	tng_topaz_mmu_flushcache(dev_priv);
-
-#ifdef TOPAZHP_IRQ_ENABLED
-	psb_irq_preinstall_islands(dev, OSPM_VIDEO_ENC_ISLAND);
-	psb_irq_postinstall_islands(dev, OSPM_VIDEO_ENC_ISLAND);
-
-	tng_topaz_enableirq(dev);
-#endif
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Firmware uploaded successfully.\n");
 
@@ -2080,4 +2042,54 @@ static int mtx_dma_write(
 }
 
 
+int tng_topaz_power_off(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+
+	PSB_DEBUG_TOPAZ("TOPAZ: power off start\n");
+
+	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
+		power_island_put_dummy(dev);
+	else
+		power_island_put(OSPM_VIDEO_ENC_ISLAND);
+out:
+	if (drm_topaz_cmdpolicy != PSB_CMDPOLICY_PARALLEL) {
+		atomic_set(&topaz_priv->cmd_wq_free, 1);
+		wake_up_interruptible(&topaz_priv->cmd_wq);
+	}
+
+	PSB_DEBUG_TOPAZ("TOPAZ: power off end\n");
+	return 0;
+}
+
+int tng_topaz_power_up(
+	struct drm_device *dev,
+	struct psb_video_ctx *video_ctx,
+	enum drm_tng_topaz_codec codec)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+
+	PSB_DEBUG_TOPAZ("TOPAZ: power up start\n");
+
+	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM) {
+		if (!power_island_get_dummy(dev)) {
+			DRM_ERROR("Failed to power on ENC island\n");
+			return -1;
+		}
+	} else {
+		if (!power_island_get(OSPM_VIDEO_ENC_ISLAND)) {
+			DRM_ERROR("Failed to power on ENC island\n");
+			return -1;
+		}
+	}
+
+	/* Must flush here in case of invalid cache data */
+	tng_topaz_mmu_flushcache(dev_priv);
+
+	PSB_DEBUG_TOPAZ("TOPAZ: power up end\n");
+	return 0;
+}
 

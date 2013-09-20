@@ -45,11 +45,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef _PVR_SYNC_H
 #define _PVR_SYNC_H
 
-#include <linux/version.h>
-
 #include <linux/seq_file.h>
-
-#if(LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 #include <linux/sync.h>
 #else
 #include <sync.h>

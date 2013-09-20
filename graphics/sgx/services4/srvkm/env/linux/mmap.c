@@ -119,7 +119,7 @@ static IMG_SIZE_T g_uiTotalByteSize = 0;
 
 
 #if defined(DEBUG_LINUX_MMAP_AREAS)
-static struct pvr_proc_dir_entry *g_ProcMMap;
+static struct proc_dir_entry *g_ProcMMap;
 #endif /* defined(DEBUG_LINUX_MMAP_AREAS) */
 
 #if !defined(PVR_MAKE_ALL_PFNS_SPECIAL)
@@ -1058,8 +1058,7 @@ PVRMMap(struct file* pFile, struct vm_area_struct* ps_vma)
     PVR_DPF((PVR_DBG_MESSAGE, "%s: Mapped psLinuxMemArea 0x%p\n",
          __FUNCTION__, psOffsetStruct->psLinuxMemArea));
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,7,0))
-    /* This is probably superfluous and implied by VM_IO */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
     ps_vma->vm_flags |= VM_RESERVED;
 #else
     ps_vma->vm_flags |= VM_DONTDUMP;
@@ -1097,6 +1096,15 @@ PVRMMap(struct file* pFile, struct vm_area_struct* ps_vma)
 #ifdef CONFIG_ARCH_OMAP5
     {
 	IMG_BOOL bModPageProt = IMG_FALSE;
+
+	/* In OMAP5, the Cortex A15 no longer masks an issue with the L2
+	 * interconnect. Write-combined access to the TILER aperture will
+	 * generate SIGBUS / "non-line fetch abort" errors due to L2
+	 * interconnect bus accesses. The workaround is to use a shared
+	 * device access.
+	 */
+
+	bModPageProt |= (psOffsetStruct->psLinuxMemArea->eAreaType == LINUX_MEM_AREA_ION);
 
 #ifdef CONFIG_DSSCOMP
 	bModPageProt |= is_tiler_addr(LinuxMemAreaToCpuPAddr(psOffsetStruct->psLinuxMemArea, 0).uiAddr);
@@ -1138,14 +1146,14 @@ PVRMMap(struct file* pFile, struct vm_area_struct* ps_vma)
 		}
 		else
 		{
-			IMG_SIZE_T uiDummyByteSize;
+        		IMG_UINT32 uiDummyByteSize;
 
-	        DetermineUsersSizeAndByteOffset(psFlushMemArea,
-	                                        &uiDummyByteSize,
-	                                        &uiByteOffset);
-	
-	        pvBase = (IMG_VOID *)ps_vma->vm_start + uiByteOffset;
-	        uiFlushSize = psFlushMemArea->uiByteSize;
+	        	DetermineUsersSizeAndByteOffset(psFlushMemArea,
+                                        &uiDummyByteSize,
+                                        &uiByteOffset);
+
+        		pvBase = (IMG_VOID *)ps_vma->vm_start + uiByteOffset;
+	        	uiFlushSize = psFlushMemArea->uiByteSize;
 		}
 
         psFlushMemArea->bNeedsCacheInvalidate = IMG_FALSE;
@@ -1245,6 +1253,7 @@ static void* ProcSeqNextMMapRegistrations(struct seq_file *sfile,void* el,loff_t
 {
 	return ProcSeqOff2ElementMMapRegistrations(sfile,off);
 }
+
 
 /*
  * Show MMap element (called when reading /proc/mmap file)

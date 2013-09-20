@@ -1390,15 +1390,9 @@ static int psb_do_init(struct drm_device *dev)
 	}
 
 	PSB_DEBUG_INIT("Init MSVDX\n");
-
-	/* on TNG B0, VED not needed to be on here since firmware is not loaded in psb_msvdx_init */
-	if (!IS_TNG_B0(dev))
-		power_island_get(OSPM_VIDEO_DEC_ISLAND);
-
+	power_island_get(OSPM_VIDEO_DEC_ISLAND);
 	psb_msvdx_init(dev);
-
-	if (!IS_TNG_B0(dev))
-		power_island_put(OSPM_VIDEO_DEC_ISLAND);
+	power_island_put(OSPM_VIDEO_DEC_ISLAND);
 
 #ifdef SUPPORT_VSP
 	VSP_DEBUG("Init VSP\n");

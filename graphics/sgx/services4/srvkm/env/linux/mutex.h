@@ -74,15 +74,15 @@ typedef struct {
 
 enum PVRSRV_MUTEX_LOCK_CLASS
 {
-	PVRSRV_LOCK_CLASS_POWER,
 	PVRSRV_LOCK_CLASS_BRIDGE,
 	PVRSRV_LOCK_CLASS_MMAP,
-	PVRSRV_LOCK_CLASS_MM_DEBUG,
-	PVRSRV_LOCK_CLASS_PVR_DEBUG,
 };
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15))
+#define LinuxInitMutex(psPVRSRVMutex) mutex_init(psPVRSRVMutex)
+#else
 extern IMG_VOID LinuxInitMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex);
-
+#endif
 extern IMG_VOID LinuxLockMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex);
 
 extern IMG_VOID LinuxLockMutexNested(PVRSRV_LINUX_MUTEX *psPVRSRVMutex, unsigned int uiLockClass);

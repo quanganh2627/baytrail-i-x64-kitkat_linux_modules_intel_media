@@ -61,6 +61,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(SUPPORT_DRI_DRM)
 #include "drmP.h"
+#include "drm.h"
 #endif
 
 #include "img_types.h"
@@ -72,7 +73,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "hotkey.h"
 #include "pvr_debug.h"
 #include "pvrmodule.h"
-#include "pvr_uaccess.h"
 
 #if defined(SUPPORT_DRI_DRM)
 
@@ -252,7 +252,7 @@ long dbgdrv_ioctl(struct file *file, unsigned int ioctlCmd, unsigned long arg)
 	in = buffer;
 	out = buffer + (PAGE_SIZE >>1);
 
-	if(pvr_copy_from_user(in, pIP->pInBuffer, pIP->ui32InBufferSize) != 0)
+	if(copy_from_user(in, pIP->pInBuffer, pIP->ui32InBufferSize) != 0)
 	{
 		goto init_failed;
 	}
@@ -285,7 +285,7 @@ long dbgdrv_ioctl(struct file *file, unsigned int ioctlCmd, unsigned long arg)
 										   psReadInParams->ui32OutBufferSize,
 										   ui8Tmp);
 
-		if(pvr_copy_to_user(psReadInParams->u.pui8OutBuffer,
+		if(copy_to_user(psReadInParams->u.pui8OutBuffer,
 						ui8Tmp,
 						*pui32BytesCopied) != 0)
 		{

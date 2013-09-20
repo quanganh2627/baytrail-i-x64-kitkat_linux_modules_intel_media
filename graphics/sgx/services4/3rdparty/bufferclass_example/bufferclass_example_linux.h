@@ -24,7 +24,25 @@
  *
  ******************************************************************************/
 
-#include "services_headers.h"
-#include "pvrsysinfo.h"
-#include "syslocal.h"
+#ifndef __BC_EXAMPLE_LINUX_H__
+#define __BC_EXAMPLE_LINUX_H__
+
+#include <linux/ioctl.h>
+
+typedef struct BC_Example_ioctl_package_TAG
+{
+	int inputparam;
+	int outputparam;
+
+}BC_Example_ioctl_package;
+
+#define BC_EXAMPLE_IOC_GID      'g'
+
+#define BC_EXAMPLE_IOWR(INDEX)  _IOWR(BC_EXAMPLE_IOC_GID, INDEX, BC_Example_ioctl_package)
+
+#define BC_Example_ioctl_fill_buffer		BC_EXAMPLE_IOWR(0)
+#define BC_Example_ioctl_get_buffer_count	BC_EXAMPLE_IOWR(1)
+#define BC_Example_ioctl_reconfigure_buffer BC_EXAMPLE_IOWR(2)
+
+#endif
 

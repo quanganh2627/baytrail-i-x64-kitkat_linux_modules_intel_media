@@ -24,7 +24,11 @@
  *
  ******************************************************************************/
 
-#include "services_headers.h"
-#include "pvrsysinfo.h"
-#include "syslocal.h"
+#ifndef _BUFFERCLASS_EXAMPLE_PRIVATE_H_
+#define _BUFFERCLASS_EXAMPLE_PRIVATE_H_
 
+int FillBuffer(unsigned int uiBufferIndex);
+int GetBufferCount(unsigned int *puiBufferCount);
+int ReconfigureBuffer(unsigned int *uiSucceed);
+
+#endif

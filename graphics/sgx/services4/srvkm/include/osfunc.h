@@ -54,6 +54,7 @@ extern "C" {
 #if defined(__linux__) && defined(__KERNEL__)
 #include <linux/hardirq.h>
 #include <linux/string.h>
+#include <linux/version.h>
 #if defined(__arm__)
 #include <asm/memory.h>
 #endif
@@ -61,7 +62,7 @@ extern "C" {
 
 
 /* setup conditional pageable / non-pageable select */
-	/* Other OSs only need pageable */
+	/* Non-Vista OSs only need pageable */
 	#define PVRSRV_PAGEABLE_SELECT		PVRSRV_OS_PAGEABLE_HEAP
 
 /******************************************************************************
@@ -346,9 +347,6 @@ static INLINE PVRSRV_ERROR OSReleaseSubMemHandle(IMG_HANDLE hOSMemHandle, IMG_UI
 #endif
 
 IMG_UINT32 OSGetCurrentProcessIDKM(IMG_VOID);
-#if defined (MEM_TRACK_INFO_DEBUG)
-IMG_UINT32 OSGetCurrentTimeInUSecsKM(IMG_VOID);
-#endif
 IMG_UINTPTR_T OSGetCurrentThreadID( IMG_VOID );
 IMG_VOID OSMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T uSize);
 

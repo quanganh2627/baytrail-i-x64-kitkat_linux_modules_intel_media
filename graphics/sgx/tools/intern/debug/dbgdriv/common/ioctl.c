@@ -42,7 +42,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifdef LINUX
 #include <asm/uaccess.h>
-#include "pvr_uaccess.h"
 #endif /* LINUX */
 
 #include "img_types.h"
@@ -78,7 +77,7 @@ static IMG_UINT32 DBGDIOCDrivCreateStream(IMG_VOID * pvInBuffer, IMG_VOID * pvOu
 
 	#ifdef LINUX
 
-	if(pvr_copy_from_user(name, psIn->u.pszName, 32) != 0)
+	if(copy_from_user(name, psIn->u.pszName, 32) != 0)
 	{
 		return IMG_FALSE;
 	}

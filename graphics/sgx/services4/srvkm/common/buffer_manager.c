@@ -155,8 +155,26 @@ AllocMemory (BM_CONTEXT			*pBMContext,
 			return IMG_FALSE;
 		}
 
-		/* Now allocate from the arena we chose above. */
-		if (ui32Flags & PVRSRV_MEM_SPARSE)
+		
+		if(ui32Flags & PVRSRV_MEM_NO_GPU_ADDR)
+		{
+			IMG_SIZE_T uImportSize = uSize;
+			IMG_BOOL result = IMG_TRUE;
+			IMG_UINT32 uQuantum = MAX(HOST_PAGESIZE(), psBMHeap->sDevArena.ui32DataPageSize);
+
+			uImportSize = ((uImportSize + uQuantum - 1)/uQuantum)*uQuantum;
+
+			result = BM_ImportMemory(psBMHeap, uImportSize, 0, &uImportSize, &pMapping, ui32Flags,
+						 pvPrivData, ui32PrivDataLength, &pBuf->DevVAddr.uiAddr);
+			if(result == IMG_FALSE)
+			{
+				PVR_DPF((PVR_DBG_ERROR, "AllocMemory: RA_Alloc(0x%x) FAILED", uSize));
+				return IMG_FALSE;
+			}
+			PVR_ASSERT(pBuf->DevVAddr.uiAddr == 0);
+			PVR_ASSERT(pMapping->DevVAddr.uiAddr == 0);
+		}
+		else if (ui32Flags & PVRSRV_MEM_SPARSE)
 		{
 			IMG_BOOL bSuccess;
 			IMG_SIZE_T uActualSize;
@@ -170,7 +188,7 @@ AllocMemory (BM_CONTEXT			*pBMContext,
 									   ui32Flags,
 									   pvPrivData,
 									   ui32PrivDataLength,
-									   IMG_NULL);	/* We allocate VM space */
+									   IMG_NULL);   /* We allocate VM space */
 
 			if (!bSuccess)
 			{
@@ -210,7 +228,7 @@ AllocMemory (BM_CONTEXT			*pBMContext,
 				BM_FreeMemory(pArena, IMG_NULL, pMapping);
 				return IMG_FALSE;
 			}
-		
+
 			/* uDevVAddrAlignment is currently set to zero so QAC generates warning which we override */
 			/* PRQA S 3356,3358 1 */
 			PVR_ASSERT (uDevVAddrAlignment>1?(pMapping->DevVAddr.uiAddr%uDevVAddrAlignment)==0:1);
@@ -589,7 +607,7 @@ fail_cleanup:
 		OSReleaseSubMemHandle(pBuf->hOSMemHandle, ui32Attribs);
 	}
 
-	if(pMapping && (pMapping->CpuVAddr || pMapping->hOSMemHandle))
+	if(pMapping->CpuVAddr || pMapping->hOSMemHandle)
 	{
 		switch(pMapping->eCpuMemoryOrigin)
 		{
@@ -776,11 +794,16 @@ FreeBuf (BM_BUF *pBuf, IMG_UINT32 ui32Flags, IMG_BOOL bFromAllocator)
 					Note: currently no need to distinguish between hm_env and hm_contiguous
 				*/
 				PVR_ASSERT(pBuf->ui32ExportCount == 0);
-				if (pBuf->pMapping->ui32Flags & PVRSRV_MEM_SPARSE)
+				if(ui32Flags & PVRSRV_MEM_NO_GPU_ADDR)
+				{
+					PVR_ASSERT(pBuf->DevVAddr.uiAddr == 0);
+					BM_FreeMemory(pBuf->pMapping->pBMHeap, pBuf->DevVAddr.uiAddr, pBuf->pMapping);
+				}
+				else if (pBuf->pMapping->ui32Flags & PVRSRV_MEM_SPARSE)
 				{
 					IMG_UINT32 ui32FreeSize = sizeof(IMG_BOOL) * pBuf->pMapping->ui32NumVirtChunks;
 					IMG_PVOID pvFreePtr = pBuf->pMapping->pabMapChunk;
-					
+
 					/* With sparse allocations we don't go through the sub-alloc RA */
 					BM_FreeMemory(pBuf->pMapping->pBMHeap, pBuf->DevVAddr.uiAddr, pBuf->pMapping);
 					OSFreeMem(PVRSRV_OS_PAGEABLE_HEAP,
@@ -1795,7 +1818,7 @@ BM_Wrap (	IMG_HANDLE hDevMemHeap,
 		}
 	}
 #endif
-
+	
 	if (psSysAddr == IMG_NULL) {
 		PVR_DPF((PVR_DBG_ERROR, "Invalid parameter."));
 		return IMG_FALSE;
@@ -1803,7 +1826,7 @@ BM_Wrap (	IMG_HANDLE hDevMemHeap,
 	/*
 	 * Insert the System Physical Address of the first page into the hash so we can optimise multiple wraps of the
 	 * same memory.
-	 */
+ 	 */
 	sHashAddress = psSysAddr[0];
 
 	/* Add the in-page offset to ensure a unique hash */
@@ -2779,11 +2802,17 @@ BM_ImportMemory (IMG_VOID *pH,
 		IMG_UINT32 ui32Attribs = pBMHeap->ui32Attribs | PVRSRV_MEM_XPROC;
         IMG_BOOL bBadBackingStoreType;
 
+        if(ui32Flags & PVRSRV_MEM_ION)
+        {
+            ui32Attribs |= PVRSRV_MEM_ION;
+        }
+
         bBadBackingStoreType = IMG_TRUE;
 
         if ((ui32Attribs & PVRSRV_BACKINGSTORE_SYSMEM_NONCONTIG) != 0)
         {
 		uDevVAddrAlignment = MAX(uAlignment, MAX(pBMHeap->sDevArena.ui32DataPageSize, HOST_PAGESIZE()));
+
 
 		if (uPSize % uDevVAddrAlignment != 0)
 		{
@@ -2989,7 +3018,7 @@ BM_ImportMemory (IMG_VOID *pH,
 	/*
 	 * Allocate some device memory for what we just allocated.
 	 */
-	if ((ui32Flags & PVRSRV_MEM_SPARSE) == 0)
+	if ((ui32Flags & PVRSRV_MEM_NO_GPU_ADDR)==0 && (ui32Flags & PVRSRV_MEM_SPARSE) == 0)
 	{
 		bResult = DevMemoryAlloc (pBMContext,
 									pMapping,
@@ -3004,7 +3033,7 @@ BM_ImportMemory (IMG_VOID *pH,
 					pMapping->uSize));
 			goto fail_dev_mem_alloc;
 		}
-	
+
 		/* uDevVAddrAlignment is currently set to zero so QAC generates warning which we override */
 		/* PRQA S 3356,3358 1 */
 		PVR_ASSERT (uDevVAddrAlignment>1?(pMapping->DevVAddr.uiAddr%uDevVAddrAlignment)==0:1);
@@ -3106,14 +3135,17 @@ BM_FreeMemory (IMG_VOID *h, IMG_UINTPTR_T _base, BM_MAPPING *psMapping)
 		return;
 	}
 
-	/*
-		Only free the virtual memory if we got as far a allocating it.
-		This NULL check should be safe as we always have a guard page
-		at virtual address 0x00000000
-	*/
-	if (psMapping->DevVAddr.uiAddr)
+	if(!(psMapping->ui32Flags & PVRSRV_MEM_NO_GPU_ADDR))
 	{
-		DevMemoryFree (psMapping);
+		/*
+			Only free the virtual memory if we got as far a allocating it.
+			This NULL check should be safe as we always have a guard page
+			at virtual address 0x00000000
+		*/
+		if (psMapping->DevVAddr.uiAddr)
+		{
+			DevMemoryFree (psMapping);
+		}
 	}
 
 	/* the size is double the actual for interleaved */

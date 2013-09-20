@@ -101,6 +101,7 @@ typedef enum {
     LINUX_MEM_AREA_VMALLOC,
     LINUX_MEM_AREA_ALLOC_PAGES,
     LINUX_MEM_AREA_SUB_ALLOC,
+    LINUX_MEM_AREA_ION,
 #if defined(PVR_LINUX_MEM_AREA_USE_VMAP)
     LINUX_MEM_AREA_VMAP,
 #endif
@@ -156,14 +157,21 @@ struct _LinuxMemArea {
         struct _sPageList
         {
             /* Note the memory this represents _is_ implicitly
-             * page aligned _and_ so is its size */
+	     * page aligned _and_ so is its size */
             struct page **ppsPageList;
 	    IMG_HANDLE hBlockPageList;
         }sPageList;
+        struct _sIONTilerAlloc
+        {
+            /* Note the memory this represents _is_ implicitly
+	     * page aligned _and_ so is its size */
+            IMG_CPU_PHYADDR *pCPUPhysAddrs;
+            struct ion_handle *psIONHandle[2];
+        }sIONTilerAlloc;
         struct _sSubAlloc
         {
             /* Note: The memory this represents is _not_ implicitly
-             * page aligned, neither is its size */
+	     * page aligned, neither is its size */
             LinuxMemArea *psParentLinuxMemArea;
             IMG_UINTPTR_T uiByteOffset;
         }sSubAlloc;
@@ -177,11 +185,11 @@ struct _LinuxMemArea {
 
     IMG_BOOL bNeedsCacheInvalidate;	/* Cache should be invalidated on first map? */
 
-	IMG_HANDLE hBMHandle;			/* Handle back to BM for this allocation */
+       IMG_HANDLE hBMHandle;                   /* Handle back to BM for this allocation */
 
     IMG_BOOL bfromPool;
 
-    /* List entry for global list of areas registered for mmap */
+    /* List entry for global list of areas registered for mmap */    
     struct list_head	sMMapItem;
 
     /*
@@ -538,6 +546,55 @@ LinuxMemArea *NewAllocPagesLinuxMemArea(IMG_SIZE_T uiBytes, IMG_UINT32 ui32AreaF
  * @return 
  ******************************************************************************/
 IMG_VOID FreeAllocPagesLinuxMemArea(LinuxMemArea *psLinuxMemArea);
+
+
+#if defined(CONFIG_ION_OMAP)
+
+/*!
+ *******************************************************************************
+ * @brief 
+ *
+ * @param uiBytes  
+ * @param ui32AreaFlags  E.g Heap caching and mapping Flags
+ *
+ * @return 
+ ******************************************************************************/
+LinuxMemArea *
+NewIONLinuxMemArea(IMG_SIZE_T uiBytes, IMG_UINT32 ui32AreaFlags,
+                   IMG_PVOID pvPrivData, IMG_SIZE_T uiPrivDataLength);
+
+
+/*!
+ *******************************************************************************
+ * @brief 
+ *
+ * @param psLinuxMemArea  
+ *
+ * @return 
+ ******************************************************************************/
+IMG_VOID FreeIONLinuxMemArea(LinuxMemArea *psLinuxMemArea);
+
+#else /* defined(CONFIG_ION_OMAP) */
+
+static inline LinuxMemArea *
+NewIONLinuxMemArea(IMG_SIZE_T uBytes, IMG_UINT32 ui32AreaFlags,
+                   IMG_PVOID pvPrivData, IMG_SIZE_T uPrivDataLength)
+{
+    PVR_UNREFERENCED_PARAMETER(uBytes);
+    PVR_UNREFERENCED_PARAMETER(ui32AreaFlags);
+    PVR_UNREFERENCED_PARAMETER(pvPrivData);
+    PVR_UNREFERENCED_PARAMETER(uPrivDataLength);
+    BUG();
+    return IMG_NULL;
+}
+
+static inline IMG_VOID FreeIONLinuxMemArea(LinuxMemArea *psLinuxMemArea)
+{
+    PVR_UNREFERENCED_PARAMETER(psLinuxMemArea);
+    BUG();
+}
+
+#endif /* defined(CONFIG_ION_OMAP) */
 
 
 /*!
