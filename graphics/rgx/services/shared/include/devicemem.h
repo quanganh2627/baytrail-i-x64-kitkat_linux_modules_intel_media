@@ -272,25 +272,21 @@ DevmemExportalignAdjustSizeAndAlign(DEVMEM_HEAP *psHeap, IMG_DEVMEM_SIZE_T *puiS
  *
  */
 
-PVRSRV_ERROR DevmemAllocateEx(DEVMEM_HEAP *psHeap,
-                             IMG_DEVMEM_SIZE_T uiSize,
-                             IMG_DEVMEM_ALIGN_T uiAlign,
-                             DEVMEM_FLAGS_T uiFlags,
-                             DEVMEM_MEMDESC **ppsMemDescPtr,
-                             IMG_PCHAR pszText);
-#define DevmemAllocate(psHeap, uiSize, uiAlign, uiFlags, ppsMemDescPtr) \
-		DevmemAllocateEx(psHeap, uiSize, uiAlign, uiFlags, ppsMemDescPtr, "DevmemAllocate");
+PVRSRV_ERROR DevmemAllocate(DEVMEM_HEAP *psHeap,
+                            IMG_DEVMEM_SIZE_T uiSize,
+                            IMG_DEVMEM_ALIGN_T uiAlign,
+                            DEVMEM_FLAGS_T uiFlags,
+                            IMG_PCHAR pszText,
+                            DEVMEM_MEMDESC **ppsMemDescPtr);
 
 PVRSRV_ERROR
-DevmemAllocateExportableEx(IMG_HANDLE hBridge,
-						   IMG_HANDLE hDeviceNode,
-						   IMG_DEVMEM_SIZE_T uiSize,
-						   IMG_DEVMEM_ALIGN_T uiAlign,
-						   DEVMEM_FLAGS_T uiFlags,
-						   DEVMEM_MEMDESC **ppsMemDescPtr,
-						   IMG_CHAR *pszText);
-#define DevmemAllocateExportable(hBridge, hDeviceNode, uiSize, uiAlign, uiFlags, ppsMemDescPtr) \
-		DevmemAllocateExportableEx(hBridge, hDeviceNode, uiSize, uiAlign, uiFlags, ppsMemDescPtr, "DevmemAllocExp");
+DevmemAllocateExportable(IMG_HANDLE hBridge,
+						 IMG_HANDLE hDeviceNode,
+						 IMG_DEVMEM_SIZE_T uiSize,
+						 IMG_DEVMEM_ALIGN_T uiAlign,
+						 DEVMEM_FLAGS_T uiFlags,
+						 IMG_PCHAR pszText,
+						 DEVMEM_MEMDESC **ppsMemDescPtr);
 
 PVRSRV_ERROR
 DevmemAllocateSparse(IMG_HANDLE hBridge,
@@ -302,6 +298,7 @@ DevmemAllocateSparse(IMG_HANDLE hBridge,
 					 IMG_BOOL *pabMappingTable,
 					 IMG_DEVMEM_ALIGN_T uiAlign,
 					 DEVMEM_FLAGS_T uiFlags,
+					 IMG_PCHAR pszText,
 					 DEVMEM_MEMDESC **ppsMemDescPtr);
 
 /*
@@ -395,13 +392,11 @@ IMG_VOID DevmemUnexport(DEVMEM_MEMDESC *psMemDesc,
 						DEVMEM_EXPORTCOOKIE *psExportCookie);
 
 PVRSRV_ERROR
-DevmemImportEx(IMG_HANDLE hBridge,
-			   DEVMEM_EXPORTCOOKIE *psCookie,
-			   DEVMEM_FLAGS_T uiFlags,
-			   DEVMEM_MEMDESC **ppsMemDescPtr,
-			   IMG_CHAR *pszText);
-#define DevmemImport(hBridge, psCookie, uiFlags, ppsMemDescPtr) \
-		DevmemImportEx(hBridge, psCookie, uiFlags, ppsMemDescPtr, "DevmemImport");
+DevmemImport(IMG_HANDLE hBridge,
+			 DEVMEM_EXPORTCOOKIE *psCookie,
+			 DEVMEM_FLAGS_T uiFlags,
+			 IMG_CHAR *pszText,
+			 DEVMEM_MEMDESC **ppsMemDescPtr);
 
 /*
  * DevmemIsValidExportCookie()

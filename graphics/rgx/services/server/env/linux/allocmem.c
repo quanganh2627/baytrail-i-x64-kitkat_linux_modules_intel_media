@@ -44,13 +44,27 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "img_defs.h"
 #include "allocmem.h"
+#include "process_stats.h"
 
 
 IMG_INTERNAL IMG_PVOID OSAllocMem(IMG_UINT32 ui32Size)
 {
     IMG_PVOID pvRet = kmalloc(ui32Size, GFP_KERNEL);
 
-    VG_MARK_INITIALIZED(pvRet,ui32Size);
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+    if (pvRet != IMG_NULL)
+    {
+		IMG_CPU_PHYADDR sCpuPAddr;
+		sCpuPAddr.uiAddr = 0;
+
+        PVRSRVStatsAddMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_KMALLOC,
+                                     pvRet,
+                                     sCpuPAddr,
+                                     ui32Size,
+                                     IMG_NULL);
+   }
+#endif
+
 	return pvRet;
 }
 
@@ -63,11 +77,32 @@ IMG_INTERNAL IMG_PVOID OSReAllocMem(IMG_PVOID pvPrev, IMG_UINT32 ui32Size)
 IMG_INTERNAL IMG_PVOID OSAllocZMem(IMG_UINT32 ui32Size)
 {
 	IMG_PVOID pvRet = kzalloc(ui32Size, GFP_KERNEL);
-	VG_MARK_INITIALIZED(pvRet,ui32Size);
+
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+    if (pvRet != IMG_NULL)
+    {
+		IMG_CPU_PHYADDR sCpuPAddr;
+		sCpuPAddr.uiAddr = 0;
+
+        PVRSRVStatsAddMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_KMALLOC,
+                                     pvRet,
+                                     sCpuPAddr,
+                                     ui32Size,
+                                     IMG_NULL);
+    }
+#endif
+
 	return pvRet;
 }
 
 IMG_INTERNAL IMG_VOID OSFreeMem(IMG_PVOID pvMem)
 {
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+    if (pvMem != IMG_NULL)
+    {
+		PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_KMALLOC, pvMem);
+	}
+#endif
+
 	kfree(pvMem);
 }

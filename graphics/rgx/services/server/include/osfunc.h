@@ -64,7 +64,8 @@ extern "C" {
 #define KERNEL_ID			0xffffffffL
 #define ISR_ID				0xfffffffdL
 
-
+IMG_UINT64 OSClockns64(IMG_VOID);
+IMG_UINT64 OSClockus64(IMG_VOID);
 IMG_UINT32 OSClockus(IMG_VOID);
 IMG_UINT32 OSClockms(IMG_VOID);
 
@@ -141,8 +142,8 @@ IMG_VOID OSInvalidateCPUCacheRangeKM(IMG_PVOID pvVirtStart,
 
 
 IMG_PID OSGetCurrentProcessIDKM(IMG_VOID);
-IMG_VOID OSGetCurrentProcessNameKM(IMG_CHAR *pszProcName, IMG_UINT32 ui32Size);
-IMG_UINTPTR_T OSGetCurrentThreadID( IMG_VOID );
+IMG_CHAR *OSGetCurrentProcessNameKM(IMG_VOID);
+IMG_UINTPTR_T OSGetCurrentThreadIDKM(IMG_VOID);
 IMG_VOID OSMemSet(IMG_VOID *pvDest, IMG_UINT8 ui8Value, IMG_SIZE_T ui32Size);
 IMG_INT OSMemCmp(IMG_VOID *pvBufA, IMG_VOID *pvBufB, IMG_SIZE_T uiLen);
 
@@ -320,12 +321,29 @@ static INLINE IMG_VOID OSWRLockReleaseWrite(POSWR_LOCK psLock)
 }
 #endif
 
+IMG_UINT64 OSDivide64r64(IMG_UINT64 ui64Divident, IMG_UINT32 ui32Divisor, IMG_UINT32 *pui32Remainder);
 IMG_UINT32 OSDivide64(IMG_UINT64 ui64Divident, IMG_UINT32 ui32Divisor, IMG_UINT32 *pui32Remainder);
 
 IMG_VOID OSDumpStack(IMG_VOID);
 
 IMG_VOID OSAcquireBridgeLock(IMG_VOID);
 IMG_VOID OSReleaseBridgeLock(IMG_VOID);
+
+
+/*
+ *  Functions for providing support for PID statistics.
+ */
+typedef IMG_BOOL (OS_GET_STATS_ELEMENT_FUNC)(IMG_PVOID pvStatPtr,
+                                             IMG_UINT32 ui32StatNumber,
+                                             IMG_INT32* pi32StatData,
+                                             IMG_CHAR** ppszStatFmtText);
+
+IMG_PVOID OSCreateStatisticEntry(IMG_CHAR* pszName, IMG_PVOID pvFolder,
+                                 OS_GET_STATS_ELEMENT_FUNC* pfnGetElement,
+                                 IMG_PVOID pvData);
+IMG_VOID OSRemoveStatisticEntry(IMG_PVOID pvEntry);
+IMG_PVOID OSCreateStatisticFolder(IMG_CHAR *pszName, IMG_PVOID pvFolder);
+IMG_VOID OSRemoveStatisticFolder(IMG_PVOID pvFolder);
 
 #if defined (__cplusplus)
 }

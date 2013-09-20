@@ -122,8 +122,16 @@ typedef struct intel_dc_primary_ctx {
 	uint32_t contalpa;
 } DC_MRFLD_PRIMARY_CONTEXT;
 
+typedef struct intel_dc_plane_zorder {
+	// 3 primary planes
+	uint32_t forceBottom[3];
+	// 1 sprite plane
+	uint32_t abovePrimary;
+} DC_MRFLD_DC_PLANE_ZORDER;
+
 typedef struct intel_dc_plane_ctx {
 	enum intel_dc_plane_types type;
+	struct intel_dc_plane_zorder zorder;
 	union {
 		struct intel_dc_overlay_ctx ov_ctx;
 		struct intel_dc_sprite_ctx sp_ctx;

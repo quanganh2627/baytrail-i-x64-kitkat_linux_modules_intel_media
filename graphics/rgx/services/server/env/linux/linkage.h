@@ -42,6 +42,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
+
 #if !defined(__LINKAGE_H__)
 #define __LINKAGE_H__
 
@@ -53,17 +54,7 @@ IMG_VOID PVRDPFInit(IMG_VOID);
 PVRSRV_ERROR PVROSFuncInit(IMG_VOID);
 IMG_VOID PVROSFuncDeInit(IMG_VOID);
 
-#if defined(DEBUG)
+int PVRDebugCreateDebugFSEntries(void);
+void PVRDebugRemoveDebugFSEntries(void);
 
-IMG_INT PVRDebugProcSetLevel(struct file *file, const IMG_CHAR *buffer, IMG_UINT32 count, IMG_VOID *data);
-void ProcSeqShowDebugLevel(struct seq_file *sfile,void *el);
-
-#if defined(PVR_MANUAL_POWER_CONTROL)
-
-IMG_INT PVRProcSetPowerLevel(struct file *file, const IMG_CHAR *buffer, IMG_UINT32 count, IMG_VOID *data);
-
-void ProcSeqShowPowerLevel(struct seq_file *sfile, void *el);
-
-#endif /* defined(PVR_MANUAL_POWER_CONTROL) */
-#endif /* defined(DEBUG) */
 #endif /* !defined(__LINKAGE_H__) */

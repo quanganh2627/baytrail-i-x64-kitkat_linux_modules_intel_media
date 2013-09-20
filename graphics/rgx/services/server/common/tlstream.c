@@ -54,41 +54,45 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "tlintern.h"
 #include "tlstream.h"
 
+/* To debug buffer utilisation enable this macro here and
+ * define PVRSRV_NEED_PVR_TRACE in the server pvr_debug.c and in tlutils.c
+ * before the inclusion of pvr_debug.h. Issue tlioctl_cmd 6 on target to see
+ * stream buffer utilisation. */
+//#define TL_BUFFER_UTILIZATION 1
+
 #define EVENT_OBJECT_TIMEOUT_MS 1000
 
 /* Given the state of the buffer it returns a number of bytes that the client
  * can use for a successful allocation. */
 static INLINE IMG_UINT32 suggestAllocSize(IMG_UINT32 ui32LRead,
 										IMG_UINT32 ui32LWrite, 
-										IMG_UINT32 ui32Size)
+										IMG_UINT32 ui32CBSize,
+						                IMG_UINT32 ui32ReqSizeMin)
 {
 	IMG_UINT32 ui32AvSpace = 0;
 	
-	if ( ui32LRead > ui32LWrite ) 
-	{/* This could be written in fewer lines using the ? operator but it  
+	/* This could be written in fewer lines using the ? operator but it  
 		would not be kind to potential readers of this source at all. */ 
-		if ( (ui32LRead - ui32LWrite) > (sizeof(PVRSRVTL_PACKETHDR) + (IMG_INT) BUFFER_RESERVED_SPACE) )
+	if ( ui32LRead > ui32LWrite )                          /* Buffer WRAPPED */
+	{
+		if ( (ui32LRead - ui32LWrite) > (sizeof(PVRSRVTL_PACKETHDR) + ui32ReqSizeMin + (IMG_INT) BUFFER_RESERVED_SPACE) )
 		{
 			ui32AvSpace =  ui32LRead - ui32LWrite - sizeof(PVRSRVTL_PACKETHDR) - (IMG_INT) BUFFER_RESERVED_SPACE;
 		}
 	}
-	else
+	else                                                  /* Normal, no wrap */
 	{
-		if ( (ui32Size - ui32LWrite) > (sizeof(PVRSRVTL_PACKETHDR) + (IMG_INT) BUFFER_RESERVED_SPACE) )
+		if ( (ui32CBSize - ui32LWrite) > (sizeof(PVRSRVTL_PACKETHDR) + ui32ReqSizeMin + (IMG_INT) BUFFER_RESERVED_SPACE) )
 		{
-			ui32AvSpace =  ui32Size - ui32LWrite - sizeof(PVRSRVTL_PACKETHDR) - (IMG_INT) BUFFER_RESERVED_SPACE;
+			ui32AvSpace =  ui32CBSize - ui32LWrite - sizeof(PVRSRVTL_PACKETHDR) - (IMG_INT) BUFFER_RESERVED_SPACE;
 		}
-		else if ( (ui32LRead - 0) > (sizeof(PVRSRVTL_PACKETHDR) + (IMG_INT) BUFFER_RESERVED_SPACE) )
+		else if ( (ui32LRead - 0) > (sizeof(PVRSRVTL_PACKETHDR) + ui32ReqSizeMin + (IMG_INT) BUFFER_RESERVED_SPACE) )
 		{
-				ui32AvSpace =  ui32LRead - sizeof(PVRSRVTL_PACKETHDR) - (IMG_INT) BUFFER_RESERVED_SPACE;
+			ui32AvSpace =  ui32LRead - sizeof(PVRSRVTL_PACKETHDR) - (IMG_INT) BUFFER_RESERVED_SPACE;
 		}
 	}
     /* The max size of a TL packet currently is UINT16. adjust accordingly */
-    if (ui32AvSpace > IMG_UINT16_MAX)
-    {
-        ui32AvSpace = IMG_UINT16_MAX;
-    }
-	return ui32AvSpace;
+	return MIN(ui32AvSpace, IMG_UINT16_MAX);
 }
 
 /* Returns bytes left in the buffer. Negative if there is not any.
@@ -119,7 +123,9 @@ PVRSRV_ERROR
 TLStreamCreate(IMG_HANDLE *phStream,
 			   IMG_CHAR *szStreamName,
 			   IMG_UINT32 ui32Size,
-			   IMG_UINT32 ui32StreamFlags)
+			   IMG_UINT32 ui32StreamFlags,
+               TL_STREAM_SOURCECB pfProducerCB,
+               IMG_PVOID pvProducerUD)
 {
 	PTL_STREAM     psTmp;
 	PVRSRV_ERROR   eError;
@@ -130,9 +136,8 @@ TLStreamCreate(IMG_HANDLE *phStream,
 								 PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE | 
 								 PVRSRV_MEMALLOCFLAG_GPU_READABLE |
 								 PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
-								 PVRSRV_MEMALLOCFLAG_UNCACHED |
+								 PVRSRV_MEMALLOCFLAG_UNCACHED | /* GPU & CPU */
 								 PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC |
-								 PVRSRV_MEMALLOCFLAG_CPU_UNCACHED |
 								 PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE;
 
 	PVR_DPF_ENTERED;
@@ -196,6 +201,10 @@ TLStreamCreate(IMG_HANDLE *phStream,
 		}
     }
 
+	/* Remember producer supplied CB and data for later */
+	psTmp->pfProducerCallback = (IMG_VOID(*)(IMG_VOID))pfProducerCB;
+	psTmp->pvProducerUserData = pvProducerUD;
+
 	/* Round the requested bytes to a multiple of array elements' size, eg round 3 to 4 */
 	psTmp->ui32Size = PVRSRVTL_ALIGN(ui32Size);
 	psTmp->ui32Read = 0;
@@ -208,6 +217,7 @@ TLStreamCreate(IMG_HANDLE *phStream,
 									   (IMG_DEVMEM_SIZE_T)psTmp->ui32Size,
 									   4096,
 									   uiMemFlags | PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE,
+									   "TLStreamCircularBuff",
 									   &psTmp->psStreamMemDesc);
 	PVR_LOGG_IF_ERROR(eError, "DevmemAllocateExportable", e2);
 
@@ -365,6 +375,7 @@ static PVRSRV_ERROR
 DoTLStreamReserve(IMG_HANDLE hStream,
 				IMG_UINT8 **ppui8Data, 
 				IMG_UINT32 ui32ReqSize,
+                IMG_UINT32 ui32ReqSizeMin,
 				PVRSRVTL_PACKETTYPE ePacketType,
 				IMG_UINT32* pui32AvSpace)
 {
@@ -404,7 +415,7 @@ DoTLStreamReserve(IMG_HANDLE hStream,
 		psTmp->ui32Pending = NOTHING_PENDING;
 		if (pui32AvSpace)
 		{
-			*pui32AvSpace = suggestAllocSize(ui32LRead, ui32LWrite, psTmp->ui32Size);
+			*pui32AvSpace = suggestAllocSize(ui32LRead, ui32LWrite, psTmp->ui32Size, ui32ReqSizeMin);
 		}
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_FULL);
 	}
@@ -517,7 +528,7 @@ DoTLStreamReserve(IMG_HANDLE hStream,
 			psTmp->ui32Pending = NOTHING_PENDING;
 			if (pui32AvSpace)
 			{
-				*pui32AvSpace = suggestAllocSize(ui32LRead, ui32LWrite, psTmp->ui32Size);
+				*pui32AvSpace = suggestAllocSize(ui32LRead, ui32LWrite, psTmp->ui32Size, ui32ReqSizeMin);
 			}
 			PVR_DPF_RETURN_RC(PVRSRV_ERROR_STREAM_FULL);
 		} 
@@ -534,16 +545,17 @@ TLStreamReserve(IMG_HANDLE hStream,
 				IMG_UINT8 **ppui8Data,
 				IMG_UINT32 ui32Size)
 {
-	return DoTLStreamReserve(hStream, ppui8Data, ui32Size, PVRSRVTL_PACKETTYPE_DATA, NULL);
+	return DoTLStreamReserve(hStream, ppui8Data, ui32Size, ui32Size, PVRSRVTL_PACKETTYPE_DATA, NULL);
 }
 
 PVRSRV_ERROR
 TLStreamReserve2(IMG_HANDLE hStream,
                 IMG_UINT8  **ppui8Data,
                 IMG_UINT32 ui32Size,
+                IMG_UINT32 ui32SizeMin,
                 IMG_UINT32* pui32Available)
 {
-	return DoTLStreamReserve(hStream, ppui8Data, ui32Size, PVRSRVTL_PACKETTYPE_DATA, pui32Available);
+	return DoTLStreamReserve(hStream, ppui8Data, ui32Size, ui32SizeMin, PVRSRVTL_PACKETTYPE_DATA, pui32Available);
 }
 
 PVRSRV_ERROR
@@ -594,6 +606,26 @@ TLStreamCommit(IMG_HANDLE hStream, IMG_UINT32 ui32ReqSize)
 			PVR_DPF_RETURN_RC(eError);
 		}
 	}
+
+    /* Calculate high water mark for debug purposes */
+#if defined(TL_BUFFER_UTILIZATION)
+	{
+		IMG_UINT32 tmp = 0;
+		if (ui32LWrite > ui32LRead)
+		{
+			tmp = (ui32LWrite-ui32LRead);
+		}
+		else if (ui32LWrite < ui32LRead)
+		{
+			tmp = (psTmp->ui32Size-ui32LRead+ui32LWrite);
+		} /* else equal, ignore */
+
+		if (tmp > psTmp->ui32BufferUt)
+		{
+			psTmp->ui32BufferUt = tmp;
+		}
+	}
+#endif
 
 	/* Update stream buffer parameters to match local copies */
 	psTmp->ui32Write = ui32LWrite ;
@@ -660,7 +692,7 @@ TLStreamMarkEOS(IMG_HANDLE psStream)
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_INVALID_PARAMS);
 	}
 
-	eError = DoTLStreamReserve(psStream, &pData, 0, PVRSRVTL_PACKETTYPE_MARKER_EOS, NULL);
+	eError = DoTLStreamReserve(psStream, &pData, 0, 0, PVRSRVTL_PACKETTYPE_MARKER_EOS, NULL);
 	if ( PVRSRV_OK !=  eError )
 	{
 		PVR_DPF_RETURN_RC(eError);
@@ -712,13 +744,26 @@ TLStreamAcquireReadPos(PTL_STREAM psStream, IMG_UINT32* puiReadOffset)
 	ui32LRead = psStream->ui32Read;
 	ui32LWrite = psStream->ui32Write;
 
-	// No data available...
-	if ( ui32LRead == ui32LWrite )
+	/* No data available and CB defined - try and get data */
+	if ((ui32LRead == ui32LWrite) && psStream->pfProducerCallback)
+	{
+		PVRSRV_ERROR eRc;
+		IMG_UINT32   ui32Resp = 0;
+
+		eRc = ((TL_STREAM_SOURCECB)psStream->pfProducerCallback)(psStream, TL_SOURCECB_OP_CLIENT_EOS,
+				&ui32Resp, psStream->pvProducerUserData);
+		PVR_LOG_IF_ERROR(eRc, "TLStream->pfProducerCallback");
+
+		ui32LWrite = psStream->ui32Write;
+	}
+
+	/* No data available... */
+	if (ui32LRead == ui32LWrite)
 	{
 		PVR_DPF_RETURN_VAL(0);
 	}
 
-	// Data available to read...
+	/* Data is available to read... */
 	*puiReadOffset = ui32LRead;
 
 	/*PVR_DPF((PVR_DBG_VERBOSE,

@@ -91,7 +91,6 @@ extern "C" {
 #define PVRSRV_MEM_RAM_BACKED_ALLOCATION	(1U<<9)
 #define PVRSRV_MEM_NO_RESMAN				(1U<<10)
 #define PVRSRV_MEM_EXPORTED					(1U<<11)
-#define PVRSRV_MEM_NO_GPU_ADDR				(1U<<20)
 
 
 /*
@@ -133,7 +132,7 @@ extern "C" {
  */
 #define PVRSRV_MAP_NOUSERVIRTUAL            (1UL<<27)
 #define PVRSRV_MEM_XPROC  					(1U<<28)
-#define PVRSRV_MEM_ION						(1U<<29)
+/* Bit 29 is unused */
 #define PVRSRV_MEM_ALLOCATENONCACHEDMEM		(1UL<<30)
 
 /*
@@ -278,6 +277,7 @@ typedef enum
 	IMG_OPENCL			= 0x0000000F,
 #endif
 
+	IMG_MODULE_UNDEF	= 0xFFFFFFFF
 } IMG_MODULE_ID;
 
 
@@ -602,7 +602,7 @@ typedef struct _PVRSRV_SYNC_TOKEN_
  *****************************************************************************/
 typedef enum _PVRSRV_CLIENT_EVENT_
 {
-	PVRSRV_CLIENT_EVENT_HWTIMEOUT = 0,
+	PVRSRV_CLIENT_EVENT_HWTIMEOUT = 0
 } PVRSRV_CLIENT_EVENT;
 
 typedef IMG_VOID (*PFN_QUEUE_COMMAND_COMPLETE)(IMG_HANDLE hCallbackData);
@@ -820,7 +820,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVAllocDeviceMemSparse(const PVRSRV_DEV_DATA *psDe
 typedef enum _PVRSRV_SYNCVAL_MODE_
 {
 	PVRSRV_SYNCVAL_READ				= IMG_TRUE,
-	PVRSRV_SYNCVAL_WRITE			= IMG_FALSE,
+	PVRSRV_SYNCVAL_WRITE			= IMG_FALSE
 
 } PVRSRV_SYNCVAL_MODE, *PPVRSRV_SYNCVAL_MODE;
 
@@ -847,6 +847,7 @@ IMG_IMPORT IMG_BOOL PVRSRVTestAllOpsNotComplete(PPVRSRV_CLIENT_MEM_INFO psMemInf
 IMG_IMPORT PVRSRV_SYNCVAL PVRSRVGetPendingOpSyncVal(PPVRSRV_CLIENT_MEM_INFO psMemInfo,
 	PVRSRV_SYNCVAL_MODE eMode);
 
+#if defined(SUPPORT_PVRSRV_DEVICE_CLASS)
 
 /******************************************************************************
  * Common Device Class Enumeration
@@ -960,11 +961,6 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVSwapToDCSystem (IMG_HANDLE hDevice,
 										IMG_HANDLE hSwapChain
 	);
 
-IMG_EXPORT
-PVRSRV_ERROR IMG_CALLCONV PVRSRVGetDCFrontBuffer(IMG_HANDLE hDevice,
-										IMG_UINT32   *pui32BufIndex,
-										IMG_UINT32	*pui32SwapChainID);
-
 /******************************************************************************
  * Buffer Device Class API definition
  *****************************************************************************/
@@ -986,6 +982,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVGetBCBuffer(IMG_HANDLE hDevice,
 												IMG_HANDLE *phBuffer
 	);
 
+#endif /* #if defined(SUPPORT_PVRSRV_DEVICE_CLASS) */
 
 /******************************************************************************
  * PDUMP Function prototypes...
@@ -1324,7 +1321,7 @@ IMG_IMPORT IMG_VOID  IMG_CALLCONV PVRSRVFreeUserModeMemTracking(IMG_VOID *pvMem)
 
 IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVReallocUserModeMemTracking(IMG_VOID *pvMem, IMG_SIZE_T ui32NewSize, 
 													  IMG_CHAR *pszFileName, IMG_UINT32 ui32LineNumber);
-#endif /* defined(DEBUG) && (defined(__linux__) || defined(_UITRON_)) */
+#endif
 
 /******************************************************************************
  * PVR Event Object API(s)

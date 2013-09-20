@@ -2248,12 +2248,11 @@ static inline void mtx_set_target(struct drm_psb_private *dev_priv)
 
 int tng_topaz_power_up(
 	struct drm_device *dev,
-	struct psb_video_ctx *video_ctx,
 	enum drm_tng_topaz_codec codec);
 
-int tng_topaz_power_off(
-	struct drm_device *dev,
-	struct psb_video_ctx *video_ctx);
+int tng_topaz_power_off(struct drm_device *dev);
+
+int Is_Mrfld_B0();
 
 #define SHIFT_WB_PRODUCER       (0)
 #define MASK_WB_PRODUCER	\

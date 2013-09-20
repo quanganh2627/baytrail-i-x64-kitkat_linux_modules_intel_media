@@ -42,6 +42,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include <linux/ion.h>
 #include <linux/slab.h>
+#include <linux/version.h>
 #include "../drivers/gpu/ion/ion_priv.h"
 
 #include "img_types.h"
@@ -54,17 +55,22 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 struct ion_platform_data gsTCIonConfig = {
 	.nr = 1,
-	.heaps = {
+	.heaps =
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,39))
+#else
+		(struct ion_platform_heap [])
+#endif
 		{
-			/* This heap must be first. The base address and size are filled
-			   in from data passed down by sysconfig.c. */
-			.type = ION_HEAP_TYPE_CUSTOM,
-			.name = "tc_local_mem",
-			.id = ION_HEAP_TYPE_CUSTOM + 1,
-			.base = 0,			/* filled in later */
-			.size = 0,			/* filled in later */
+			{
+				/* This heap must be first. The base address and size are filled
+				   in from data passed down by sysconfig.c. */
+				.type = ION_HEAP_TYPE_CUSTOM,
+				.name = "tc_local_mem",
+				.id = ION_HEAP_TYPE_CUSTOM + 1,
+				.base = 0,			/* filled in later */
+				.size = 0,			/* filled in later */
+			}
 		}
-	}
 };
 
 struct ion_heap **gapsIonHeaps;

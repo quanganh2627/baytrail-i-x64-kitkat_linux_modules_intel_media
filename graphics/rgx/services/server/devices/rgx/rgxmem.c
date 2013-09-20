@@ -56,13 +56,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgx_memallocflags.h"
 
 /*
-	FIXME:
-	For now just get global state, but what we really want is to do
-	this per memory context
+	
 */
 static IMG_UINT32 ui32CacheOpps = 0;
 static IMG_UINT32 ui32CacheOpSequence = 0;
-/* FIXME: End */
+/* */
 
 
 IMG_VOID RGXMMUCacheInvalidate(PVRSRV_DEVICE_NODE *psDeviceNode,
@@ -227,7 +225,7 @@ IMG_VOID RGXUnregisterMemoryContext(IMG_HANDLE hPrivData)
 	/*
 	 * Release the page catalogue address acquired in RGXRegisterMemoryContext().
 	 */
-	MMU_ReleaseBaseAddr(IMG_NULL /* FIXME */);
+	MMU_ReleaseBaseAddr(IMG_NULL /* */);
 	
 	/*
 	 * Free the firmware memory context.
@@ -279,7 +277,7 @@ PVRSRV_ERROR RGXRegisterMemoryContext(PVRSRV_DEVICE_NODE	*psDeviceNode,
 			application.
 		*/
 		PDUMPCOMMENT("Allocate RGX firmware memory context");
-		/* FIXME: why cache-consistent? */
+		/* */
 		eError = DevmemFwAllocate(psDevInfo,
 								sizeof(*psFWMemContext),
 								uiFWMemContextMemAllocFlags,
@@ -353,8 +351,13 @@ PVRSRV_ERROR RGXRegisterMemoryContext(PVRSRV_DEVICE_NODE	*psDeviceNode,
 			/*
 			 * Dump the Page Cat tag in the mem context (symbolic address)
 			 */
-			eError = MMU_PDumpWritePageCatBase(psMMUContext, aszName, uiOffset, 0);
-
+			eError = MMU_PDumpWritePageCatBase(psMMUContext,
+												aszName,
+												uiOffset,
+												8, /* 64-bit register write */
+												0,
+												0,
+												0);
 			if (eError != PVRSRV_OK)
 			{
 				PVR_DPF((PVR_DBG_ERROR,"RGXRegisterMemoryContext: Failed to acquire Page Catalogue address (%u)",

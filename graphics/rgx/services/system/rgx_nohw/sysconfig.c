@@ -115,8 +115,8 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 
 	gsSysConfig.pasPhysHeaps = &(gsPhysHeapConfig[0]);
 	gsSysConfig.ui32PhysHeapCount = sizeof(gsPhysHeapConfig) / sizeof(gsPhysHeapConfig[0]);
-
 	gsSysConfig.pui32BIFTilingHeapConfigs = gauiBIFTilingHeapXStrides;
+
 	gsSysConfig.ui32BIFTilingHeapCount = IMG_ARR_NUM_ELEMS(gauiBIFTilingHeapXStrides);
 
 	/*
@@ -148,6 +148,10 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 	gsDevices[0].ui32IRQ                = 0x00000bad;
 	gsDevices[0].bIRQIsShared           = IMG_FALSE;
 
+	/* Device's physical heap IDs */
+	gsDevices[0].aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL] = 0;
+	gsDevices[0].aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL] = 0;
+
 	/* No power management on no HW system */
 	gsDevices[0].pfnPrePowerState       = IMG_NULL;
 	gsDevices[0].pfnPostPowerState      = IMG_NULL;
@@ -157,6 +161,8 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 
 	/* No interrupt handled either */
 	gsDevices[0].pfnInterruptHandled    = IMG_NULL;
+
+	gsDevices[0].pfnCheckMemAllocSize   = SysCheckMemAllocSize;
 
 	gsDevices[0].hDevData               = &gsRGXData;
 
@@ -202,6 +208,7 @@ PVRSRV_ERROR SysDebugInfo(PVRSRV_SYSTEM_CONFIG *psSysConfig)
 
 	return PVRSRV_OK;
 }
+
 /******************************************************************************
  End of file (sysconfig.c)
 ******************************************************************************/

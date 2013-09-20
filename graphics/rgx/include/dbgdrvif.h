@@ -63,7 +63,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #endif
 
-#define LAST_FRAME_BUF_SIZE			(1024)
+#define LAST_FRAME_BUF_SIZE			(2048)
 #define LF_AND_LF_DEINIT_BUF_SIZE	(2*LAST_FRAME_BUF_SIZE)
 
 /*****************************************************************************

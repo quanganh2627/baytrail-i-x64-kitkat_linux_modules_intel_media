@@ -125,6 +125,7 @@ PVRSRV_ERROR PDumpPMRMalloc(const IMG_CHAR *pszDevSpace,
                             uiAlign);
 	if(eError != PVRSRV_OK)
 	{
+		OSFreeMem(psPDumpAllocationInfo);
 		return eError;
 	}
 

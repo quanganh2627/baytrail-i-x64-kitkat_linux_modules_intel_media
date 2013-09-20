@@ -42,11 +42,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "pvr_sync.h"
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
-#include <linux/sync.h>
-#else
-#include <sync.h>
-#endif
 #include <linux/errno.h>
 #include <linux/file.h>
 #include <linux/miscdevice.h>
@@ -55,6 +50,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/debugfs.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/version.h>
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+#include <linux/sync.h>
+#else
+#include <../drivers/staging/android/sync.h>
+#endif
 
 #include "img_types.h"
 #include "allocmem.h"

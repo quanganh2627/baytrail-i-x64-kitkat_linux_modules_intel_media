@@ -25,6 +25,6 @@
  ******************************************************************************/
 
 #include "services_headers.h"
-#include "pvrsysinfo.h"
+#include "sysinfo.h"
 #include "syslocal.h"
 

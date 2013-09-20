@@ -46,7 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define __RGX_FWIF_SHARED_H__
 
 #include "img_types.h"
-#include "rgx_hwperf.h"
+#include "rgx_common.h"
 #include "devicemem_typedefs.h"
 
 
@@ -54,7 +54,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  ******************************************************************************
  * Device state flags
  *****************************************************************************/
-#define RGXKMIF_DEVICE_STATE_ZERO_FREELIST		(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed freelists */
+#define RGXKMIF_DEVICE_STATE_ZERO_FREELIST		(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed free lists */
+#define RGXKMIF_DEVICE_STATE_FTRACE_EN			(0x1 << 1)		/*!< Used to enable device FTrace thread to consume HWPerf data */
 
 
 /*!
@@ -106,7 +107,7 @@ typedef RGXFWIF_DEV_VIRTADDR	PRGXFWIF_UFO_ADDR;
 #endif /* RGX_FIRMWARE */
 
 
-/* FIXME PRGXFWIF_UFO_ADDR and RGXFWIF_UFO should move back into rgx_fwif_client.h */
+/* */
 typedef struct _RGXFWIF_UFO_
 {
 	PRGXFWIF_UFO_ADDR	puiAddrUFO;
@@ -204,14 +205,22 @@ typedef struct _RGXFWIF_HWRTDATA_
 	RGXFWIF_RTDATA_STATE	eState;
 
 	IMG_UINT32				ui32NumPartialRenders; /*!< Number of partial renders. Used to setup ZLS bits correctly */
-
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN psPMMListDevVAddr; /*!< MList Data Store */
+
+#if defined(RGX_FEATURE_SCALABLE_TE_ARCH)
+	IMG_UINT64				RGXFW_ALIGN ui64VCECatBase[4];
+	IMG_UINT64				RGXFW_ALIGN ui64VCELastCatBase[4];
+	IMG_UINT64				RGXFW_ALIGN ui64TECatBase[4];
+	IMG_UINT64				RGXFW_ALIGN ui64TELastCatBase[4];
+#else
 	IMG_UINT64				RGXFW_ALIGN ui64VCECatBase;
 	IMG_UINT64				RGXFW_ALIGN ui64VCELastCatBase;
 	IMG_UINT64				RGXFW_ALIGN ui64TECatBase;
 	IMG_UINT64				RGXFW_ALIGN ui64TELastCatBase;
+#endif
 	IMG_UINT64				RGXFW_ALIGN ui64AlistCatBase;
 	IMG_UINT64				RGXFW_ALIGN ui64AlistLastCatBase;
+
 #if defined(SUPPORT_VFP)
 	IMG_DEV_VIRTADDR		RGXFW_ALIGN sVFPPageTableAddr;
 #endif
@@ -244,6 +253,12 @@ typedef struct _RGXFWIF_HWRTDATA_
 	IMG_UINT32				ui32TEAA;
 	IMG_UINT32				ui32TEMTILE1;
 	IMG_UINT32				ui32TEMTILE2;
+	IMG_UINT32				ui32ISPMergeLowerX;
+	IMG_UINT32				ui32ISPMergeLowerY;
+	IMG_UINT32				ui32ISPMergeUpperX;
+	IMG_UINT32				ui32ISPMergeUpperY;
+	IMG_UINT32				ui32ISPMergeScaleX;
+	IMG_UINT32				ui32ISPMergeScaleY;
 } RGXFWIF_HWRTDATA;
 
 typedef enum
@@ -332,6 +347,7 @@ typedef enum _RGXFWIF_CCB_CMD_TYPE_
 	RGXFWIF_CCB_CMD_TYPE_NULL		= 207 | RGX_CCB_TYPE_TASK,
 	RGXFWIF_CCB_CMD_TYPE_SHG		= 208 | RGX_CCB_TYPE_TASK,
 	RGXFWIF_CCB_CMD_TYPE_RTU		= 209 | RGX_CCB_TYPE_TASK,
+	RGXFWIF_CCB_CMD_TYPE_RTU_FC		= 210 | RGX_CCB_TYPE_TASK,
 
 /* Leave a gap between CCB specific commands and generic commands */
 	RGXFWIF_CCB_CMD_TYPE_FENCE		= 211,
@@ -347,26 +363,6 @@ typedef struct _RGXFWIF_CCB_CMD_HEADER_
 	RGXFWIF_CCB_CMD_TYPE	eCmdType;
 	IMG_UINT32				ui32CmdSize;
 } RGXFWIF_CCB_CMD_HEADER;
-
-/*!
- *****************************************************************************
- * Data master selection
- *****************************************************************************/
-
-/* RGXFWIF_DM moved to the client header rgx_hwperf.h for broader use as
- * the master definition.
- */
-
-#if defined(RGX_FEATURE_RAY_TRACING)
-/* Maximum number of DM in use: GP, 2D, TA, 3D, CDM, SHG, RTU */
-#define RGXFWIF_DM_MAX			(7)
-#else
-#define RGXFWIF_DM_MAX			(5)
-#endif
-
-/* Min/Max number of HW DMs (all but GP) */
-#define RGXFWIF_HWDM_MIN		(1)
-#define RGXFWIF_HWDM_MAX		(RGXFWIF_DM_MAX)
 
 
 #endif /*  __RGX_FWIF_SHARED_H__ */

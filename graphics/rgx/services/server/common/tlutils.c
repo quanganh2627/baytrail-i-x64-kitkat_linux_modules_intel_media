@@ -65,6 +65,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #undef PVR_DPF_FUNCTION_TRACE_ON
 
 #include "pvr_debug.h"
+#include "srvkm.h"
 
 #include "allocmem.h"
 #include "osfunc.h"
@@ -172,7 +173,7 @@ static PVRSRV_ERROR createStream(PVR_TL_TEST_CMD_SOURCE_START_IN** ppsIn1,
 								 psIn1->pszStreamName,
 								 ((OSGetPageSize()*psIn1->uiStreamSizeInPages))
 								 	- PVR_TL_TEST_STREAM_BUFFER_REDUCTION, 
-								 psIn1->uiStreamCreateFlags);
+								 psIn1->uiStreamCreateFlags, IMG_NULL, IMG_NULL);
 
 		if (eError != PVRSRV_OK)
 		{
@@ -621,29 +622,31 @@ static PVRSRV_ERROR  TLTestCMD_DumpState (IMG_VOID)
 
 	PVR_ASSERT(psd);
 
-	PVR_TRACE(("--- TL_GLOBAL_DATA: %p - uiClientCnt(%d) psHead(%p) psRgxDevNode(%p)",
+	PVR_LOG(("--- TL_GLOBAL_DATA: %p - uiClientCnt(%d) psHead(%p) psRgxDevNode(%p)",
 			psd, psd->uiClientCnt, psd->psHead, psd->psRgxDevNode));
 
 	for (psn = psd->psHead; psn; psn = psn->psNext)
 	{
 		count++;
-		PVR_TRACE(("----- TL_SNODE[%d]: %p - psNext(%p) hDataEventObj(%p) psStream(%p) psDesc(%p)",
+		PVR_LOG(("----- TL_SNODE[%d]: %p - psNext(%p) hDataEventObj(%p) psStream(%p) psDesc(%p)",
 				count, psn, psn->psNext, psn->hDataEventObj, psn->psStream, psn->psDesc));
 
 		if (psn->psStream)
 		{
-			PVR_TRACE(("------- TL_STREAM[%d]: %p - psNode(%p) szName(%s) bDrop(%d) ",
+			PVR_LOG(("------- TL_STREAM[%d]: %p - psNode(%p) szName(%s) bDrop(%d) ",
 				count, psn->psStream, psn->psStream->psNode, psn->psStream->szName, psn->psStream->bDrop));
-			PVR_TRACE(("------- TL_STREAM[%d]: %p - ui32Read(%d) ui32Write(%d) ui32Pending(%d) ui32Size(%d) ",
-				count, psn->psStream, psn->psStream->ui32Read, psn->psStream->ui32Write, psn->psStream->ui32Pending, psn->psStream->ui32Size));
-			PVR_TRACE(("------- TL_STREAM[%d]: %p - ui32Buffer(%p) psStreamMemDesc(%p) sExportCookie.hPMRExportHandle(%x)",
-				count, psn->psStream, psn->psStream->pbyBuffer, psn->psStream->psStreamMemDesc, (IMG_UINT) psn->psStream->sExportCookie.hPMRExportHandle));
+			PVR_LOG(("------- TL_STREAM[%d]: %p - ui32Read(%d) ui32Write(%d) ui32Pending(%d) ui32Size(%d) ui32BufferUt(%d.%d%%)",
+				count, psn->psStream, psn->psStream->ui32Read, psn->psStream->ui32Write, psn->psStream->ui32Pending, psn->psStream->ui32Size,
+				((psn->psStream->ui32BufferUt*10000)/psn->psStream->ui32Size)/100,
+				((psn->psStream->ui32BufferUt*10000)/psn->psStream->ui32Size)%100));
+			PVR_LOG(("------- TL_STREAM[%d]: %p - ui32Buffer(%p) psStreamMemDesc(%p) sExportCookie.hPMRExportHandle(%p)",
+				count, psn->psStream, psn->psStream->pbyBuffer, psn->psStream->psStreamMemDesc, psn->psStream->sExportCookie.hPMRExportHandle));
 		}
 
 		if (psn->psDesc)
 		{
-			PVR_TRACE(("------ TL_STREAM_DESC[%d]: %p - psNode(%p) ui32Flags(%x) hDataEvent(%x)",
-				count, psn->psDesc, psn->psDesc->psNode, psn->psDesc->ui32Flags, (IMG_UINT) psn->psDesc->hDataEvent));
+			PVR_LOG(("------ TL_STREAM_DESC[%d]: %p - psNode(%p) ui32Flags(%x) hDataEvent(%p)",
+				count, psn->psDesc, psn->psDesc->psNode, psn->psDesc->ui32Flags, psn->psDesc->hDataEvent));
 		}
 
 	}
@@ -661,27 +664,30 @@ static PVRSRV_ERROR TLTestCMD_DumpHWPerfState (IMG_VOID)
 	PVR_ASSERT(psGD);
 	if (psGD->ui32NumDevices != 1)
 	{
-		PVR_TRACE(("--- PVRSRV_DATA: Unable to dump, 0 or multiple devices exist!"));
+		PVR_LOG(("--- PVRSRV_DATA: Unable to dump, 0 or multiple devices exist!"));
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_NOT_READY);
 	}
 
-	PVR_TRACE(("--- PVRSRV_DATA: %p - ui32NumDevices( %d ) apsRegisteredDevNodes[0]( %p ) apsRegisteredDevNodes[0]->pvDevice( %p )",
+	PVR_LOG(("--- PVRSRV_DATA: %p - ui32NumDevices( %d ) apsRegisteredDevNodes[0]( %p ) apsRegisteredDevNodes[0]->pvDevice( %p )",
 			psGD, psGD->ui32NumDevices,
 			psGD->apsRegisteredDevNodes[0],
 			psGD->apsRegisteredDevNodes[0]->pvDevice));
 
 	psRD = psGD->apsRegisteredDevNodes[0]->pvDevice;
-	PVR_TRACE(("----- PVRSRV_RGXDEV_INFO: %p - psRGXFWIfTraceBuf( %p ) psRGXFWIfHWPerfBuf( %p )",
+	PVR_LOG(("----- PVRSRV_RGXDEV_INFO: %p - psRGXFWIfTraceBuf( %p ) psRGXFWIfHWPerfBuf( %p )",
 			psRD, psRD->psRGXFWIfTraceBuf,
 			psRD->psRGXFWIfHWPerfBuf));
 
 	psTB = psRD->psRGXFWIfTraceBuf;
-	PVR_TRACE(("-------- RGXFWIF_TRACEBUF: %p",	psTB));
+	PVR_LOG(("-------- RGXFWIF_TRACEBUF: %p",	psTB));
 
-	PVR_TRACE(("-------- RGXFWIF_TRACEBUF: HWPerSize( %d )",
-			psRD->ui32RGXFWIfHWPerfBufSize));
-
-	PVR_TRACE(("-------- RGXFWIF_TRACEBUF: HWPerfRIdx( %d )  HWPerfWIdx( %d )  HWPerfWrapCount( %d )",
+	PVR_LOG(("-------- RGXFWIF_TRACEBUF: HWPerSize( %d )  HWPerfFullWatermark%%( %d.%d %% )",
+			psRD->ui32RGXFWIfHWPerfBufSize,
+			((psTB->ui32HWPerfUt*10000)/psRD->ui32RGXFWIfHWPerfBufSize)/100,
+			((psTB->ui32HWPerfUt*10000)/psRD->ui32RGXFWIfHWPerfBufSize)%100));
+	PVR_LOG(("-------- RGXFWIF_TRACEBUF: HWPerfDropCount( %d )  FirstDropOrdinal( %d ) LastDropOrdinal( %d )",
+			psTB->ui32HWPerfDropCount, psTB->ui32FirstDropOrdinal, psTB->ui32LastDropOrdinal));
+	PVR_LOG(("-------- RGXFWIF_TRACEBUF: HWPerfRIdx( %d )  HWPerfWIdx( %d )  HWPerfWrapCount( %d )",
 			psTB->ui32HWPerfRIdx, psTB->ui32HWPerfWIdx,
 			psTB->ui32HWPerfWrapCount));
 
@@ -756,6 +762,12 @@ static PVRSRV_ERROR TLTestCMD_SignalPE (IMG_UINT32* psIn1)
 
 	/* ensure the registers goes through before continuing */
 	OSMemoryBarrier();
+#if !defined(RGXFW_POWMON_TIMERCTL)
+	/* ack the output from the FW */
+	ui32Tmp = OSReadHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_EVENT_STATUS);
+	OSWriteHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_EVENT_STATUS, ui32Tmp|RGX_CR_EVENT_STATUS_GPIO_ACK_EN);
+	OSMemoryBarrier();
+#endif
 
 #if defined(NO_HARDWARE)
 	PVR_DPF((PVR_DBG_WARNING, "TLTestCMD_SignalPwrEst is a no-op on NO_HARDWARE!"));
@@ -981,7 +993,7 @@ static PVRSRV_ERROR  TLTestCMD_StreamCreate(PVR_TL_TEST_CMD_STREAM_CREATE_IN *ps
 
 	eError = TLStreamCreate (&srcn->gTLStream, psIn1->pszStreamName,
 			                 ((OSGetPageSize()*psIn1->uiStreamSizeInPages)) - PVR_TL_TEST_STREAM_BUFFER_REDUCTION,
-							 psIn1->uiStreamCreateFlags);
+							 psIn1->uiStreamCreateFlags, IMG_NULL, IMG_NULL);
 	if (eError != PVRSRV_OK)
 	{
 		OSFREEMEM(srcn);

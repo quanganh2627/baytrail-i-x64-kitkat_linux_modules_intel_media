@@ -624,6 +624,46 @@ PVRSRVBridgeDumpDebugInfo(IMG_UINT32 ui32BridgeID,
 }
 
 static IMG_INT
+PVRSRVBridgeGetDevClockSpeed(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_GETDEVCLOCKSPEED *psGetDevClockSpeedIN,
+					 PVRSRV_BRIDGE_OUT_GETDEVCLOCKSPEED *psGetDevClockSpeedOUT,
+					 CONNECTION_DATA *psConnection)
+{
+	IMG_HANDLE hDevNodeInt = IMG_NULL;
+
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_SRVCORE_GETDEVCLOCKSPEED);
+
+
+
+
+
+				{
+					/* Look up the address from the handle */
+					psGetDevClockSpeedOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hDevNodeInt,
+											psGetDevClockSpeedIN->hDevNode,
+											PVRSRV_HANDLE_TYPE_DEV_NODE);
+					if(psGetDevClockSpeedOUT->eError != PVRSRV_OK)
+					{
+						goto GetDevClockSpeed_exit;
+					}
+
+				}
+
+	psGetDevClockSpeedOUT->eError =
+		PVRSRVGetDevClockSpeedKM(
+					hDevNodeInt,
+					&psGetDevClockSpeedOUT->ui32ui32RGXClockSpeed);
+
+
+
+GetDevClockSpeed_exit:
+
+	return 0;
+}
+
+static IMG_INT
 PVRSRVBridgeHWOpTimeout(IMG_UINT32 ui32BridgeID,
 					 PVRSRV_BRIDGE_IN_HWOPTIMEOUT *psHWOpTimeoutIN,
 					 PVRSRV_BRIDGE_OUT_HWOPTIMEOUT *psHWOpTimeoutOUT,
@@ -699,6 +739,7 @@ PVRSRV_ERROR RegisterSRVCOREFunctions(IMG_VOID)
 	SetDispatchTableEntry(PVRSRV_BRIDGE_SRVCORE_EVENTOBJECTWAIT, PVRSRVBridgeEventObjectWait);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_SRVCORE_EVENTOBJECTCLOSE, PVRSRVBridgeEventObjectClose);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_SRVCORE_DUMPDEBUGINFO, PVRSRVBridgeDumpDebugInfo);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_SRVCORE_GETDEVCLOCKSPEED, PVRSRVBridgeGetDevClockSpeed);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_SRVCORE_HWOPTIMEOUT, PVRSRVBridgeHWOpTimeout);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_SRVCORE_KICKDEVICES, PVRSRVBridgeKickDevices);
 

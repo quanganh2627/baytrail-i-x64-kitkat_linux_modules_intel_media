@@ -48,6 +48,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxdevice.h"
 
 #define SYS_RGX_ACTIVE_POWER_LATENCY_MS (10)
+static PVRSRV_SYSTEM_CONFIG gsSysConfig;
+
 static RGX_TIMING_INFORMATION gsRGXTimingInfo =
 {
 	/* ui32CoreClockSpeed */
@@ -65,7 +67,6 @@ static RGX_DATA gsRGXData =
 	/* psRGXTimingInfo */
 	&gsRGXTimingInfo
 };
-
 static PVRSRV_DEVICE_CONFIG gsDevices[] = 
 {
 	{
@@ -96,9 +97,20 @@ static PVRSRV_DEVICE_CONFIG gsDevices[] =
 		/* hSysData */
 		IMG_NULL,
 
-		/* ui32PhysHeapID */
-		0,
-
+#if (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
+		/*
+		 *  PhysHeapIDs.
+		 *  NB. Where allowing both LMA
+		 *      and a UMA physical heaps, be
+		 *      sure to provide the ID of
+		 *      the LMA Heap first and that
+		 *      of the UMA heap second.
+		 */
+		{ 1, 0 },
+#else
+		/* usable ui32PhysHeapIDs */
+		{ 0, 0 },
+#endif
 		/* pfnPrePowerState */
 		IMG_NULL,
 		/* pfnPostPowerState */
@@ -110,6 +122,9 @@ static PVRSRV_DEVICE_CONFIG gsDevices[] =
 		/* pfnInterruptHandled */
 		IMG_NULL,
 		
+		/* pfnCheckMemAllocSize */
+		SysCheckMemAllocSize,
+
 		/* eBPDM */
 		RGXFWIF_DM_TA,
 		/* bBPSet */
@@ -160,8 +175,9 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 		/* psMemFuncs */
 		&gsLocalPhysHeapFuncs,
 		/* hPrivData */
-		IMG_NULL,
+		(IMG_HANDLE)&gsSysConfig,
 	},
+#if defined(SUPPORT_DISPLAY_CLASS)
 	{
 		/* ui32PhysHeapID */
 		1,
@@ -176,8 +192,9 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 		/* psMemFuncs */
 		&gsLocalPhysHeapFuncs,
 		/* hPrivData */
-		IMG_NULL,
+		(IMG_HANDLE)&gsSysConfig,
 	},
+#endif
 #if defined(SUPPORT_ION)
 	{
 		/* ui32PhysHeapID */
@@ -193,7 +210,7 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 		/* psMemFuncs */
 		&gsLocalPhysHeapFuncs,
 		/* hPrivData */
-		IMG_NULL,
+		(IMG_HANDLE)&gsSysConfig,
 	},
 #endif
 };
@@ -222,7 +239,7 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 		/* psMemFuncs */
 		&gsSystemPhysHeapFuncs,
 		/* hPrivData */
-		IMG_NULL,
+		(IMG_HANDLE)&gsSysConfig,
 	}
 };
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
@@ -250,7 +267,7 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 		/* psMemFuncs */
 		&gsHybridPhysHeapFuncs,
 		/* hPrivData */
-		IMG_NULL,
+		(IMG_HANDLE)&gsSysConfig,
 	},
 	{
 		/* ui32PhysHeapID */
@@ -266,7 +283,7 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 		/* psMemFuncs */
 		&gsHybridPhysHeapFuncs,
 		/* hPrivData */
-		IMG_NULL,
+		(IMG_HANDLE)&gsSysConfig,
 	}
 };
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
@@ -294,7 +311,7 @@ static PHYS_HEAP_CONFIG	gsPhysHeapConfig[] =
 		/* psMemFuncs */
 		&gsDirectMappedPhysHeapFuncs,
 		/* hPrivData */
-		IMG_NULL,
+		(IMG_HANDLE)&gsSysConfig,
 	}
 };
 #else

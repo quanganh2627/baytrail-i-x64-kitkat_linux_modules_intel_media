@@ -88,7 +88,7 @@ struct _RGX_SERVER_TQ_CONTEXT_ {
 };
 
 /*
-	Static functions used by tranfser context code
+	Static functions used by transfer context code
 */
 
 static PVRSRV_ERROR _Create3DTransferContext(CONNECTION_DATA *psConnection,
@@ -311,7 +311,7 @@ PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(CONNECTION_DATA		*psConnection,
 									  &psTransferContext->s3DData);
 	if (eError != PVRSRV_OK)
 	{
-		goto fail_3dtranfsercontext;
+		goto fail_3dtransfercontext;
 	}
 	psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_3D;
 
@@ -323,17 +323,17 @@ PVRSRV_ERROR PVRSRVRGXCreateTransferContextKM(CONNECTION_DATA		*psConnection,
 									  &psTransferContext->s2DData);
 	if (eError != PVRSRV_OK)
 	{
-		goto fail_2dtranfsercontext;
+		goto fail_2dtransfercontext;
 	}
 	psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_2D;
 
 	return PVRSRV_OK;
 
-fail_2dtranfsercontext:
+fail_2dtransfercontext:
 	_Destroy3DTransferContext(&psTransferContext->s3DData,
 							  psTransferContext->psDeviceNode,
 							  psTransferContext->psCleanupSync);
-fail_3dtranfsercontext:
+fail_3dtransfercontext:
 fail_frameworkcopy:
 	DevmemFwFree(psTransferContext->psFWFrameworkMemDesc);
 fail_frameworkcreate:
@@ -349,27 +349,27 @@ PVRSRV_ERROR PVRSRVRGXDestroyTransferContextKM(RGX_SERVER_TQ_CONTEXT *psTransfer
 {
 	PVRSRV_ERROR eError;
 
-	if (psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_2D)
+	if (psTransferContext->ui32Flags & RGX_SERVER_TQ_CONTEXT_FLAGS_2D)
 	{
 		eError = _Destroy2DTransferContext(&psTransferContext->s2DData,
 										   psTransferContext->psDeviceNode,
 										   psTransferContext->psCleanupSync);
 		if (eError != PVRSRV_OK)
 		{
-			goto fail_destory2d;
+			goto fail_destroy2d;
 		}
 		/* We've freed the 2D context, don't try to free it again */
 		psTransferContext->ui32Flags &= ~RGX_SERVER_TQ_CONTEXT_FLAGS_2D;
 	}
 
-	if (psTransferContext->ui32Flags |= RGX_SERVER_TQ_CONTEXT_FLAGS_3D)
+	if (psTransferContext->ui32Flags & RGX_SERVER_TQ_CONTEXT_FLAGS_3D)
 	{
 		eError = _Destroy3DTransferContext(&psTransferContext->s3DData,
 										   psTransferContext->psDeviceNode,
 										   psTransferContext->psCleanupSync);
 		if (eError != PVRSRV_OK)
 		{
-			goto fail_destory3d;
+			goto fail_destroy3d;
 		}
 		/* We've freed the 3D context, don't try to free it again */
 		psTransferContext->ui32Flags &= ~RGX_SERVER_TQ_CONTEXT_FLAGS_3D;
@@ -381,8 +381,8 @@ PVRSRV_ERROR PVRSRVRGXDestroyTransferContextKM(RGX_SERVER_TQ_CONTEXT *psTransfer
 
 	return PVRSRV_OK;
 
-fail_destory2d:
-fail_destory3d:
+fail_destroy2d:
+fail_destroy3d:
 	PVR_ASSERT(eError != PVRSRV_OK);
 	return eError;
 }
@@ -484,7 +484,7 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(RGX_SERVER_TQ_CONTEXT	*psTransferContext,
 			IMG_UINT32 k;
 			/*
 				We've at the start of a transfer operation (which might be made
-				up of multiplue HW operations) so check if we also have then
+				up of multiple HW operations) so check if we also have then
 				end of the transfer operation in the batch
 			*/
 			for (k=i;k<ui32PrepareCount;k++)
@@ -570,12 +570,8 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(RGX_SERVER_TQ_CONTEXT	*psTransferContext,
 			IMG_UINT32 *pui32UpdateValues;
 
 			/*
-				FIXME:
-				We can't be taking the server sync operations here as we
-				have no way to undo them should the acquire fail.
-				If client/local syncs where used here would that remove the
-				issue?
-			*/
+				
+*/
 			eError = PVRFDSyncQueryFencesKM(ui32NumFenceFDs,
 											paui32FenceFDs,
 											IMG_TRUE,
@@ -752,13 +748,13 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(RGX_SERVER_TQ_CONTEXT	*psTransferContext,
 	}
 
 	/*
-		We should acquire the kernel CCB(s) space here as the schudle could fail
+		We should acquire the kernel CCB(s) space here as the schedule could fail
 		and we would have to roll back all the syncs
 	*/
 
 	/*
 		Only do the command helper release (which takes the server sync
-		operations if the acquire succeded
+		operations if the acquire succeeded
 	*/
 	if (ui323DCmdCount)
 	{

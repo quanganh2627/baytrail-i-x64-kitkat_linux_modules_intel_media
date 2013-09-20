@@ -83,6 +83,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/psb_intel_display.o \
 	$(DISPLAYDIR)/mdfld_hdmi_audio.o \
 	$(DISPLAYDIR)/mdfld_msic.o \
+	$(DISPLAYDIR)/mdfld_debugfs.o \
 	$(DISPLAYDIR)/mdfld_csc.o \
 	$(DISPLAYDIR)/mdfld_intel_hdcp.o \
 	$(DISPLAYDIR)/psb_intel_hdmi.o \
@@ -104,6 +105,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/jdi_cmd.o \
 	$(DISPLAYDIR)/cmi_vid.o \
 	$(DISPLAYDIR)/cmi_cmd.o \
+	$(DISPLAYDIR)/sharp25x16_vid.o \
 	$(DISPLAYDIR)/dc_callbacks.o \
 	$(DISPLAYDIR)/ospm/pwr_mgmt.o \
 	$(DISPLAYDIR)/ospm/gfx_ospm.o \

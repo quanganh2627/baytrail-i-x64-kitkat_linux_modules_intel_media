@@ -37,6 +37,9 @@
 #include "pmu_tng.h"
 #include "tng_wa.h"
 
+
+
+
 #define	USE_GFX_PM_FUNC			0
 
 /* WRAPPER Offset 0x160024 */
@@ -54,6 +57,9 @@
 #define GFX_POWER_DOWN(x) \
 	pmu_nc_set_power_state(x, OSPM_ISLAND_DOWN, GFX_SS_PM0)
 
+extern IMG_BOOL gbSystemActivePMEnabled;
+extern IMG_BOOL gbSystemActivePMInit;
+
 static u32 gfx_island_selected = GFX_SLC_LDO_SSC | GFX_SLC_SSC |
 	GFX_SDKCK_SSC | GFX_RSCD_SSC;
 
@@ -66,6 +72,9 @@ enum GFX_ISLAND_STATUS {
 
 static int (*pSuspend_func)(void) = NULL;
 static int (*pResume_func)(void) = NULL;
+
+int is_tng_b0 = 0;
+EXPORT_SYMBOL(is_tng_b0);
 
 /**
   * gpu_freq_code_to_mhz() - Given frequency as a code (as defined for *_PM1
@@ -110,6 +119,9 @@ static int gpu_freq_code_to_mhz(int freq_code_in)
 		break;
 	case IP_FREQ_400_00:
 		freq_mhz_out = 400;
+		break;
+	case IP_FREQ_457_14:
+		freq_mhz_out = 457;
 		break;
 	case IP_FREQ_533_33:
 		freq_mhz_out = 533;
@@ -316,6 +328,9 @@ int gpu_freq_mhz_to_code(int freq_mhz_in, int *p_freq_out)
 	} else if (freq_mhz_in >= 533) {
 		freq_code = IP_FREQ_533_33;	/* 533.33 */
 		freq_out = 533;
+	} else if (freq_mhz_in >= 457) {
+		freq_code = IP_FREQ_457_14;	/* 457.14 */
+		freq_out = 457;
 	} else if (freq_mhz_in >= 400) {
 		freq_code = IP_FREQ_400_00;	/* 400.00 */
 		freq_out = 400;
@@ -417,20 +432,15 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	 * This workarounds are only needed for TNG A0/A1 silicon.
 	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
-	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
-		intel_mid_soc_stepping() < 1)
+	if (!IS_TNG_B0(dev))
 	{
-#endif
 		/**
 		* If turning some power on, and the power to be on includes SLC,
 		* and SLC was not previously on, then setup some registers.
 		*/
 		if (gfx_all & GFX_SLC_SSC)
 			apply_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
-#ifndef GFX_KERNEL_3_10_FIX /*waiting for function to identify stepping*/
 	}
-#endif
 
 	if (gfx_all & GFX_SDKCK_SSC)
 		ret = GFX_POWER_UP(PMU_SDKCK);
@@ -442,7 +452,8 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	OSPM_DPF("Post-power-up status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
-	psb_irq_preinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+	if ((!gbSystemActivePMEnabled) && gbSystemActivePMInit)
+		psb_irq_preinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
 
 	return !ret;
 }
@@ -469,14 +480,13 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 		}
 	}
 
-#ifdef GFX_KERNEL_3_10_FIX
-	return true;
-#endif
 	OSPM_DPF("Pre-power-off Status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
-	psb_irq_uninstall_islands(dev,OSPM_GRAPHICS_ISLAND);
-	synchronize_irq(dev->pdev->irq);
+	if ((!gbSystemActivePMEnabled) && gbSystemActivePMInit) {
+		psb_irq_uninstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+		synchronize_irq(dev->pdev->irq);
+	}
 
 	/* power down every thing */
 	if (gfx_island_selected & GFX_RSCD_SSC)
@@ -505,6 +515,9 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 void ospm_gfx_init(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
+	if(IS_TNG_B0(dev))
+		is_tng_b0 = 1;
+
 	OSPM_DPF("%s\n", __func__);
 	p_island->p_funcs->power_up = ospm_gfx_power_up;
 	p_island->p_funcs->power_down = ospm_gfx_power_down;

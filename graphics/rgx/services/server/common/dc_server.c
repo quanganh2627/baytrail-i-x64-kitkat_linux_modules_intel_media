@@ -72,6 +72,7 @@ struct _DC_DISPLAY_CONTEXT_
 	IMG_BOOL		bIssuedNullFlip;
 	IMG_HANDLE		hMISR;
 	IMG_HANDLE		hDebugNotify;
+	IMG_PVOID		hTimer;
 };
 
 struct _DC_DEVICE_
@@ -452,6 +453,21 @@ static IMG_BOOL _DCDisplayContextReady(IMG_PVOID hReadyData)
 	return IMG_TRUE;
 }
 
+#if defined SUPPORT_DC_COMPLETE_TIMEOUT_DEBUG
+static IMG_VOID _RetireTimeout(IMG_PVOID pvData)
+{
+	DC_CMD_COMP_DATA *psCompleteData = pvData;
+	DC_DISPLAY_CONTEXT *psDisplayContext = psCompleteData->psDisplayContext;
+
+	PVR_DPF((PVR_DBG_ERROR, "Timeout fired for operation %d", psCompleteData->ui32Token));
+	SCPDumpStatus(psDisplayContext->psSCPContext);
+
+	OSDisableTimer(psDisplayContext->hTimer);
+	OSRemoveTimer(psDisplayContext->hTimer);
+	psDisplayContext->hTimer = IMG_NULL;
+}
+#endif	/* SUPPORT_DC_COMPLETE_TIMEOUT_DEBUG */
+
 static IMG_VOID _DCDisplayContextConfigure(IMG_PVOID hReadyData,
 										   IMG_PVOID hCompleteData)
 {
@@ -461,6 +477,22 @@ static IMG_VOID _DCDisplayContextConfigure(IMG_PVOID hReadyData,
 
 	OSLockAcquire(psDisplayContext->hLock);
 	psDisplayContext->ui32ConfigsInFlight++;
+
+#if defined SUPPORT_DC_COMPLETE_TIMEOUT_DEBUG
+	if (psDisplayContext->ui32ConfigsInFlight == psDevice->ui32MaxConfigsInFlight)
+	{
+		/*
+			We've just sent out a new config which has filled the DC's pipeline.
+			This means that we expect a retire within a VSync period, start
+			a timer that will print out a message if we haven't got a complete
+			within a reasonable period (200ms)
+		*/
+		PVR_ASSERT(psDisplayContext->hTimer == IMG_NULL);
+		psDisplayContext->hTimer = OSAddTimer(_RetireTimeout, hCompleteData, 200);
+		OSEnableTimer(psDisplayContext->hTimer);
+	}
+#endif
+
 	OSLockRelease(psDisplayContext->hLock);
 
 #if defined(DC_DEBUG)
@@ -755,23 +787,24 @@ static PVRSRV_ERROR _DCCreatePMR(IMG_DEVMEM_LOG2ALIGN_T uiLog2PageSize,
 						  "DISPLAY",
 						  &sDCPMRFuncTab,
 						  psPMRPriv,
-						  ppsPMR);
+						  ppsPMR,
+						  &hPDumpAllocInfo,
+						  IMG_TRUE);
 
 	if (eError != PVRSRV_OK)
 	{
 		goto fail_pmrcreate;
 	}
 
-	PDumpPMRMallocPMR(*ppsPMR,
-					  uiBufferSize,
-					  1ULL<<uiLog2PageSize,
-	                  IMG_TRUE,
-					  &hPDumpAllocInfo);
+//	PDumpPMRMallocPMR(*ppsPMR,
+//					  uiBufferSize,
+//					  1ULL<<uiLog2PageSize,
+//	                  IMG_TRUE,
+//					  &hPDumpAllocInfo);
 #if defined(PDUMP)
 	psPMRPriv->hPDumpAllocInfo = hPDumpAllocInfo;
 	psPMRPriv->bPDumpMalloced = IMG_TRUE;
 #endif
-
 	return PVRSRV_OK;
 
 fail_pmrcreate:
@@ -1143,6 +1176,7 @@ PVRSRV_ERROR DCDisplayContextCreate(DC_DEVICE *psDevice,
 	psDisplayContext->ui32RefCount = 1;
 	psDisplayContext->ui32ConfigsInFlight = 0;
 	psDisplayContext->bIssuedNullFlip = IMG_FALSE;
+	psDisplayContext->hTimer = IMG_NULL;
 
 	eError = OSLockCreate(&psDisplayContext->hLock, LOCK_TYPE_NONE);
 	if (eError != PVRSRV_OK)
@@ -1790,7 +1824,7 @@ PVRSRV_ERROR DCRegisterDevice(DC_DEVICE_FUNCTIONS *psFuncTable,
 	psNew->hSystemBuffer = IMG_NULL;
 	psNew->psSystemBufferPMR = IMG_NULL;
 	psNew->sSystemContext.psDevice = psNew;
-	psNew->sSystemContext.hDisplayContext = hDeviceData;	/* FIXME: Is this the correct thing to do? */
+	psNew->sSystemContext.hDisplayContext = hDeviceData;	/* */
 
 	OSLockAcquire(g_hDCListLock);
 	psNew->psNext = g_psDCDeviceList;
@@ -1889,6 +1923,15 @@ IMG_VOID DCDisplayConfigurationRetired(IMG_HANDLE hConfigData)
 
 	OSLockAcquire(psDisplayContext->hLock);
 	psDisplayContext->ui32TokenIn++;
+
+#if defined SUPPORT_DC_COMPLETE_TIMEOUT_DEBUG
+	if (psDisplayContext->hTimer)
+	{
+		OSDisableTimer(psDisplayContext->hTimer);
+		OSRemoveTimer(psDisplayContext->hTimer);
+		psDisplayContext->hTimer = IMG_NULL;
+	}
+#endif	/* SUPPORT_DC_COMPLETE_TIMEOUT_DEBUG */
 
 	psDisplayContext->ui32ConfigsInFlight--;
 	OSLockRelease(psDisplayContext->hLock);

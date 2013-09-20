@@ -58,6 +58,9 @@ PhysmemNewRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
 						PVRSRV_MEMALLOCFLAGS_T uiFlags,
 						PMR **ppsPMRPtr)
 {
+	PVRSRV_DEVICE_PHYS_HEAP ePhysHeapIdx = (uiFlags & PVRSRV_MEMALLOCFLAG_CPU_LOCAL) ? 1: 0;
+	PFN_SYS_DEV_CHECK_MEM_ALLOC_SIZE pfnCheckMemAllocSize = \
+										psDevNode->psDevConfig->pfnCheckMemAllocSize;
 	/********************************
 	 * Sanity check the cache flags *
 	 ********************************/
@@ -81,7 +84,18 @@ PhysmemNewRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
 		return PVRSRV_ERROR_UNSUPPORTED_CACHE_MODE;
 	}
 
-	return psDevNode->pfnCreateRamBackedPMR(psDevNode,
+	/* Apply memory budgeting policy */
+	if (pfnCheckMemAllocSize)
+	{
+		PVRSRV_ERROR eError = \
+						pfnCheckMemAllocSize(psDevNode, (IMG_UINT64)uiChunkSize*ui32NumPhysChunks);
+		if (eError != PVRSRV_OK)
+		{
+			return eError;
+		}
+	}
+
+	return psDevNode->pfnCreateRamBackedPMR[ePhysHeapIdx](psDevNode,
 											uiSize,
 											uiChunkSize,
 											ui32NumPhysChunks,

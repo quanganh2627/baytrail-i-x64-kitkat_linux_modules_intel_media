@@ -150,6 +150,15 @@ typedef enum _PVRSRV_DEVICE_HEALTH_
 
 #define PRVSRV_DEVICE_FLAGS_LMA		(1 << 0)
 
+typedef PVRSRV_ERROR (*FN_CREATERAMBACKEDPMR)(struct _PVRSRV_DEVICE_NODE_ *psDevNode,
+										IMG_DEVMEM_SIZE_T uiSize,
+										IMG_DEVMEM_SIZE_T uiChunkSize,
+										IMG_UINT32 ui32NumPhysChunks,
+										IMG_UINT32 ui32NumVirtChunks,
+										IMG_BOOL *pabMappingTable,
+										IMG_UINT32 uiLog2PageSize,
+										PVRSRV_MEMALLOCFLAGS_T uiFlags,
+										PMR **ppsPMRPtr);
 typedef struct _PVRSRV_DEVICE_NODE_
 {
 	PVRSRV_DEVICE_IDENTIFIER	sDevId;
@@ -165,20 +174,12 @@ typedef struct _PVRSRV_DEVICE_NODE_
 		callbacks the device must support:
 	*/
 
-	PVRSRV_ERROR (*pfnCreateRamBackedPMR)(struct _PVRSRV_DEVICE_NODE_ *psDevNode,
-											IMG_DEVMEM_SIZE_T uiSize,
-											IMG_DEVMEM_SIZE_T uiChunkSize,
-											IMG_UINT32 ui32NumPhysChunks,
-											IMG_UINT32 ui32NumVirtChunks,
-											IMG_BOOL *pabMappingTable,
-											IMG_UINT32 uiLog2PageSize,
-											PVRSRV_MEMALLOCFLAGS_T uiFlags,
-											PMR **ppsPMRPtr);
+    FN_CREATERAMBACKEDPMR pfnCreateRamBackedPMR[PVRSRV_DEVICE_PHYS_HEAP_LAST];
 
-	PVRSRV_ERROR (*pfnMMUPxAlloc)(struct _PVRSRV_DEVICE_NODE_ *psDevNode, IMG_SIZE_T uiSize,
+    PVRSRV_ERROR (*pfnMMUPxAlloc)(struct _PVRSRV_DEVICE_NODE_ *psDevNode, IMG_SIZE_T uiSize,
 									Px_HANDLE *psMemHandle, IMG_DEV_PHYADDR *psDevPAddr);
 
-	IMG_VOID (*pfnMMUPxFree)(struct _PVRSRV_DEVICE_NODE_ *psDevNode, Px_HANDLE *psMemHandle);
+    IMG_VOID (*pfnMMUPxFree)(struct _PVRSRV_DEVICE_NODE_ *psDevNode, Px_HANDLE *psMemHandle);
 
 	PVRSRV_ERROR (*pfnMMUPxMap)(struct _PVRSRV_DEVICE_NODE_ *psDevNode, Px_HANDLE *pshMemHandle,
 								IMG_SIZE_T uiSize, IMG_DEV_PHYADDR *psDevPAddr,
@@ -186,6 +187,7 @@ typedef struct _PVRSRV_DEVICE_NODE_
 
 	IMG_VOID (*pfnMMUPxUnmap)(struct _PVRSRV_DEVICE_NODE_ *psDevNode,
 								Px_HANDLE *psMemHandle, IMG_VOID *pvPtr);
+
 	IMG_UINT32 uiMMUPxLog2AllocGran;
 	IMG_CHAR				*pszMMUPxPDumpMemSpaceName;
 
@@ -206,6 +208,8 @@ typedef struct _PVRSRV_DEVICE_NODE_
 	PVRSRV_ERROR (*pfnServiceHWPerf)(struct _PVRSRV_DEVICE_NODE_ *psDevNode);
 
 	PVRSRV_ERROR (*pfnDeviceVersionString)(struct _PVRSRV_DEVICE_NODE_ *psDevNode, IMG_CHAR **ppszVersionString);
+
+	PVRSRV_ERROR (*pfnDeviceClockSpeed)(struct _PVRSRV_DEVICE_NODE_ *psDevNode, IMG_PUINT32 pui32RGXClockSpeed);
 
 	PVRSRV_DEVICE_CONFIG	*psDevConfig;
 
@@ -228,7 +232,19 @@ typedef struct _PVRSRV_DEVICE_NODE_
 
 	RA_ARENA				*psLocalDevMemArena;
 
-	PHYS_HEAP			*psPhysHeap;
+	/*
+	 * Pointers to the device's physical memory heap(s)
+	 * The first entry (apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL]) will be used for allocations
+	 *  where the PVRSRV_MEMALLOCFLAG_CPU_LOCAL flag is not set. Normally this will be an LMA heap
+	 *  (but the device configuration could specify a UMA heap here, if desired)
+	 * The second entry (apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL]) will be used for allocations
+	 *  where the PVRSRV_MEMALLOCFLAG_CPU_LOCAL flag is set. Normally this will be a UMA heap
+	 *  (but the configuration could specify an LMA heap here, if desired)
+	 * The device configuration will always specify two physical heap IDs - in the event of the device
+	 *  only using one physical heap, both of these IDs will be the same, and hence both pointers below
+	 *  will also be the same
+	 */
+	PHYS_HEAP				*apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_LAST];
 
 	struct _PVRSRV_DEVICE_NODE_	*psNext;
 	struct _PVRSRV_DEVICE_NODE_	**ppsThis;

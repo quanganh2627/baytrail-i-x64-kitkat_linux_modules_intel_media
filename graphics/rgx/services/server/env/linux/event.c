@@ -48,7 +48,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #endif
 #include <linux/mm.h>
 #include <linux/slab.h>
-#include <linux/vmalloc.h>
 #include <linux/delay.h>
 #include <linux/pci.h>
 
@@ -66,7 +65,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "mm.h"
 #include "mmap.h"
 #include "env_data.h"
-#include "proc.h"
 #include "mutex.h"
 #include "driverlock.h"
 #include "event.h"

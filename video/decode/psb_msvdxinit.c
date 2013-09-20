@@ -41,6 +41,12 @@
 #endif
 #include <linux/firmware.h>
 
+#ifdef CONFIG_DX_SEP54
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+extern int sepapp_image_verify(u8 *addr, ssize_t size, u32 key_index, u32 magic_num);
+#endif
+#endif
+
 uint8_t psb_rev_id;
 
 /*
@@ -561,17 +567,20 @@ void msvdx_init_test(struct drm_device *dev)
 
 /* FW + FIP + VRL */
 #define PSB_MSVDX_FW_SIZE (84 * 1024 + 296 + 728)
+#define PSB_VEDSSPM0_OFF_STATE 0xb000003
 
-static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
+int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 {
 	struct firmware *fw = NULL;
 	uint8_t *fw_io_base;
 	void *ptr = NULL;
 	int rc, fw_size;
-	uint32_t imrl = 0;
-	uint32_t imrh = 0;
+	uint32_t imrl, imrh;
 	uint64_t imr_base, imr_end;
 	const unsigned long tng_magic_num = 0x44455624;
+	int pwr_mask = 0;
+	int ret = 0;
+
 
 	imrl = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
 			TNG_IMR5L_MSG_REGADDR);
@@ -581,31 +590,30 @@ static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 	imr_base = (imrl & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
 	imr_end = (imrh & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
 
-	printk(KERN_INFO "IMR5 ranges 0x%12lx - 0x%12lx\n", imr_base, imr_end);
+	DRM_INFO("IMR5 ranges 0x%12lx - 0x%12lx\n", imr_base, imr_end);
 
-	if ((imr_end - imr_base) < PSB_MSVDX_FW_SIZE) {
-		DRM_ERROR("MSVDX: IMR5 size not enough for fw\n");
+	/*      if ((imr_end - imr_base) < PSB_MSVDX_FW_SIZE) {
+		printk("MSVDX: IMR5 size not enough for fw\n");
 		return 1;
-	}
-
+		}
+	 */
 	rc = request_firmware(&fw, name, &dev->pdev->dev);
 	if (fw == NULL || rc < 0) {
 		DRM_ERROR("MSVDX: %s request_firmware failed: Reason %d\n",
-			  name, rc);
+				name, rc);
 		return 1;
 	}
 
 	ptr = (int *)(fw)->data;
 	fw_size =  (int)(fw)->size;
-	if (0 == ptr || fw_size != PSB_MSVDX_FW_SIZE) {
+	if (0 == ptr) {
 		DRM_ERROR("MSVDX: Failed to load %s, fw_size is %d\n", name, fw_size);
 		release_firmware(fw);
 		return 1;
 	}
+	fw_io_base = ioremap(imr_base, fw_size);
 
-       fw_io_base = ioremap(imr_base, PSB_MSVDX_FW_SIZE);
-
-       if (!fw_io_base) {
+	if (!fw_io_base) {
 		release_firmware(fw);
 		DRM_ERROR("MSVDX_FW_PHADDRESS ioremap failed in function msvdx_fw_initialize\r\n");
 		return 1;
@@ -616,13 +624,39 @@ static int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 	iounmap(fw_io_base);
 	release_firmware(fw);
 
-#ifdef CONFIG_DX_SEP54_IMAGE
-	ret = sepapp_image_verify(imr_base, PSB_MSVDX_FW_SIZE, 0,
-		tng_magic_num);
+#ifdef CONFIG_DX_SEP54
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+	DRM_INFO("sepapp_image_verify\n");
+
+	DRM_INFO("imr5 L 0x94 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X94));
+	DRM_INFO("imr5 H 0x95 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X95));
+	DRM_INFO("imr5 RAC 0x96 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X96));
+	DRM_INFO("imr5 WAC 0x97 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X97));
+
+
+	ret = sepapp_image_verify(imr_base, fw_size, 0,
+			tng_magic_num);
 	if (ret) {
 		DRM_ERROR("failed to verify VED firmware ret %x\n", ret);
 		return -1;
 	}
+
+	DRM_INFO("fw is verified!!\n");
+	DRM_INFO("imr5 L 0x94 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X94));
+	DRM_INFO("imr5 H 0x95 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X95));
+	DRM_INFO("imr5 RAC 0x96 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X96));
+	DRM_INFO("imr5 WAC 0x97 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X97));
+#endif
+	pwr_mask = intel_mid_msgbus_read32(0x04, 0x32);
+	DRM_INFO("VEDSSPM0 = 0x%x", pwr_mask);
+
+	intel_mid_msgbus_write32(0x04, 0x32, PSB_VEDSSPM0_OFF_STATE);
+	udelay(10);
+
+	pwr_mask = intel_mid_msgbus_read32(0x04, 0x32);
+	DRM_INFO("VEDSSPM0 = 0x%x", pwr_mask);
+
+	DRM_INFO("VED  FW is ready!!!\n");
 #endif
 	return 0;
 }
@@ -633,11 +667,6 @@ static int msvdx_startup_init(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	int ret;
 	struct msvdx_private *msvdx_priv;
-
-	printk(KERN_INFO "MSVDX: core id	%x\n",
-				PSB_RMSVDX32(MSVDX_CORE_ID_OFFSET));
-	printk(KERN_INFO "MSVDX: core rev	%x\n",
-				PSB_RMSVDX32(MSVDX_CORE_REV_OFFSET));
 
 	msvdx_priv = kmalloc(sizeof(struct msvdx_private), GFP_KERNEL);
 	if (msvdx_priv == NULL) {
@@ -654,6 +683,7 @@ static int msvdx_startup_init(struct drm_device *dev)
 #else
 #ifdef MERRIFIELD
 	msvdx_priv->msvdx_needs_reset = 1;
+	msvdx_priv->fw_b0_uploaded = 0;
 
 	if (IS_MRFLD(dev)) {
 		if (IS_TNG_B0(dev))
@@ -713,8 +743,8 @@ static int msvdx_startup_init(struct drm_device *dev)
 		drm_msvdx_bottom_half = PSB_BOTTOM_HALF_WQ;
 
 #ifdef MERRIFIELD
-	if (IS_TNG_B0(dev))
-		return tng_msvdx_fw_init("signed_msvdx_fw_mrfld.bin", dev);
+	//if (IS_TNG_B0(dev))
+	//	return tng_msvdx_fw_init("signed_msvdx_fw_mrfld.bin", dev);
 #endif
 
 	return 0;
@@ -749,6 +779,10 @@ void msvdx_post_powerup_core_reset(struct drm_device *dev)
 									100, 100);
 #endif
 
+#ifndef CONFIG_DRM_VXD_BYT
+       psb_irq_preinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
+       psb_irq_postinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
+#endif
 	/* psb_msvdx_clearirq only clear CR_MTX_IRQ int,
 	 * while DDK set 0xFFFFFFFF */
 	psb_msvdx_clearirq(dev);
@@ -894,97 +928,105 @@ int psb_msvdx_init(struct drm_device *dev)
 	if (dev_priv->msvdx_private == NULL)
 		return 1;
 
-	msvdx_priv = dev_priv->msvdx_private;
+        ret = msvdx_alloc_ccb_for_rendec(dev);
+        if (ret) {
+                printk("msvdx_alloc_ccb_for_rendec failed.\n");
+                return 1;
+        }
 
-	msvdx_priv->msvdx_busy = 0;
-	msvdx_priv->msvdx_hw_busy = 1;
-
-	if (msvdx_priv->fw_loaded_by_punit) {
-		/* DDK: Configure MSVDX Memory Stalling iwth the min, max and ratio of access */
-		msvdx_post_powerup_core_reset(dev);
-	}
-
-	/* Enable Clocks */
-	PSB_DEBUG_INIT("Enabling clocks\n");
-	psb_msvdx_mtx_set_clocks(dev_priv->dev, clk_enable_all);
-#if 0
-	msvdx_sw_rest(dev);
+#ifdef MERRIFIELD
+	if (!IS_TNG_B0(dev))
 #endif
-	if (!msvdx_priv->fw_loaded_by_punit) {
-		/* Enable MMU by removing all bypass bits */
-		PSB_WMSVDX32(0, MSVDX_MMU_CONTROL0_OFFSET);
-	} else {
-		msvdx_priv->rendec_init = 0;
-		ret = msvdx_mtx_init(dev, msvdx_priv->decoding_err);
-		if (ret) {
-			PSB_DEBUG_WARN("WARN: msvdx_mtx_init failed.\n");
-			return 1;
-		}
-	}
+		 psb_msvdx_post_init(dev);
 
-	ret = msvdx_alloc_ccb_for_rendec(dev);
-	if (ret) {
-		DRM_ERROR("msvdx_alloc_ccb_for_rendec failed.\n");
-		return 1;
-	}
+	return 0;
+}
 
-	/* PSB_WMSVDX32(clk_enable_minimal, MSVDX_MAN_CLK_ENABLE); */
-	PSB_DEBUG_INIT("MSVDX:defer firmware loading to the"
-		       " place when receiving user space commands\n");
+int psb_msvdx_post_init(struct drm_device *dev)
+{
+        struct drm_psb_private *dev_priv = psb_priv(dev);
+        uint32_t cmd;
+        int ret;
+        struct msvdx_private *msvdx_priv;
 
-	if (!msvdx_priv->fw_loaded_by_punit) {
+        if (dev_priv->msvdx_private == NULL)
+                return 1;
+
+        msvdx_priv = dev_priv->msvdx_private;
+
+        msvdx_priv->msvdx_busy = 0;
+        msvdx_priv->msvdx_hw_busy = 1;
+
+        if (msvdx_priv->fw_loaded_by_punit) {
+                /* DDK: Configure MSVDX Memory Stalling iwth the min, max and ratio of access */
+                msvdx_post_powerup_core_reset(dev);
+        }
+
+        if (!msvdx_priv->fw_loaded_by_punit) {
+                /* Enable MMU by removing all bypass bits */
+                PSB_WMSVDX32(0, MSVDX_MMU_CONTROL0_OFFSET);
+        } else {
+                msvdx_priv->rendec_init = 0;
+                ret = msvdx_mtx_init(dev, msvdx_priv->decoding_err);
+                if (ret) {
+                        printk("WARN: msvdx_mtx_init failed.\n");
+                        return 1;
+                }
+        }
+
+        if (!msvdx_priv->fw_loaded_by_punit) {
 #ifndef CONFIG_SLICE_HEADER_PARSING
-		msvdx_rendec_init_by_reg(dev);
+                msvdx_rendec_init_by_reg(dev);
 #endif
-		if (!msvdx_priv->fw) {
-			ret = psb_msvdx_alloc_fw_bo(dev_priv);
-			if (ret) {
-				DRM_ERROR("psb_msvdx_alloc_fw_bo failed.\n");
-				return 1;
-			}
-		}
-		/* move fw loading to the place receiving first cmd buffer */
-		msvdx_priv->msvdx_fw_loaded = 0; /* need to load firware */
-		/* it should be set at punit post boot init phase */
-		PSB_WMSVDX32(820, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-		PSB_WMSVDX32(8200, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
+                if (!msvdx_priv->fw) {
+                        ret = psb_msvdx_alloc_fw_bo(dev_priv);
+                        if (ret) {
+                                DRM_ERROR("psb_msvdx_alloc_fw_bo failed.\n");
+                                return 1;
+                        }
+                }
+                /* move fw loading to the place receiving first cmd buffer */
+                msvdx_priv->msvdx_fw_loaded = 0; /* need to load firware */
+                /* it should be set at punit post boot init phase */
+                PSB_WMSVDX32(820, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
+                PSB_WMSVDX32(8200, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
 
-		PSB_WMSVDX32(820, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
-		PSB_WMSVDX32(8200, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
+                PSB_WMSVDX32(820, FE_MSVDX_WDT_COMPAREMATCH_OFFSET);
+                PSB_WMSVDX32(8200, BE_MSVDX_WDT_COMPAREMATCH_OFFSET);
 
 #ifndef CONFIG_DRM_VXD_BYT
-		if (IS_MRFLD(dev)) {
-			psb_irq_preinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
-			psb_irq_postinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
-		}
+                if (IS_MRFLD(dev)) {
+                        psb_irq_preinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
+                        psb_irq_postinstall_islands(dev, OSPM_VIDEO_DEC_ISLAND);
+                }
 #endif
+                psb_msvdx_clearirq(dev);
+                psb_msvdx_enableirq(dev);
 
-		psb_msvdx_clearirq(dev);
-		psb_msvdx_enableirq(dev);
 
-		cmd = 0;
-		cmd = PSB_RMSVDX32(VEC_SHIFTREG_CONTROL_OFFSET);
-		REGIO_WRITE_FIELD(cmd,
-				  VEC_SHIFTREG_CONTROL,
-				  SR_MASTER_SELECT,
-				  1);  /* Host */
-		PSB_WMSVDX32(cmd, VEC_SHIFTREG_CONTROL_OFFSET);
-	}
+                cmd = 0;
+                cmd = PSB_RMSVDX32(VEC_SHIFTREG_CONTROL_OFFSET);
+                REGIO_WRITE_FIELD(cmd,
+                                  VEC_SHIFTREG_CONTROL,
+                                  SR_MASTER_SELECT,
+                                  1);  /* Host */
+                PSB_WMSVDX32(cmd, VEC_SHIFTREG_CONTROL_OFFSET);
+        }
 
 #ifndef CONFIG_DRM_VXD_BYT
-	PSB_DEBUG_INIT("MSDVX:old clock gating disable = 0x%08x\n",
-		       PSB_RVDC32(PSB_MSVDX_CLOCKGATING));
+        PSB_DEBUG_INIT("MSDVX:old clock gating disable = 0x%08x\n",
+                       PSB_RVDC32(PSB_MSVDX_CLOCKGATING));
 #endif
 #ifdef CONFIG_SLICE_HEADER_PARSING
-	if (!msvdx_priv->term_buf) {
-		ret = psb_allocate_term_buf(dev, &msvdx_priv->term_buf,
-				    &msvdx_priv->term_buf_addr,
-				    TERMINATION_SIZE);
-		if (ret)
-			return 1;
-	}
+        if (!msvdx_priv->term_buf) {
+                ret = psb_allocate_term_buf(dev, &msvdx_priv->term_buf,
+                                    &msvdx_priv->term_buf_addr,
+                                    TERMINATION_SIZE);
+                if (ret)
+                        return 1;
+        }
 #endif
-	return 0;
+        return 0;
 }
 
 int psb_msvdx_uninit(struct drm_device *dev)

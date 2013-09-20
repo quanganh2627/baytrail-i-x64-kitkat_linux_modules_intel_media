@@ -41,7 +41,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-//#warning FIXME:  add the MMU specialisation defines here (or in hwdefs, perhaps?)
+//#warning 
 
 #ifndef __RGXHEAPCONFIG_H__
 #define __RGXHEAPCONFIG_H__
@@ -97,8 +97,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	#define RGX_FIRMWARE_HEAP_BASE				IMG_UINT64_C(0xE1C0000000)
     #define RGX_FIRMWARE_HEAP_SIZE				IMG_UINT64_C(0x0100000000)
 
-	/* start at 907GiB. Size of 16 GiB */
-    #define RGX_TQ3DPARAMETERS_HEAP_BASE		IMG_UINT64_C(0xE2C0000000)
+	/* Start at 912GiB. Size of 16 GiB. 16GB aligned to match RGX_CR_ISP_PIXEL_BASE */
+    #define RGX_TQ3DPARAMETERS_HEAP_BASE		IMG_UINT64_C(0xE400000000)
     #define RGX_TQ3DPARAMETERS_HEAP_SIZE		IMG_UINT64_C(0x0400000000)
 
 	/* Size of 4 KB */
@@ -107,8 +107,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     #define RGX_HWBRN37200_HEAP_SIZE				IMG_UINT64_C(0x0000001000)
 #endif
 
-	/* start at 923GiB. Size of 4 GiB */
-	#define RGX_DOPPLER_HEAP_BASE				IMG_UINT64_C(0xE6C0000000)
+	/* Start at 928GiB. Size of 4 GiB */
+	#define RGX_DOPPLER_HEAP_BASE				IMG_UINT64_C(0xE800000000)
 	#define RGX_DOPPLER_HEAP_SIZE				IMG_UINT64_C(0x0100000000)
 
 	/* signal we've identified the core by the build */

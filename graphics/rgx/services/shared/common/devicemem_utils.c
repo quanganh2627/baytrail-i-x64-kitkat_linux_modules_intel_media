@@ -287,7 +287,7 @@ PVRSRV_ERROR _DevmemValidateParams(IMG_DEVMEM_SIZE_T uiSize,
     }
 
     /* Verify that size is a positive integer multiple of alignment */
-#if 0 // FIXME
+#if 0 // 
     if (uiSize & (uiAlign-1))
     {
         /* Size not a multiple of alignment */
@@ -645,11 +645,8 @@ IMG_VOID _DevmemImportStructCPUUnmap(DEVMEM_IMPORT *psImport)
 	{
 		OSLockRelease(psCPUImport->hLock);
 
-		/* FIXME: psImport->uiSize is a 64-bit quantity where as the 5th
-		 * argument to OSUnmapPMR is a 32-bit quantity on 32-bit systems
-		 * hence a compiler warning of implicit cast and loss of data.
-		 * Added explicit cast and assert to remove warning.
-		 */
+		/* 
+*/
 #if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
 		PVR_ASSERT(psImport->uiSize<IMG_UINT32_MAX);
 #endif

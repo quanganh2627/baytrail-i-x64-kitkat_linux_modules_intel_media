@@ -22,6 +22,7 @@ ccflags-y += \
 	-I$(RGXINC)/generated/pdumpcmm_bridge \
 	-I$(RGXINC)/generated/dc_bridge \
 	-I$(RGXINC)/generated/cachegeneric_bridge \
+	-I$(RGXINC)/generated/dpvrtl_bridge \
 	-I$(RGXINC)/generated/hostportio_bridge \
 	-I$(RGXINC)/generated/rgxtq_bridge \
 	-I$(RGXINC)/generated/mm_bridge \
@@ -97,7 +98,13 @@ ccflags-y += \
 	-DPVR_ANDROID_HAS_HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED=1 \
 	-DEGL_EXTENSION_ANDROID_FRAMEBUFFER_TARGET=1 \
 	-DPVR_ANDROID_HAS_CORKSCREW_API=1 \
+	-DSUPPORT_GPUTRACE_EVENTS \
+	-DSUPPORT_KERNEL_HWPERF \
+	-DPVRSRV_ENABLE_PROCESS_STATS \
+	-DRGXFW_POWMON_TIMERCTL \
 	$(NULL)
+
+#	-DPVRSRV_ENABLE_FW_TRACE_DEBUGFS \
 
 ccflags-y += \
 	-DCLIENT_DRIVER_DEFAULT_WAIT_RETRIES=50 \
@@ -178,6 +185,7 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/common/handle.o \
 	$(RGXDIR)/services/server/common/handle_generic.o \
 	$(RGXDIR)/services/server/common/physmem.o \
+	$(RGXDIR)/services/server/common/process_stats.o \
 	$(RGXDIR)/services/server/env/linux/allocmem.o \
 	$(RGXDIR)/services/server/env/linux/mm.o \
 	$(RGXDIR)/services/server/env/linux/physmem_osmem_linux.o \
@@ -196,6 +204,8 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/lock.o \
 	$(RGXDIR)/services/server/env/linux/ossecure_export.o \
 	$(RGXDIR)/services/server/env/linux/pdump.o \
+	$(RGXDIR)/services/server/env/linux/pvr_debugfs.o \
+	$(RGXDIR)/services/server/env/linux/pvr_gputrace.o \
 	$(RGXDIR)/services/shared/common/dllist.o \
 	$(RGXDIR)/services/shared/common/devicemem.o \
 	$(RGXDIR)/services/shared/common/hash.o \
@@ -206,7 +216,8 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/common/tlintern.o \
 	$(RGXDIR)/services/server/common/tlstream.o \
 	$(RGXDIR)/services/server/common/tlutils.o \
-	$(RGXDIR)/services/server/common/tlserver.o
+	$(RGXDIR)/services/server/common/tlserver.o \
+	$(RGXDIR)/services/shared/common/tlclient.o
 
 #	$(RGXDIR)/services/server/env/linux/physmem_ion.o
 
@@ -248,15 +259,19 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/devices/rgx/rgxmem.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxccb.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxdebug.o \
-	$(RGXDIR)/services/server/devices/rgx/rgxbreakpoint.o
+	$(RGXDIR)/services/server/devices/rgx/rgxbreakpoint.o \
+	$(RGXDIR)/services/server/devices/rgx/rgxhwperf.o
 
 # For devfreq
 $(DRIVER_NAME)-y += \
-	$(RGXDIR)/services/server/devices/rgx/rgxdf.o
+	$(RGXDIR)/services/server/devices/rgx/rgxdf.o \
+	$(RGXDIR)/services/server/devices/rgx/dfrgx_utilstats.o \
+	$(RGXDIR)/services/server/devices/rgx/dfrgx_interface.o
 
 $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/cmm_bridge/server_cmm_bridge.o \
 	$(RGXDIR)/generated/dc_bridge/server_dc_bridge.o \
+	$(RGXDIR)/generated/dpvrtl_bridge/client_pvrtl_bridge.o \
 	$(RGXDIR)/generated/pdump_bridge/server_pdump_bridge.o \
 	$(RGXDIR)/generated/syncexport_bridge/server_syncexport_bridge.o \
 	$(RGXDIR)/generated/srvcore_bridge/server_srvcore_bridge.o \

@@ -955,12 +955,12 @@ DevmemDestroyHeap(DEVMEM_HEAP *psHeap)
  *****************************************************************************/
 
 IMG_INTERNAL PVRSRV_ERROR
-DevmemAllocateEx(DEVMEM_HEAP *psHeap,
-                 IMG_DEVMEM_SIZE_T uiSize,
-                 IMG_DEVMEM_ALIGN_T uiAlign,
-                 DEVMEM_FLAGS_T uiFlags,
-                 DEVMEM_MEMDESC **ppsMemDescPtr,
-                 IMG_PCHAR pszText)
+DevmemAllocate(DEVMEM_HEAP *psHeap,
+               IMG_DEVMEM_SIZE_T uiSize,
+               IMG_DEVMEM_ALIGN_T uiAlign,
+               DEVMEM_FLAGS_T uiFlags,
+               IMG_PCHAR pszText,
+			   DEVMEM_MEMDESC **ppsMemDescPtr)
 {
     IMG_BOOL bStatus; /* eError for RA */
     RA_BASE_T uiAllocatedAddr;
@@ -1045,11 +1045,8 @@ DevmemAllocateEx(DEVMEM_HEAP *psHeap,
 			goto failZero;
 		}
 
-		/* FIXME: uiSize is a 64-bit quantity whereas the 3rd argument
-		 * to OSMemSet is a 32-bit quantity on 32-bit systems
-		 * hence a compiler warning of implicit cast and loss of data.
-		 * Added explicit cast and assert to remove warning.
-		 */
+		/* 
+*/
 #if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
 		PVR_ASSERT(uiSize<IMG_UINT32_MAX);
 #endif
@@ -1100,13 +1097,13 @@ failParams:
 
 
 IMG_INTERNAL PVRSRV_ERROR
-DevmemAllocateExportableEx(IMG_HANDLE hBridge,
-						   IMG_HANDLE hDeviceNode,
-						   IMG_DEVMEM_SIZE_T uiSize,
-						   IMG_DEVMEM_ALIGN_T uiAlign,
-						   DEVMEM_FLAGS_T uiFlags,
-						   DEVMEM_MEMDESC **ppsMemDescPtr,
-						   IMG_CHAR *pszText)
+DevmemAllocateExportable(IMG_HANDLE hBridge,
+						 IMG_HANDLE hDeviceNode,
+						 IMG_DEVMEM_SIZE_T uiSize,
+						 IMG_DEVMEM_ALIGN_T uiAlign,
+						 DEVMEM_FLAGS_T uiFlags,
+						 IMG_PCHAR pszText,
+						 DEVMEM_MEMDESC **ppsMemDescPtr)
 {
     PVRSRV_ERROR eError;
     DEVMEM_MEMDESC *psMemDesc = IMG_NULL;
@@ -1205,6 +1202,7 @@ DevmemAllocateSparse(IMG_HANDLE hBridge,
 					 IMG_BOOL *pabMappingTable,
 					 IMG_DEVMEM_ALIGN_T uiAlign,
 					 DEVMEM_FLAGS_T uiFlags,
+					 IMG_PCHAR pszText,
 					 DEVMEM_MEMDESC **ppsMemDescPtr)
 {
     PVRSRV_ERROR eError;
@@ -1256,7 +1254,27 @@ DevmemAllocateSparse(IMG_HANDLE hBridge,
 					   0,
 					   psImport);
 
-    *ppsMemDescPtr = psMemDesc;
+#if defined(PVR_RI_DEBUG)
+	{
+		IMG_HANDLE hHandle = IMG_NULL;
+
+		/* Attach RI information */
+		eError = BridgeRIWriteMEMDESCEntry (psMemDesc->psImport->hBridge,
+											psMemDesc->psImport->hPMR,
+											pszText,
+											psMemDesc->uiOffset,
+											psMemDesc->uiOffset,
+											uiSize,
+											IMG_FALSE,
+											&hHandle);
+		psMemDesc->hRIHandle = hHandle;
+
+	}
+#else  /* if defined(PVR_RI_DEBUG) */
+	PVR_UNREFERENCED_PARAMETER (pszText);
+#endif /* if defined(PVR_RI_DEBUG) */
+
+	*ppsMemDescPtr = psMemDesc;
 
     return PVRSRV_OK;
 
@@ -1375,11 +1393,11 @@ DevmemUnexport(DEVMEM_MEMDESC *psMemDesc,
 }
 
 IMG_INTERNAL PVRSRV_ERROR
-DevmemImportEx(IMG_HANDLE hBridge,
-			   DEVMEM_EXPORTCOOKIE *psCookie,
-			   DEVMEM_FLAGS_T uiFlags,
-			   DEVMEM_MEMDESC **ppsMemDescPtr,
-			   IMG_CHAR *pszText)
+DevmemImport(IMG_HANDLE hBridge,
+			 DEVMEM_EXPORTCOOKIE *psCookie,
+			 DEVMEM_FLAGS_T uiFlags,
+			 IMG_CHAR *pszText,
+			 DEVMEM_MEMDESC **ppsMemDescPtr)
 {
     DEVMEM_MEMDESC *psMemDesc = IMG_NULL;
     DEVMEM_IMPORT *psImport;
@@ -1439,8 +1457,8 @@ DevmemImportEx(IMG_HANDLE hBridge,
 		/* Attach RI information */
 		eError = BridgeRIWriteMEMDESCEntry (psMemDesc->psImport->hBridge,
 											psMemDesc->psImport->hPMR,
-											pszText, //"DevmemImport",
-											psMemDesc->uiOffset,//psMemDesc->uiAllocatedAddr,
+											pszText,
+											psMemDesc->uiOffset,
 											psMemDesc->uiOffset,
 											psMemDesc->psImport->uiSize,
 											IMG_TRUE,
@@ -1592,7 +1610,6 @@ IMG_INTERNAL IMG_VOID
 DevmemReleaseDevVirtAddr(DEVMEM_MEMDESC *psMemDesc)
 {
 	PVR_ASSERT(psMemDesc != IMG_NULL);
-	PVR_ASSERT(psMemDesc->sDeviceMemDesc.ui32RefCount != 0);
 
 	OSLockAcquire(psMemDesc->sDeviceMemDesc.hLock);
 	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
@@ -1600,6 +1617,8 @@ DevmemReleaseDevVirtAddr(DEVMEM_MEMDESC *psMemDesc)
 					psMemDesc,
 					psMemDesc->sDeviceMemDesc.ui32RefCount,
 					psMemDesc->sDeviceMemDesc.ui32RefCount-1);
+
+	PVR_ASSERT(psMemDesc->sDeviceMemDesc.ui32RefCount != 0);
 
 	if (--psMemDesc->sDeviceMemDesc.ui32RefCount == 0)
 	{
@@ -1672,7 +1691,6 @@ IMG_INTERNAL IMG_VOID
 DevmemReleaseCpuVirtAddr(DEVMEM_MEMDESC *psMemDesc)
 {
 	PVR_ASSERT(psMemDesc != IMG_NULL);
-	PVR_ASSERT(psMemDesc->sCPUMemDesc.ui32RefCount != 0);
 
 	OSLockAcquire(psMemDesc->sCPUMemDesc.hLock);
 	DEVMEM_REFCOUNT_PRINT("%s (%p) %d->%d",
@@ -1680,6 +1698,8 @@ DevmemReleaseCpuVirtAddr(DEVMEM_MEMDESC *psMemDesc)
 					psMemDesc,
 					psMemDesc->sCPUMemDesc.ui32RefCount,
 					psMemDesc->sCPUMemDesc.ui32RefCount-1);
+
+	PVR_ASSERT(psMemDesc->sCPUMemDesc.ui32RefCount != 0);
 
 	if (--psMemDesc->sCPUMemDesc.ui32RefCount == 0)
 	{

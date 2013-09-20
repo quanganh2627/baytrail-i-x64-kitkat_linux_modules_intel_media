@@ -226,10 +226,6 @@ struct _RA_ARENA_
 
 	/* Lock for this arena */
 	POS_LOCK hLock;
-
-#ifdef RA_STATS
-	RA_STATISTICS sStatistics;
-#endif
 };
 /* #define ENABLE_RA_DUMP	1 */
 #if defined(ENABLE_RA_DUMP)
@@ -701,11 +697,6 @@ _InsertResource (RA_ARENA *pArena,
 			return IMG_NULL;
 		}
 		_FreeListInsert (pArena, pBT);
-#ifdef RA_STATS
-		pArena->sStatistics.uTotalResourceCount+= (IMG_SIZE_T) uSize;
-		pArena->sStatistics.uFreeResourceCount+= (IMG_SIZE_T) uSize;
-		pArena->sStatistics.uSpanCount++;
-#endif
 	}
 	return pBT;
 }
@@ -792,14 +783,6 @@ _InsertResourceSpan (RA_ARENA *pArena,
 		goto fail_SegListInsert;
 	}
 
-#ifdef RA_STATS
-	pArena->sStatistics.uTotalResourceCount+=(IMG_SIZE_T)uSize;
-/*	pArena->sStatistics.uFreeResourceCount+=uSize;
-	This has got to be wrong as uFreeResourceCount ends
-	up larger than uTotalResourceCount by uTotalResourceCount
-	- allocated memory
-*/
-#endif
 	return pBT;
 
   fail_SegListInsert:
@@ -841,13 +824,6 @@ _RemoveResourceSpan (RA_ARENA *pArena, BT *pBT)
 		_SegmentListRemove (pArena, prev);
 		_SegmentListRemove (pArena, pBT);
 		pArena->pImportFree (pArena->pImportHandle, pBT->base, pBT->hPriv);
-#ifdef RA_STATS
-		pArena->sStatistics.uSpanCount--;
-		pArena->sStatistics.uExportCount++;
-		pArena->sStatistics.uFreeSegmentCount--;
-		pArena->sStatistics.uFreeResourceCount-=(IMG_SIZE_T)pBT->uSize;
-		pArena->sStatistics.uTotalResourceCount-=(IMG_SIZE_T)pBT->uSize;
-#endif
 		OSFreeMem(next);
 		/*not nulling original pointer, already overwritten*/
 		OSFreeMem(prev);
@@ -883,12 +859,6 @@ _FreeBT (RA_ARENA *pArena, BT *pBT)
 		return;
 	}
 
-#ifdef RA_STATS
-	pArena->sStatistics.uLiveSegmentCount--;
-	pArena->sStatistics.uFreeSegmentCount++;
-	pArena->sStatistics.uFreeResourceCount+=(IMG_SIZE_T)pBT->uSize;
-#endif
-
 	/* try and coalesce with left neighbour */
 	pNeighbour = pBT->pPrevSegment;
 	if (pNeighbour!=IMG_NULL
@@ -901,9 +871,6 @@ _FreeBT (RA_ARENA *pArena, BT *pBT)
 		pBT->uSize += pNeighbour->uSize;
         OSFreeMem(pNeighbour);
 		/*not nulling original pointer, already overwritten*/
-#ifdef RA_STATS
-		pArena->sStatistics.uFreeSegmentCount--;
-#endif
 	}
 
 	/* try to coalesce with right neighbour */
@@ -917,9 +884,6 @@ _FreeBT (RA_ARENA *pArena, BT *pBT)
 		pBT->uSize += pNeighbour->uSize;
 		OSFreeMem(pNeighbour);
 		/*not nulling original pointer, already overwritten*/
-#ifdef RA_STATS
-		pArena->sStatistics.uFreeSegmentCount--;
-#endif
 	}
 
 	if (_RemoveResourceSpan(pArena, pBT) == IMG_FALSE)
@@ -949,7 +913,7 @@ _AttemptAllocAligned (RA_ARENA *pArena,
 					  IMG_UINT32 uFlags,
 					  RA_LENGTH_T uAlignment,
 					  RA_BASE_T *base,
-                      RA_PERISPAN_HANDLE *phPriv) // is this the "per-import" private data? FIXME: check
+                      RA_PERISPAN_HANDLE *phPriv) // is this the "per-import" private data? 
 {
 	IMG_UINT32 uIndex;
 	PVR_ASSERT (pArena!=IMG_NULL);
@@ -1000,20 +964,13 @@ _AttemptAllocAligned (RA_ARENA *pArena,
 
 				if (pBT->base + pBT->uSize >= aligned_base + uSize)
 				{
-                    /* FIXME: do we need a "bCheckFlags"?  I think it's
-                       ok to say that caller would just supply 0 for
-                       such RAs, and 0 == 0, so all is good */
+                    /* 
+*/
 					if(/*!pArena->bCheckFlags ||*/ pBT->uFlags == uFlags)
 					{
 						_FreeListRemove (pArena, pBT);
 
 						PVR_ASSERT (pBT->type == btt_free);
-
-#ifdef RA_STATS
-						pArena->sStatistics.uLiveSegmentCount++;
-						pArena->sStatistics.uFreeSegmentCount--;
-						pArena->sStatistics.uFreeResourceCount-=(IMG_SIZE_T)pBT->uSize;
-#endif
 
 						/* with uAlignment we might need to discard the front of this segment */
 						if (aligned_base > pBT->base)
@@ -1030,10 +987,6 @@ _AttemptAllocAligned (RA_ARENA *pArena,
 							}
 
 							_FreeListInsert (pArena, pBT);
-	#ifdef RA_STATS
-							pArena->sStatistics.uFreeSegmentCount++;
-							pArena->sStatistics.uFreeResourceCount+=(IMG_SIZE_T)pBT->uSize;
-	#endif
 							pBT = pNeighbour;
 						}
 
@@ -1052,10 +1005,6 @@ _AttemptAllocAligned (RA_ARENA *pArena,
 							}
 
 							_FreeListInsert (pArena, pNeighbour);
-	#ifdef RA_STATS
-							pArena->sStatistics.uFreeSegmentCount++;
-							pArena->sStatistics.uFreeResourceCount+=(IMG_SIZE_T)pNeighbour->uSize;
-	#endif
 						}
 
 						pBT->type = btt_live;
@@ -1169,18 +1118,6 @@ RA_Create (IMG_CHAR *name,
 	pArena->uQuantum = (IMG_UINT64) (1 << uLog2Quantum);
     pArena->pfnPreAllocCheck = IMG_NULL;
 
-#ifdef RA_STATS
-	pArena->sStatistics.uSpanCount = 0;
-	pArena->sStatistics.uLiveSegmentCount = 0;
-	pArena->sStatistics.uFreeSegmentCount = 0;
-	pArena->sStatistics.uFreeResourceCount = 0;
-	pArena->sStatistics.uTotalResourceCount = 0;
-	pArena->sStatistics.uCumulativeAllocs = 0;
-	pArena->sStatistics.uCumulativeFrees = 0;
-	pArena->sStatistics.uImportCount = 0;
-	pArena->sStatistics.uExportCount = 0;
-#endif
-
 	pArena->pSegmentHash = HASH_Create_Extended(MINIMUM_HASH_SIZE, sizeof(RA_BASE_T), HASH_Func_Default, HASH_Key_Comp_Default);
 
 	if (pArena->pSegmentHash==IMG_NULL)
@@ -1250,9 +1187,6 @@ RA_Delete (RA_ARENA *pArena)
 		_SegmentListRemove (pArena, pBT);
 		OSFreeMem(pBT);
 		/*not nulling original pointer, it has changed*/
-#ifdef RA_STATS
-		pArena->sStatistics.uSpanCount--;
-#endif
 	}
 	HASH_Delete (pArena->pSegmentHash);
 	OSLockDestroy(pArena->hLock);
@@ -1336,7 +1270,7 @@ RA_Alloc (RA_ARENA *pArena,
 
     if (pArena->pfnPreAllocCheck)
     {
-        pArena->pfnPreAllocCheck(); // FIXME: per-RA private data?
+        pArena->pfnPreAllocCheck(); // 
     }
 
 	if (pActualSize != IMG_NULL)
@@ -1398,13 +1332,6 @@ RA_Alloc (RA_ARENA *pArena,
 
             pBT->hPriv = hPriv;
 
-#ifdef RA_STATS
-			pArena->sStatistics.uFreeSegmentCount++;
-			pArena->sStatistics.uFreeResourceCount += (IMG_SIZE_T)uImportSize;
-			pArena->sStatistics.uImportCount++;
-			pArena->sStatistics.uSpanCount++;
-#endif
-
 			bResult = _AttemptAllocAligned(pArena, uSize, uFlags, uAlignment, base, phPriv);
 			if (!bResult)
 			{
@@ -1448,10 +1375,6 @@ RA_Alloc (RA_ARENA *pArena,
 			}
 		}
 	}
-#ifdef RA_STATS
-	if (bResult)
-		pArena->sStatistics.uCumulativeAllocs++;
-#endif
 
 	PVR_DPF ((PVR_DBG_MESSAGE, "RA_Alloc: name='%s', size=" RA_LENGTH_FMTSPEC ", "
               "*base=" RA_BASE_FMTSPEC " = %d",pArena->name, uSize, *base, bResult));
@@ -1648,9 +1571,6 @@ RA_Free (RA_ARENA *pArena, RA_BASE_T base)
 	}
 
 	OSLockAcquire(pArena->hLock);
-#ifdef USE_BM_FREESPACE_CHECK
-	CheckBMFreespace();
-#endif
 
 	PVR_DPF ((PVR_DBG_MESSAGE, "RA_Free: name='%s', base=" RA_BASE_FMTSPEC, pArena->name, base));
 
@@ -1660,85 +1580,12 @@ RA_Free (RA_ARENA *pArena, RA_BASE_T base)
 	if (pBT)
 	{
 		PVR_ASSERT (pBT->base == base);
-
-#ifdef RA_STATS
-		pArena->sStatistics.uCumulativeFrees++;
-#endif
-
-#ifdef USE_BM_FREESPACE_CHECK
-{
-	IMG_BYTE* p;
-	IMG_BYTE* endp;
-
-	p = (IMG_BYTE*)pBT->base + SysGetDevicePhysOffset();
-	endp = (IMG_BYTE*)((IMG_UINT32)(p + pBT->uSize));
-	while ((IMG_UINT32)p & 3)
-	{
-		*p++ = 0xAA;
-	}
-	while (p < (IMG_BYTE*)((IMG_UINT32)endp & 0xfffffffc))
-	{
-		*(IMG_UINT32*)p = 0xAAAAAAAA;
-		p += sizeof(IMG_UINT32);
-	}
-	while (p < endp)
-	{
-		*p++ = 0xAA;
-	}
-	PVR_DPF((PVR_DBG_MESSAGE,"BM_FREESPACE_CHECK: RA_Free Cleared %08X to %08X (size=0x%x)",(IMG_BYTE*)pBT->base + SysGetDevicePhysOffset(),endp-1,pBT->uSize));
-}
-#endif
 		_FreeBT (pArena, pBT);
 	}
 	OSLockRelease(pArena->hLock);
 }
 
-
-#ifdef USE_BM_FREESPACE_CHECK
-RA_ARENA* pJFSavedArena = IMG_NULL;
-
-IMG_VOID CheckBMFreespace(IMG_VOID)
-{
-	BT *pBT;
-	IMG_BYTE* p;
-	IMG_BYTE* endp;
-
-	if (pJFSavedArena != IMG_NULL)
-	{
-		for (pBT=pJFSavedArena->pHeadSegment; pBT!=IMG_NULL; pBT=pBT->pNextSegment)
-		{
-			if (pBT->type == btt_free)
-			{
-				p = (IMG_BYTE*)pBT->base + SysGetDevicePhysOffset();
-				endp = (IMG_BYTE*)((IMG_UINT32)(p + pBT->uSize) & 0xfffffffc);
-
-				while ((IMG_UINT32)p & 3)
-				{
-					if (*p++ != 0xAA)
-					{
-						fprintf(stderr,"BM_FREESPACE_CHECK: Blank space at %08X has changed to 0x%x\n",p,*(IMG_UINT32*)p);
-						for (;;);
-						break;
-					}
-				}
-				while (p < endp)
-				{
-					if (*(IMG_UINT32*)p != 0xAAAAAAAA)
-					{
-						fprintf(stderr,"BM_FREESPACE_CHECK: Blank space at %08X has changed to 0x%x\n",p,*(IMG_UINT32*)p);
-						for (;;);
-						break;
-					}
-					p += 4;
-				}
-			}
-		}
-	}
-}
-#endif
-
-
-#if (defined(CONFIG_PROC_FS) && defined(DEBUG)) || defined (RA_STATS)
+#if defined(ENABLE_RA_DUMP)
 static IMG_CHAR *
 _BTType (IMG_INT eType)
 {
@@ -1750,9 +1597,7 @@ _BTType (IMG_INT eType)
 	}
 	return "junk";
 }
-#endif /*defined(CONFIG_PROC_FS) && defined(DEBUG) && defined(FIXME_PERPROC)*/
 
-#if defined(ENABLE_RA_DUMP)
 /*************************************************************************/ /*!
 @Function       RA_Dump
 @Description    To dump a readable description of an arena. Diagnostic only.
@@ -1790,139 +1635,6 @@ RA_Dump (RA_ARENA *pArena)
 	OSLockRelease(pArena->hLock);
 }
 #endif /* #if defined(ENABLE_RA_DUMP) */
-
-
-#ifdef RA_STATS
-/*************************************************************************/ /*!
-@Function       RA_GetStats
-@Description    Gets the arena stats and places in client buffer
-@Input          pArena       The arena to print statistics for.
-@Input          ppszStr      Caller string to fill
-@Input          pui32StrLen  Length of caller string
-@Return         PVRSRV_ERROR
-*/ /**************************************************************************/
-IMG_INTERNAL
-PVRSRV_ERROR RA_GetStats(RA_ARENA *pArena,
-							IMG_CHAR **ppszStr,
-							IMG_UINT32 *pui32StrLen)
-{
-	IMG_CHAR 	*pszStr = *ppszStr;
-	IMG_UINT32 	ui32StrLen = *pui32StrLen;
-	IMG_INT32	i32Count;
-	BT 			*pBT;
-
-	OSLockAcquire(pArena->hLock);
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "\nArena '%s':\n", pArena->name);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "  allocCB=%p freeCB=%p handle=%p quantum=%lld\n",
-							 pArena->pImportAlloc,
-							 pArena->pImportFree,
-							 pArena->pImportHandle,
-							 pArena->uQuantum);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "span count\t\t" IMG_SIZE_FMTSPEC "\n",
-						  pArena->sStatistics.uSpanCount);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "live segment count\t" IMG_SIZE_FMTSPEC "\n",
-						  pArena->sStatistics.uLiveSegmentCount);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "free segment count\t" IMG_SIZE_FMTSPEC "\n",
-						  pArena->sStatistics.uFreeSegmentCount);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "free resource count\t" IMG_SIZE_FMTSPEC "\n",
-						  pArena->sStatistics.uFreeResourceCount);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "total allocs\t\t" IMG_SIZE_FMTSPEC "\n",
-						  pArena->sStatistics.uCumulativeAllocs);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "total frees\t\t" IMG_SIZE_FMTSPEC "\n",
-						  pArena->sStatistics.uCumulativeFrees);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "import count\t\t" IMG_SIZE_FMTSPEC "\n",
-						  pArena->sStatistics.uImportCount);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "export count\t\t" IMG_SIZE_FMTSPEC "\n",
-						  pArena->sStatistics.uExportCount);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "  segment Chain:\n");
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-
-	if (pArena->pHeadSegment != IMG_NULL &&
-	    pArena->pHeadSegment->pPrevSegment != IMG_NULL)
-	{
-		CHECK_SPACE(ui32StrLen);
-		i32Count = OSSNPrintf(pszStr, 100, "  error: head boundary tag has invalid pPrevSegment\n");
-		UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-	}
-
-	if (pArena->pTailSegment != IMG_NULL &&
-	    pArena->pTailSegment->pNextSegment != IMG_NULL)
-	{
-		CHECK_SPACE(ui32StrLen);
-		i32Count = OSSNPrintf(pszStr, 100, "  error: tail boundary tag has invalid pNextSegment\n");
-		UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-	}
-
-	for (pBT=pArena->pHeadSegment; pBT!=IMG_NULL; pBT=pBT->pNextSegment)
-	{
-		CHECK_SPACE(ui32StrLen);
-		i32Count = OSSNPrintf(pszStr, 100, "\tbase=" RA_BASE_FMTSPEC " size=" RA_LENGTH_FMTSPEC " type=%s ref=%p\n",
-											 pBT->base,
-											 pBT->uSize,
-											 _BTType(pBT->type),
-											 pBT->hPriv);
-		UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-	}
-
-	*ppszStr = pszStr;
-	*pui32StrLen = ui32StrLen;
-
-	OSLockRelease(pArena->hLock);
-	return PVRSRV_OK;
-}
-
-IMG_INTERNAL
-PVRSRV_ERROR RA_GetStatsFreeMem(RA_ARENA *pArena,
-								IMG_CHAR **ppszStr, 
-								IMG_UINT32 *pui32StrLen)
-{
-	IMG_CHAR 	*pszStr = *ppszStr;
-	IMG_UINT32 	ui32StrLen = *pui32StrLen;
-	IMG_INT32	i32Count;
-	CHECK_SPACE(ui32StrLen);
-	i32Count = OSSNPrintf(pszStr, 100, "Bytes free: Arena %-30s: "
-						  IMG_SIZE_FMTSPEC "\n",
-						  pArena->name,
-						  pArena->sStatistics.uFreeResourceCount);
-	UPDATE_SPACE(pszStr, i32Count, ui32StrLen);
-	*ppszStr = pszStr;
-	*pui32StrLen = ui32StrLen;
-	
-	return PVRSRV_OK;
-}
-#endif
 
 /******************************************************************************
  End of file (ra.c)

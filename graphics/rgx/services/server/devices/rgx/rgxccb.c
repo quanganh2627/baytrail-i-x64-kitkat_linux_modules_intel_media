@@ -85,7 +85,7 @@ static PVRSRV_ERROR _RGXCCBPDumpTransition(IMG_PVOID *pvData, IMG_BOOL bInto, IM
 		PVRSRV_ERROR eError;
 
 		/*
-			Wait for the FW to catchup (retry will get pushed back out services
+			Wait for the FW to catch up (retry will get pushed back out services
 			client where we wait on the event object and try again later)
 		*/
 		if (psClientCCB->psClientCCBCtrl->ui32ReadOffset != psClientCCB->ui32HostWriteOffset)
@@ -94,35 +94,43 @@ static PVRSRV_ERROR _RGXCCBPDumpTransition(IMG_PVOID *pvData, IMG_BOOL bInto, IM
 		}
 
 		/*
-			If new command(s) have been written out of cpature range then drain
-			the previous set of operations.
+			We drain whenever capture range is entered. Even if no commands
+			have been issued while where out of capture range we have to wait for
+			operations that we might have issued in the last capture range
+			to finish so the sync prim update that will happen after all the
+			PDumpTransition callbacks have been called doesn't clobber syncs
+			which the FW is currently working on.
+			Although this is suboptimal, while out of capture range for every
+			persistant operation we serialise the PDump script processing and
+			the FW, there is no easy solution.
+			Not all modules that work on syncs register a PDumpTransition and
+			thus we have no way of knowing if we can skip drain and the sync
+			prim dump or not.
+		*/
+		PDUMPCOMMENTWITHFLAGS(ui32PDumpFlags,
+							  "cCCB(%s@%p): Draining rgxfw_roff == woff (%d)",
+							  psClientCCB->szName,
+							  psClientCCB,
+							  psClientCCB->ui32LastPDumpWriteOffset);
+
+		eError = DevmemPDumpDevmemPol32(psClientCCB->psClientCCBCtrlMemDesc,
+										offsetof(RGXFWIF_CCCB_CTL, ui32ReadOffset),
+										psClientCCB->ui32LastPDumpWriteOffset,
+										0xffffffff,
+										PDUMP_POLL_OPERATOR_EQUAL,
+										ui32PDumpFlags);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_WARNING, "_RGXCCBPDumpTransition: problem pdumping POL for cCCBCtl (%d)", eError));
+		}
+		PVR_ASSERT(eError == PVRSRV_OK);
+
+		/*
+			If new command(s) have been written out of capture range then we
+			need to fast forward past uncaptured operations.
 		*/
 		if (psClientCCB->ui32LastPDumpWriteOffset != psClientCCB->ui32HostWriteOffset)
 		{
-			/*
-				Drain all the previous commands from the last capture range
-				before we Transition into the new capture range so when we
-				fastforward the commands that aren't PDumped we don't skip
-				comands we should be running
-			*/
-			PDUMPCOMMENTWITHFLAGS(ui32PDumpFlags,
-								  "cCCB(%s@%p): Draining rgxfw_roff == woff (%d)",
-								  psClientCCB->szName,
-								  psClientCCB,
-								  psClientCCB->ui32LastPDumpWriteOffset);
-
-			eError = DevmemPDumpDevmemPol32(psClientCCB->psClientCCBCtrlMemDesc,
-											offsetof(RGXFWIF_CCCB_CTL, ui32ReadOffset),
-											psClientCCB->ui32LastPDumpWriteOffset,
-											0xffffffff,
-											PDUMP_POLL_OPERATOR_EQUAL,
-											ui32PDumpFlags);
-			if (eError != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_WARNING, "RGXReleaseCCB: problem pdumping POL for cCCBCtl (%d)", eError));
-			}
-			PVR_ASSERT(eError == PVRSRV_OK);
-
 			/*
 				There are commands that where not captured so after the
 				simulation drain (above) we also need to fast-forward pass
@@ -144,6 +152,14 @@ static PVRSRV_ERROR _RGXCCBPDumpTransition(IMG_PVOID *pvData, IMG_BOOL bInto, IM
 							   0,
 							   sizeof(RGXFWIF_CCCB_CTL),
 							   ui32PDumpFlags);
+							   
+			/*
+				Although we've entered capture range we might not do any work
+				on this CCB so update the ui32LastPDumpWriteOffset to reflect
+				where we got to for next so we start the drain from where we
+				got to last time
+			*/
+			psClientCCB->ui32LastPDumpWriteOffset = psClientCCB->ui32HostWriteOffset;
 		}
 	}
 	return PVRSRV_OK;
@@ -181,8 +197,8 @@ PVRSRV_ERROR RGXCreateCCB(PVRSRV_DEVICE_NODE	*psDeviceNode,
 								PVRSRV_MEMALLOCFLAG_GPU_READABLE |
 								PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
 								PVRSRV_MEMALLOCFLAG_CPU_READABLE |
-								/* FIXME: Client CCB Ctl should be read-only for the CPU 
-									(it is not because for now we initialize it from the host) */
+								/* 
+*/
 								PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE | 
 								PVRSRV_MEMALLOCFLAG_UNCACHED |
 								PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC |
@@ -360,7 +376,7 @@ IMG_INTERNAL PVRSRV_ERROR RGXAcquireCCB(RGX_CLIENT_CCB *psClientCCB,
 	/*
 		PDumpSetFrame will detect as we Transition into capture range for
 		frame based data but if we are PDumping continuous data then we
-		need to inform the PDump layer ourselfs
+		need to inform the PDump layer ourselves
 	*/
 	if (bPDumpContinuous && !bInCaptureRange)
 	{
@@ -466,7 +482,7 @@ IMG_INTERNAL IMG_VOID RGXReleaseCCB(RGX_CLIENT_CCB *psClientCCB,
 	/*
 		PDumpSetFrame will detect as we Transition out of capture range for
 		frame based data but if we are PDumping continuous data then we
-		need to inform the PDump layer ourselfs
+		need to inform the PDump layer ourselves
 	*/
 	if (bPDumpContinuous && !bInCaptureRange)
 	{
@@ -529,6 +545,7 @@ static IMG_VOID _RGXClientCCBDumpCommands(RGX_CLIENT_CCB *psClientCCB,
 			CHECK_COMMAND(NULL, IMG_FALSE);
 			CHECK_COMMAND(SHG, IMG_FALSE);
 			CHECK_COMMAND(RTU, IMG_FALSE);
+			CHECK_COMMAND(RTU_FC, IMG_FALSE);
 			CHECK_COMMAND(FENCE, IMG_TRUE);
 			CHECK_COMMAND(UPDATE, IMG_TRUE);
 			CHECK_COMMAND(FENCE_PR, IMG_TRUE);
@@ -641,7 +658,7 @@ PVRSRV_ERROR RGXCmdHelperInitCmdCCB(RGX_CLIENT_CCB 			*psClientCCB,
 	psCmdHelperData->pui8DMCmd = pui8DMCmd;
 	psCmdHelperData->eType = eType;
 
-	/* Init the generated data memembers */
+/* Init the generated data members */
 	psCmdHelperData->ui32ServerFenceCount = 0;
 	psCmdHelperData->ui32ServerUpdateCount = 0;
 
@@ -675,7 +692,7 @@ PVRSRV_ERROR RGXCmdHelperInitCmdCCB(RGX_CLIENT_CCB 			*psClientCCB,
 	psCmdHelperData->ui32DMCmdSize = RGX_CCB_FWALLOC_ALIGN(ui32CmdSize +
 														   sizeof(RGXFWIF_CCB_CMD_HEADER));
 
-	/* Total fence command size (header plus command data) */
+	/* Total update command size (header plus command data) */
 	ui32UpdateCount = ui32ClientUpdateCount + psCmdHelperData->ui32ServerUpdateCount;
 	if (ui32UpdateCount)
 	{
@@ -900,7 +917,7 @@ IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
 			/*
 				As server syncs always fence (we have a check in RGXCmcdHelperInitCmdCCB
 				which ensures the client is playing ball) the filling in of the fence
-				is unconditational.
+				is unconditional.
 			*/
 			if (bFence)
 			{
@@ -970,6 +987,23 @@ IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
 				  asCmdHelperData[0].bPDumpContinuous);
 }
 
+IMG_UINT32 RGXCmdHelperGetCommandSize(IMG_UINT32 ui32CmdCount,
+								   RGX_CCB_CMD_HELPER_DATA *asCmdHelperData)
+{
+	IMG_UINT32 ui32AllocSize = 0;
+	IMG_UINT32 i;
+
+	/*
+		Workout how much space we need for all the command(s)
+	*/
+	for (i=0;i<ui32CmdCount;i++)
+	{
+		ui32AllocSize += asCmdHelperData[i].ui32FenceCmdSize +
+						 asCmdHelperData[i].ui32DMCmdSize +
+						 asCmdHelperData[i].ui32UpdateCmdSize;
+	}
+	return ui32AllocSize;
+}
 
 /******************************************************************************
  End of file (rgxccb.c)

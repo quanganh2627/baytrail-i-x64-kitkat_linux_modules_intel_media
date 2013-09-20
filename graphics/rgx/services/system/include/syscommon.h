@@ -124,6 +124,31 @@ static inline IMG_VOID SysWriteHWReg(IMG_PVOID pvLinRegBaseAddr, IMG_UINT32 ui32
 }
 #endif	/* !(defined(NO_HARDWARE) && defined(__linux__)) */
 
+/*!
+******************************************************************************
+
+ @Function		SysCheckMemAllocSize
+
+ @Description	Function to apply memory budgeting policies
+
+ @input			psDevNode
+
+ @input			uiChunkSize
+
+ @input			ui32NumPhysChunks
+
+ @Return		PVRSRV_ERROR
+
+******************************************************************************/
+FORCE_INLINE PVRSRV_ERROR SysCheckMemAllocSize(struct _PVRSRV_DEVICE_NODE_ *psDevNode,
+												IMG_UINT64 ui64MemSize)
+{
+	PVR_UNREFERENCED_PARAMETER(psDevNode);
+	PVR_UNREFERENCED_PARAMETER(ui64MemSize);
+
+	return PVRSRV_OK;
+}
+
 #if defined(__cplusplus)
 }
 #endif

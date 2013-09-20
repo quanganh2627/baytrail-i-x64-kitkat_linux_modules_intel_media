@@ -3,7 +3,7 @@
 @Title          Transport Layer kernel side API.
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @Description    TL provides driver components with a way to copy data from kernel
-                space to user space (eg screen/file). 
+                space to user space (e.g. screen/file).
 
                 Data can be passed to the Transport Layer through the 
                 TL Stream (kernel space) API interface.
@@ -21,7 +21,7 @@
                   until enough space is freed.
 
                 All size/space requests are in bytes. However, the actual
-                implementation uses native word sizes (ie 4 byte aligned).
+                implementation uses native word sizes (i.e. 4 byte aligned).
 
                 The user does not need to provide space for the stream buffer 
                 as the TL handles memory allocations and usage.
@@ -98,7 +98,7 @@ extern "C" {
  * it chooses. */
 #define TL_FLAG_NO_SIGNAL_ON_COMMIT    (1U<<3)
 
-/*! Struct used to pass internal TL stream sizes information to users.*/
+/*! Structure used to pass internal TL stream sizes information to users.*/
 typedef struct _TL_STREAM_INFO_
 {
     IMG_UINT32 headerSize;          /*!< Packet header size in bytes */
@@ -106,6 +106,20 @@ typedef struct _TL_STREAM_INFO_
     IMG_UINT32 pageSize;            /*!< Page size in bytes */
     IMG_UINT32 pageAlign;           /*!< Page alignment in bytes */
 } TL_STREAM_INFO, *PTL_STREAM_INFO;
+
+/*! Callback operations or notifications that a stream producer may handle
+ * when requested by the Transport Layer.
+ */
+#define TL_SOURCECB_OP_CLIENT_EOS 0x01  /*!< Client has reached end of stream,
+                                         * can anymore data be supplied?
+                                         * ui32Resp ignored in this operation */
+
+/*! Function pointer type for the callback handler into the "producer" code
+ * that writes data to the TL stream.  Producer should handle the notification
+ * or operation supplied in ui32ReqOp on stream hStream. The
+ * Operations and notifications are defined above in TL_SOURCECB_OP */
+typedef PVRSRV_ERROR (*TL_STREAM_SOURCECB)(IMG_HANDLE hStream,
+		IMG_UINT32 ui32ReqOp, IMG_UINT32* ui32Resp, IMG_VOID* pvUser);
 
 /*************************************************************************/ /*!
  @Function      TLStreamCreate
@@ -122,6 +136,8 @@ typedef struct _TL_STREAM_INFO_
                                   If a longer string is provided,creation fails.
  @Input         ui32Size        Desired buffer size in bytes.
  @Input         ui32StreamFlags Flags that configure buffer behaviour.See above.
+ @Input         pfProducerDB    Optional callback, may be null.
+ @Input         pvProducerData  Optional user data for callback, may be null.
  @Return        PVRSRV_ERROR_INVALID_PARAMS  NULL stream handle or string name 
                                                exceeded MAX_STREAM_NAME_SIZE
  @Return        PVRSRV_ERROR_OUT_OF_MEMORY   Failed to allocate space for stream
@@ -136,7 +152,9 @@ PVRSRV_ERROR
 TLStreamCreate(IMG_HANDLE *phStream,
                IMG_CHAR	  *szStreamName,
                IMG_UINT32 ui32Size,
-               IMG_UINT32 ui32StreamFlags);
+               IMG_UINT32 ui32StreamFlags,
+               TL_STREAM_SOURCECB pfProducerCB,
+               IMG_PVOID pvProducerUD);
 
 /*************************************************************************/ /*!
  @Function      TLStreamOpen
@@ -159,7 +177,7 @@ TLStreamOpen(IMG_HANDLE *phStream,
  @Function      TLStreamClose
  @Description   Detach from the stream associated with the given handle. If
                   the current handle is the last one accessing the stream 
-				  (ie the number of TLStreamCreate+TLStreamOpen calls matches
+				  (i.e. the number of TLStreamCreate+TLStreamOpen calls matches
 				  the number of TLStreamClose calls) then the stream is also
 				  deleted.
 				On return the handle is no longer valid.
@@ -206,7 +224,8 @@ TLStreamReserve(IMG_HANDLE hStream,
  @Output        ppui8Data       Pointer to a pointer to a location in the
                                   buffer. The caller can then use this address
                                   in writing data into the stream.
- @Input         ui32Size        Number of bytes to reserve in buffer.
+ @Input         ui32Size        Ideal number of bytes to reserve in buffer.
+ @Input         ui32SizeMin     Minimum number of bytes to reserve in buffer.
  @Input         pui32Available  Optional, but when present and the FULL error
                                   is returned, a size suggestion is returned
 								  in this argument which the caller can attempt
@@ -224,6 +243,7 @@ PVRSRV_ERROR
 TLStreamReserve2(IMG_HANDLE hStream,
                 IMG_UINT8  **ppui8Data,
                 IMG_UINT32 ui32Size,
+                IMG_UINT32 ui32SizeMin,
                 IMG_UINT32* pui32Available);
 
 /*************************************************************************/ /*!
@@ -254,7 +274,7 @@ TLStreamCommit(IMG_HANDLE hStream,
                   style operation.
  @Input         hStream         Stream handle.
  @Input         pui8Src         Source to read data from.
- @Input         ui32Size        Number of elements to copy and commit.
+ @Input         ui32Size        Number of bytes to copy and commit.
  @Return        PVRSRV_ERROR_INVALID_PARAMS  NULL stream handler.
  @Return        eError                       Error codes returned by either 
                                                Reserve or Commit.
@@ -299,7 +319,7 @@ TLStreamMarkEOS(IMG_HANDLE hStream);
                 It sets psInfo members accordingly. Users can use those values
                 to calculate the parameters they use in TLStreamCreate and 
                 TLStreamReserve.
- @Output        psInfo          pointer to stream info struct.
+ @Output        psInfo          pointer to stream info structure.
  @Return        None.
 */ /**************************************************************************/
 IMG_VOID 

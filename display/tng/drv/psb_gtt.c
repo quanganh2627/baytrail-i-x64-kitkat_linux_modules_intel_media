@@ -228,10 +228,14 @@ int mrfld_gtt_init(struct psb_gtt *pg, int resume)
 
 void psb_gtt_takedown(struct psb_gtt *pg, int free)
 {
-	struct drm_psb_private *dev_priv = pg->dev->dev_private;
+	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
 
 	if (!pg)
 		return;
+
+	dev = pg->dev;
+	dev_priv = dev->dev_private;
 
 	if (pg->gtt_map) {
 		iounmap(pg->gtt_map);
@@ -580,11 +584,7 @@ int psb_gtt_mm_init(struct psb_gtt *pg)
 	mm = &gtt_mm->base;
 
 	/*will use tt_start ~ 128M for IMG TT buffers */
-	ret = drm_mm_init(mm, tt_start, ((tt_size / 2) - tt_start));
-	if (ret) {
-		DRM_DEBUG("drm_mm_int error(%d)\n", ret);
-		goto err_mm_init;
-	}
+	drm_mm_init(mm, tt_start, ((tt_size / 2) - tt_start));
 
 	gtt_mm->count = 0;
 

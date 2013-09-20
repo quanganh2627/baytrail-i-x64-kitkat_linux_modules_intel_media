@@ -44,7 +44,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/slab.h>
 #include <linux/genalloc.h>
 #include <linux/scatterlist.h>
-#include <linux/vmalloc.h>
 #include "../drivers/gpu/ion/ion_priv.h"
 
 #include "ion_lma_heap.h"

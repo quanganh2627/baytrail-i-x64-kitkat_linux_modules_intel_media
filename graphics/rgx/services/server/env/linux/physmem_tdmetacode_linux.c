@@ -346,15 +346,10 @@ PhysmemNewTDMetaCodePMR(PVRSRV_DEVICE_NODE *psDevNode,
                            "PMRTDMETACODE",
                            &sTDMETACodePMRFuncTab,
                            (IMG_VOID *)psPageContainer,
-                           ppsPMRPtr);
+                           ppsPMRPtr,
+                           &hPDumpAllocInfo,
+                           IMG_FALSE);
 	
-	/* and pdump the new allocation */
-    PDumpPMRMallocPMR(*ppsPMRPtr,
-                      ui64NumPages * uiPageSize,
-                      1U<<uiLog2PageSize,
-	                  IMG_FALSE,
-                      &hPDumpAllocInfo);
-
 	/* this is needed when the allocation is finalized and we need to free it. */
 	psPageContainer->hPDumpAllocInfo = hPDumpAllocInfo;
 

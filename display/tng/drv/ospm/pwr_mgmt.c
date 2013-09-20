@@ -253,6 +253,8 @@ struct ospm_power_island *get_island_ptr(u32 hw_island)
 	return p_island;
 }
 
+static bool power_down_island(struct ospm_power_island *p_island);
+
 /**
  * power_up_island
  *
@@ -277,8 +279,12 @@ static bool power_up_island(struct ospm_power_island *p_island)
 		ret = p_island->p_funcs->power_up(g_ospm_data->dev, p_island);
 		if (ret)
 			p_island->island_state = OSPM_POWER_ON;
-		else
+		else {
+			OSPM_DPF("Power up island %x failed!\n", p_island->island);
+			if (p_island->p_dependency)
+				power_down_island(p_island->p_dependency);
 			return ret;
+		}
 	}
 
 	/* increment the ref count */
@@ -561,10 +567,9 @@ void ospm_power_uninit(void)
 bool ospm_power_suspend(void)
 {
 	OSPM_DPF("%s\n", __func__);
-
 	/* Asking RGX to power off */
 	if (!PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_OFF))
-		return false;
+	        return false;
 
 	return true;
 }
@@ -578,13 +583,9 @@ void ospm_power_resume(void)
 {
 	OSPM_DPF("%s\n", __func__);
 
-	OSPM_DPF("pci resumed.\n");
-
 	/* restore Graphics State */
 	PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_ON);
-	OSPM_DPF("Graphics state restored.\n");
 
-	OSPM_DPF("display resumed.\n");
 }
 
 /* FIXME: hkpatel */
@@ -700,6 +701,52 @@ void ospm_apm_power_down_topaz(struct drm_device *dev)
 		p_island->island_state = OSPM_POWER_OFF;
 
 	PSB_DEBUG_PM("Power down VEC done\n");
+out:
+	mutex_unlock(&g_ospm_data->ospm_lock);
+	return;
+}
+
+void ospm_apm_power_down_vsp(struct drm_device *dev)
+{
+	int ret;
+	struct ospm_power_island *p_island;
+	unsigned long flags;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+
+	PSB_DEBUG_PM("Power down VPP...\n");
+	p_island = get_island_ptr(OSPM_VIDEO_VPP_ISLAND);
+
+	if (!p_island) {
+		DRM_ERROR("p_island is NULL\n");
+		return;
+	}
+
+	mutex_lock(&g_ospm_data->ospm_lock);
+
+	if (!ospm_power_is_hw_on(OSPM_VIDEO_VPP_ISLAND))
+		goto out;
+
+	if (atomic_read(&p_island->ref_count))
+		PSB_DEBUG_PM("VPP ref_count has been set(%d), bypass\n",
+			     atomic_read(&p_island->ref_count));
+
+	if (vsp_priv->vsp_cmd_num > 0) {
+		VSP_DEBUG("command in VSP, by pass\n");
+		goto out;
+	}
+
+	ret = p_island->p_funcs->power_down(
+		g_ospm_data->dev,
+		p_island);
+
+	/* set the island state */
+	if (ret) {
+		p_island->island_state = OSPM_POWER_OFF;
+		atomic_set(&p_island->ref_count, 0);
+	}
+
+	PSB_DEBUG_PM("Power down VPP done\n");
 out:
 	mutex_unlock(&g_ospm_data->ospm_lock);
 	return;
