@@ -177,18 +177,25 @@ int mdfld_dsi_dsr_update_panel_fb(struct mdfld_dsi_config *dsi_config)
 	dsr = dsi_config->dsr;
 
 	/*if no dsr attached, return 0*/
-	if (!dsr)
-		return 0;
+	if (!dsr) {
+		DRM_ERROR("%s: no dsr attached\n", __func__);
+		return -EINVAL;
+	}
 
 	PSB_DEBUG_ENTRY("\n");
 
+	mutex_lock(&dsi_config->context_lock);
+
 	/*ignore it if there are pending fb updates*/
-	if (dsr->pending_fb_updates)
+	if (dsr->pending_fb_updates) {
+		err = -EBUSY;
 		goto update_fb_out;
+	}
 
 	if (!dsi_config->dsi_hw_context.panel_on) {
 		PSB_DEBUG_ENTRY(
 		"if screen off, update fb is not allowed\n");
+		err = -EINVAL;
 		goto update_fb_out;
 	}
 
@@ -214,7 +221,9 @@ int mdfld_dsi_dsr_update_panel_fb(struct mdfld_dsi_config *dsi_config)
 	dsr->pending_fb_updates++;
 	/*clear free count*/
 	dsr->free_count = 0;
+
 update_fb_out:
+	mutex_unlock(&dsi_config->context_lock);
 	return err;
 }
 

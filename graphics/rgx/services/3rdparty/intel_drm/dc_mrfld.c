@@ -1379,6 +1379,10 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
 
+	if (type == DC_OVERLAY_PLANE && !err) {
+		/* avoid big lock as it is a blocking call */
+		err = DCCBOverlayDisableAndWait(gpsDevice->psDrmDevice, ctx, index);
+	}
 	return err;
 }
 
