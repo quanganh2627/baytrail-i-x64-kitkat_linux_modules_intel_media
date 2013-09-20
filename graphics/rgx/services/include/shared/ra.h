@@ -82,42 +82,6 @@ typedef IMG_UINT64 RA_LENGTH_T;
  */
 typedef IMG_UINT32 RA_FLAGS_T;
 
-/** Enable support for arena statistics. */
-#define RA_STATS 
-
-
-/** Resource arena statistics. */
-struct _RA_STATISTICS_
-{
-    /** total number of segments add to the arena */
-    IMG_SIZE_T uSpanCount;
-
-    /** number of current live segments within the arena */
-    IMG_SIZE_T uLiveSegmentCount;
-
-    /** number of current free segments within the arena */
-    IMG_SIZE_T uFreeSegmentCount;
-
-    /** total number of resource within the arena */
-    IMG_SIZE_T uTotalResourceCount;
-    
-    /** number of free resource within the arena */
-    IMG_SIZE_T uFreeResourceCount;
-
-    /** total number of resources allocated from the arena */
-    IMG_SIZE_T uCumulativeAllocs;
-
-    /** total number of resources returned to the arena */
-    IMG_SIZE_T uCumulativeFrees;
-
-    /** total number of spans allocated by the callback mechanism */
-    IMG_SIZE_T uImportCount;
-
-    /** total number of spans deallocated by the callback mechanism */
-    IMG_SIZE_T uExportCount;
-};
-typedef struct _RA_STATISTICS_ RA_STATISTICS;
-
 struct _RA_SEGMENT_DETAILS_
 {
 	RA_LENGTH_T      uiSize;
@@ -236,49 +200,6 @@ RA_Alloc (RA_ARENA *pArena,
  */
 IMG_VOID 
 RA_Free (RA_ARENA *pArena, RA_BASE_T base);
-
-
-#ifdef RA_STATS
-
-#define CHECK_SPACE(total)					\
-{											\
-	if((total)<100) 							\
-		return PVRSRV_ERROR_INVALID_PARAMS;	\
-}
-
-#define UPDATE_SPACE(str, count, total)		\
-{											\
-	/* FIXME sign casts should not be required - fix the type */ \
-	if((count) == (IMG_INT32)-1)			\
-		return PVRSRV_ERROR_INVALID_PARAMS;	\
-	else									\
-	{										\
-		(str) += (count);					\
-		(total) -= (IMG_UINT32)(count);		\
-	}										\
-}
-
-
-/**
- *  @Function   RA_GetStats
- *
- *  @Description    gets stats on a given arena
- *  
- *  @Input  pArena - the arena the segment was originally allocated from.
- *  @Input  ppszStr - string to write stats to 
- *	@Input	pui32StrLen - length of string
- *
- *  @Return PVRSRV_ERROR
- */
-PVRSRV_ERROR RA_GetStats(RA_ARENA *pArena,
-							IMG_CHAR **ppszStr, 
-							IMG_UINT32 *pui32StrLen);
-
-PVRSRV_ERROR RA_GetStatsFreeMem(RA_ARENA *pArena,
-								IMG_CHAR **ppszStr, 
-								IMG_UINT32 *pui32StrLen);
-
-#endif /* #ifdef RA_STATS */
 
 #endif
 

@@ -83,7 +83,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/fs.h>
-#include <linux/proc_fs.h>
 
 #if defined(SUPPORT_DRI_DRM)
 #include <drm/drmP.h>
@@ -133,6 +132,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_sync.h"
 #endif
 
+#if defined(SUPPORT_PVRSRV_ANDROID_SYSTRACE)
+#include "systrace.h"
+#endif
+
 #if defined(SUPPORT_DRI_DRM)
 #include "pvr_drm.h"
 #endif
@@ -163,16 +166,16 @@ module_param(gPVRDebugLevel, uint, 0644);
 MODULE_PARM_DESC(gPVRDebugLevel, "Sets the level of debug output (default 0x7)");
 #endif /* defined(PVRSRV_NEED_PVR_DPF) */
 
-#if defined(CONFIG_ION_OMAP)
-#include <linux/ion.h>
-#include <linux/omap_ion.h>
-extern struct ion_device *omap_ion_device;
-struct ion_client *gpsIONClient;
-#endif /* defined(CONFIG_ION_OMAP) */
+/* Newer kernels no longer support __devinitdata */
+#if !defined(__devinitdata)
+#define __devinitdata
+#endif
 
+#if defined(SUPPORT_PVRSRV_DEVICE_CLASS)
 /* PRQA S 3207 2 */ /* ignore 'not used' warning */
 EXPORT_SYMBOL(PVRGetDisplayClassJTable);
 EXPORT_SYMBOL(PVRGetBufferClassJTable);
+#endif /* defined(SUPPORT_PVRSRV_DEVICE_CLASS) */
 
 #if defined(PVR_LDM_DEVICE_CLASS) && !defined(SUPPORT_DRI_DRM)
 /*
@@ -216,39 +219,6 @@ IMG_UINT32 gui32ReleasePID;
 static IMG_UINT32 gPVRPowerLevel;
 #endif
 
-static int PVRSRVIONClientCreate(void)
-{
-#if defined(CONFIG_ION_OMAP)
-	gpsIONClient = ion_client_create(omap_ion_device,
-									 1 << OMAP_ION_HEAP_TYPE_TILER,
-									 "pvr");
-	if (IS_ERR_OR_NULL(gpsIONClient))
-	{
-		int err;
-
-		PVR_DPF((PVR_DBG_ERROR, "PVRSRVDriverProbe: Couldn't create ion client"));
-
-		err = PTR_ERR(gpsIONClient);
-		gpsIONClient = IMG_NULL;
-
-		return err;
-	}
-#endif /* defined(CONFIG_ION_OMAP) */
-
-	return 0;
-}
-
-static void PVRSRVIONClientDestroy(void)
-{
-#if defined(CONFIG_ION_OMAP)
-	if (gpsIONClient != NULL)
-	{
-		ion_client_destroy(gpsIONClient);
-		gpsIONClient = IMG_NULL;
-	}
-#endif
-}
-
 #if defined(PVR_LDM_MODULE)
 
 #if defined(PVR_LDM_PLATFORM_MODULE)
@@ -277,7 +247,7 @@ static int PVRSRVDriverResume(LDM_DEV *device);
 
 #if defined(PVR_LDM_PCI_MODULE)
 /* This structure is used by the Linux module code */
-struct pci_device_id powervr_id_table[] = {
+struct pci_device_id powervr_id_table[] __devinitdata = {
 	{PCI_DEVICE(SYS_SGX_DEV_VENDOR_ID, SYS_SGX_DEV_DEVICE_ID)},
 #if defined (SYS_SGX_DEV1_DEVICE_ID)
 	{PCI_DEVICE(SYS_SGX_DEV_VENDOR_ID, SYS_SGX_DEV1_DEVICE_ID)},
@@ -289,7 +259,7 @@ MODULE_DEVICE_TABLE(pci, powervr_id_table);
 #endif
 
 #if defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
-static struct platform_device_id powervr_id_table[] = {
+static struct platform_device_id powervr_id_table[] __devinitdata = {
 	{SYS_SGX_DEV_NAME, 0},
 	{}
 };
@@ -312,7 +282,7 @@ static LDM_DRV powervr_driver = {
 	.remove		= PVRSRVDriverRemove,
 #endif
 #if defined(PVR_LDM_PCI_MODULE)
-	.remove		= PVRSRVDriverRemove,
+	.remove		= __devexit_p(PVRSRVDriverRemove),
 #endif
 	.suspend	= PVRSRVDriverSuspend,
 	.resume		= PVRSRVDriverResume,
@@ -356,7 +326,7 @@ static struct platform_device powervr_device = {
 static int PVRSRVDriverProbe(LDM_DEV *pDevice)
 #endif
 #if defined(PVR_LDM_PCI_MODULE)
-static int PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *id)
+static int __devinit PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *id)
 #endif
 {
 	SYS_DATA *psSysData;
@@ -388,7 +358,7 @@ static int PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *id)
 		}
 	}
 
-	return PVRSRVIONClientCreate();
+	return 0;
 }
 
 
@@ -415,14 +385,12 @@ static int PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *id)
 static int PVRSRVDriverRemove(LDM_DEV *pDevice)
 #endif
 #if defined(PVR_LDM_PCI_MODULE)
-static void PVRSRVDriverRemove(LDM_DEV *pDevice)
+static void __devexit PVRSRVDriverRemove(LDM_DEV *pDevice)
 #endif
 {
 	SYS_DATA *psSysData;
 
 	PVR_TRACE(("PVRSRVDriverRemove(pDevice=%p)", pDevice));
-
-	PVRSRVIONClientDestroy();
 
 	SysAcquireData(&psSysData);
 	
@@ -489,7 +457,7 @@ PVR_MOD_STATIC void PVRSRVDriverShutdown(LDM_DEV *pDevice)
 {
 	PVR_TRACE(("PVRSRVDriverShutdown(pDevice=%p)", pDevice));
 
-	LinuxLockMutex(&gsPMMutex);
+	LinuxLockMutexNested(&gsPMMutex, PVRSRV_LOCK_CLASS_POWER);
 
 	if (!bDriverIsShutdown && !bDriverIsSuspended)
 	{
@@ -555,7 +523,7 @@ PVR_MOD_STATIC int PVRSRVDriverSuspend(LDM_DEV *pDevice, pm_message_t state)
 #if !(defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL) && !defined(SUPPORT_DRI_DRM))
 	PVR_TRACE(( "PVRSRVDriverSuspend(pDevice=%p)", pDevice));
 
-	LinuxLockMutex(&gsPMMutex);
+	LinuxLockMutexNested(&gsPMMutex, PVRSRV_LOCK_CLASS_POWER);
 
 	if (!bDriverIsSuspended && !bDriverIsShutdown)
 	{
@@ -612,7 +580,7 @@ PVR_MOD_STATIC int PVRSRVDriverResume(LDM_DEV *pDevice)
 #if !(defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL) && !defined(SUPPORT_DRI_DRM))
 	PVR_TRACE(("PVRSRVDriverResume(pDevice=%p)", pDevice));
 
-	LinuxLockMutex(&gsPMMutex);
+	LinuxLockMutexNested(&gsPMMutex, PVRSRV_LOCK_CLASS_POWER);
 
 	if (bDriverIsSuspended && !bDriverIsShutdown)
 	{
@@ -1028,12 +996,6 @@ static int __init PVRCore_Init(void)
 #endif
 		goto init_failed;
 	}
-
-	error = PVRSRVIONClientCreate();
-	if (error != 0)
-	{
-		goto sys_deinit;
-	}
 #endif /* !defined(PVR_LDM_MODULE) */
 
 #if !defined(SUPPORT_DRI_DRM)
@@ -1077,6 +1039,10 @@ static int __init PVRCore_Init(void)
 #endif /* defined(PVR_LDM_DEVICE_CLASS) */
 #endif /* !defined(SUPPORT_DRI_DRM) */
 
+#if defined(SUPPORT_PVRSRV_ANDROID_SYSTRACE)
+	SystraceCreateFS();
+#endif
+
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 	PVRSyncDeviceInit();
 #endif
@@ -1090,7 +1056,7 @@ unregister_device:
 	unregister_chrdev((IMG_UINT)AssignedMajorNumber, DEVNAME);
 #endif
 #endif
-#if !defined(PVR_LDM_MODULE) || !defined(SUPPORT_DRI_DRM)
+#if !defined(SUPPORT_DRI_DRM)
 sys_deinit:
 #endif
 #if defined(PVR_LDM_MODULE)
@@ -1106,8 +1072,6 @@ sys_deinit:
 #endif
 
 #else	/* defined(PVR_LDM_MODULE) */
-	PVRSRVIONClientDestroy();
-
 	/* LDM drivers call SysDeinitialise during PVRSRVDriverRemove */
 	{
 		SYS_DATA *psSysData;
@@ -1127,7 +1091,6 @@ init_failed:
 #ifdef CONFIG_PVR_PROC
 	RemoveProcEntries();
 #endif
-
 	return error;
 
 } /*PVRCore_Init*/
@@ -1221,8 +1184,6 @@ static void __exit PVRCore_Cleanup(void)
 		}
 	}
 #endif
-	PVRSRVIONClientDestroy();
-
 	/* LDM drivers call SysDeinitialise during PVRSRVDriverRemove */
 	(void) SysDeinitialise(psSysData);
 #endif /* defined(PVR_LDM_MODULE) */
@@ -1237,6 +1198,10 @@ static void __exit PVRCore_Cleanup(void)
 
 #ifdef CONFIG_PVR_PROC
 	RemoveProcEntries();
+#endif
+
+#if defined(SUPPORT_PVRSRV_ANDROID_SYSTRACE)
+	SystraceDestroyFS();
 #endif
 
 	PVR_TRACE(("PVRCore_Cleanup: unloading"));

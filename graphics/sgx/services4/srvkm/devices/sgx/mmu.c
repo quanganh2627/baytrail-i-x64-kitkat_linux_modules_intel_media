@@ -274,6 +274,10 @@ struct _MMU_HEAP_
 static IMG_VOID
 _DeferredFreePageTable (MMU_HEAP *pMMUHeap, IMG_UINT32 ui32PTIndex, IMG_BOOL bOSFreePT);
 
+#if defined (MEM_TRACK_INFO_DEBUG)
+IMG_IMPORT IMG_VOID PVRSRVPrintMemTrackInfo(IMG_UINT32 ui32FaultAddr);
+#endif
+
 #if defined(PDUMP)
 static IMG_VOID
 MMU_PDumpPageTables	(MMU_HEAP *pMMUHeap,
@@ -332,7 +336,7 @@ static IMG_VOID CheckPT(MMU_PT_INFO *psPTInfoList)
 		PVR_DPF((PVR_DBG_ERROR, "ui32ValidPTECount: %u ui32Count: %u\n",
 				 psPTInfoList->ui32ValidPTECount, ui32Count));
 		DumpPT(psPTInfoList);
-		BUG();
+		PVR_DBG_BREAK;
 	}
 }
 #else /* PT_DEBUG */
@@ -3159,10 +3163,19 @@ MMU_Alloc (MMU_HEAP *pMMUHeap,
 							&uiAddr);
 		if(!bStatus)
 		{
-			PVR_DPF((PVR_DBG_ERROR,"MMU_Alloc: RA_Alloc of VMArena failed"));
-			PVR_DPF((PVR_DBG_ERROR,"MMU_Alloc: Alloc of DevVAddr failed from heap %s ID%d",
-									pMMUHeap->psDevArena->pszName,
-									pMMUHeap->psDevArena->ui32HeapID));
+			IMG_CHAR asCurrentProcessName[128];
+
+			PVR_DPF((PVR_DBG_ERROR,"MMU_Alloc: RA_Alloc of VMArena failed"));	
+			OSGetCurrentProcessNameKM(asCurrentProcessName, 128);
+			PVR_DPF((PVR_DBG_ERROR,"MMU_Alloc: Alloc of DevVAddr failed from heap %s ID%d, pid: %d, task: %s",
+ 									pMMUHeap->psDevArena->pszName,
+									pMMUHeap->psDevArena->ui32HeapID,
+									OSGetCurrentProcessIDKM(),
+									asCurrentProcessName));									
+		#if defined (MEM_TRACK_INFO_DEBUG)
+			PVRSRVPrintMemTrackInfo(0);
+		#endif
+
 			return bStatus;
 		}
 
@@ -3576,10 +3589,7 @@ MMU_MapScatter (MMU_HEAP *pMMUHeap,
 	IMG_UINT32 uCount, i;
 	IMG_DEV_PHYADDR DevPAddr;
 
-	if (pMMUHeap == IMG_NULL) {
-		PVR_DPF((PVR_DBG_ERROR, "Null pMMUHeap value"));
-		return ;
-	}
+	PVR_ASSERT (pMMUHeap != IMG_NULL);
 
 #if defined(PDUMP)
 	MapBaseDevVAddr = DevVAddr;
@@ -4612,11 +4622,11 @@ PVRSRV_ERROR MMU_UnmapExtSystemCacheRegs(PVRSRV_DEVICE_NODE *psDeviceNode)
 		{
 			pui32PT = (IMG_UINT32 *) psDeviceNode->sDevMemoryInfo.pBMKernelContext->psMMUContext->apsPTInfoList[ui32PDIndex]->PTPageCpuVAddr;
 
-			MakeKernelPageReadWrite(pui32PT);
-			pui32PT[ui32PTIndex] = 0;
-			MakeKernelPageReadOnly(pui32PT);
+	MakeKernelPageReadWrite(pui32PT);
+	pui32PT[ui32PTIndex] = 0;
+	MakeKernelPageReadOnly(pui32PT);
 
-			PDUMPMEMPTENTRIES(&sMMUAttrib, psDeviceNode->sDevMemoryInfo.pBMKernelContext->psMMUContext->hPDOSMemHandle, &pui32PT[ui32PTIndex], sizeof(IMG_UINT32), 0, IMG_FALSE, PDUMP_PD_UNIQUETAG, PDUMP_PT_UNIQUETAG);
+	PDUMPMEMPTENTRIES(&sMMUAttrib, psDeviceNode->sDevMemoryInfo.pBMKernelContext->psMMUContext->hPDOSMemHandle, &pui32PT[ui32PTIndex], sizeof(IMG_UINT32), 0, IMG_FALSE, PDUMP_PD_UNIQUETAG, PDUMP_PT_UNIQUETAG);
 		}
 	}
 

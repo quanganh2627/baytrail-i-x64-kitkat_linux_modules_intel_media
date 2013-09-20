@@ -88,7 +88,7 @@ static PVRSRV_DEVICE_CONFIG sDevices[] = {
 		/* hSysData */
 		IMG_NULL,
 		/* ui32PhysHeapID */
-		0, /* Use physcial heap 0 */
+		{ 0, 0 }, /* Use physical heap 0 only */
 		/* No power management on no HW system */
 		/* pfnPrePowerState */
 		IMG_NULL,
@@ -98,6 +98,8 @@ static PVRSRV_DEVICE_CONFIG sDevices[] = {
 		EmuRGXClockFreq,
 		/* pfnInterruptHandled */
 		IMG_NULL,
+		/* pfnCheckMemAllocSize */
+		SysCheckMemAllocSize,
 		/* eBPDM */
 		RGXFWIF_DM_TA, /* initialised to a valid DM but no breakpoint is set yet */
 		/* bBPSet */

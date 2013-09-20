@@ -567,10 +567,9 @@ void ospm_power_uninit(void)
 bool ospm_power_suspend(void)
 {
 	OSPM_DPF("%s\n", __func__);
-
 	/* Asking RGX to power off */
 	if (!PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_OFF))
-		return false;
+	        return false;
 
 	return true;
 }
@@ -584,13 +583,9 @@ void ospm_power_resume(void)
 {
 	OSPM_DPF("%s\n", __func__);
 
-	OSPM_DPF("pci resumed.\n");
-
 	/* restore Graphics State */
 	PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_ON);
-	OSPM_DPF("Graphics state restored.\n");
 
-	OSPM_DPF("display resumed.\n");
 }
 
 /* FIXME: hkpatel */

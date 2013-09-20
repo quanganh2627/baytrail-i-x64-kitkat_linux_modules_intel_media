@@ -184,6 +184,7 @@ PVRSRV_ERROR RGXMMUInit_Register(PVRSRV_DEVICE_NODE *psDeviceNode)
 	/*
 	 * Setup sRGXMMUDeviceAttributes
 	 */
+	sRGXMMUDeviceAttributes.eMMUType = PDUMP_MMU_TYPE_VARPAGE_40BIT;
 	sRGXMMUDeviceAttributes.eTopLevel = MMU_LEVEL_3;
 	sRGXMMUDeviceAttributes.ui32BaseAlign = RGX_MMUCTRL_PC_DATA_PD_BASE_ALIGNSHIFT;
 	sRGXMMUDeviceAttributes.psBaseConfig = &sRGXMMUPCEConfig;

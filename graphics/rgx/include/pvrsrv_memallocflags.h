@@ -333,6 +333,15 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
  */
 #define PVRSRV_MEMALLOCFLAG_NO_OSPAGES_ON_ALLOC (1U<<15)
 
+/*!
+    PVRSRV_MEMALLOCFLAG_CPU_LOCAL
+
+    Indicates that the allocation will primarily be accessed by
+    the CPU, so a UMA allocation (if available) is preferable.
+    If not set, the allocation will primarily be accessed by
+    the GPU, so LMA allocation (if available) is preferable.
+ */
+#define PVRSRV_MEMALLOCFLAG_CPU_LOCAL (1U<<16)
 
 /*
  *
@@ -426,7 +435,8 @@ typedef IMG_UINT32 PVRSRV_MEMALLOCFLAGS_T;
                                             PVRSRV_MEMALLOCFLAG_POISON_ON_FREE | \
                                             PVRSRV_MEMALLOCFLAGS_GPU_MMUFLAGSMASK | \
                                             PVRSRV_MEMALLOCFLAGS_CPU_MMUFLAGSMASK | \
-                                            PVRSRV_MEMALLOCFLAG_NO_OSPAGES_ON_ALLOC)
+                                            PVRSRV_MEMALLOCFLAG_NO_OSPAGES_ON_ALLOC | \
+                                            PVRSRV_MEMALLOCFLAG_CPU_LOCAL)
 
 #if ((~(PVRSRV_MEMALLOCFLAGS_PMRFLAGSMASK) & PVRSRV_MEMALLOCFLAGS_GPU_MMUFLAGSMASK) != 0)
 #error PVRSRV_MEMALLOCFLAGS_GPU_MMUFLAGSMASK is not a subset of PVRSRV_MEMALLOCFLAGS_PMRFLAGSMASK

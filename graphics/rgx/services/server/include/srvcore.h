@@ -164,11 +164,11 @@ typedef struct _PVRSRV_BRIDGE_GLOBAL_STATS
 	IMG_UINT32 ui32IOCTLCount;
 	IMG_UINT32 ui32TotalCopyFromUserBytes;
 	IMG_UINT32 ui32TotalCopyToUserBytes;
-}PVRSRV_BRIDGE_GLOBAL_STATS;
+} PVRSRV_BRIDGE_GLOBAL_STATS;
 
-/* OS specific code way want to report the stats held here and within the
+/* OS specific code may want to report the stats held here and within the
  * BRIDGE_DISPATCH_TABLE_ENTRYs (E.g. on Linux we report these via a
- * proc entry /proc/pvr/bridge_stats. Ref printLinuxBridgeStats()) */
+ * debugfs entry /sys/kernel/debug/pvr/bridge_stats) */
 extern PVRSRV_BRIDGE_GLOBAL_STATS g_BridgeGlobalStats;
 #endif
 
@@ -195,6 +195,10 @@ PVRSRVInitSrvDisconnectKM(CONNECTION_DATA *psConnection,
 
 PVRSRV_ERROR
 PVRSRVDumpDebugInfoKM(IMG_UINT32 ui32VerbLevel);
+
+PVRSRV_ERROR
+PVRSRVGetDevClockSpeedKM(PVRSRV_DEVICE_NODE *psDeviceNode,
+							IMG_PUINT32  pui32RGXClockSpeed);
 
 PVRSRV_ERROR
 PVRSRVHWOpTimeoutKM(IMG_VOID);

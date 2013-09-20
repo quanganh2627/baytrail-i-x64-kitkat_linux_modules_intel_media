@@ -79,12 +79,20 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVTLDisconnect(PVRSRV_CONNECTION* psConnection);
 
 /**************************************************************************/ /*!
  @Function		PVRSRVTLOpenStream
- @Description	Open a descriptor onto an existing kernel transport stream.
+ @Description	Open a descriptor onto an existing PVR transport stream. If
+				the stream does not exist it returns a NOT_FOUND error unless
+				the OPEN_WAIT flag is supplied. In this case it will wait for
+				the stream to be created. If it is not created in the wait
+				period a TIMEOUT error is returned.
  @Input			psConnection	Address of a pointer to a connection object
  @Input			pszName			Address of the stream name string, no longer
  	 	 	 	 	 	 	 	than PRVSRVTL_MAX_STREAM_NAME_SIZE.
- @Input			ui32Mode		Unused
- @Output		phSD			Address of a pointer to an stream object
+ @Input			ui32Mode    Flags defined in pvr_tlcommon.h
+							ACQUIRE_NONBLOCKING: Results in non-blocking reads
+							    on stream. Reads are blocking by default
+                            OPEN_WAIT: Causes open to wait for a brief moment
+                                if the stream does not exist
+ @Output		phSD		Address of a pointer to an stream object
  @Return 		PVRSRV_ERROR_NOT_FOUND:        when named stream not found
  @Return		PVRSRV_ERROR_ALREADY_OPEN:     stream already open by another
  @Return		PVRSRV_ERROR_STREAM_ERROR:     internal driver state error

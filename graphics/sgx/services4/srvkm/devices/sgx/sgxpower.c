@@ -274,9 +274,9 @@ static IMG_VOID SGXPollForClockGating (PVRSRV_SGXDEV_INFO	*psDevInfo,
 	{
 		PVR_DPF((PVR_DBG_ERROR,"SGXPollForClockGating: %s failed.", pszComment));
 		if(!bRetry){
-			SGXDumpDebugInfo(psDevInfo, IMG_FALSE);
-			PVR_DBG_BREAK;
-		}
+		SGXDumpDebugInfo(psDevInfo, IMG_FALSE);
+		PVR_DBG_BREAK;
+	}
 	}
 	#endif /* NO_HARDWARE */
 

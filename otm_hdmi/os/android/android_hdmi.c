@@ -2211,26 +2211,26 @@ android_hdmi_detect(struct drm_connector *connector,
 
 		return connector_status_connected;
 	} else {
-		if (prev_connection_status == connector_status_disconnected)
-			return connector_status_disconnected;
-
-		prev_connection_status = connector_status_disconnected;
-
+		if (prev_connection_status != connector_status_disconnected) {
 #ifdef OTM_HDMI_HDCP_ENABLE
 #ifdef OTM_HDMI_HDCP_ALWAYS_ENC
-		if (otm_hdmi_hdcp_disable(hdmi_priv->context))
-			pr_debug("hdcp disabled\n");
-		else
-			pr_debug("failed to disable hdcp\n");
+			if (otm_hdmi_hdcp_disable(hdmi_priv->context))
+				pr_debug("hdcp disabled\n");
+			else
+				pr_debug("failed to disable hdcp\n");
 #endif
 #endif
-		dev_priv->panel_desc &= ~DISPLAY_B;
-		dev_priv->bhdmiconnected = false;
+			dev_priv->panel_desc &= ~DISPLAY_B;
+			dev_priv->bhdmiconnected = false;
 
-		/* Turn off power islands and decrement ref count */
-		otm_hdmi_power_islands_off();
+			/* Turn off power islands and decrement ref count */
+			otm_hdmi_power_islands_off();
+		}
 
+		/* Always turn off power rails when hdmi is disconnected */
 		otm_hdmi_power_rails_off();
+
+		prev_connection_status = connector_status_disconnected;
 
 		return connector_status_disconnected;
 	}

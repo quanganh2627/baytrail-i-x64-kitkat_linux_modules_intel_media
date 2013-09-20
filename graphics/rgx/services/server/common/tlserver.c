@@ -67,9 +67,8 @@ PVRSRV_ERROR
 TLServerConnectKM(CONNECTION_DATA *psConnection)
 {
 	PVR_DPF_ENTERED;
-	PVR_ASSERT(psConnection);
 
-	TLGGD()->uiClientCnt++;
+	PVR_UNREFERENCED_PARAMETER(psConnection);
 
 	PVR_DPF_RETURN_OK;
 }
@@ -79,13 +78,7 @@ TLServerDisconnectKM(CONNECTION_DATA *psConnection)
 {
 	PVR_DPF_ENTERED;
 
-	PVR_ASSERT(psConnection);
-
-	if (TLGGD()->uiClientCnt <= 0)
-	{
-		PVR_DPF_RETURN_RC(PVRSRV_ERROR_SRV_DISCONNECT_FAILED);
-	}
-	TLGGD()->uiClientCnt--;
+	PVR_UNREFERENCED_PARAMETER(psConnection);
 
 	PVR_DPF_RETURN_OK;
 }
@@ -97,6 +90,7 @@ TLServerOpenStreamKM(IMG_PCHAR  	 	   pszName,
 			   	     DEVMEM_EXPORTCOOKIE** ppsBufCookie)
 {
 	PVRSRV_ERROR 	eError = PVRSRV_OK;
+	PVRSRV_ERROR 	eErrorEO = PVRSRV_OK;
 	PTL_SNODE		psNode = 0;
 	TL_STREAM_DESC* psNewSD = 0;
 	IMG_HANDLE 		hEvent;
@@ -109,7 +103,7 @@ TLServerOpenStreamKM(IMG_PCHAR  	 	   pszName,
 	PVR_ASSERT(pszName);
 
 	psNode = TLFindStreamNodeByName(pszName);
-	if ((psNode == NULL) && (ui32Mode & PVRSRV_STREAM_FLAG_OPEN_BLOCKING))
+	if ((psNode == NULL) && (ui32Mode & PVRSRV_STREAM_FLAG_OPEN_WAIT))
 	{	/* Blocking code to wait for stream to be created if it does not exist
 	     */
 		eError = OSEventObjectOpen(psGD->hTLEventObj, &hEvent);
@@ -121,10 +115,10 @@ TLServerOpenStreamKM(IMG_PCHAR  	 	   pszName,
 			{
 				PVR_DPF((PVR_DBG_MESSAGE, "Stream %s does not exist, waiting...", pszName));
 				/* Will exit OK or with timeout, both cases safe to ignore */
-				eError = OSEventObjectWaitTimeout(hEvent, NO_STREAM_WAIT_PERIOD);
+				eErrorEO = OSEventObjectWaitTimeout(hEvent, NO_STREAM_WAIT_PERIOD);
 			}
 		}
-		while ((psNode == NULL) && (eError == PVRSRV_OK));
+		while ((psNode == NULL) && (eErrorEO == PVRSRV_OK));
 
 		eError = OSEventObjectClose(hEvent);
 		PVR_LOGR_IF_ERROR(eError, "OSEventObjectClose");
@@ -134,9 +128,9 @@ TLServerOpenStreamKM(IMG_PCHAR  	 	   pszName,
 	if (psNode == NULL)
 	{
 		/* Did we exit the wait with timeout, inform caller */
-		if (eError == PVRSRV_ERROR_TIMEOUT)
+		if (eErrorEO == PVRSRV_ERROR_TIMEOUT)
 		{
-			PVR_DPF_RETURN_RC(eError);
+			PVR_DPF_RETURN_RC(eErrorEO);
 		}
 		PVR_DPF((PVR_DBG_ERROR, "Stream does not exist"));
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_NOT_FOUND);
@@ -164,6 +158,8 @@ TLServerOpenStreamKM(IMG_PCHAR  	 	   pszName,
 		PVR_DPF((PVR_DBG_ERROR, "Not possible to make a new stream descriptor"));
 		PVR_DPF_RETURN_RC(PVRSRV_ERROR_OUT_OF_MEMORY);
 	}
+
+	TLGGD()->uiClientCnt++;
 
 	// Copy the export cookie back to the user mode API to enable access to
 	// the stream buffer from user-mode process.
@@ -218,6 +214,10 @@ TLServerCloseStreamKM(PTL_STREAM_DESC psSD)
 
 	// Free the stream descriptor object
 	OSFREEMEM(psSD);
+
+	// Assert the counter is sane after input data validated.
+	PVR_ASSERT(TLGGD()->uiClientCnt > 0);
+	TLGGD()->uiClientCnt--;
 
 	PVR_DPF_RETURN_RC(eError);
 }

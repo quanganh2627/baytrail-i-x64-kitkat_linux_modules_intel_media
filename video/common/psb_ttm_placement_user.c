@@ -869,7 +869,8 @@ int ttm_pl_verify_access(struct ttm_buffer_object *bo,
 	 * Check bo subclass.
 	 */
 
-	if (unlikely(bo->destroy != &ttm_bo_user_destroy))
+	if (unlikely(bo->destroy != &ttm_bo_user_destroy
+		&& bo->destroy != &ttm_ub_bo_user_destroy))
 		return -EPERM;
 
 	ubo = container_of(bo, struct ttm_bo_user_object, bo);

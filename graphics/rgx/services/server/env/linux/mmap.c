@@ -222,13 +222,8 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
     CONNECTION_DATA *psConnection = LinuxConnectionFromFile(pFile);
 #endif
 	/*
-	 * Take the bridge mutex to make this code thread/multiprocess safe.
-	 * This is not a permanent solution (see comment regarding the
-	 * bridge mutex at the top of this file), but is needed to
-	 * prevent assertion failures in ResManFindPriavateDataByPtr
-	 * when X windows are being frequently resized (e.g. quickly dragging
-	 * the corner of a window around when running the metacity window
-	 * manager).
+	 * Both PVRSRVLookupHandle and ResManFindPrivateDataByPtr
+	 * require the bridge mutex to be held for thread safety.
 	 */
 	LinuxLockMutex(&gPVRSRVLock);
 	LinuxLockMutex(&g_sMMapMutex);
@@ -256,6 +251,8 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 		while it's mapped into the user process
 	*/
 	PMRRefPMR(psPMR);
+
+	LinuxUnLockMutex(&gPVRSRVLock);
 
     eError = PMRLockSysPhysAddresses(psPMR, PAGE_SHIFT);
 	if (eError != PVRSRV_OK)
@@ -400,9 +397,8 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
     /* Install open and close handlers for ref-counting */
     ps_vma->vm_ops = &gsMMapOps;
 
-
 	LinuxUnLockMutex(&g_sMMapMutex);
-	LinuxUnLockMutex(&gPVRSRVLock);
+
     return 0;
 
     /*
@@ -413,11 +409,14 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
     PMRUnlockSysPhysAddresses(psPMR);
  e1:
 	PMRUnrefPMR(psPMR);
+	goto em1;
  e0:
+	LinuxUnLockMutex(&gPVRSRVLock);
+ em1:
     PVR_ASSERT(eError != PVRSRV_OK);
     PVR_DPF((PVR_DBG_ERROR, "unable to translate error %d", eError));
 	LinuxUnLockMutex(&g_sMMapMutex);
-	LinuxUnLockMutex(&gPVRSRVLock);
+
     return -ENOENT; // -EAGAIN // or what?
 }
 

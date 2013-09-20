@@ -152,6 +152,7 @@ AllocSyncPrimitiveBlock(SYNC_PRIM_CONTEXT *psContext,
 	eError = DevmemImport(psContext->hBridge,
 						  &sExportCookie,
 						  PVRSRV_MEMALLOCFLAG_CPU_READABLE,
+						  "SyncPrim",
 						  &psSyncBlk->hMemDesc);
 
 	/*
@@ -191,12 +192,6 @@ static IMG_VOID
 FreeSyncPrimitiveBlock(SYNC_PRIM_BLOCK *psSyncBlk)
 {
 	SYNC_PRIM_CONTEXT *psContext = psSyncBlk->psContext;
-
-	if (psSyncBlk == IMG_NULL)
-	{
-		PVR_DPF((PVR_DBG_ERROR, "FreeSyncPrimitiveBlock: NULL handle"));
-		return;
-	}
 
 	DevmemReleaseCpuVirtAddr(psSyncBlk->hMemDesc);
 	DevmemFree(psSyncBlk->hMemDesc);
@@ -632,7 +627,7 @@ SyncPrimContextCreate(SYNC_BRIDGE_HANDLE hBridge,
 									IMG_NULL,
 									IMG_NULL,
 									IMG_NULL);
-	if (psContext->psSubAllocRA == IMG_NULL)
+	if (psContext->psSpanRA == IMG_NULL)
 	{
 		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
 		goto fail_span;

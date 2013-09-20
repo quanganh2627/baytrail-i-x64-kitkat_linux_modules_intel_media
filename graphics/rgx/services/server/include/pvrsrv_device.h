@@ -48,6 +48,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "ra.h"
 #include "physheap.h"
 #include "rgx_fwif_km.h"
+#include "pmr.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -58,6 +59,17 @@ typedef struct _PVRSRV_DEVICE_CONFIG_ PVRSRV_DEVICE_CONFIG;
 /*! The CPU physical base of the LMA physical heap is used as the base for
  *  device memory physical heap allocations */
 #define PVRSRV_DEVICE_CONFIG_LMA_USE_CPU_ADDR	(1<<0)
+
+/*
+ *  The maximum number of physical heaps associated
+ *  with a device
+ */
+typedef enum
+{
+	PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL = 0,
+	PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL = 1,
+	PVRSRV_DEVICE_PHYS_HEAP_LAST
+}PVRSRV_DEVICE_PHYS_HEAP;
 
 typedef IMG_VOID (*PFN_MISR)(IMG_VOID *pvData);
 
@@ -75,6 +87,9 @@ typedef PVRSRV_ERROR (*PFN_SYS_DEV_POST_POWER)(PVRSRV_DEV_POWER_STATE eNewPowerS
 											   IMG_BOOL bForced);
 
 typedef IMG_VOID (*PFN_SYS_DEV_INTERRUPT_HANDLED)(PVRSRV_DEVICE_CONFIG *psDevConfig);
+
+typedef PVRSRV_ERROR (*PFN_SYS_DEV_CHECK_MEM_ALLOC_SIZE)(struct _PVRSRV_DEVICE_NODE_ *psDevNode,
+														 IMG_UINT64 ui64MemSize);
 
 struct _PVRSRV_DEVICE_CONFIG_
 {
@@ -102,8 +117,16 @@ struct _PVRSRV_DEVICE_CONFIG_
 	/*! System specific data. This gets passed into system callback functions */
 	IMG_HANDLE			hSysData;
 
-	/*! ID of the Physcial memory heap to use */
-	IMG_UINT32			ui32PhysHeapID;
+	/*! ID of the Physical memory heap to use
+	 *! The first entry (aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL])  will be used for allocations
+	 *!  where the PVRSRV_MEMALLOCFLAG_CPU_LOCAL flag is not set. Normally this will be the PhysHeapID
+	 *!  of an LMA heap (but the configuration could specify a UMA heap here, if desired)
+	 *! The second entry (aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL]) will be used for allocations
+	 *!  where the PVRSRV_MEMALLOCFLAG_CPU_LOCAL flag is set. Normally this will be the PhysHeapID
+	 *!  of a UMA heap (but the configuration could specify an LMA heap here, if desired)
+	 *! In the event of there being only one Physical Heap, the configuration should specify the
+	 *!  same heap details in both entries */
+	IMG_UINT32			aui32PhysHeapID[PVRSRV_DEVICE_PHYS_HEAP_LAST];
 
 	/*! Callback to inform the device we about to change power state */
 	PFN_SYS_DEV_PRE_POWER		pfnPrePowerState;
@@ -116,6 +139,9 @@ struct _PVRSRV_DEVICE_CONFIG_
 
 	/*! Callback to inform the device that an interrupt has been handled */
 	PFN_SYS_DEV_INTERRUPT_HANDLED	pfnInterruptHandled;
+
+	/*! Callback to handle memory budgeting */
+	PFN_SYS_DEV_CHECK_MEM_ALLOC_SIZE	pfnCheckMemAllocSize;
 
 	/*! Current breakpoint data master */
 	RGXFWIF_DM			eBPDM;

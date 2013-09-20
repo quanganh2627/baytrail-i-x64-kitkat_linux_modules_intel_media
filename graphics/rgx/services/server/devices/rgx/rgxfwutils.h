@@ -79,6 +79,7 @@ static INLINE PVRSRV_ERROR DevmemFwAllocate(PVRSRV_RGXDEV_INFO *psDevInfo,
 							uiSize,
 							ROGUE_CACHE_LINE_SIZE,
 							uiFlags,
+							"FWAllocate",
 							ppsMemDescPtr);
 	if (eError != PVRSRV_OK)
 	{
@@ -111,6 +112,7 @@ static INLINE PVRSRV_ERROR DevmemFwAllocateExportable(PVRSRV_DEVICE_NODE *psDevi
 									  uiSize,
 									  64,
 									  uiFlags,
+									  "FWAllocateExportable",
 									  ppsMemDescPtr);
 	if (eError != PVRSRV_OK)
 	{
@@ -178,6 +180,7 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							     IMG_UINT32			ui32LogType,
 							     IMG_UINT32            ui32NumTilingCfgs,
 							     IMG_UINT32            *pui32BIFTilingXStrides,
+							     IMG_UINT32			ui32FilterMode,
 							     RGXFWIF_DEV_VIRTADDR	*psRGXFWInitFWAddr);
 
 
@@ -225,7 +228,7 @@ IMG_VOID RGXUnsetFirmwareAddress(DEVMEM_MEMDESC			*psSrc);
                                         should allocate it
 @Input          ui32AllocatedOffset     Offset into pre-allocate MemDesc to use
                                         as the FW context. If psAllocatedMemDesc
-                                        is NULL then this parameter is ingored
+                                        is NULL then this parameter is ignored
 @Input          psFWMemContextMemDesc   MemDesc of the FW memory context this
                                         common context resides on
 @Input          psContextStateMemDesc   FW context state (context switch) MemDesc
@@ -234,7 +237,7 @@ IMG_VOID RGXUnsetFirmwareAddress(DEVMEM_MEMDESC			*psSrc);
 @Input          psInfo                  Structure that contains extra info
                                         required for the creation of the context
                                         (elements might change from core to core)
-@Return			PVRSRV_OK if the context was succesfully created
+@Return			PVRSRV_OK if the context was successfully created
 */ /**************************************************************************/
 PVRSRV_ERROR FWCommonContextAllocate(CONNECTION_DATA *psConnection,
 									 PVRSRV_DEVICE_NODE *psDeviceNode,

@@ -114,5 +114,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #endif /* FIX_HW_BRN_36492 */
 
+#define DPX_MAX_RAY_CONTEXTS 4 /* FIXME should this be in dpx file? */
 
 #endif /* _RGXDEFS_KM_H_ */

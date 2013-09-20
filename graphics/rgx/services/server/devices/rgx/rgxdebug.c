@@ -53,6 +53,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxdebug.h"
 #include "pvrversion.h"
 #include "pvr_debug.h"
+#include "srvkm.h"
 #include "rgxutils.h"
 #include "tlstream.h"
 #include "rgxfwutils.h"
@@ -70,6 +71,7 @@ IMG_CHAR* pszPowStateName [] = {
 	RGXFWIF_POW_STATES
 #undef X
 };
+
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
@@ -804,7 +806,7 @@ IMG_VOID RGXDebugRequestProcess(PVRSRV_RGXDEV_INFO	*psDevInfo,
 				/* Forcing bit 6 of MslvCtrl1 to 0 to avoid internal reg read going though the core */
 				OSWriteHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_META_SP_MSLVCTRL1, 0x0);
 
-				eError = RGXRunScript(psDevInfo, psDevInfo->sScripts.asDbgCommands, RGX_MAX_INIT_COMMANDS, PDUMP_FLAGS_CONTINUOUS);
+				eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDbgCommands, RGX_MAX_INIT_COMMANDS, PDUMP_FLAGS_CONTINUOUS);
 				if (eError != PVRSRV_OK)
 				{
 					PVR_DPF((PVR_DBG_WARNING,"RGXDumpDebugInfo: RGXRunScript failed (%d) - Retry", eError));
@@ -812,7 +814,7 @@ IMG_VOID RGXDebugRequestProcess(PVRSRV_RGXDEV_INFO	*psDevInfo,
 					/* use thread1 for slave port accesses */
 					OSWriteHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_META_SP_MSLVCTRL1, 0x1 << RGX_CR_META_SP_MSLVCTRL1_THREAD_SHIFT);
 
-					eError = RGXRunScript(psDevInfo, psDevInfo->sScripts.asDbgCommands, RGX_MAX_INIT_COMMANDS, PDUMP_FLAGS_CONTINUOUS);
+					eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDbgCommands, RGX_MAX_INIT_COMMANDS, PDUMP_FLAGS_CONTINUOUS);
 					if (eError != PVRSRV_OK)
 					{
 						PVR_DPF((PVR_DBG_ERROR,"RGXDumpDebugInfo: RGXRunScript retry failed (%d) - Dump Slave Port debug information", eError));
@@ -973,7 +975,38 @@ IMG_VOID RGXDebugRequestProcess(PVRSRV_RGXDEV_INFO	*psDevInfo,
 			}
 			break;
 		}
-			
+		case DEBUG_REQUEST_VERBOSITY_HIGH:
+		{
+			PVRSRV_ERROR            eError;
+			IMG_UINT32              ui32DeviceIndex;
+			PVRSRV_DEV_POWER_STATE  ePowerState;
+			IMG_BOOL                bRGXPoweredON;
+
+			ui32DeviceIndex = psDevInfo->psDeviceNode->sDevId.ui32DeviceIndex;
+
+			eError = PVRSRVGetDevicePowerState(ui32DeviceIndex, &ePowerState);
+			if (eError != PVRSRV_OK)
+			{
+				PVR_DPF((PVR_DBG_ERROR, "RGXDebugRequestProcess: Error retrieving RGX power state. No debug info dumped."));
+				return;
+			}
+
+			bRGXPoweredON = (ePowerState == PVRSRV_DEV_POWER_STATE_ON);
+
+			PVR_LOG(("------[ Debug bus ]------"));
+
+			_RGXDumpRGXDebugSummary(psDevInfo, bRGXPoweredON);
+
+			if (bRGXPoweredON)
+			{
+				eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDbgBusCommands, RGX_MAX_DBGBUS_COMMANDS, PDUMP_FLAGS_CONTINUOUS);
+				if (eError != PVRSRV_OK)
+				{
+					PVR_DPF((PVR_DBG_WARNING,"RGXDumpDebugBusInfo: RGXRunScript failed (%s)", PVRSRVGetErrorStringKM(eError)));
+				}
+				break;
+			}
+		}
 		default:
 			break;
 	}
@@ -1038,575 +1071,6 @@ PVRSRV_ERROR RGXQueryDMState(PVRSRV_RGXDEV_INFO *psDevInfo, RGXFWIF_DM eDM, RGXF
 	return eError;
 }
 
-/*
-	RGXHWPerfCopyDataL1toL2
-*/
-static IMG_UINT32 RGXHWPerfCopyDataL1toL2(IMG_HANDLE hHWPerfStream,
-										  IMG_BYTE   *pbFwBuffer, 
-										  IMG_UINT32 ui32BytesExp)
-{
-  	IMG_BYTE 	 *pbL2Buffer;
-	IMG_UINT32   ui32L2BufFree;
-	IMG_UINT32   ui32BytesCopied = 0;
-	PVRSRV_ERROR eError;
-
-/* HWPERF_MISR_FUNC_DEBUG enables debug code for investigating HWPerf issues */
-#ifdef HWPERF_MISR_FUNC_DEBUG
-	static IMG_UINT32 gui32Ordinal = IMG_UINT32_MAX;
-#endif
-
-	PVR_DPF_ENTERED;
-
-#ifdef HWPERF_MISR_FUNC_DEBUG
-	PVR_DPF((PVR_DBG_VERBOSE, "RGXHWPerfCopyDataL1toL2 BufToBeCopiedStart:0x%p bytesExp:%05d",
-							  pbFwBuffer, ui32BytesExp));
-#endif
-
-	/* Try submitting all data in one TL packet. */
-	eError = TLStreamReserve2( hHWPerfStream, 
-							   &pbL2Buffer, 
-							   (IMG_SIZE_T)ui32BytesExp , 
-							   &ui32L2BufFree);
-	if ( eError == PVRSRV_OK )
-	{
-		OSMemCopy( pbL2Buffer, pbFwBuffer, (IMG_SIZE_T)ui32BytesExp );
-		eError = TLStreamCommit(hHWPerfStream, (IMG_SIZE_T)ui32BytesExp);
-		if ( eError != PVRSRV_OK )
-		{
-			PVR_DPF((PVR_DBG_ERROR,
-					 "TLStreamCommit() failed (%d) in %s(), unable to copy packet from L1 to L2 buffer",
-					 eError, __func__));
-			goto e0;
-		}
-		/* Data were successfully written */
-		ui32BytesCopied = ui32BytesExp;
-	}
-	else if ( (eError == PVRSRV_ERROR_STREAM_FULL) &&
-			  (ui32L2BufFree > sizeof(RGX_HWPERF_V2_PACKET_HDR)<<1) )
-	{
-		/* There was not enough space for all data, copy as much as possible */
-		IMG_UINT32                sizeSum  = 0;
-		RGX_HWPERF_V2_PACKET_HDR* asCurPos = RGX_HWPERF_GET_PACKET(pbFwBuffer);
-
-		/* Traverse the array to find how many packets will fit in the available space. */
-		while ( sizeSum < ui32BytesExp  &&
-				sizeSum + RGX_HWPERF_GET_SIZE(asCurPos) < ui32L2BufFree )
-		{
-			sizeSum += RGX_HWPERF_GET_SIZE(asCurPos);
-			asCurPos = RGX_HWPERF_GET_NEXT_PACKET(asCurPos);
-		}
-
-		if ( 0 != sizeSum )
-		{
-			eError = TLStreamReserve( hHWPerfStream, &pbL2Buffer, (IMG_SIZE_T)sizeSum);
-
-			if ( eError == PVRSRV_OK )
-			{
-				OSMemCopy( pbL2Buffer, pbFwBuffer, (IMG_SIZE_T)sizeSum );
-				eError = TLStreamCommit(hHWPerfStream, (IMG_SIZE_T)sizeSum);
-				if ( eError != PVRSRV_OK )
-				{
-					PVR_DPF((PVR_DBG_ERROR,
-							 "TLStreamCommit() failed (%d) in %s(), unable to copy packet from L1 to L2 buffer",
-							 eError, __func__));
-					goto e0;
-				}
-				/* sizeSum bytes of hwperf packets have been successfully written */
-				ui32BytesCopied = sizeSum;
-			}
-			else if ( PVRSRV_ERROR_STREAM_FULL == eError )
-			{
-				PVR_DPF((PVR_DBG_WARNING, "HWPerf enabled: Host buffer full, check data in case of packet loss"));
-			}
-		}
-	}
-	if ( PVRSRV_OK != eError && /*  Some other error occurred */
-	     PVRSRV_ERROR_STREAM_FULL != eError ) /* Full error handled by caller, we returning the copied bytes count to caller*/
-	{
-		PVR_DPF((PVR_DBG_ERROR,
-				 "HWPerf enabled: Unexpected Error ( %d ) while copying FW buffer to TL buffer.",
-				 eError));
-	}
-
-#ifdef HWPERF_MISR_FUNC_DEBUG
-	{
- 	 	IMG_BYTE *pbFwBufferIter = pbFwBuffer;
-	 	do
-		{
-			RGX_HWPERF_V2_PACKET_HDR *asCurPos = RGX_HWPERF_GET_PACKET(pbFwBufferIter);
-			IMG_UINT32 ui32CurOrdinal = asCurPos->ui32Ordinal;
-			if (gui32Ordinal != IMG_UINT32_MAX)
-			{
-				if ((gui32Ordinal+1) != ui32CurOrdinal)
-				{
-					if (gui32Ordinal < ui32CurOrdinal)
-					{
-						PVR_DPF((PVR_DBG_WARNING,
-								 "HWPerf [%p] packets lost (%u packets) between ordinal %u...%u",
-								 pbFwBufferIter,
-								 ui32CurOrdinal - gui32Ordinal - 1,
-								 gui32Ordinal,
-								 ui32CurOrdinal));
-					}
-					else
-					{
-						PVR_DPF((PVR_DBG_WARNING,
-								 "HWPerf [%p] packet ordinal out of sequence last: %u, current: %u",
-								  pbFwBufferIter,
-								  gui32Ordinal,
-								  ui32CurOrdinal));
-					}
-				}
-			}
-			gui32Ordinal = asCurPos->ui32Ordinal;
-			pbFwBufferIter += RGX_HWPERF_GET_SIZE(asCurPos);
-		} while( pbFwBufferIter < pbFwBuffer+ui32BytesCopied );
-	}
-#endif
-e0:
-	/* Return the remaining packets left to be transported. */
-	PVR_DPF_RETURN_VAL(ui32BytesCopied);
-}
-
-static INLINE IMG_UINT32 RGXHWPerfAdvanceRIdx(
-		const IMG_UINT32 ui32BufSize,
-		const IMG_UINT32 ui32Pos,
-		const IMG_UINT16 ui16Size)
-{
-	return (  ui32Pos + ui16Size < ui32BufSize ? ui32Pos + ui16Size : 0 );
-}
-
-/*
-	RGXHWPerfDataStore
-*/
-IMG_VOID RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo)
-{
-	RGXFWIF_TRACEBUF    *psRGXFWIfTraceBufCtl = psDevInfo->psRGXFWIfTraceBuf;
-	IMG_BYTE*           psHwPerfInfo = psDevInfo->psRGXFWIfHWPerfBuf;
-	PVRSRV_ERROR		eError = PVRSRV_OK;
-	IMG_UINT32			ui32SrcRIdx, ui32SrcWIdx, ui32SrcWrap;
-	IMG_UINT32			ui32BytesExp = 0, ui32BytesCopied = 0, ui32BytesCopiedSum = 0;
-#ifdef HWPERF_MISR_FUNC_DEBUG
-	IMG_UINT32			ui32BytesExpSum = 0;
-#endif
-	
-	PVR_DPF_ENTERED;
-
-	/* Caller should check this member is valid before calling */
-	PVR_ASSERT(psDevInfo->hHWPerfStream);
-	
- 	/* Get a copy of the current
-	 *   read (first packet to read) 
-	 *   write (empty location for the next write to be inserted) 
-	 *   WrapCount (# bytes passed the normal buffer end)
-	 * indexes of the FW buffer */
-	ui32SrcRIdx = psRGXFWIfTraceBufCtl->ui32HWPerfRIdx;
-	ui32SrcWIdx = psRGXFWIfTraceBufCtl->ui32HWPerfWIdx;
-	ui32SrcWrap = psRGXFWIfTraceBufCtl->ui32HWPerfWrapCount;
-
-	/* Is there any data in the buffer not yet retrieved? */
-	if ( ui32SrcRIdx != ui32SrcWIdx )
-	{
-		PVR_DPF((PVR_DBG_MESSAGE, "RGXHWPerfDataStore EVENTS found srcRIdx:%d srcWIdx: %d ", ui32SrcRIdx, ui32SrcWIdx));
-
-		/* Is the write position higher than the read position? */
-		if ( ui32SrcWIdx > ui32SrcRIdx )
-		{
-			/* Yes, buffer has not wrapped */
-			ui32BytesExp  = ui32SrcWIdx - ui32SrcRIdx;
-#ifdef HWPERF_MISR_FUNC_DEBUG
-			ui32BytesExpSum += ui32BytesExp;
-#endif
-			ui32BytesCopied = RGXHWPerfCopyDataL1toL2(psDevInfo->hHWPerfStream,
-													  psHwPerfInfo + ui32SrcRIdx,
-													  ui32BytesExp);
-			ui32BytesCopiedSum += ui32BytesCopied;
-
-			/* Advance the read index and the free bytes counter by the number
-			 * of bytes transported. Items will be left in buffer if not all data
-			 * could be transported. Exit to allow buffer to drain. */
-			psRGXFWIfTraceBufCtl->ui32HWPerfRIdx = RGXHWPerfAdvanceRIdx(
-					psDevInfo->ui32RGXFWIfHWPerfBufSize, ui32SrcRIdx,
-					ui32BytesCopied);
-		}
-		/* No, buffer has wrapped and write position is behind read position */
-		else
-		{
-			/* Byte count equal to 
-			 *     number of bytes from read position to the end of the buffer, 
-			 *   + data in the extra space in the end of the buffer. */
-			ui32BytesExp = psDevInfo->ui32RGXFWIfHWPerfBufSize + ui32SrcWrap - ui32SrcRIdx;
-
-#ifdef HWPERF_MISR_FUNC_DEBUG
-			ui32BytesExpSum += ui32BytesExp;
-#endif
-			/* Attempt to transfer the packets to the TL stream buffer */
-			ui32BytesCopied = RGXHWPerfCopyDataL1toL2(psDevInfo->hHWPerfStream,
-													  psHwPerfInfo + ui32SrcRIdx,
-													  ui32BytesExp);
-			ui32BytesCopiedSum += ui32BytesCopied;
-
-			/* Advance read index as before and Update the local copy of the
-			 * read index as it might be used in the last if branch*/
-			ui32SrcRIdx = RGXHWPerfAdvanceRIdx(
-					psDevInfo->ui32RGXFWIfHWPerfBufSize, ui32SrcRIdx,
-					ui32BytesCopied);
-
-			/* Update Wrap Count */
-			if ( 0 == ui32SrcRIdx )
-			{
-				psRGXFWIfTraceBufCtl->ui32HWPerfWrapCount = 0;
-			}
-			psRGXFWIfTraceBufCtl->ui32HWPerfRIdx = ui32SrcRIdx;
-			
-			/* If all the data in the end of the array was copied, try copying
-			 * wrapped data in the beginning of the array, assuming there is
-			 * any and the RIdx was wrapped. */
-			if (   (ui32BytesCopied == ui32BytesExp)
-			    && (ui32SrcWIdx > 0) 
-				&& (ui32SrcRIdx == 0) )
-			{
-				ui32BytesExp = ui32SrcWIdx;
-#ifdef HWPERF_MISR_FUNC_DEBUG
-				ui32BytesExpSum += ui32BytesExp;
-#endif
-				ui32BytesCopied = RGXHWPerfCopyDataL1toL2(psDevInfo->hHWPerfStream,
-														  psHwPerfInfo,
-														  ui32BytesExp);
-				ui32BytesCopiedSum += ui32BytesCopied;
-				/* Advance the FW buffer read position. */
-				psRGXFWIfTraceBufCtl->ui32HWPerfRIdx = RGXHWPerfAdvanceRIdx(
-						psDevInfo->ui32RGXFWIfHWPerfBufSize, ui32SrcRIdx,
-						ui32BytesCopied);
-			}
-		}
-#ifdef HWPERF_MISR_FUNC_DEBUG
-		if (ui32BytesCopiedSum != ui32BytesExpSum)
-		{
-			PVR_DPF((PVR_DBG_WARNING, "RGXHWPerfDataStore: FW L1 RIdx:%u. Not all bytes copied to L2: %u bytes out of %u expected", psRGXFWIfTraceBufCtl->ui32HWPerfRIdx, ui32BytesCopiedSum, ui32BytesExpSum));
-		}
-#endif
-		if ( ui32BytesCopiedSum )
-		{	/* Signal consumers that packets may be available to read */
-			eError = TLStreamSync(psDevInfo->hHWPerfStream);
-			PVR_ASSERT(eError == PVRSRV_OK);
-		}
-        else
-        {
-            PVR_DPF((PVR_DBG_VERBOSE, "RGXHWPerfDataStore: Zero bytes copied from FW L1 to L2."));
-        }
-	}
-	else
-	{
-		PVR_DPF((PVR_DBG_VERBOSE, "RGXHWPerfDataStore NO EVENTS to transport"));
-	}
-
-	PVR_DPF_RETURN;
-}
-
-PVRSRV_ERROR RGXHWPerfDataStoreCB(PVRSRV_DEVICE_NODE *psDevInfo)
-{
-	PVRSRV_RGXDEV_INFO* psRgxDevInfo;
-
-	PVR_DPF_ENTERED;
-
-	PVR_ASSERT(psDevInfo);
-	psRgxDevInfo = psDevInfo->pvDevice;
-
-	if (psRgxDevInfo->hHWPerfStream != 0)
-	{
-		OSLockAcquire(psRgxDevInfo->hLockHWPerfStream);
-
-		RGXHWPerfDataStore(psRgxDevInfo);
-
-		OSLockRelease(psRgxDevInfo->hLockHWPerfStream);
-	}
-	PVR_DPF_RETURN_OK;
-}
-
-PVRSRV_ERROR RGXHWPerfInit(PVRSRV_RGXDEV_INFO *psRgxDevInfo)
-{
-	PVRSRV_ERROR eError;
-
-	PVR_DPF_ENTERED;
-
-	eError = OSLockCreate(&psRgxDevInfo->hLockHWPerfStream, LOCK_TYPE_PASSIVE);
-	PVR_LOGR_IF_ERROR(eError, "OSLockCreate");
-
-	/* Host L2 HWPERF buffer size in bytes must be bigger than the L1 buffer
-	 * accessed by the FW. The MISR may try to write one packet the size of the L1
-	 * buffer in some scenarios. When logging is enabled in the MISR, it can be seen
-	 * if the L2 buffer hits a full condition. The closer in size the L2 and L1 buffers
-	 * are the more chance of this happening.
-	 * Size chosen to allow MISR to write an L1 sized packet and for the client
-	 * application/daemon to drain a L1 sized packet e.g. ~ 2xL1+64 working space.
-	 */
-	eError = TLStreamCreate(&psRgxDevInfo->hHWPerfStream, "hwperf",
-					(psRgxDevInfo->ui32RGXFWIfHWPerfBufSize<<1)+64,
-					TL_FLAG_DROP_DATA | TL_FLAG_NO_SIGNAL_ON_COMMIT);
-	PVR_LOGG_IF_ERROR(eError, "TLStreamCreate", e1);
-
-	PVR_DPF_RETURN_OK;
-
-e1:
-	OSLockDestroy(psRgxDevInfo->hLockHWPerfStream);
-//e0:
-	PVR_DPF_RETURN_RC(eError);
-}
-
-IMG_VOID RGXHWPerfDeinit(PVRSRV_RGXDEV_INFO *psRgxDevInfo)
-{
-	PVR_DPF_ENTERED;
-
-	if (psRgxDevInfo->hHWPerfStream)
-	{
-		TLStreamClose(psRgxDevInfo->hHWPerfStream);
-		psRgxDevInfo->hHWPerfStream = IMG_NULL;
-	}
-	if (psRgxDevInfo->hLockHWPerfStream)
-	{
-		OSLockDestroy(psRgxDevInfo->hLockHWPerfStream);
-		psRgxDevInfo->hLockHWPerfStream = IMG_NULL;
-	}
-
-	PVR_DPF_RETURN;
-}
-
-/******************************************************************************
- * RGX HW Performance Profiling Server API(s)
- *****************************************************************************/
-/*
-	PVRSRVRGXCtrlHWPerfKM
-*/
-PVRSRV_ERROR PVRSRVRGXCtrlHWPerfKM(
-		PVRSRV_DEVICE_NODE*	psDeviceNode,
-		IMG_BOOL			bEnable,
-		IMG_UINT64 			ui64Mask)
-{
-	PVRSRV_ERROR 		eError = PVRSRV_OK;
-	PVRSRV_RGXDEV_INFO* psDevice;
-	RGXFWIF_KCCB_CMD 	sKccbCmd;
-
-	PVR_DPF_ENTERED;
-	PVR_ASSERT(psDeviceNode);
-	psDevice = psDeviceNode->pvDevice;
-
-	/* If this method is being used whether to enable or disable
-	 * then the hwperf stream is likely to be needed eventually so create it,
-	 * also helps unit testing.
-	 * Stream allocated on demand to reduce RAM foot print on systems not
-	 * needing HWPerf resources.
-	 */
-	if (psDevice->hHWPerfStream == 0)
-	{
-		eError = RGXHWPerfInit(psDevice);
-		PVR_LOGR_IF_ERROR(eError, "TLStreamCreate");
-	}
-
-	/* Prepare command parameters ...
-	 */
-	sKccbCmd.eCmdType = RGXFWIF_KCCB_CMD_HWPERF_CTRL_EVENTS;
-	sKccbCmd.uCmdData.sHWPerfCtrl.bEnable = bEnable;
-	sKccbCmd.uCmdData.sHWPerfCtrl.ui64Mask = ui64Mask;
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXCtrlHWPerfKM parameters set, calling FW"));
-
-	/* Ask the FW to carry out the HWPerf configuration command
-	 */
-	eError = RGXScheduleCommand(psDeviceNode->pvDevice,	RGXFWIF_DM_GP, 
-								&sKccbCmd, sizeof(sKccbCmd), IMG_TRUE);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_LOGR_IF_ERROR(eError, "RGXScheduleCommand");
-	}
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXCtrlHWPerfKM command scheduled for FW"));
-
-	/* Wait for FW to complete
-	 */
-	eError = RGXWaitForFWOp(psDeviceNode->pvDevice, RGXFWIF_DM_GP, psDeviceNode->psSyncPrim, IMG_TRUE);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_LOGR_IF_ERROR(eError, "RGXWaitForFWOp");
-	}
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXCtrlHWPerfKM firmware completed"));
-
-	/* If it was being asked to disable then don't delete the stream as the FW
-	 * will continue to generate events during the disabling phase. Clean up
-	 * will be done when the driver is unloaded.
-	 * The increase in extra memory used by the stream would only occur on a
-	 * developer system and not a production device as a user would never
-	 * enable HWPerf. If this is not the case then a deferred clean system will
-	 * need to be implemented.
-	 */
-	/*if ((!bEnable) && (psDevice->hHWPerfStream))
-	{
-		TLStreamDestroy(psDevice->hHWPerfStream);
-		psDevice->hHWPerfStream = 0;
-	}*/
-
-#if defined(DEBUG)
-	if (bEnable)
-	{
-		PVR_DPF((PVR_DBG_WARNING, "HWPerf events have been ENABLED (%llx)", ui64Mask));
-	}
-	else
-	{
-		PVR_DPF((PVR_DBG_WARNING, "HWPerf events have been DISABLED (%llx)", ui64Mask));
-	}
-#endif
-
-	PVR_DPF_RETURN_OK;
-}
-
-
-/*
-	PVRSRVRGXEnableHWPerfCountersKM
-*/
-PVRSRV_ERROR PVRSRVRGXConfigEnableHWPerfCountersKM(
-		PVRSRV_DEVICE_NODE* 		psDeviceNode,
-		IMG_UINT32 					ui32ArrayLen,
-		RGX_HWPERF_CONFIG_CNTBLK* 	psBlockConfigs)
-{
-	PVRSRV_ERROR 		eError = PVRSRV_OK;
-	RGXFWIF_KCCB_CMD 	sKccbCmd;
-	DEVMEM_MEMDESC*		psFwBlkConfigsMemDesc;
-	RGX_HWPERF_CONFIG_CNTBLK* psFwArray;
-
-	PVR_DPF_ENTERED;
-
-	PVR_ASSERT(psDeviceNode);
-	PVR_ASSERT(ui32ArrayLen>0);
-	PVR_ASSERT(psBlockConfigs);
-
-	/* Fill in the command structure with the parameters needed
-	 */
-	sKccbCmd.eCmdType = RGXFWIF_KCCB_CMD_HWPERF_CONFIG_ENABLE_BLKS;
-	sKccbCmd.uCmdData.sHWPerfCfgEnableBlks.ui32NumBlocks = ui32ArrayLen;
-
-	eError = DevmemFwAllocate(psDeviceNode->pvDevice,
-			sizeof(RGX_HWPERF_CONFIG_CNTBLK)*ui32ArrayLen, 
-			PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
-									  PVRSRV_MEMALLOCFLAG_GPU_READABLE | 
-					                  PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
-									  PVRSRV_MEMALLOCFLAG_CPU_READABLE |
-									  PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE | 
-									  PVRSRV_MEMALLOCFLAG_UNCACHED |
-									  PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC,
-			&psFwBlkConfigsMemDesc);
-	if (eError != PVRSRV_OK)
-		PVR_LOGR_IF_ERROR(eError, "DevmemFwAllocate");
-
-	RGXSetFirmwareAddress(&sKccbCmd.uCmdData.sHWPerfCfgEnableBlks.pasBlockConfigs,
-			psFwBlkConfigsMemDesc, 0, 0);
-
-	eError = DevmemAcquireCpuVirtAddr(psFwBlkConfigsMemDesc, (IMG_VOID **)&psFwArray);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_LOGG_IF_ERROR(eError, "DevmemAcquireCpuVirtAddr", fail1);
-	}
-
-	OSMemCopy(psFwArray, psBlockConfigs, sizeof(RGX_HWPERF_CONFIG_CNTBLK)*ui32ArrayLen);
-	DevmemPDumpLoadMem(psFwBlkConfigsMemDesc,
-						0,
-						sizeof(RGX_HWPERF_CONFIG_CNTBLK)*ui32ArrayLen,
-						0);
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXConfigEnableHWPerfCountersKM parameters set, calling FW"));
-
-	/* Ask the FW to carry out the HWPerf configuration command
-	 */
-	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
-			RGXFWIF_DM_GP, &sKccbCmd, sizeof(sKccbCmd), IMG_TRUE);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_LOGG_IF_ERROR(eError, "RGXScheduleCommand", fail2);
-	}
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXConfigEnableHWPerfCountersKM command scheduled for FW"));
-
-	/* Wait for FW to complete */
-	eError = RGXWaitForFWOp(psDeviceNode->pvDevice, RGXFWIF_DM_GP, psDeviceNode->psSyncPrim, IMG_TRUE);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_LOGG_IF_ERROR(eError, "RGXWaitForFWOp", fail2);
-	}
-
-	/* Release temporary memory used for block configuration
-	 */
-	RGXUnsetFirmwareAddress(psFwBlkConfigsMemDesc);
-	DevmemReleaseCpuVirtAddr(psFwBlkConfigsMemDesc);
-	DevmemFwFree(psFwBlkConfigsMemDesc);
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXConfigEnableHWPerfCountersKM firmware completed"));
-
-	PVR_DPF((PVR_DBG_WARNING, "HWPerf %d counter blocks configured and ENABLED",  ui32ArrayLen));
-
-	PVR_DPF_RETURN_OK;
-
-fail2:
-	DevmemReleaseCpuVirtAddr(psFwBlkConfigsMemDesc);
-fail1:
-	RGXUnsetFirmwareAddress(psFwBlkConfigsMemDesc);
-	DevmemFwFree(psFwBlkConfigsMemDesc);
-
-	PVR_DPF_RETURN_RC(eError);
-}
-
-
-/*
-	PVRSRVRGXDisableHWPerfcountersKM
-*/
-PVRSRV_ERROR PVRSRVRGXCtrlHWPerfCountersKM(
-		PVRSRV_DEVICE_NODE*		psDeviceNode,
-		IMG_BOOL				bEnable,
-	    IMG_UINT32 				ui32ArrayLen,
-	    IMG_UINT8*				psBlockIDs)
-{
-	PVRSRV_ERROR 		eError = PVRSRV_OK;
-	RGXFWIF_KCCB_CMD 	sKccbCmd;
-
-	PVR_DPF_ENTERED;
-
-	PVR_ASSERT(psDeviceNode);
-	PVR_ASSERT(ui32ArrayLen>0);
-	PVR_ASSERT(psBlockIDs);
-
-	/* Fill in the command structure with the parameters needed
-	 */
-	sKccbCmd.eCmdType = RGXFWIF_KCCB_CMD_HWPERF_CTRL_BLKS;
-	sKccbCmd.uCmdData.sHWPerfCtrlBlks.bEnable = bEnable;
-	sKccbCmd.uCmdData.sHWPerfCtrlBlks.ui32NumBlocks = ui32ArrayLen;
-	OSMemCopy(sKccbCmd.uCmdData.sHWPerfCtrlBlks.aeBlockIDs, psBlockIDs, sizeof(IMG_UINT8)*ui32ArrayLen);
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXCtrlHWPerfCountersKM parameters set, calling FW"));
-
-	/* Ask the FW to carry out the HWPerf configuration command
-	 */
-	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
-			RGXFWIF_DM_GP, &sKccbCmd, sizeof(sKccbCmd), IMG_TRUE);
-	if (eError != PVRSRV_OK)
-		PVR_LOGR_IF_ERROR(eError, "RGXScheduleCommand");
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXCtrlHWPerfCountersKM command scheduled for FW"));
-
-	/* Wait for FW to complete */
-	eError = RGXWaitForFWOp(psDeviceNode->pvDevice, RGXFWIF_DM_GP, psDeviceNode->psSyncPrim, IMG_TRUE);
-	if (eError != PVRSRV_OK)
-		PVR_LOGR_IF_ERROR(eError, "RGXWaitForFWOp");
-
-	//PVR_DPF((PVR_DBG_VERBOSE, "PVRSRVRGXCtrlHWPerfCountersKM firmware completed"));
-
-#if defined(DEBUG)
-	if (bEnable)
-		PVR_DPF((PVR_DBG_WARNING, "HWPerf %d counter blocks have been ENABLED",  ui32ArrayLen));
-	else
-		PVR_DPF((PVR_DBG_WARNING, "HWPerf %d counter blocks have been DISBALED",  ui32ArrayLen));
-#endif
-
-	PVR_DPF_RETURN_OK;
-}
 
 /******************************************************************************
  End of file (rgxdebug.c)

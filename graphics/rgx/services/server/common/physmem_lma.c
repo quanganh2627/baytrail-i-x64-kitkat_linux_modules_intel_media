@@ -89,7 +89,7 @@ static PVRSRV_ERROR _MapAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_DEV_PHYADDR *ps
 {
 	IMG_CPU_PHYADDR sCpuPAddr;
 
-	PhysHeapDevPAddrToCpuPAddr(psDevNode->psPhysHeap, &sCpuPAddr, psDevPAddr);
+	PhysHeapDevPAddrToCpuPAddr(psDevNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL], &sCpuPAddr, psDevPAddr);
 	*pvPtr = OSMapPhysToLin(sCpuPAddr,
 							uiSize,
 							ulFlags);
@@ -880,7 +880,7 @@ PhysmemNewLocalRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
     {
     	PDUMPCOMMENT("Deferred Allocation PMR (LMA)");
     }
-	eError = PMRCreatePMR(psDevNode->psPhysHeap,
+	eError = PMRCreatePMR(psDevNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL],
 						  uiSize,
                           uiChunkSize,
                           ui32NumPhysChunks,
@@ -891,20 +891,14 @@ PhysmemNewLocalRamBackedPMR(PVRSRV_DEVICE_NODE *psDevNode,
 						  "PMRLMA",
 						  &_sPMRLMAFuncTab,
 						  psPrivData,
-						  &psPMR);
+						  &psPMR,
+						  &hPDumpAllocInfo,
+						  IMG_FALSE);
 	if (eError != PVRSRV_OK)
 	{
 		goto errorOnCreate;
 	}
 
-	PDumpPMRMallocPMR(psPMR,
-					  uiChunkSize * ui32NumPhysChunks,
-					  /* alignment is alignment of start of buffer _and_
-					     minimum contiguity - i.e. smallest allowable
-					     page-size. */
-					  1ULL<<uiLog2PageSize,
-	                  IMG_FALSE,
-					  &hPDumpAllocInfo);
 	psPrivData->hPDumpAllocInfo = hPDumpAllocInfo;
 	psPrivData->bPDumpMalloced = IMG_TRUE;
 

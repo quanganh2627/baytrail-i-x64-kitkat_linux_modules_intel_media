@@ -51,6 +51,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "ion_support.h"
 #include "ion_sys.h"
 
+#include <linux/version.h>
 #include <linux/ion.h>
 #include <../drivers/gpu/ion/ion_priv.h>
 #include <linux/err.h>
@@ -59,18 +60,23 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* Just the system heaps are used by the generic implementation */
 static struct ion_platform_data generic_config = {
 	.nr = 2,
-	.heaps = {
-				{
-					.type = ION_HEAP_TYPE_SYSTEM_CONTIG,
-					.name = "system_contig",
-					.id = ION_HEAP_TYPE_SYSTEM_CONTIG,
-				},
-				{
-					.type = ION_HEAP_TYPE_SYSTEM,
-					.name = "system",
-					.id = ION_HEAP_TYPE_SYSTEM,
-				}
+	.heaps =
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,4,39))
+#else
+		(struct ion_platform_heap [])
+#endif
+		{
+			{
+				.type = ION_HEAP_TYPE_SYSTEM_CONTIG,
+				.name = "system_contig",
+				.id = ION_HEAP_TYPE_SYSTEM_CONTIG,
+			},
+			{
+				.type = ION_HEAP_TYPE_SYSTEM,
+				.name = "system",
+				.id = ION_HEAP_TYPE_SYSTEM,
 			}
+		}
 };
 
 struct ion_heap **g_apsIonHeaps;

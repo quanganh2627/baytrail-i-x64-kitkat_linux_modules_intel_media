@@ -74,6 +74,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define META_CR_PERF_COUNT_THR_0				(0x1 << META_CR_PERF_COUNT_THR_SHIFT)
 #define META_CR_PERF_COUNT_THR_1				(0x2 << META_CR_PERF_COUNT_THR_1)
 
+#define META_CR_TxVECINT_BHALT					(0x04820500)
 #define META_CR_PERF_ICORE0						(0x0480FFD0)
 #define META_CR_PERF_ICORE1						(0x0480FFD8)
 #define META_CR_PERF_ICORE_DCACHEMISS			(0x8)
@@ -83,6 +84,7 @@ typedef enum
 	META_PERF_CONF_NONE = 0,
 	META_PERF_CONF_ICACHE = 1,
 	META_PERF_CONF_DCACHE = 2,
+	META_PERF_CONF_POLLS = 3,
 } META_PERF_CONF;
 
 #define META_CR_PERF_COUNT(CTRL, THR)			((META_CR_PERF_COUNT_CTRL_##CTRL << META_CR_PERF_COUNT_CTRL_SHIFT) | \
@@ -260,6 +262,16 @@ typedef struct
 #define RGXFW_BOOTLDR_DEVV_ADDR_1	(0x000007E1)
 #define RGXFW_BOOTLDR_DEVV_ADDR		((((IMG_UINT64) RGXFW_BOOTLDR_DEVV_ADDR_1) << 32) | RGXFW_BOOTLDR_DEVV_ADDR_0)
 #define RGXFW_BOOTLDR_LIMIT			(0x1FFFF000)
+
+/* Bootloader configuration offset is in dwords (512 bytes) */
+#define RGXFW_BOOTLDR_CONF_OFFSET	(0x80)
+
+/************************************************************************
+* RGX META Core memory
+************************************************************************/
+#define RGX_META_COREMEM_ADDR   (0x80000000)
+#define RGX_META_IS_COREMEM(A)  (((A) >= RGX_META_COREMEM_ADDR) && ((A) < (RGX_META_COREMEM_ADDR + RGX_META_COREMEM_SIZE)))
+
 
 /************************************************************************
 * 2nd thread

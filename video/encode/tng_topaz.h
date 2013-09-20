@@ -32,8 +32,7 @@
 #define TOPAZHP_IRQ_ENABLED
 #define TOPAZHP_PIPE_NUM 2
 
-#define _MRFLD_B0_A_ 0
-#define _MRFLD_B0_   0
+/* #define MRFLD_B0_DEBUG */
 
 #define TNG_IS_H264_ENC(codec) \
 	(codec == IMG_CODEC_H264_NO_RC || \
@@ -284,6 +283,7 @@ int tng_topaz_remove_ctx(struct drm_psb_private *dev,
 extern int tng_topaz_save_mtx_state(struct drm_device *dev);
 
 extern int tng_topaz_restore_mtx_state(struct drm_device *dev);
+extern int tng_topaz_restore_mtx_state_b0(struct drm_device *dev);
 
 int tng_topaz_dequeue_send(struct drm_device *dev);
 

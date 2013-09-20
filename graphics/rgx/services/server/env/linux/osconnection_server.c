@@ -44,11 +44,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "osconnection_server.h"
 
 #include "env_connection.h"
-#include "proc.h"
 #include "allocmem.h"
 #include "pvr_debug.h"
 
 #if defined (SUPPORT_ION)
+#include <linux/err.h>
 #include "linux/ion.h"
 
 /*
@@ -124,9 +124,6 @@ PVRSRV_ERROR OSConnectionPrivateDataDeInit(IMG_HANDLE hOsPrivateData)
 #if defined(SUPPORT_ION)
 	EnvDataIonClientRelease(psEnvConnection->psIonData);
 #endif
-	/* Remove per process /proc entries */
-	/* FIXME: How does connection stuff map into /proc? */
-	/*RemoveConnectionProcDir(psEnvConnection); */
 
 	OSFreeMem(hOsPrivateData);
 	/*not nulling pointer, copy on stack*/

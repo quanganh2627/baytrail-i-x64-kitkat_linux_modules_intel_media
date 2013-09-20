@@ -52,6 +52,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #ifndef _RGX_CR_DEFS_KM_H_
 #define _RGX_CR_DEFS_KM_H_
+
+#include "img_types.h"
+
 /*
 
 	Core Module Clock Control Modes.
@@ -65,6 +68,20 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 #define RGX_CR_CLK_CTRL                                   (0x0000U)
 #define RGX_CR_CLK_CTRL_MASKFULL                          (IMG_UINT64_C(0xFFFFFF003F3FFFFF))
+#if defined(RGX_FEATURE_CLUSTER_GROUPING)
+/* BIF_TEXAS default: AUTO (0x00000002) */
+#define RGX_CR_CLK_CTRL_BIF_TEXAS_SHIFT                   (62U)
+#define RGX_CR_CLK_CTRL_BIF_TEXAS_CLRMSK                  (IMG_UINT64_C(0X3FFFFFFFFFFFFFFF))
+#define RGX_CR_CLK_CTRL_BIF_TEXAS_OFF                     (IMG_UINT64_C(0000000000000000))
+#define RGX_CR_CLK_CTRL_BIF_TEXAS_ON                      (IMG_UINT64_C(0x4000000000000000))
+#define RGX_CR_CLK_CTRL_BIF_TEXAS_AUTO                    (IMG_UINT64_C(0x8000000000000000))
+/* IPP default: AUTO (0x00000002) */
+#define RGX_CR_CLK_CTRL_IPP_SHIFT                         (60U)
+#define RGX_CR_CLK_CTRL_IPP_CLRMSK                        (IMG_UINT64_C(0XCFFFFFFFFFFFFFFF))
+#define RGX_CR_CLK_CTRL_IPP_OFF                           (IMG_UINT64_C(0000000000000000))
+#define RGX_CR_CLK_CTRL_IPP_ON                            (IMG_UINT64_C(0x1000000000000000))
+#define RGX_CR_CLK_CTRL_IPP_AUTO                          (IMG_UINT64_C(0x2000000000000000))
+#endif /* RGX_FEATURE_CLUSTER_GROUPING */
 
 /* FBC default: AUTO (0x00000002) */
 #define RGX_CR_CLK_CTRL_FBC_SHIFT                         (58U)
@@ -229,6 +246,18 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGX_CR_CLK_STATUS_MCU_FBTC_CLRMSK                 (IMG_UINT64_C(0XFFFFFFFEFFFFFFFF))
 #define RGX_CR_CLK_STATUS_MCU_FBTC_GATED                  (IMG_UINT64_C(0000000000000000))
 #define RGX_CR_CLK_STATUS_MCU_FBTC_RUNNING                (IMG_UINT64_C(0x0000000100000000))
+#if defined(RGX_FEATURE_CLUSTER_GROUPING)
+/* BIF_TEXAS default: GATED (0x00000000) */
+#define RGX_CR_CLK_STATUS_BIF_TEXAS_SHIFT                 (31U)
+#define RGX_CR_CLK_STATUS_BIF_TEXAS_CLRMSK                (IMG_UINT64_C(0XFFFFFFFF7FFFFFFF))
+#define RGX_CR_CLK_STATUS_BIF_TEXAS_GATED                 (IMG_UINT64_C(0000000000000000))
+#define RGX_CR_CLK_STATUS_BIF_TEXAS_RUNNING               (IMG_UINT64_C(0x0000000080000000))
+/* IPP default: GATED (0x00000000) */
+#define RGX_CR_CLK_STATUS_IPP_SHIFT                       (30U)
+#define RGX_CR_CLK_STATUS_IPP_CLRMSK                      (IMG_UINT64_C(0XFFFFFFFFBFFFFFFF))
+#define RGX_CR_CLK_STATUS_IPP_GATED                       (IMG_UINT64_C(0000000000000000))
+#define RGX_CR_CLK_STATUS_IPP_RUNNING                     (IMG_UINT64_C(0x0000000040000000))
+#endif /* RGX_FEATURE_CLUSTER_GROUPING */
 
 /* FBC default: GATED (0x00000000) */
 #define RGX_CR_CLK_STATUS_FBC_SHIFT                       (29U)
@@ -463,7 +492,27 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 	Register RGX_CR_SOFT_RESET
 */
 #define RGX_CR_SOFT_RESET                                 (0x0100U)
-#define RGX_CR_SOFT_RESET_MASKFULL                        (IMG_UINT64_C(0x00FFFFFFFFFFFC1D))
+#define RGX_CR_SOFT_RESET_MASKFULL                        (IMG_UINT64_C(0x1FE7FFFFFFFFFC1D))
+/* JONES_CORE*/
+#define RGX_CR_SOFT_RESET_JONES_CORE_SHIFT                (60U)
+#define RGX_CR_SOFT_RESET_JONES_CORE_CLRMSK               (IMG_UINT64_C(0XEFFFFFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_JONES_CORE_EN                   (IMG_UINT64_C(0X1000000000000000))
+/* TILING_CORE*/
+#define RGX_CR_SOFT_RESET_TILING_CORE_SHIFT               (59U)
+#define RGX_CR_SOFT_RESET_TILING_CORE_CLRMSK              (IMG_UINT64_C(0XF7FFFFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_TILING_CORE_EN                  (IMG_UINT64_C(0X0800000000000000))
+/* TE3*/
+#define RGX_CR_SOFT_RESET_TE3_SHIFT                       (58U)
+#define RGX_CR_SOFT_RESET_TE3_CLRMSK                      (IMG_UINT64_C(0XFBFFFFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_TE3_EN                          (IMG_UINT64_C(0X0400000000000000))
+/* VCE*/
+#define RGX_CR_SOFT_RESET_VCE_SHIFT                       (57U)
+#define RGX_CR_SOFT_RESET_VCE_CLRMSK                      (IMG_UINT64_C(0XFDFFFFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_VCE_EN                          (IMG_UINT64_C(0X0200000000000000))
+/* VBS*/
+#define RGX_CR_SOFT_RESET_VBS_SHIFT                       (56U)
+#define RGX_CR_SOFT_RESET_VBS_CLRMSK                      (IMG_UINT64_C(0XFEFFFFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_VBS_EN                          (IMG_UINT64_C(0X0100000000000000))
 #if defined(RGX_FEATURE_RAY_TRACING)
 /* DPX1_CORE*/
 #define RGX_CR_SOFT_RESET_DPX1_CORE_SHIFT                 (55U)
@@ -477,18 +526,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGX_CR_SOFT_RESET_FBA_SHIFT                       (53U)
 #define RGX_CR_SOFT_RESET_FBA_CLRMSK                      (IMG_UINT64_C(0XFFDFFFFFFFFFFFFF))
 #define RGX_CR_SOFT_RESET_FBA_EN                          (IMG_UINT64_C(0X0020000000000000))
-/* RPM*/
-#define RGX_CR_SOFT_RESET_RPM_SHIFT                       (52U)
-#define RGX_CR_SOFT_RESET_RPM_CLRMSK                      (IMG_UINT64_C(0XFFEFFFFFFFFFFFFF))
-#define RGX_CR_SOFT_RESET_RPM_EN                          (IMG_UINT64_C(0X0010000000000000))
-/* SHG*/
-#define RGX_CR_SOFT_RESET_SHG_SHIFT                       (51U)
-#define RGX_CR_SOFT_RESET_SHG_CLRMSK                      (IMG_UINT64_C(0XFFF7FFFFFFFFFFFF))
-#define RGX_CR_SOFT_RESET_SHG_EN                          (IMG_UINT64_C(0X0008000000000000))
-/* SHF*/
-#define RGX_CR_SOFT_RESET_SHF_SHIFT                       (50U)
-#define RGX_CR_SOFT_RESET_SHF_CLRMSK                      (IMG_UINT64_C(0XFFFBFFFFFFFFFFFF))
-#define RGX_CR_SOFT_RESET_SHF_EN                          (IMG_UINT64_C(0X0004000000000000))
+/* SH*/
+#define RGX_CR_SOFT_RESET_SH_SHIFT                        (50U)
+#define RGX_CR_SOFT_RESET_SH_CLRMSK                       (IMG_UINT64_C(0XFFFBFFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_SH_EN                           (IMG_UINT64_C(0X0004000000000000))
 /* VRDM*/
 #define RGX_CR_SOFT_RESET_VRDM_SHIFT                      (49U)
 #define RGX_CR_SOFT_RESET_VRDM_CLRMSK                     (IMG_UINT64_C(0XFFFDFFFFFFFFFFFF))
@@ -499,6 +540,36 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGX_CR_SOFT_RESET_MCU_FBTC_SHIFT                  (48U)
 #define RGX_CR_SOFT_RESET_MCU_FBTC_CLRMSK                 (IMG_UINT64_C(0XFFFEFFFFFFFFFFFF))
 #define RGX_CR_SOFT_RESET_MCU_FBTC_EN                     (IMG_UINT64_C(0X0001000000000000))
+#if defined(RGX_FEATURE_CLUSTER_GROUPING)
+/* PHANTOM1_CORE*/
+#define RGX_CR_SOFT_RESET_PHANTOM1_CORE_SHIFT             (47U)
+#define RGX_CR_SOFT_RESET_PHANTOM1_CORE_CLRMSK            (IMG_UINT64_C(0XFFFF7FFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_PHANTOM1_CORE_EN                (IMG_UINT64_C(0X0000800000000000))
+/* PHANTOM0_CORE*/
+#define RGX_CR_SOFT_RESET_PHANTOM0_CORE_SHIFT             (46U)
+#define RGX_CR_SOFT_RESET_PHANTOM0_CORE_CLRMSK            (IMG_UINT64_C(0XFFFFBFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_PHANTOM0_CORE_EN                (IMG_UINT64_C(0X0000400000000000))
+/* BERNADO1_CORE*/
+#define RGX_CR_SOFT_RESET_BERNADO1_CORE_SHIFT             (45U)
+#define RGX_CR_SOFT_RESET_BERNADO1_CORE_CLRMSK            (IMG_UINT64_C(0XFFFFDFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_BERNADO1_CORE_EN                (IMG_UINT64_C(0X0000200000000000))
+/* BERNADO0_CORE*/
+#define RGX_CR_SOFT_RESET_BERNADO0_CORE_SHIFT             (44U)
+#define RGX_CR_SOFT_RESET_BERNADO0_CORE_CLRMSK            (IMG_UINT64_C(0XFFFFEFFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_BERNADO0_CORE_EN                (IMG_UINT64_C(0X0000100000000000))
+/* IPP*/
+#define RGX_CR_SOFT_RESET_IPP_SHIFT                       (43U)
+#define RGX_CR_SOFT_RESET_IPP_CLRMSK                      (IMG_UINT64_C(0XFFFFF7FFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_IPP_EN                          (IMG_UINT64_C(0X0000080000000000))
+/* BIF_TEXAS*/
+#define RGX_CR_SOFT_RESET_BIF_TEXAS_SHIFT                 (42U)
+#define RGX_CR_SOFT_RESET_BIF_TEXAS_CLRMSK                (IMG_UINT64_C(0XFFFFFBFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_BIF_TEXAS_EN                    (IMG_UINT64_C(0X0000040000000000))
+/* TORNADO_CORE*/
+#define RGX_CR_SOFT_RESET_TORNADO_CORE_SHIFT              (41U)
+#define RGX_CR_SOFT_RESET_TORNADO_CORE_CLRMSK             (IMG_UINT64_C(0XFFFFFDFFFFFFFFFF))
+#define RGX_CR_SOFT_RESET_TORNADO_CORE_EN                 (IMG_UINT64_C(0X0000020000000000))
+#endif /* RGX_FEATURE_CLUSTER_GROUPING */
 
 /* DUST_H_CORE*/
 #define RGX_CR_SOFT_RESET_DUST_H_CORE_SHIFT               (40U)
@@ -659,7 +730,7 @@ Bifpmcache BIF
 	Register RGX_CR_EVENT_STATUS
 */
 #define RGX_CR_EVENT_STATUS                               (0x0130U)
-#define RGX_CR_EVENT_STATUS_MASKFULL                      (IMG_UINT64_C(0x000000001FFFFFFF))
+#define RGX_CR_EVENT_STATUS_MASKFULL                      (IMG_UINT64_C(0x000000001FFEFFFF))
 #if defined(RGX_FEATURE_RAY_TRACING)
 /* DPX_OUT_OF_MEMORY
  The Doppler overflow FIFO in memory is full 
@@ -733,12 +804,6 @@ Bifpmcache BIF
 #define RGX_CR_EVENT_STATUS_SHG_FINISHED_SHIFT            (17U)
 #define RGX_CR_EVENT_STATUS_SHG_FINISHED_CLRMSK           (0XFFFDFFFFU)
 #define RGX_CR_EVENT_STATUS_SHG_FINISHED_EN               (0X00020000U)
-/* SHF_FINISHED
- SHF has completed writing all vertices and varyings to memory 
-*/
-#define RGX_CR_EVENT_STATUS_SHF_FINISHED_SHIFT            (16U)
-#define RGX_CR_EVENT_STATUS_SHF_FINISHED_CLRMSK           (0XFFFEFFFFU)
-#define RGX_CR_EVENT_STATUS_SHF_FINISHED_EN               (0X00010000U)
 #endif /* RGX_FEATURE_RAY_TRACING */
 
 /* USC_TRIGGER
@@ -837,6 +902,32 @@ Bifpmcache BIF
 #define RGX_CR_EVENT_STATUS_TLA_COMPLETE_SHIFT            (0U)
 #define RGX_CR_EVENT_STATUS_TLA_COMPLETE_CLRMSK           (0XFFFFFFFEU)
 #define RGX_CR_EVENT_STATUS_TLA_COMPLETE_EN               (0X00000001U)
+
+/*
+
+	This register contains the value of a 48-bit internal timer.
+	The timer runs continuously, and wraps at the top end.
+	It counts 256 cycles at the core clock frequency.
+
+
+	This means that at 100 MHz:
+	1 count value = 1/100MHz = 256 * 10 * 10^-9 seconds = 2.56 us
+
+	In order to avoid having to issue three 32-bit reads to detect the lower 32-bits wrapping, the MSB of the low 32-bit word is duplicated in the MSB of the high 32-bit word.
+
+*/
+/*
+	Register RGX_CR_TIMER
+*/
+#define RGX_CR_TIMER                                      (0x0160U)
+#define RGX_CR_TIMER_MASKFULL                             (IMG_UINT64_C(0x8000FFFFFFFFFFFF))
+/* BIT31*/
+#define RGX_CR_TIMER_BIT31_SHIFT                          (63U)
+#define RGX_CR_TIMER_BIT31_CLRMSK                         (IMG_UINT64_C(0X7FFFFFFFFFFFFFFF))
+#define RGX_CR_TIMER_BIT31_EN                             (IMG_UINT64_C(0X8000000000000000))
+/* VALUE*/
+#define RGX_CR_TIMER_VALUE_SHIFT                          (0U)
+#define RGX_CR_TIMER_VALUE_CLRMSK                         (IMG_UINT64_C(0XFFFF000000000000))
 
 /*
 	Register RGX_CR_META_SP_MSLVDATAX
@@ -2750,7 +2841,7 @@ Defines whether PBE accesses with the Vertex DM are trusted: 0x1 = Trusted, 0x0 
 	Register RGX_CR_CLK_CTRL2
 */
 #define RGX_CR_CLK_CTRL2                                  (0xD200U)
-#define RGX_CR_CLK_CTRL2_MASKFULL                         (IMG_UINT64_C(0x0000000000000FFF))
+#define RGX_CR_CLK_CTRL2_MASKFULL                         (IMG_UINT64_C(0x0000000000000F33))
 /* MCU_FBTC default: AUTO (0x00000002) */
 #define RGX_CR_CLK_CTRL2_MCU_FBTC_SHIFT                   (10U)
 #define RGX_CR_CLK_CTRL2_MCU_FBTC_CLRMSK                  (IMG_UINT64_C(0XFFFFFFFFFFFFF3FF))
@@ -2764,24 +2855,12 @@ Defines whether PBE accesses with the Vertex DM are trusted: 0x1 = Trusted, 0x0 
 #define RGX_CR_CLK_CTRL2_VRDM_OFF                         (IMG_UINT64_C(0000000000000000))
 #define RGX_CR_CLK_CTRL2_VRDM_ON                          (IMG_UINT64_C(0x0000000000000100))
 #define RGX_CR_CLK_CTRL2_VRDM_AUTO                        (IMG_UINT64_C(0x0000000000000200))
-/* SHG default: AUTO (0x00000002) */
-#define RGX_CR_CLK_CTRL2_SHG_SHIFT                        (6U)
-#define RGX_CR_CLK_CTRL2_SHG_CLRMSK                       (IMG_UINT64_C(0XFFFFFFFFFFFFFF3F))
-#define RGX_CR_CLK_CTRL2_SHG_OFF                          (IMG_UINT64_C(0000000000000000))
-#define RGX_CR_CLK_CTRL2_SHG_ON                           (IMG_UINT64_C(0x0000000000000040))
-#define RGX_CR_CLK_CTRL2_SHG_AUTO                         (IMG_UINT64_C(0x0000000000000080))
-/* SHF default: AUTO (0x00000002) */
-#define RGX_CR_CLK_CTRL2_SHF_SHIFT                        (4U)
-#define RGX_CR_CLK_CTRL2_SHF_CLRMSK                       (IMG_UINT64_C(0XFFFFFFFFFFFFFFCF))
-#define RGX_CR_CLK_CTRL2_SHF_OFF                          (IMG_UINT64_C(0000000000000000))
-#define RGX_CR_CLK_CTRL2_SHF_ON                           (IMG_UINT64_C(0x0000000000000010))
-#define RGX_CR_CLK_CTRL2_SHF_AUTO                         (IMG_UINT64_C(0x0000000000000020))
-/* RPM default: AUTO (0x00000002) */
-#define RGX_CR_CLK_CTRL2_RPM_SHIFT                        (2U)
-#define RGX_CR_CLK_CTRL2_RPM_CLRMSK                       (IMG_UINT64_C(0XFFFFFFFFFFFFFFF3))
-#define RGX_CR_CLK_CTRL2_RPM_OFF                          (IMG_UINT64_C(0000000000000000))
-#define RGX_CR_CLK_CTRL2_RPM_ON                           (IMG_UINT64_C(0x0000000000000004))
-#define RGX_CR_CLK_CTRL2_RPM_AUTO                         (IMG_UINT64_C(0x0000000000000008))
+/* SH default: AUTO (0x00000002) */
+#define RGX_CR_CLK_CTRL2_SH_SHIFT                         (4U)
+#define RGX_CR_CLK_CTRL2_SH_CLRMSK                        (IMG_UINT64_C(0XFFFFFFFFFFFFFFCF))
+#define RGX_CR_CLK_CTRL2_SH_OFF                           (IMG_UINT64_C(0000000000000000))
+#define RGX_CR_CLK_CTRL2_SH_ON                            (IMG_UINT64_C(0x0000000000000010))
+#define RGX_CR_CLK_CTRL2_SH_AUTO                          (IMG_UINT64_C(0x0000000000000020))
 /* FBA default: AUTO (0x00000002) */
 #define RGX_CR_CLK_CTRL2_FBA_SHIFT                        (0U)
 #define RGX_CR_CLK_CTRL2_FBA_CLRMSK                       (IMG_UINT64_C(0XFFFFFFFFFFFFFFFC))
@@ -2803,28 +2882,18 @@ Defines whether PBE accesses with the Vertex DM are trusted: 0x1 = Trusted, 0x0 
 	Register RGX_CR_CLK_STATUS2
 */
 #define RGX_CR_CLK_STATUS2                                (0xD208U)
-#define RGX_CR_CLK_STATUS2_MASKFULL                       (IMG_UINT64_C(0x000000000000001F))
+#define RGX_CR_CLK_STATUS2_MASKFULL                       (IMG_UINT64_C(0x0000000000000015))
 #if defined(RGX_FEATURE_RAY_TRACING)
 /* VRDM default: GATED (0x00000000) */
 #define RGX_CR_CLK_STATUS2_VRDM_SHIFT                     (4U)
 #define RGX_CR_CLK_STATUS2_VRDM_CLRMSK                    (IMG_UINT64_C(0XFFFFFFFFFFFFFFEF))
 #define RGX_CR_CLK_STATUS2_VRDM_GATED                     (IMG_UINT64_C(0000000000000000))
 #define RGX_CR_CLK_STATUS2_VRDM_RUNNING                   (IMG_UINT64_C(0x0000000000000010))
-/* SHG default: GATED (0x00000000) */
-#define RGX_CR_CLK_STATUS2_SHG_SHIFT                      (3U)
-#define RGX_CR_CLK_STATUS2_SHG_CLRMSK                     (IMG_UINT64_C(0XFFFFFFFFFFFFFFF7))
-#define RGX_CR_CLK_STATUS2_SHG_GATED                      (IMG_UINT64_C(0000000000000000))
-#define RGX_CR_CLK_STATUS2_SHG_RUNNING                    (IMG_UINT64_C(0x0000000000000008))
-/* SHF default: GATED (0x00000000) */
-#define RGX_CR_CLK_STATUS2_SHF_SHIFT                      (2U)
-#define RGX_CR_CLK_STATUS2_SHF_CLRMSK                     (IMG_UINT64_C(0XFFFFFFFFFFFFFFFB))
-#define RGX_CR_CLK_STATUS2_SHF_GATED                      (IMG_UINT64_C(0000000000000000))
-#define RGX_CR_CLK_STATUS2_SHF_RUNNING                    (IMG_UINT64_C(0x0000000000000004))
-/* RPM default: GATED (0x00000000) */
-#define RGX_CR_CLK_STATUS2_RPM_SHIFT                      (1U)
-#define RGX_CR_CLK_STATUS2_RPM_CLRMSK                     (IMG_UINT64_C(0XFFFFFFFFFFFFFFFD))
-#define RGX_CR_CLK_STATUS2_RPM_GATED                      (IMG_UINT64_C(0000000000000000))
-#define RGX_CR_CLK_STATUS2_RPM_RUNNING                    (IMG_UINT64_C(0x0000000000000002))
+/* SH default: GATED (0x00000000) */
+#define RGX_CR_CLK_STATUS2_SH_SHIFT                       (2U)
+#define RGX_CR_CLK_STATUS2_SH_CLRMSK                      (IMG_UINT64_C(0XFFFFFFFFFFFFFFFB))
+#define RGX_CR_CLK_STATUS2_SH_GATED                       (IMG_UINT64_C(0000000000000000))
+#define RGX_CR_CLK_STATUS2_SH_RUNNING                     (IMG_UINT64_C(0x0000000000000004))
 /* FBA default: GATED (0x00000000) */
 #define RGX_CR_CLK_STATUS2_FBA_SHIFT                      (0U)
 #define RGX_CR_CLK_STATUS2_FBA_CLRMSK                     (IMG_UINT64_C(0XFFFFFFFFFFFFFFFE))

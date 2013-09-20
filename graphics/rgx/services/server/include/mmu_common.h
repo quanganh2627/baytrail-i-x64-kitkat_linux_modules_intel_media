@@ -79,7 +79,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 /* services/server/include/ */
-#include "pdump_mmu.h"
 #include "pmr.h"
 
 /* include/ */
@@ -97,7 +96,11 @@ typedef enum
 	MMU_LEVEL_1,
 	MMU_LEVEL_2,
 	MMU_LEVEL_3,
+	MMU_LEVEL_LAST
 } MMU_LEVEL;
+
+/* moved after declaration of MMU_LEVEL, as pdump_mmu.h references it */
+#include "pdump_mmu.h"
 
 #define MMU_MAX_LEVEL 3
 
@@ -109,6 +112,8 @@ struct _MMU_DEVVADDR_CONFIG_;
 */
 typedef struct _MMU_DEVICEATTRIBS_
 {
+	PDUMP_MMU_TYPE eMMUType;
+
 	/*! The type of the top level object */
 	MMU_LEVEL eTopLevel;
 
@@ -361,7 +366,7 @@ MMU_MapPMR (MMU_CONTEXT *psMMUContext,
 /*************************************************************************/ /*!
 @Function       MMU_AcquireBaseAddr
 
-@Description    Acquire the device physcial address of the base level MMU object
+@Description    Acquire the device physical address of the base level MMU object
 
 @Input          psMMUContext            MMU context to operate on
 
@@ -377,7 +382,7 @@ MMU_AcquireBaseAddr(MMU_CONTEXT *psMMUContext, IMG_DEV_PHYADDR *psPhysAddr);
 /*************************************************************************/ /*!
 @Function       MMU_ReleaseBaseAddr
 
-@Description    Release the device physcial address of the base level MMU object
+@Description    Release the device physical address of the base level MMU object
 
 @Input          psMMUContext            MMU context to operate on
 
@@ -436,9 +441,12 @@ extern PVRSRV_ERROR MMU_ContextDerivePCPDumpSymAddr(MMU_CONTEXT *psMMUContext,
 */
 /*****************************************************************************/
 PVRSRV_ERROR MMU_PDumpWritePageCatBase(MMU_CONTEXT *psMMUContext,
-                                       const IMG_CHAR *pszSpaceName,
-                                       IMG_DEVMEM_OFFSET_T uiOffset,
-									   PDUMP_FLAGS_T uiPdumpFlags);
+        								const IMG_CHAR *pszSpaceName,
+        								IMG_DEVMEM_OFFSET_T uiOffset,
+        								IMG_UINT32 ui32WordSize,
+        								IMG_UINT32 ui32AlignShift,
+        								IMG_UINT32 ui32Shift,
+        								PDUMP_FLAGS_T uiPdumpFlags);
 
 /*************************************************************************/ /*!
 @Function       MMU_AcquirePDumpMMUContext
@@ -479,13 +487,19 @@ PVRSRV_ERROR MMU_ReleasePDumpMMUContext(MMU_CONTEXT *psMMUContext);
 #endif
 static INLINE IMG_VOID
 MMU_PDumpWritePageCatBase(MMU_CONTEXT *psMMUContext,
-                          const IMG_CHAR *pszSpaceName,
-                          IMG_DEVMEM_OFFSET_T uiOffset,
-						  PDUMP_FLAGS_T uiPdumpFlags)
+        						const IMG_CHAR *pszSpaceName,
+        						IMG_DEVMEM_OFFSET_T uiOffset,
+        						IMG_UINT32 ui32WordSize,
+        						IMG_UINT32 ui32AlignShift,
+        						IMG_UINT32 ui32Shift,
+        						PDUMP_FLAGS_T uiPdumpFlags)
 {
 	PVR_UNREFERENCED_PARAMETER(psMMUContext);
 	PVR_UNREFERENCED_PARAMETER(pszSpaceName);
 	PVR_UNREFERENCED_PARAMETER(uiOffset);
+	PVR_UNREFERENCED_PARAMETER(ui32WordSize);
+	PVR_UNREFERENCED_PARAMETER(ui32AlignShift);
+	PVR_UNREFERENCED_PARAMETER(ui32Shift);
 	PVR_UNREFERENCED_PARAMETER(uiPdumpFlags);
 }
 #endif /* PDUMP */

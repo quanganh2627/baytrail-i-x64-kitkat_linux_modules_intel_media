@@ -292,7 +292,10 @@ PDumpWriteSymbAddress(const IMG_CHAR *pszDestSpaceName,
                       IMG_DEVMEM_OFFSET_T uiDestOffset,
                       const IMG_CHAR *pszRefSymbolicName,
                       IMG_DEVMEM_OFFSET_T uiRefOffset,
-                      IMG_DEVMEM_SIZE_T uiWordSize,
+                      const IMG_CHAR *pszPDumpDevName,
+                      IMG_UINT32 ui32WordSize,
+                      IMG_UINT32 ui32AlignShift,
+                      IMG_UINT32 ui32Shift,
                       IMG_UINT32 uiPDumpFlags);
 
 /* Register the connection with the PDump subsystem */
@@ -302,7 +305,7 @@ extern PVRSRV_ERROR PDumpRegisterConnection(SYNC_CONNECTION_DATA *psSyncConnecti
 /* Unregister the connection with the PDump subsystem */
 extern IMG_VOID PDumpUnregisterConnection(PDUMP_CONNECTION_DATA *psPDumpConnectionData);
 
-/* Register for notification of PDump Transition into/outof capture range */
+/* Register for notification of PDump Transition into/out of capture range */
 extern PVRSRV_ERROR PDumpRegisterTransitionCallback(PDUMP_CONNECTION_DATA *psPDumpConnectionData,
 													 PFN_PDUMP_TRANSITION pfnCallback,
 													 IMG_PVOID hPrivData,
@@ -311,7 +314,7 @@ extern PVRSRV_ERROR PDumpRegisterTransitionCallback(PDUMP_CONNECTION_DATA *psPDu
 /* Unregister notification of PDump Transition */
 extern IMG_VOID PDumpUnregisterTransitionCallback(IMG_PVOID pvHandle);
 
-/* Notify PDump of a Transition into/outof capture range */
+/* Notify PDump of a Transition into/out of capture range */
 extern PVRSRV_ERROR PDumpTransition(PDUMP_CONNECTION_DATA *psPDumpConnectionData, IMG_BOOL bInto, IMG_BOOL bContinuous);
    
 	#define PDUMP_LOCK				PDumpLockKM

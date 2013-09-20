@@ -66,6 +66,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "ion_sys_private.h"
 #endif
 
+#if defined(LMA)
+#define	HOST_PCI_INIT_FLAGS	0
+#else
+#define	HOST_PCI_INIT_FLAGS	HOST_PCI_INIT_FLAG_BUS_MASTER
+#endif
+
 #if defined(LDM_PCI) || defined(SUPPORT_DRM)
 /* The following is exported by the Linux module code */
 extern struct pci_dev *gpsPVRLDMDev;
@@ -241,7 +247,12 @@ static PVRSRV_ERROR AcquireLocalMemory(SYS_DATA *psSysData, IMG_CPU_PHYADDR *psM
 {
 	IMG_UINT16 uiDevID;
 	IMG_UINT32 uiMemSize;
+	IMG_UINT32 uiMemLimit;
+	IMG_UINT32 ui32Value;
+	IMG_UINT32 ui32PCIVersion;
 	PVRSRV_ERROR eError;
+	IMG_CPU_PHYADDR	sHostFPGARegCpuPBase;
+	IMG_VOID *pvHostFPGARegCpuVBase;
 
 	OSPCIDevID(psSysData->hRGXPCI, &uiDevID);
 	if (uiDevID != SYS_RGX_DEV_DEVICE_ID)
@@ -251,20 +262,48 @@ static PVRSRV_ERROR AcquireLocalMemory(SYS_DATA *psSysData, IMG_CPU_PHYADDR *psM
 		return PVRSRV_ERROR_PCI_DEVICE_NOT_FOUND;
 	}
 
-	uiMemSize = OSPCIAddrRangeLen(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM);
-	if (RGX_TC_MEM_SIZE > uiMemSize)
+	/* To get some of the version information we need to read from a register that we don't normally have 
+	   mapped. Map it temporarily (without trying to reserve it) to get the information we need. */
+	sHostFPGARegCpuPBase.uiAddr	= OSPCIAddrRangeStart(psSysData->hRGXPCI, SYS_APOLLO_REG_PCI_BASENUM) + 0x40F0;
+	pvHostFPGARegCpuVBase		= OSMapPhysToLin(sHostFPGARegCpuPBase, 0x04, 0);
+
+	ui32Value = OSReadHWReg32(pvHostFPGARegCpuVBase, 0);
+
+	ui32PCIVersion = UINT8_HEX_TO_DEC((ui32Value & 0x00FF0000) >> 16);
+
+	if (ui32PCIVersion < 18)
+	{
+		PVR_DPF((PVR_DBG_WARNING,"\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
+		PVR_DPF((PVR_DBG_WARNING, "%s: YOU HAVE AN OUTDATED TEST CHIP FPGA IMAGE. RESTRICTING AVAILABLE GRAPHICS MEMORY TO 512MB AS A WORKAROUND.", __FUNCTION__));
+		PVR_DPF((PVR_DBG_WARNING, "THIS RESTRICTION MAY CAUSE TEST FAILURES FOR THOSE TESTS THAT REQUIRE A LARGE AMOUNT OF GRAPHICS MEMORY."));
+		PVR_DPF((PVR_DBG_WARNING, "PLEASE SPEAK TO YOUR CUSTOMER SUPPORT REPRESENTATIVE ABOUT UPGRADING YOUR TEST CHIP FPGA IMAGE."));
+		PVR_DPF((PVR_DBG_WARNING, "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
+
+		/* limit to 512mb */
+		uiMemLimit = 512 * 1024 * 1024;
+	
+		uiMemSize = OSPCIAddrRangeLen(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM);
+	}
+	else
+	{
+		uiMemLimit = SYS_DEV_MEM_REGION_SIZE;
+	
+		uiMemSize = OSPCIAddrRangeLen(psSysData->hRGXPCI, SYS_DEV_MEM_PCI_BASENUM) - SYS_DEV_MEM_BROKEN_BYTES;
+	}
+
+	if (uiMemLimit > uiMemSize)
 	{
 		PVR_DPF((PVR_DBG_WARNING, 
 			 "%s: Device memory region smaller than requested (got 0x%08X, requested 0x%08X)", 
-			 __FUNCTION__, uiMemSize, RGX_TC_MEM_SIZE));
+			 __FUNCTION__, uiMemSize, uiMemLimit));
 	}
-	else if (RGX_TC_MEM_SIZE < uiMemSize)
+	else if (uiMemLimit < uiMemSize)
 	{
-		PVR_DPF((PVR_DBG_MESSAGE, 
+		PVR_DPF((PVR_DBG_WARNING, 
 			 "%s: Limiting device memory region size to 0x%08X from 0x%08X", 
-			 __FUNCTION__, RGX_TC_MEM_SIZE, uiMemSize));
+			 __FUNCTION__, uiMemLimit, uiMemSize));
 
-		uiMemSize = RGX_TC_MEM_SIZE;
+		uiMemSize = uiMemLimit; 
 	}
 
 	/* Reserve the address region */
@@ -308,6 +347,7 @@ static INLINE void ReleaseLocalMemory(SYS_DATA *psSysData, IMG_CPU_PHYADDR *psMe
 #if (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL)
 static PVRSRV_ERROR InitLocalMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA *psSysData)
 {
+	IMG_UINT32 ui32HeapNum = 0;
 	IMG_UINT32 ui32Value;
 	PVRSRV_ERROR eError;
 
@@ -317,25 +357,36 @@ static PVRSRV_ERROR InitLocalMemory(PVRSRV_SYSTEM_CONFIG *psSysConfig, SYS_DATA 
 		return eError;
 	}
 
-	/* Setup the RGX heap */
-	psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr	= psSysData->sLocalMemCpuPBase.uiAddr;
-	psSysConfig->pasPhysHeaps[0].uiSize =
+	/* Setup the Rogue heap */
+	psSysConfig->pasPhysHeaps[ui32HeapNum].sStartAddr.uiAddr =
+		psSysData->sLocalMemCpuPBase.uiAddr;
+	psSysConfig->pasPhysHeaps[ui32HeapNum].uiSize =
 		psSysData->uiLocalMemSize
+#if defined(SUPPORT_DISPLAY_CLASS)
 		- RGX_TC_RESERVE_DC_MEM_SIZE
+#endif
 #if defined(SUPPORT_ION)
 		- RGX_TC_RESERVE_ION_MEM_SIZE
 #endif
 		;
+	ui32HeapNum++;
 
+#if defined(SUPPORT_DISPLAY_CLASS)
 	/* Setup the DC heap */
-	psSysConfig->pasPhysHeaps[1].sStartAddr.uiAddr	= psSysData->sLocalMemCpuPBase.uiAddr + psSysConfig->pasPhysHeaps[0].uiSize;
-	psSysConfig->pasPhysHeaps[1].uiSize		= RGX_TC_RESERVE_DC_MEM_SIZE;
+	psSysConfig->pasPhysHeaps[ui32HeapNum].sStartAddr.uiAddr = 
+		psSysConfig->pasPhysHeaps[ui32HeapNum - 1].sStartAddr.uiAddr + 
+		psSysConfig->pasPhysHeaps[ui32HeapNum - 1].uiSize;
+	psSysConfig->pasPhysHeaps[ui32HeapNum].uiSize = RGX_TC_RESERVE_DC_MEM_SIZE;
+	ui32HeapNum++;
+#endif
 
 #if defined(SUPPORT_ION)
 	/* Setup the ion heap */
-	psSysConfig->pasPhysHeaps[2].sStartAddr.uiAddr =
-		psSysConfig->pasPhysHeaps[1].sStartAddr.uiAddr + RGX_TC_RESERVE_DC_MEM_SIZE;
-	psSysConfig->pasPhysHeaps[2].uiSize = RGX_TC_RESERVE_ION_MEM_SIZE;
+	psSysConfig->pasPhysHeaps[ui32HeapNum].sStartAddr.uiAddr = 
+		psSysConfig->pasPhysHeaps[ui32HeapNum - 1].sStartAddr.uiAddr + 
+		psSysConfig->pasPhysHeaps[ui32HeapNum - 1].uiSize;
+	psSysConfig->pasPhysHeaps[ui32HeapNum].uiSize = RGX_TC_RESERVE_ION_MEM_SIZE;
+	ui32HeapNum++;
 #endif
 
 	/* Configure Apollo for regression compatibility (i.e. local memory) mode */
@@ -932,9 +983,9 @@ static PVRSRV_ERROR PCIInitDev(SYS_DATA *psSysData)
 	/* Use the pci_dev structure pointer from module.c */
 	PVR_ASSERT(gpsPVRLDMDev != IMG_NULL);
 
-	psSysData->hRGXPCI = OSPCISetDev((IMG_VOID *)gpsPVRLDMDev, HOST_PCI_INIT_FLAG_BUS_MASTER);
+	psSysData->hRGXPCI = OSPCISetDev((IMG_VOID *)gpsPVRLDMDev, HOST_PCI_INIT_FLAGS);
 #else
-	psSysData->hRGXPCI = OSPCIAcquireDev(SYS_RGX_DEV_VENDOR_ID, SYS_RGX_DEV_DEVICE_ID, HOST_PCI_INIT_FLAG_BUS_MASTER);
+	psSysData->hRGXPCI = OSPCIAcquireDev(SYS_RGX_DEV_VENDOR_ID, SYS_RGX_DEV_DEVICE_ID, HOST_PCI_INIT_FLAGS);
 #endif /* defined(LDM_PCI) || defined(SUPPORT_DRM) */
 	if (!psSysData->hRGXPCI)
 	{
@@ -1146,7 +1197,7 @@ static IMG_VOID TCLocalCpuPAddrToDevPAddr(IMG_HANDLE hPrivData,
 {
 	PVRSRV_SYSTEM_CONFIG *psSysConfig = (PVRSRV_SYSTEM_CONFIG *)hPrivData;
 
-	psDevPAddr->uiAddr = psCpuPAddr->uiAddr - psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr;
+	psDevPAddr->uiAddr = psCpuPAddr->uiAddr - psSysConfig->pasPhysHeaps[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL].sStartAddr.uiAddr;
 }
 
 static IMG_VOID TCLocalDevPAddrToCpuPAddr(IMG_HANDLE hPrivData,
@@ -1155,7 +1206,7 @@ static IMG_VOID TCLocalDevPAddrToCpuPAddr(IMG_HANDLE hPrivData,
 {
 	PVRSRV_SYSTEM_CONFIG *psSysConfig = (PVRSRV_SYSTEM_CONFIG *)hPrivData;
 
-	psCpuPAddr->uiAddr = psDevPAddr->uiAddr + psSysConfig->pasPhysHeaps[0].sStartAddr.uiAddr;
+	psCpuPAddr->uiAddr = psDevPAddr->uiAddr + psSysConfig->pasPhysHeaps[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL].sStartAddr.uiAddr;
 }
 #elif (TC_MEMORY_CONFIG == TC_MEMORY_HOST) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID) || (TC_MEMORY_CONFIG == TC_MEMORY_DIRECT_MAPPED)
 static IMG_VOID TCSystemCpuPAddrToDevPAddr(IMG_HANDLE hPrivData,
@@ -1195,13 +1246,6 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 		goto ErrorFreeSysData;
 	}
 
-	/* Save private data for the physical memory heaps */
-	gsPhysHeapConfig[0].hPrivData = (IMG_HANDLE)&gsSysConfig;
-
-#if (TC_MEMORY_CONFIG == TC_MEMORY_LOCAL) || (TC_MEMORY_CONFIG == TC_MEMORY_HYBRID)
-	gsPhysHeapConfig[1].hPrivData = (IMG_HANDLE)&gsSysConfig;
-#endif
-
 #if defined(SUPPORT_ION)
 #if TC_MEMORY_CONFIG == TC_MEMORY_LOCAL
 	{
@@ -1216,7 +1260,6 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 			.sPCIAddrRangeStart = gsSysConfig.pasPhysHeaps[0].sStartAddr
 		};
 
-		gsPhysHeapConfig[2].hPrivData = (IMG_HANDLE)&gsSysConfig;
 		IonInit(&sIonPrivateData);
 	}
 #elif TC_MEMORY_CONFIG == TC_MEMORY_HYBRID

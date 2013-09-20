@@ -2654,8 +2654,6 @@ MRST_ERROR MRSTLFBInit(struct drm_device * dev)
 		psDevInfo->sDCJTable.pfnGetDCBuffers = GetDCBuffers;
 		psDevInfo->sDCJTable.pfnSwapToDCBuffer = SwapToDCBuffer;
 		psDevInfo->sDCJTable.pfnSetDCState = SetDCState;
-		psDevInfo->sDCJTable.pfnGetDCFrontBuffer = GetDCFrontBuffer;
-		psDevInfo->sDCJTable.pfnQuerySwapCommandID = MRSTQuerySwapCommand;
 
 
 		if(psDevInfo->sPVRJTable.pfnPVRSRVRegisterDCDevice (

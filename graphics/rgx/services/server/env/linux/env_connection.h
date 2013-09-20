@@ -41,14 +41,12 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _ENV_CONNECTION_H_
+#if !defined(_ENV_CONNECTION_H_)
 #define _ENV_CONNECTION_H_
 
 #include <linux/list.h>
-#include <linux/proc_fs.h>
 
 #include "handle.h"
-
 #include "pvr_debug.h"
 
 #if defined(SUPPORT_ION)
@@ -63,9 +61,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(SUPPORT_ION)
 #define ION_CLIENT_NAME_SIZE	50
-#endif
 
-#if defined(SUPPORT_ION)
 typedef struct _ENV_ION_CONNECTION_DATA_
 {
 	IMG_CHAR azIonClientName[ION_CLIENT_NAME_SIZE];
@@ -82,7 +78,6 @@ typedef struct _ENV_CONNECTION_DATA_
 #else
 	struct file *psFile;
 #endif
-	struct proc_dir_entry *psProcDir;
 #if defined(SUPPORT_ION)
 	ENV_ION_CONNECTION_DATA *psIonData;
 #endif
@@ -100,9 +95,7 @@ static inline struct ion_client *EnvDataIonClientAcquire(ENV_CONNECTION_DATA *ps
 	psEnvData->psIonData->ui32IonClientRefCount++;
 	return psEnvData->psIonData->psIonClient;
 }
-#endif
 
-#if defined(SUPPORT_ION)
 static inline IMG_VOID EnvDataIonClientRelease(ENV_ION_CONNECTION_DATA *psIonData)
 {
 	PVR_ASSERT(psIonData != IMG_NULL);
@@ -116,6 +109,6 @@ static inline IMG_VOID EnvDataIonClientRelease(ENV_ION_CONNECTION_DATA *psIonDat
 		psIonData = IMG_NULL;
 	}
 }
-#endif
+#endif /* defined(SUPPORT_ION) */
 
-#endif /* _ENV_CONNECTION_H_ */
+#endif /* !defined(_ENV_CONNECTION_H_) */

@@ -75,13 +75,14 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "allocmem.h"
 #include "mmap.h"
 #include "env_data.h"
-#include "proc.h"
+#include "pvr_debugfs.h"
 #include "mutex.h"
 #include "event.h"
 #include "linkage.h"
 #include "pvr_uaccess.h"
 #include "pvr_debug.h"
 #include "driverlock.h"
+#include "process_stats.h"
 
 #if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 #include "syscommon.h"
@@ -92,16 +93,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #else
 #define EVENT_OBJECT_TIMEOUT_MS		(100)
 #endif /* EMULATOR */
-
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,24))
-
-static inline int is_vmalloc_addr(const void *pvCpuVAddr)
-{
-	unsigned long lAddr = (unsigned long)pvCpuVAddr;
-	return lAddr >= VMALLOC_START && lAddr < VMALLOC_END;
-}
-
-#endif /* (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,24)) */
 
 ENV_DATA *gpsEnvData = IMG_NULL;
 
@@ -154,7 +145,15 @@ PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_SIZE_T uiSize,
 	psMemHandle->u.pvHandle = psPage;
 	sCpuPAddr.uiAddr = page_to_phys(psPage);
 
-	PhysHeapCpuPAddrToDevPAddr(psDevNode->psPhysHeap, psDevPAddr, &sCpuPAddr);
+	PhysHeapCpuPAddrToDevPAddr(psDevNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_CPU_LOCAL], psDevPAddr, &sCpuPAddr);
+
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+    PVRSRVStatsAddMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_ALLOC_PAGES,
+                                 psPage,
+                                 sCpuPAddr,
+                                 PAGE_SIZE,
+                                 IMG_NULL);
+#endif
 
 	return PVRSRV_OK;
 }
@@ -162,6 +161,10 @@ PVRSRV_ERROR OSMMUPxAlloc(PVRSRV_DEVICE_NODE *psDevNode, IMG_SIZE_T uiSize,
 IMG_VOID OSMMUPxFree(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle)
 {
 	struct page *psPage = (struct page*) psMemHandle->u.pvHandle;
+
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_ALLOC_PAGES, psPage);
+#endif
 
 #if defined (CONFIG_X86)
 	{
@@ -193,9 +196,27 @@ PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 											1,
 											-1,
 											prot);
+	if (((IMG_VOID *)uiCPUVAddr) == IMG_NULL)
+	{
+		return PVRSRV_ERROR_FAILED_TO_MAP_KERNELVIRTUAL;
+	}
 
 	*pvPtr = (IMG_VOID *) ((uiCPUVAddr & (~OSGetPageMask())) |
 							((IMG_UINTPTR_T) (psDevPAddr->uiAddr & OSGetPageMask())));
+
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	{
+		IMG_CPU_PHYADDR sCpuPAddr;
+		sCpuPAddr.uiAddr = 0;
+
+		PVRSRVStatsAddMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_VMAP,
+									 uiCPUVAddr,
+									 sCpuPAddr,
+									 uiSize,
+									 IMG_NULL);
+	}
+#endif
+
 	return PVRSRV_OK;
 }
 
@@ -203,6 +224,10 @@ IMG_VOID OSMMUPxUnmap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle, IMG
 {
 	PVR_UNREFERENCED_PARAMETER(psDevNode);
 	PVR_UNREFERENCED_PARAMETER(psMemHandle);
+
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	PVRSRVStatsRemoveMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_VMAP, pvPtr);
+#endif
 
 	vm_unmap_ram(pvPtr, 1);
 }
@@ -358,6 +383,69 @@ IMG_VOID OSReleaseThreadQuanta(IMG_VOID)
 }
 
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,35))
+static inline IMG_UINT32 Clockus(IMG_VOID)
+{
+    return  (jiffies * (1000000 / HZ));
+}
+#else
+/* Not matching/aligning this API to the Clockus() API above to avoid necessary
+ * multiplication/division operations in calling code.
+ */
+static inline IMG_UINT64 Clockns64(IMG_VOID)
+{
+	IMG_UINT64 timenow;
+
+	/* Kernel thread preempt protection. Some architecture implementations 
+	 * (ARM) of sched_clock are not preempt safe when the kernel is configured 
+	 * as such e.g. CONFIG_PREEMPT and others.
+	 */
+	preempt_disable();
+
+	/* Using sched_clock instead of ktime_get since we need a time stamp that
+	 * correlates with that shown in kernel logs and trace data not one that
+	 * is a bit behind. */
+	timenow = sched_clock();
+
+	preempt_enable();
+
+	return timenow;
+}
+#endif
+
+/*************************************************************************/ /*!
+ @Function OSClockns64
+ @Description
+        This function returns the clock in nanoseconds. Unlike OSClockus,
+        OSClockus64 has a near 64-bit range
+*/ /**************************************************************************/
+IMG_UINT64 OSClockns64(IMG_VOID)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+	return Clockns64();	
+#else
+	return ((IMG_UINT64)Clockus()) * 1000ULL;
+#endif
+}
+
+/*************************************************************************/ /*!
+ @Function OSClockus64
+ @Description
+        This function returns the clock in microseconds. Unlike OSClockus,
+        OSClockus64 has a near 64-bit range
+*/ /**************************************************************************/
+IMG_UINT64 OSClockus64(IMG_VOID)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+	IMG_UINT64 timenow = Clockns64();
+	IMG_UINT32 remainder;
+	return OSDivide64r64(timenow, 1000, &remainder);
+#else
+	return ((IMG_UINT64)Clockus());
+#endif
+}
+
+
 /*************************************************************************/ /*!
 @Function       OSClockus
 @Description    This function returns the clock in microseconds
@@ -365,27 +453,34 @@ IMG_VOID OSReleaseThreadQuanta(IMG_VOID)
 */ /**************************************************************************/ 
 IMG_UINT32 OSClockus(IMG_VOID)
 {
-    IMG_UINT32 time, j = jiffies;
-
-    time = j * (1000000 / HZ);
-
-    return time;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+	return (IMG_UINT32) OSClockus64();
+#else
+	return Clockus();
+#endif
 }
 
 
 /*************************************************************************/ /*!
 @Function       OSClockms
-@Description    This function returns the clock in miliseconds
+@Description    This function returns the clock in milliseconds
 @Return         clock (ms)
 */ /**************************************************************************/ 
 IMG_UINT32 OSClockms(IMG_VOID)
 {
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+	IMG_UINT64 timenow = Clockns64();
+	IMG_UINT32 remainder;
+
+	return OSDivide64(timenow, 1000000, &remainder);
+#else
     IMG_UINT64 time, j = (IMG_UINT32)jiffies;
 
     time = j * (((1 << 16) * 1000) / HZ);
 	time >>= 16;
 
     return (IMG_UINT32)time;
+#endif
 }
 
 
@@ -409,7 +504,7 @@ IMG_VOID OSSleepms(IMG_UINT32 ui32Timems)
 
 /*************************************************************************/ /*!
 @Function       OSGetCurrentProcessIDKM
-@Description    Returns handle for current process
+@Description    Returns ID of current process (thread group)
 @Return         ID of current process
 *****************************************************************************/
 IMG_PID OSGetCurrentProcessIDKM(IMG_VOID)
@@ -433,11 +528,26 @@ IMG_PID OSGetCurrentProcessIDKM(IMG_VOID)
 /*************************************************************************/ /*!
 @Function       OSGetCurrentProcessNameKM
 @Description    gets name of current process
-@Return         none
+@Return         process name
 *****************************************************************************/
-IMG_VOID OSGetCurrentProcessNameKM(IMG_CHAR *pszProcName, IMG_UINT32 ui32Size)
+IMG_CHAR *OSGetCurrentProcessNameKM(IMG_VOID)
 {
-	strncpy(pszProcName, current->comm, MIN(ui32Size,TASK_COMM_LEN));
+	return current->comm;
+}
+
+/*************************************************************************/ /*!
+@Function       OSGetCurrentThreadIDKM
+@Description    Returns ID for current thread
+@Return         ID of current thread
+*****************************************************************************/
+IMG_UINTPTR_T OSGetCurrentThreadIDKM(IMG_VOID)
+{
+	if (in_interrupt())
+	{
+		return KERNEL_ID;
+	}
+
+	return current->pid;
 }
 
 /*************************************************************************/ /*!
@@ -1632,6 +1742,13 @@ IMG_VOID OSWRLockReleaseWrite(POSWR_LOCK psLock)
 	up_write(&psLock->sRWLock);
 }
 
+IMG_UINT64 OSDivide64r64(IMG_UINT64 ui64Divident, IMG_UINT32 ui32Divisor, IMG_UINT32 *pui32Remainder)
+{
+	*pui32Remainder = do_div(ui64Divident, ui32Divisor);
+
+	return ui64Divident;
+}
+
 IMG_UINT32 OSDivide64(IMG_UINT64 ui64Divident, IMG_UINT32 ui32Divisor, IMG_UINT32 *pui32Remainder)
 {
 	*pui32Remainder = do_div(ui64Divident, ui32Divisor);
@@ -1702,3 +1819,70 @@ IMG_VOID OSReleaseBridgeLock(IMG_VOID)
 {
 	LinuxUnLockMutex(&gPVRSRVLock);
 }
+
+
+/*************************************************************************/ /*!
+@Function       OSCreateStatisticEntry
+@Description    Create a statistic entry in the specified folder.
+@Input          pszName        String containing the name for the entry.
+@Input          pvFolder       Reference from OSCreateStatisticFolder() of the 
+                               folder to create the entry in, or IMG_NULL for the
+							   root.
+@Input          pfnGetElement  Pointer to function that can be used to obtain the
+                               value of the statistic.
+@Input          pvData         OS specific reference that can be used by
+                               pfnGetElement.
+@Return         Pointer void reference to the entry created, which can be
+                passed to OSRemoveStatisticEntry() to remove the entry.
+*/ /**************************************************************************/
+IMG_PVOID OSCreateStatisticEntry(IMG_CHAR* pszName, IMG_PVOID pvFolder,
+                                 OS_GET_STATS_ELEMENT_FUNC* pfnGetElement,
+                                 IMG_PVOID pvData)
+{
+	return PVRDebugFSCreateStatisticEntry(pszName, pvFolder, pfnGetElement, pvData);
+} /* OSCreateStatisticEntry */
+
+
+/*************************************************************************/ /*!
+@Function       OSRemoveStatisticEntry
+@Description    Removes a statistic entry.
+@Input          pvEntry  Pointer void reference to the entry created by
+                         OSCreateStatisticEntry().
+*/ /**************************************************************************/
+IMG_VOID OSRemoveStatisticEntry(IMG_PVOID pvEntry)
+{
+	PVRDebugFSRemoveStatisticEntry(pvEntry);
+} /* OSRemoveStatisticEntry */
+
+
+/*************************************************************************/ /*!
+@Function       OSCreateStatisticFolder
+@Description    Create a statistic folder to hold statistic entries.
+@Input          pszName   String containing the name for the folder.
+@Input          pvFolder  Reference from OSCreateStatisticFolder() of the folder
+                          to create the folder in, or IMG_NULL for the root.
+@Return         Pointer void reference to the folder created, which can be
+                passed to OSRemoveStatisticFolder() to remove the folder.
+*/ /**************************************************************************/
+IMG_PVOID OSCreateStatisticFolder(IMG_CHAR *pszName, IMG_PVOID pvFolder)
+{
+	struct dentry *psDir;
+	int iResult;
+
+	iResult = PVRDebugFSCreateEntryDir(pszName, pvFolder, &psDir);
+
+	return (iResult == 0) ? psDir : IMG_NULL;
+} /* OSCreateStatisticFolder */
+
+
+/*************************************************************************/ /*!
+@Function       OSRemoveStatisticFolder
+@Description    Removes a statistic folder.
+@Input          pvFolder  Reference from OSCreateStatisticFolder() of the
+                          folder that should be removed.
+*/ /**************************************************************************/
+IMG_VOID OSRemoveStatisticFolder(IMG_PVOID pvFolder)
+{
+	PVRDebugFSRemoveEntryDir((struct dentry *)pvFolder);
+} /* OSRemoveStatisticFolder */
+

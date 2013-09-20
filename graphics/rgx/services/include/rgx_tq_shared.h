@@ -2,7 +2,7 @@
 @File
 @Title          RGX transfer queue shared
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    Shared definations between client and server
+@Description    Shared definitions between client and server
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.

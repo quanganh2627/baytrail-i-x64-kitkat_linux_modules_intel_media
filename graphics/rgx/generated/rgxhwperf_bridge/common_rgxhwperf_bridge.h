@@ -46,7 +46,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define COMMON_RGXHWPERF_BRIDGE_H
 
 #include "rgx_bridge.h"
-#include "rgx_hwperf.h"
+#include "rgx_hwperf_km.h"
 
 
 /* FIXME: need to create pvrbridge_common.h" */
