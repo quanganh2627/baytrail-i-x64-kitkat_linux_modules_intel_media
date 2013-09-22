@@ -453,6 +453,10 @@ static void PVRSyncPrintTimeline(struct seq_file *s,
 {
 	struct PVR_SYNC_TIMELINE *psTimeline = (struct PVR_SYNC_TIMELINE *)psObj;
 
+	if (!(psTimeline->psSyncInfo)) {
+		PVR_DPF((PVR_DBG_ERROR, "%s: Syncinfo is null\n", __func__));
+		return;
+	}
 	seq_printf(s, "WOP/WOC=0x%x/0x%x",
 	           psTimeline->psSyncInfo->psBase->psSyncData->ui32WriteOpsPending,
 	           psTimeline->psSyncInfo->psBase->psSyncData->ui32WriteOpsComplete);
@@ -461,6 +465,12 @@ static void PVRSyncPrintTimeline(struct seq_file *s,
 static void PVRSyncPrint(struct seq_file *s, struct sync_pt *psPt)
 {
 	struct PVR_SYNC *psSync = (struct PVR_SYNC *)psPt;
+
+	if (!(psSync->psSyncData->psSyncInfo)) {
+		PVR_DPF((PVR_DBG_ERROR, "%s: Syncinfo is null\n", __func__));
+		return;
+	}
+
 	PVRSRV_KERNEL_SYNC_INFO *psSyncInfo =
 		psSync->psSyncData->psSyncInfo->psBase;
 
