@@ -386,6 +386,13 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	/*unready dsi adapter for re-programming*/
 	REG_WRITE(regs->device_ready_reg,
 		REG_READ(regs->device_ready_reg) & ~(DSI_DEVICE_READY));
+	/*
+	 * According to MIPI D-PHY spec, if clock stop feature is enabled (EOT
+	 * Disable), un-ready MIPI adapter needs to wait for 20 cycles from HS
+	 * to LP mode. Per calculation 1us is enough.
+	 */
+	if (ctx->eot_disable & CLOCK_STOP)
+		udelay(1);
 
 	/*D-PHY parameter*/
 	REG_WRITE(regs->dphy_param_reg, ctx->dphy_param);
