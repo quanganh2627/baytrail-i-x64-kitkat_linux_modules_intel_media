@@ -970,7 +970,7 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 	connector = &psb_output->base;
 	drm_connector_init(dev, connector,
 			&mdfld_dsi_connector_funcs,
-			DRM_MODE_CONNECTOR_MIPI);
+			DRM_MODE_CONNECTOR_DSI);
 
 	drm_connector_helper_add(connector, &mdfld_dsi_connector_helper_funcs);
 
