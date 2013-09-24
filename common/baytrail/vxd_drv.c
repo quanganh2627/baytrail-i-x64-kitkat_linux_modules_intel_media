@@ -40,7 +40,15 @@ extern int drm_psb_trap_pagefaults;
 
 int drm_psb_cpurelax;
 int drm_psb_udelaydivider = 1;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 int drm_psb_priv_pmu_func = 0;
+#else
+/* Currrently on 3.10 PMU Driver is not enabled on BYT.
+ * So set this to 1 to use private PMU APIs. 
+ * This is a temporary workaround.
+ * It will be removed as soon as PMU Driver is enabled.*/
+int drm_psb_priv_pmu_func = 1;
+#endif
 static struct pci_dev *pci_root;
 
 int drm_psb_trap_pagefaults;
@@ -820,7 +828,6 @@ power_off:
 #ifdef CONFIG_PM_RUNTIME
 	i915_rpm_put_vxd(dev);
 #endif
-
 	/* MSVDX_NEW_PMSTATE(dev, msvdx_priv, PSB_PMSTATE_POWERDOWN); */
 
 out:
