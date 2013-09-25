@@ -654,7 +654,6 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 		goto power_off_err;
 	}
 power_off_err:
-
 	power_island = pipe_to_island(dsi_config->pipe);
 	/* power gate display island C for overlay C and sprite D */
 	power_island |= OSPM_DISPLAY_C;
@@ -901,6 +900,7 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 	struct mdfld_dsi_encoder *dsi_encoder;
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
 	int pipe;
 
 	PSB_DEBUG_ENTRY("\n");
@@ -911,15 +911,12 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
 	dev = dsi_config->dev;
+	dev_priv = dev->dev_private;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
 	mdfld_generic_dsi_dbi_set_power(encoder, false);
 
-	/* Turn off vsync (TE) interrupt. */
-	drm_vblank_off(dev, pipe);
-
-	/* Make the pending flip request as completed. */
-	DCUnAttachPipe(pipe);
+	psb_vsync_on_pipe_off(dev_priv, pipe);
 }
 
 static
@@ -941,8 +938,6 @@ void mdfld_generic_dsi_dbi_restore(struct drm_encoder *encoder)
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
 	mdfld_generic_dsi_dbi_set_power(encoder, true);
-
-	DCAttachPipe(pipe);
 }
 
 static
