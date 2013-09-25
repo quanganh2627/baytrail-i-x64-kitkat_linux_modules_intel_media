@@ -30,6 +30,7 @@
 #include <linux/io.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/acpi.h>
 #include <sound/pcm.h>
 #include <sound/core.h>
 #include <sound/pcm_params.h>
@@ -1923,6 +1924,12 @@ const struct dev_pm_ops had_pm_ops = {
 	.runtime_resume = had_pm_runtime_resume,
 };
 
+static const struct acpi_device_id had_acpi_ids[] = {
+	{ "HAD0F28", 0 },
+	{},
+};
+MODULE_DEVICE_TABLE(acpi, had_acpi_ids);
+
 static struct platform_driver had_driver = {
 	.probe =        hdmi_audio_probe,
 	.remove		= hdmi_audio_remove,
@@ -1933,6 +1940,7 @@ static struct platform_driver had_driver = {
 #ifdef CONFIG_PM
 		.pm	= &had_pm_ops,
 #endif
+		.acpi_match_table = ACPI_PTR(had_acpi_ids),
 	},
 };
 
