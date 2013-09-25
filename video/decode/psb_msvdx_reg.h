@@ -368,6 +368,8 @@ typedef enum {
 
 #define MSVDX_MMU_STATUS_OFFSET				(0x068C)
 
+#define MSVDX_MMU_CONTROL2_OFFSET			(0x0690)
+
 #define MSVDX_MMU_DIR_LIST_BASE_OFFSET			(0x0694)
 
 #define MSVDX_MMU_MEM_REQ_OFFSET			(0x06D0)

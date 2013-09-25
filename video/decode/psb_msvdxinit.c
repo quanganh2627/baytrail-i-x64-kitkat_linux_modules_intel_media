@@ -962,6 +962,10 @@ int psb_msvdx_post_init(struct drm_device *dev)
         if (!msvdx_priv->fw_loaded_by_punit) {
                 /* Enable MMU by removing all bypass bits */
                 PSB_WMSVDX32(0, MSVDX_MMU_CONTROL0_OFFSET);
+#ifdef CONFIG_DRM_VXD_BYT
+		/* we need set tile format as 512x8 on Baytrail */
+		PSB_WMSVDX32(0x1<<3, MSVDX_MMU_CONTROL2_OFFSET);
+#endif
         } else {
                 msvdx_priv->rendec_init = 0;
                 ret = msvdx_mtx_init(dev, msvdx_priv->decoding_err);

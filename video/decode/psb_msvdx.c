@@ -83,10 +83,9 @@ int psb_msvdx_dequeue_send(struct drm_device *dev)
 #endif
 
 	PSB_DEBUG_GENERAL("MSVDXQUE: Queue has id %08x\n", msvdx_cmd->sequence);
-#ifndef CONFIG_DRM_VXD_BYT
+
 	if (IS_MSVDX_MEM_TILE(dev) && drm_psb_msvdx_tiling)
 		psb_msvdx_set_tile(dev, msvdx_cmd->msvdx_tile);
-#endif
 
 #ifdef CONFIG_VIDEO_MRFLD_EC
 	/* Seperate update frame and backup cmds because if a batch of cmds
@@ -378,13 +377,12 @@ static int psb_msvdx_map_command(struct drm_device *dev,
 		*msvdx_cmd = cmd_copy;
 	} else {
 		PSB_DEBUG_GENERAL("MSVDXQUE:did NOT copy command\n");
-#ifndef CONFIG_DRM_VXD_BYT
 		if (IS_MSVDX_MEM_TILE(dev) && drm_psb_msvdx_tiling) {
 			unsigned long msvdx_tile =
 				((msvdx_priv->msvdx_ctx->ctx_type >> 16) & 0xff);
 			psb_msvdx_set_tile(dev, msvdx_tile);
 		}
-#endif
+
 #ifdef CONFIG_VIDEO_MRFLD_EC
 		if (msvdx_priv->host_be_opp_enabled) {
 			psb_msvdx_update_frame_info(msvdx_priv,
@@ -1387,7 +1385,6 @@ static void psb_msvdx_set_tile(struct drm_device *dev, unsigned long msvdx_tile)
 	uint32_t cmd, msvdx_stride;
 	uint32_t start = msvdx_priv->tile_region_start0;
 	uint32_t end = msvdx_priv->tile_region_end0;
-
 	msvdx_stride = (msvdx_tile & 0xf);
 	/* Enable memory tiling */
 	cmd = ((start >> 20) + (((end >> 20) - 1) << 12) +

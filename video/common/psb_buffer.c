@@ -551,6 +551,7 @@ static int psb_init_mem_type(struct ttm_bo_device *bdev, uint32_t type,
 		man->gpu_offset = PSB_MEM_IMR_START;
 		break;
 #endif
+
 	case TTM_PL_TT:	/* Mappable GATT memory */
 		man->func = &ttm_bo_manager_func;
 #ifdef PSB_WORKING_HOST_MMU_ACCESS
@@ -565,6 +566,7 @@ static int psb_init_mem_type(struct ttm_bo_device *bdev, uint32_t type,
 		man->gpu_offset =
 		    pg->mmu_gatt_start + pg->gtt_video_start;
 		break;
+#endif
 
 	case DRM_PSB_MEM_MMU_TILING:
 		man->func = &ttm_bo_manager_func;
@@ -575,7 +577,7 @@ static int psb_init_mem_type(struct ttm_bo_device *bdev, uint32_t type,
 					 TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_WC;
 		man->default_caching = TTM_PL_FLAG_WC;
 		break;
-#endif
+
 	default:
 		DRM_ERROR("Unsupported memory type %u\n", (unsigned) type);
 		return -EINVAL;
@@ -706,11 +708,12 @@ static int psb_ttm_io_mem_reserve(struct ttm_bo_device *bdev, struct ttm_mem_reg
 		mem->bus.is_iomem = true;
 		break;
 #endif
+#endif
 	case DRM_PSB_MEM_MMU_TILING:
 		mem->bus.offset = mem->start << PAGE_SHIFT;
 		mem->bus.base = 0x00000000;
 		break;
-#endif
+
 	default:
 		return -EINVAL;
 	}
