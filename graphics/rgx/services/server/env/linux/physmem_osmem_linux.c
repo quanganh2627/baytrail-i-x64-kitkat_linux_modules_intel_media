@@ -696,6 +696,10 @@ PMRAcquireKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
 						   psOSPageArrayData->uiNumPages,
 						   -1,
 						   prot);
+	if (!pvAddress) {
+		eError = PVRSRV_ERROR_FAILED_TO_MAP_KERNELVIRTUAL;
+		goto e0;
+	}
 
     *ppvKernelAddressOut = pvAddress + uiOffset;
     *phHandleOut = pvAddress;
