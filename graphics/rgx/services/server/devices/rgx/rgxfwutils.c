@@ -1063,7 +1063,9 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							     IMG_UINT32            ui32NumTilingCfgs,
 							     IMG_UINT32            *pui32BIFTilingXStrides,
 							     IMG_UINT32			ui32FilterFlags,
-							     RGXFWIF_DEV_VIRTADDR	*psRGXFWInitFWAddr)
+							     RGXFWIF_DEV_VIRTADDR	*psRGXFWInitFWAddr,
+							     IMG_UINT32			ui32APMLatency,
+							     IMG_UINT32			ui32CoreClockSpeed)
 {
  	PVRSRV_ERROR		eError;
 	DEVMEM_FLAGS_T		uiMemAllocFlags;
@@ -1320,8 +1322,17 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	{
 		RGX_DATA *psRGXData = (RGX_DATA*) psDeviceNode->psDevConfig->hDevData;
 
-		psRGXFWInit->ui32InitialCoreClockSpeed = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
-		psRGXFWInit->ui32ActivePMLatencyms = psRGXData->psRGXTimingInfo->ui32ActivePMLatencyms;
+		/* if user defined clockspeed */
+		if (ui32CoreClockSpeed != psRGXData->psRGXTimingInfo->ui32CoreClockSpeed)
+			psRGXFWInit->ui32InitialCoreClockSpeed = ui32CoreClockSpeed;
+		else
+			psRGXFWInit->ui32InitialCoreClockSpeed = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
+
+		/* if user defined latency */
+		if (psRGXData->psRGXTimingInfo->ui32ActivePMLatencyms != ui32APMLatency)
+			psRGXFWInit->ui32ActivePMLatencyms = ui32APMLatency;
+		else
+			psRGXFWInit->ui32ActivePMLatencyms = psRGXData->psRGXTimingInfo->ui32ActivePMLatencyms;
 	}
 
 	/* Setup BIF Fault read register */

@@ -25,49 +25,7 @@
  *    Javier Torres Castillo <javier.torres.castillo@intel.com>
  */
 
-#if !defined DFRGX_BURST_H
-#define  DFRGX_BURST_H
-#include <linux/types.h>
-#include <linux/ctype.h>
-#include <linux/hrtimer.h>
-#include <linux/interrupt.h>
-#include <linux/kernel.h>
-#include <linux/kthread.h>
-#include <linux/ktime.h>
-#include <linux/mutex.h>
-#include <linux/spinlock.h>
-#include <linux/thermal.h>
-#include <linux/uaccess.h>
-#include <linux/version.h>
-#include <linux/proc_fs.h>
-#include <linux/module.h>
+#include <linux/device.h>
 
-#include <linux/mm.h>
-#include <linux/pagemap.h>
-#include <linux/hugetlb.h>
-#include <linux/slab.h>
-#include <linux/vmalloc.h>
-#include <linux/delay.h>
-
-#include <linux/string.h>
-#include <linux/sched.h>
-#include <linux/interrupt.h>
-#include <asm/hardirq.h>
-#include <linux/timer.h>
-#include "df_rgx_defs.h"
-#include "dev_freq_graphics_pm.h"
-
-#define DFRGX_BURST_TIMER_PERIOD_DEFAULT_USECS 5000
-
-
-int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx);
-void dfrgx_burst_deinit(struct df_rgx_data_s *g_dfrgx);
-void dfrgx_burst_set_enable(struct df_rgx_data_s *g_dfrgx, int enable);
-void dfrgx_profiling_set_enable(struct df_rgx_data_s *g_dfrgx, int enable);
-int dfrgx_burst_is_enabled(struct df_rgx_data_s *g_dfrgx);
-int dfrgx_profiling_is_enabled(struct df_rgx_data_s *g_dfrgx);
-void gpu_profiling_records_restart();
-int gpu_profiling_records_show(char *buf);
-
-#endif /*DFRGX_BURST*/
-
+int dev_freq_add_attributes_to_sysfs(struct device *device);
+void dev_freq_remove_attributes_on_sysfs(struct device *device);

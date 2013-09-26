@@ -1205,7 +1205,20 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 
 	dev_priv->panel_id = PanelID;
 	dev_priv->mipi_encoder_type = is_panel_vid_or_cmd(dev_priv->dev);
-	enable_HFPLL(dev_priv->dev);
+
+	if (IS_TNG_B0(dev)) {
+		if (dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DBI) {
+			dev_priv->bRereadZero = false;
+			dev_priv->bUseHFPLL = true;
+			enable_HFPLL(dev_priv->dev);
+		} else {
+			dev_priv->bUseHFPLL = false;
+			dev_priv->bRereadZero = true;
+		}
+	} else {
+		dev_priv->bUseHFPLL = false;
+		dev_priv->bRereadZero = false;
+	}
 
 	return true;
 }
@@ -1392,12 +1405,12 @@ static int psb_do_init(struct drm_device *dev)
 	PSB_DEBUG_INIT("Init MSVDX\n");
 
 	/* on TNG B0, VED not needed to be on here since firmware is not loaded in psb_msvdx_init */
-	if (!IS_TNG_B0(dev))
+	if (IS_TNG_A0(dev))
 		power_island_get(OSPM_VIDEO_DEC_ISLAND);
 
 	psb_msvdx_init(dev);
 
-	if (!IS_TNG_B0(dev))
+	if (IS_TNG_A0(dev))
 		power_island_put(OSPM_VIDEO_DEC_ISLAND);
 
 #ifdef SUPPORT_VSP
@@ -2938,8 +2951,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
 				if (ret) {
-					DRM_ERROR("Fail to get pipe %d vsync\n",
-							pipe);
+					DRM_ERROR("%s: fail to get pipe %d vsync\n",
+							__func__, pipe);
 					if (pipe != 1)
 						schedule_work(&dev_priv->reset_panel_work);
 				}
@@ -2958,8 +2971,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
 			mdfld_dsi_dsr_forbid(dsi_config);
 
-			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
+			if ((pipe == 0) || (pipe == 1) || (pipe == 2)) {
 				ret = drm_vblank_get(dev, pipe);
+				if (ret != 0)
+					DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
+						__func__, pipe);
+			}
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
@@ -3047,6 +3064,21 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 		DC_MRFLD_Disable_Plane(arg->plane.type,
 				arg->plane.index, arg->plane.ctx);
 
+	if (arg->overlay_read_mask & OVSTATUS_REGRBIT_OVR_UPDT) {
+		u32 ovstat_reg = OV_DOVASTA;
+		power_island |= OSPM_DISPLAY_A;
+		if (arg->plane.index) {
+			power_island |= OSPM_DISPLAY_C;
+			ovstat_reg = OVC_DOVCSTA;
+		}
+		/* By default overlay is not updated since last vblank event*/
+		arg->plane.ctx = 1;
+		if (power_island_get(power_island)) {
+			arg->plane.ctx =
+				(PSB_RVDC32(ovstat_reg) & BIT31) == 0 ? 0 : 1;
+			power_island_put(power_island);
+		}
+	}
 	return 0;
 }
 

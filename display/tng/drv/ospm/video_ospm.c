@@ -66,7 +66,7 @@ static bool vsp_power_up(struct drm_device *dev,
 	 * This workarounds are only needed for TNG A0/A1 silicon.
 	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-	if (!IS_TNG_B0(dev))
+	if (IS_TNG_A0(dev))
 	{
 		apply_A0_workarounds(OSPM_VIDEO_VPP_ISLAND, 1);
 	}

@@ -125,6 +125,11 @@ static void _Flip_Overlay(DC_MRFLD_DEVICE *psDevice,
 			DC_MRFLD_OVERLAY_CONTEXT *psContext,
 			IMG_INT iPipe)
 {
+	if (!(psDevice->ui32ActiveOverlays & (1 << psContext->index))) {
+		DRM_ERROR("%s: overlay %d is disabled, pipe %d",
+			__func__, psContext->index, iPipe);
+		return;
+	}
 	if ((iPipe && psContext->pipe) || (!iPipe && !psContext->pipe))
 		DCCBFlipOverlay(psDevice->psDrmDevice, psContext);
 }
@@ -1374,6 +1379,10 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
 
+	if (type == DC_OVERLAY_PLANE && !err) {
+		/* avoid big lock as it is a blocking call */
+		err = DCCBOverlayDisableAndWait(gpsDevice->psDrmDevice, ctx, index);
+	}
 	return err;
 }
 
