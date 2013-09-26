@@ -68,7 +68,7 @@ static PVRSRV_ERROR SysDevicePrePowerState(
 static RGX_TIMING_INFORMATION sRGXTimingInfo =
 {
 	.ui32CoreClockSpeed		= RGX_CORE_CLOCK_SPEED_DEFAULT,
-	.bEnableActivePM		= IMG_FALSE,
+	.bEnableActivePM		= IMG_TRUE,
 	.bEnableRDPowIsland		= IMG_FALSE,
 
 	/* ui32ActivePMLatencyms */
