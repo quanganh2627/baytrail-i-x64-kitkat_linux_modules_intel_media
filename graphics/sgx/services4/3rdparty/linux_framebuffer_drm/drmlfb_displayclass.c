@@ -586,6 +586,73 @@ static IMG_BOOL DRMLFBFlipBlackScreen(MRSTLFB_DEVINFO *psDevInfo,
 	return IMG_TRUE;
 }
 
+static IMG_BOOL DRMLFBFlipBlackScreen2(MRSTLFB_DEVINFO *psDevInfo,
+					IMG_BOOL bAlpha)
+{
+	struct drm_psb_private *dev_priv;
+	struct mdfld_dsi_config *dsi_config = 0;
+	struct mdfld_dsi_hw_context *ctx;
+	u32 offset;
+	u32 dspcntr;
+
+	if (!psDevInfo) {
+		DRM_ERROR("Invalid parameters\n");
+		return IMG_FALSE;
+	}
+
+	dev_priv =
+		(struct drm_psb_private *)psDevInfo->psDrmDevice->dev_private;
+
+	if (!dev_priv) {
+		DRM_ERROR("Invalid parameters\n");
+		return IMG_FALSE;
+	}
+
+	if (psDevInfo->ui32MainPipe == 0) {
+		offset = 0x0000;
+		dsi_config = dev_priv->dsi_configs[0];
+	} else if (psDevInfo->ui32MainPipe == 1) {
+		offset = 0x1000;
+		dsi_config = dev_priv->dsi_configs[1];
+	} else if (psDevInfo->ui32MainPipe == 2) {
+		offset = 0x2000;
+		dsi_config = dev_priv->dsi_configs[2];
+	} else
+		return IMG_FALSE;
+
+	dspcntr = PSB_RVDC32(DSPACNTR + offset);
+	/* mask alpha and pixel format if bAlpha to be false*/
+	if (!bAlpha) {
+		dspcntr &= (~DISPPLANE_PIXFORMAT_MASK);
+		dspcntr |= DISPPLANE_32BPP_NO_ALPHA;
+	} else {
+		dspcntr &= (~DISPPLANE_PIXFORMAT_MASK);
+		dspcntr |= DISPPLANE_32BPP;
+	}
+
+	PSB_WVDC32(0x0, DSPAPOS + offset);
+
+	/* In CTP platform, Actually need stride mismatch with framebuffer stride,
+	this maybe cause garbage display in screen bottom, set and store the stride
+	value with init framebuffer stride after destory the swapchain*/
+	PSB_WVDC32(dev_priv->init_screen_size, DSPASIZE + offset);
+	PSB_WVDC32(psDevInfo->sDisplayDim.ui32ByteStride, DSPASTRIDE + offset);
+	PSB_WVDC32(dev_priv->init_screen_offset, DSPALINOFF + offset);
+	PSB_WVDC32(dspcntr, DSPACNTR + offset);
+	PSB_WVDC32(dev_priv->init_screen_start, DSPASURF + offset);
+
+	if (dsi_config) {
+		ctx = &dsi_config->dsi_hw_context;
+		ctx->dsppos = 0x0;
+		ctx->dspsize = dev_priv->init_screen_size;
+		ctx->dspstride = psDevInfo->sDisplayDim.ui32ByteStride;
+		ctx->dspcntr = dspcntr;
+		ctx->dsplinoff = dev_priv->init_screen_offset;
+		ctx->dspsurf = dev_priv->init_screen_start;
+	}
+	return IMG_TRUE;
+}
+
 static IMG_BOOL DRMLFBFlipBuffer2(MRSTLFB_DEVINFO *psDevInfo,
 			MRSTLFB_SWAPCHAIN *psSwapChain,
 			struct mdfld_plane_contexts *psContexts)
@@ -1145,6 +1212,7 @@ static PVRSRV_ERROR DestroyDCSwapChain(IMG_HANDLE hDevice,
 	MRSTLFB_SWAPCHAIN *psSwapChain;
 	int i;
 	IMG_UINT32 taskid;
+	struct drm_device *dev;
 
 	if(!hDevice || !hSwapChain)
 	{
@@ -1152,6 +1220,7 @@ static PVRSRV_ERROR DestroyDCSwapChain(IMG_HANDLE hDevice,
 	}
 	psDevInfo = (MRSTLFB_DEVINFO*)hDevice;
 	psSwapChain = (MRSTLFB_SWAPCHAIN*)hSwapChain;
+	dev = psDevInfo->psDrmDevice;
 
 	mutex_lock(&psDevInfo->sSwapChainMutex);
 
@@ -1168,9 +1237,17 @@ static PVRSRV_ERROR DestroyDCSwapChain(IMG_HANDLE hDevice,
 
 	if (psDevInfo->ui32SwapChainNum == 0)
 	{
-		DRMLFBFlipBuffer(psDevInfo, NULL, &psDevInfo->sSystemBuffer);
+		if (IS_CTP(dev))
+			DRMLFBFlipBuffer2(psDevInfo, NULL, &psDevInfo->sSystemBuffer);
+		else
+			DRMLFBFlipBuffer(psDevInfo, NULL, &psDevInfo->sSystemBuffer);
+
 		MRSTLFBClearSavedFlip(psDevInfo);
-		DRMLFBFlipBlackScreen(psDevInfo, IMG_FALSE);
+
+		if (IS_CTP(dev))
+			DRMLFBFlipBlackScreen2(psDevInfo, IMG_FALSE);
+		else
+			DRMLFBFlipBlackScreen(psDevInfo, IMG_FALSE);
 	}
 
 	if (psDevInfo->psCurrentSwapChain == psSwapChain ||
