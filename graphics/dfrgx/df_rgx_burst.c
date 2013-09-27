@@ -124,7 +124,6 @@ long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	unsigned long prev_freq = 0;
 	unsigned int freq_mhz_quantized;
 	u32 freq_code;
-	int thermal_state;
 	int prev_util_record_index = -1;
 
 	sts = 0;
@@ -291,6 +290,10 @@ static int df_rgx_action(struct df_rgx_data_s * g_dfrgx)
 	utilStats.ui32GpuStatBlocked = 0;
 	utilStats.ui32GpuStatIdle = 0;
 	/* Get GPU utilisation numbers*/
+
+	utilStats.ui32GpuStatActive = 0;
+	utilStats.ui32GpuStatBlocked = 0;
+	utilStats.ui32GpuStatIdle = 0;
 
 	//smp_rmb();
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: !\n",

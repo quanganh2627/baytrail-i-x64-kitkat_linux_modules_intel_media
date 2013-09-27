@@ -77,7 +77,7 @@ static unsigned int gpu_rgx_acquire_device(){
 	IMG_HANDLE hDevCookie = IMG_NULL;
 	IMG_UINT32 numDevices = 0;
 	unsigned int error = DFRGX_HWPERF_OK;
-	IMG_UINT32 rgxIndex = -1;
+	IMG_UINT32 rgxIndex = IMG_UINT32_MAX;
 	int i = 0;
 
 	pDeviceList = kzalloc(PVRSRV_MAX_DEVICES * sizeof(PVRSRV_DEVICE_IDENTIFIER), GFP_KERNEL);
@@ -111,7 +111,7 @@ static unsigned int gpu_rgx_acquire_device(){
 			}	
 		}
 
-		if(rgxIndex < 0){
+		if(rgxIndex == IMG_UINT32_MAX){
 			error = PVRSRV_ERROR_INIT_FAILURE;
 			goto go_free;
 		}

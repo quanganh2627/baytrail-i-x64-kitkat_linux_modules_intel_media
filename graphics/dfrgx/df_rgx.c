@@ -350,8 +350,8 @@ static int tcd_get_cur_state(struct thermal_cooling_device *tcd,
 static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 	unsigned long cs)
 {
-	struct devfreq *df;
 	struct busfreq_data *bfdata;
+	struct devfreq *df;
 	int ret = 0;
 
 	bfdata = (struct busfreq_data *) tcd->devdata;
@@ -362,7 +362,6 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 	/*If different state*/
 	if(bfdata->gbp_cooldv_state_cur != cs)
 	{
-
 		int new_index = -1;
 
 		mutex_lock(&bfdata->lock);
