@@ -1687,14 +1687,6 @@ PVRSyncPatchTransferSyncInfos(IMG_HANDLE    ahSyncs[SGX_MAX_SRC_SYNCS_TA],
 		goto err_out;
 	}
 
-	if (!(psTransferSyncData->psSyncInfo))
-	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Trans'd sync info is null - "
-								"possibly already CREATEd?", __func__));
-		eError = -EFAULT;
-		goto err_put_fs;
-	}
-
 	/* There should only be one destination sync for a transfer.
 	 * Ultimately this will be patched to two (the sync_pt SYNCINFO,
 	 * and the timeline's SYNCINFO for debugging).
@@ -1728,7 +1720,6 @@ PVRSyncPatchTransferSyncInfos(IMG_HANDLE    ahSyncs[SGX_MAX_SRC_SYNCS_TA],
 	 */
 	*pui32NumSrcSyncs = 2;
 
-err_put_fs:
 	fput(psTransferSyncData->psFile);
 err_out:
 	return eError;
