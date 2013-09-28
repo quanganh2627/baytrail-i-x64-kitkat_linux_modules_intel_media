@@ -94,14 +94,6 @@ ccflags-y += \
 	-DSUPPORT_HW_RECOVERY \
 	-DSUPPORT_RGXFW_LOG \
 	-DLMA \
-	-DTC_MEMORY_CONFIG=TC_MEMORY_LOCAL
-	-DPVR_ANDROID_HAS_HAL_PIXEL_FORMAT_IMPLEMENTATION_DEFINED=1 \
-	-DEGL_EXTENSION_ANDROID_FRAMEBUFFER_TARGET=1 \
-	-DPVR_ANDROID_HAS_CORKSCREW_API=1 \
-	-DSUPPORT_GPUTRACE_EVENTS \
-	-DSUPPORT_KERNEL_HWPERF \
-	-DPVRSRV_ENABLE_PROCESS_STATS \
-	-DRGXFW_POWMON_TIMERCTL \
 	$(NULL)
 
 #	-DPVRSRV_ENABLE_FW_TRACE_DEBUGFS \
@@ -149,12 +141,9 @@ ccflags-$(CONFIG_DRM_HANDSET_RELEASE) += \
 ccflags-$(CONFIG_DRM_HANDSET_DEBUG) += \
 	-DBUILD="\"debug\"" \
 	-DPVR_BUILD_TYPE="\"debug\"" \
-	-DDEBUG
-
-ccflags-$(CONFIG_DRM_HANDSET_DEBUG) += \
-	-DDEBUG_LINUX_MEM_AREAS \
+	-DDEBUG \
+	-DPVRSRV_ENABLE_PROCESS_STATS \
 	-DDEBUG_LINUX_MEMORY_ALLOCATIONS \
-	-DDEBUG_LINUX_MMAP_AREAS \
 	-DRGXFW_ALIGNCHECKS
 
 # The following is an option, it can be enabled for more debug information
@@ -220,12 +209,6 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/shared/common/tlclient.o
 
 #	$(RGXDIR)/services/server/env/linux/physmem_ion.o
-
-ifeq ($(CONFIG_PVR_PROC),y)
-$(DRIVER_NAME)-y += \
-	$(RGXDIR)/services/server/env/linux/proc.o
-endif
-
 
 # WINDOW_HAS_SYNC
 merrifield_gfx-y += \

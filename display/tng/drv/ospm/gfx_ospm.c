@@ -449,6 +449,14 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 		ret = GFX_POWER_UP(PMU_RSCD);
 #endif /*USE_GFX_INTERNAL_PM_FUNC*/
 
+	if (IS_TNG_B0(dev)) {
+		/* enable bypass SLC */
+		uint32_t slc_bypass = 0x160854 - GFX_WRAPPER_OFFSET;
+		uint32_t data = WRAPPER_REG_READ(slc_bypass);
+		data |= 0x1;
+		WRAPPER_REG_WRITE(slc_bypass, data);
+	}
+
 	OSPM_DPF("Post-power-up status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
