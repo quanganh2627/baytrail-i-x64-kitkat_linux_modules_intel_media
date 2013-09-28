@@ -527,7 +527,12 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 		msvdx_priv->msvdx_busy = 0;
 
 		if (msvdx_priv->fw_loaded_by_punit){
-			psb_msvdx_post_init(dev);
+			ret = psb_msvdx_post_init(dev);
+			if (ret) {
+				ret = -EBUSY;
+				PSB_DEBUG_WARN("WARN: psb_msvdx_post_init failed.\n");
+				return ret;
+			}
 		}
 		else{
 			if (psb_msvdx_init(dev)) {

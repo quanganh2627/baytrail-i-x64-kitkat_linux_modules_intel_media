@@ -932,9 +932,16 @@ int psb_msvdx_init(struct drm_device *dev)
         }
 
 #ifdef MERRIFIELD
-	if (!IS_TNG_B0(dev))
+	if (!IS_TNG_B0(dev)) {
 #endif
-		 psb_msvdx_post_init(dev);
+		ret = psb_msvdx_post_init(dev);
+		if (ret) {
+			printk("psb_msvdx_post_init failed.\n");
+			return 1;
+		}
+#ifdef MERRIFIELD
+	}
+#endif
 
 	return 0;
 }
