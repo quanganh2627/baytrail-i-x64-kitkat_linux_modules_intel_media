@@ -684,7 +684,7 @@ PMRUnmakeServerExportClientExport(PMR_EXPORT *psPMRExport)
 PVRSRV_ERROR
 PMRUnexportPMR(PMR_EXPORT *psPMRExport)
 {
-    /* FIXME: probably shouldn't be assertions? */
+    /* */
     PVR_ASSERT(psPMRExport != IMG_NULL);
     PVR_ASSERT(psPMRExport->psPMR != IMG_NULL);
     PVR_ASSERT(psPMRExport->psPMR->uiRefCount > 0);
@@ -959,9 +959,8 @@ _PMRLogicalOffsetToPhysicalOffset(const PMR *psPMR,
 	{
 		ui64ChunkIndex = OSDivide64(
 				uiLogicalOffset, 
-				/* FIXME: Really ought to change OSDivide64 so divisor 
-				   arg is 64-bits, (rather than casting to 32-bits), but 
-				   this is an OSFunc, so don't want to touch right now */
+				/* 
+*/
 				TRUNCATE_64BITS_TO_32BITS(psMappingTable->uiChunkSize), 
 				&ui32Remain);
 	
@@ -1241,7 +1240,7 @@ PMR_WriteBytes(PMR *psPMR,
     IMG_DEVMEM_OFFSET_T uiPhysicalOffset;
     IMG_SIZE_T uiBytesCopied = 0;
 
-	/* FIXME: When we honour CPU mapping flags remove the #if 0*/
+	/* */
 	#if 0
 	/* Check that writes are allowed */
 	PMR_Flags(psPMR, &uiFlags);
@@ -1752,8 +1751,8 @@ PMRPDumpSaveToFile(const PMR *psPMR,
 #endif	/* PDUMP */
 
 /*
-   FIXME: Find a better way to do this
- */
+   
+*/
 
 IMG_VOID *PMRGetPrivateDataHack(const PMR *psPMR,
                                 const PMR_IMPL_FUNCTAB *psFuncTab)
@@ -1800,7 +1799,7 @@ PMRWritePMPageList(/* Target PMR, offset, and length */
     IMG_VOID *pvKernAddr = IMG_NULL;
     IMG_UINT32 *pui32DataPtr;
 #endif
-    /* FIXME: should this be configurable? */
+    /* */
     uiWordSize = 4;
 
     /* check we're being asked to write the same number of 4-byte units as there are pages */
@@ -2006,7 +2005,7 @@ PMRWritePMPageList(/* Target PMR, offset, and length */
 }
 
 
-PVRSRV_ERROR /* FIXME: should be IMG_VOID */
+PVRSRV_ERROR /* */
 PMRUnwritePMPageList(PMR_PAGELIST *psPageList)
 {
     PVRSRV_ERROR eError2;
@@ -2461,10 +2460,8 @@ PMRDeInit()
     _gsSingletonPMRContext.bModuleInitialised = IMG_FALSE;
 
     /*
-      FIXME:
-
-      should deinitialise the mutex here
-    */
+      
+*/
 
     return PVRSRV_OK;
 }

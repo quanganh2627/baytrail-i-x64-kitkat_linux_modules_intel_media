@@ -1045,11 +1045,8 @@ DevmemAllocate(DEVMEM_HEAP *psHeap,
 			goto failZero;
 		}
 
-		/* FIXME: uiSize is a 64-bit quantity whereas the 3rd argument
-		 * to OSMemSet is a 32-bit quantity on 32-bit systems
-		 * hence a compiler warning of implicit cast and loss of data.
-		 * Added explicit cast and assert to remove warning.
-		 */
+		/* 
+*/
 #if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
 		PVR_ASSERT(uiSize<IMG_UINT32_MAX);
 #endif

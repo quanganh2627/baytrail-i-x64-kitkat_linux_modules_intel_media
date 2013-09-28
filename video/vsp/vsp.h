@@ -266,9 +266,6 @@ struct vsp_private {
 	int vsp_cmd_num;
 
 	unsigned int fw_type;
-	struct VssProcPictureVP8 ref_frame_buffers[4];
-	int available_recon_buffer;
-	int rec_surface_id;
 
 	/* save the address of vp8 cmd_buffer for now */
 	struct VssVp8encPictureParameterBuffer *vp8_encode_frame_cmd;

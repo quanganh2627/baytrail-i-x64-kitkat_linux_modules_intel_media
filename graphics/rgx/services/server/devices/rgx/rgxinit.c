@@ -99,7 +99,7 @@ static PVRSRV_ERROR RGXDevClockSpeed(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_PUINT
 
 #define VAR(x) #x
 
-/* FIXME: This is a workaround due to having 2 inits but only 1 deinit */
+/* */
 static IMG_BOOL g_bDevInit2Done = IMG_FALSE;
 
 
@@ -108,6 +108,7 @@ static IMG_VOID RGX_DeInitHeaps(DEVICE_MEMORY_INFO *psDevMemoryInfo);
 IMG_UINT32 g_ui32HostSampleIRQCount = 0;
 
 IMG_BOOL gbSystemActivePMEnabled = IMG_FALSE;
+IMG_BOOL gbSystemActivePMInit = IMG_FALSE;
 
 #if !defined(NO_HARDWARE)
 /*
@@ -392,7 +393,7 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 #if defined(PDUMP)
 	/* Run the deinit script to feed the last-frame deinit buffer */
 	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_LASTFRAME, "RGX deinitialisation script");
-	RGXRunScript(psDevInfo, psDevInfo->psScripts->asDeinitCommands, RGX_MAX_DEINIT_COMMANDS, PDUMP_FLAGS_LASTFRAME);
+	RGXRunScript(psDevInfo, psDevInfo->psScripts->asDeinitCommands, RGX_MAX_DEINIT_COMMANDS, PDUMP_FLAGS_LASTFRAME, IMG_NULL);
 #endif
 
 
@@ -443,6 +444,7 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   (eActivePMConf == RGX_ACTIVEPM_FORCE_ON);
 
 		gbSystemActivePMEnabled = bEnableAPM;
+		gbSystemActivePMInit = IMG_TRUE;
 		psRGXData->psRGXTimingInfo->bEnableActivePM = bEnableAPM;
 
 		if (bEnableAPM)
@@ -628,8 +630,8 @@ PVRSRV_ERROR PVRSRVRGXInitAllocFWImgMemKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	}
 	
 	eError = DevmemFindHeapByName(psDevInfo->psKernelDevmemCtx,
-								  "Firmware", /* FIXME: We need to create an IDENT macro for this string.
-								                 Make sure the IDENT macro is not accessible to userland */
+								  "Firmware", /* 
+*/
 								  &psDevInfo->psFirmwareHeap);
 	if (eError != PVRSRV_OK)
 	{
@@ -1207,7 +1209,7 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 	if (psDevInfo->psKernelDevmemCtx)
 	{
 		eError = DevmemDestroyContext(psDevInfo->psKernelDevmemCtx);
-		/* oops - this should return void -- FIXME */
+		/* oops - this should return void -- */
 		PVR_ASSERT(eError == PVRSRV_OK);
 	}
 
@@ -1237,7 +1239,7 @@ static IMG_VOID RGXDebugRequestNotify(PVRSRV_DBGREQ_HANDLE hDbgReqestHandle, IMG
 	/* Only action the request if we've fully init'ed */
 	if (g_bDevInit2Done)
 	{
-		RGXDebugRequestProcess(psDeviceNode->pvDevice, ui32VerbLevel);
+		RGXDebugRequestProcess(IMG_NULL, psDeviceNode->pvDevice, ui32VerbLevel);
 	}
 }
 
@@ -1263,7 +1265,7 @@ static PVRSRV_ERROR RGX_InitHeaps(DEVICE_MEMORY_INFO *psNewMemoryInfo)
 {
     DEVMEM_HEAP_BLUEPRINT *psDeviceMemoryHeapCursor;
 
-    /* actually - this ought not to be on the device node itself, I think.  Hmmm.  FIXME */
+    /* actually - this ought not to be on the device node itself, I think.  Hmmm.  */
 	psNewMemoryInfo->psDeviceMemoryHeap = OSAllocMem(sizeof(DEVMEM_HEAP_BLUEPRINT) * RGX_MAX_HEAP_ID);
     if(psNewMemoryInfo->psDeviceMemoryHeap == IMG_NULL)
 	{
@@ -1418,15 +1420,8 @@ PVRSRV_ERROR RGXRegisterDevice (PVRSRV_DEVICE_NODE *psDeviceNode)
 #if defined(PDUMP)
 	psDeviceNode->sDevId.pszPDumpRegName	= RGX_PDUMPREG_NAME;
 	/*
-		FIXME: This should not be required as PMR's should give the memspace
-		name. However, due to limitations within PDump we need a memspace name
-		when dpumping with MMU context with virtual address in which case we
-		don't have a PMR to get the name from.
 		
-		There is also the issue obtaining a namespace name for the catbase which
-		is required when we PDump the write of the physical catbase into the FW
-		structure
-	*/
+*/
 	psDeviceNode->sDevId.pszPDumpDevName	= PhysHeapPDumpMemspaceName(psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL]);
 	psDeviceNode->pfnPDumpInitDevice = &RGXResetPDump;
 #endif /* PDUMP */

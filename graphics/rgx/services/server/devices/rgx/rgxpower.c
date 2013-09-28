@@ -54,6 +54,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "osfunc.h"
 #include "rgxdebug.h"
 #include "rgx_meta.h"
+#include "dfrgx_interface.h"
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
@@ -445,7 +446,7 @@ static PVRSRV_ERROR RGXStop(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	PVRSRV_ERROR		eError; 
 
 
-	eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDeinitCommands, RGX_MAX_DEINIT_COMMANDS, PDUMP_FLAGS_LASTFRAME | PDUMP_FLAGS_POWERTRANS);
+	eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDeinitCommands, RGX_MAX_DEINIT_COMMANDS, PDUMP_FLAGS_LASTFRAME | PDUMP_FLAGS_POWERTRANS, IMG_NULL);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXStop: RGXRunScript failed (%d)", eError));
@@ -529,6 +530,9 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 						eError = PVRSRV_ERROR_DEVICE_POWER_CHANGE_FAILURE;
 					}
 					psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
+
+					/*Report dfrgx We have the device OFF*/
+					dfrgx_interface_power_state_set(0);
 				}
 			}
 			else
@@ -601,6 +605,9 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 				PVR_DPF((PVR_DBG_ERROR,"RGXPostPowerState: RGXStart failed"));
 				return eError;
 			}
+
+			/*Report dfrgx We have the device back ON*/
+			dfrgx_interface_power_state_set(1);
 		}
 	}
 

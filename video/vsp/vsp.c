@@ -218,40 +218,13 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			VSP_DEBUG("sequence %d\n", sequence);
 			VSP_DEBUG("receive vp8 encoded frame response\n");
 
-			int i;
+#ifdef VP8_ENC_DEBUG
 			struct VssVp8encEncodedFrame *encoded_frame =
 				(struct VssVp8encEncodedFrame *)
 					(vsp_priv->coded_buf);
-			int ref_frame_surface_id;
-			VSP_DEBUG("encoded_frame.surfaceId_of_ref_frame[REF_FRAME_LAST] %x\n",
-					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_LAST]);
-			VSP_DEBUG("encoded_frame.surfaceId_of_ref_frame[REF_FRAME_ALT] %x\n",
-					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_ALT]);
-			VSP_DEBUG("encoded_frame.surfaceId_of_ref_frame[REF_FRAME_GOLD] %x\n",
-					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_GOLD]);
-
-			for (i = 0; i < 4; i++) {
-				ref_frame_surface_id = vsp_priv->ref_frame_buffers[i].surface_id;
-				VSP_DEBUG("%d: ref_frame_surface_id=%x\n",
-					   i, ref_frame_surface_id);
-				if (ref_frame_surface_id !=
-					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_LAST]
-				 && ref_frame_surface_id !=
-					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_ALT]
-				 && ref_frame_surface_id !=
-					encoded_frame->surfaceId_of_ref_frame[REF_FRAME_GOLD])
-					break;
-			}
-
-			vsp_priv->available_recon_buffer = i;
-			VSP_DEBUG("vsp_priv->available_recon_buffer=%d\n",
-					vsp_priv->available_recon_buffer);
-
-			encoded_frame->reserved[0] = vsp_priv->rec_surface_id;
-
-#ifdef VP8_ENC_DEBUG
 			struct VssVp8encPictureParameterBuffer *t =
 					vsp_priv->vp8_encode_frame_cmd;
+			int i = 0;
 			int j = 0;
 			VSP_DEBUG("VSP clock cycles from pre response %x\n",
 				  msg->vss_cc);
@@ -702,44 +675,6 @@ static int vsp_prehandle_command(struct drm_file *priv,
 
 			vsp_priv->fw_type = VSP_FW_TYPE_VP8;
 
-		} else if (cur_cmd->type == Vss_Sys_Ref_Frame_COMMAND) {
-			ref_vp8_bo =
-				ttm_buffer_object_lookup(tfile,
-					cur_cmd->reserved7);
-			if (ref_vp8_bo == NULL) {
-				DRM_ERROR("VSP: failed to find %x bo\n",
-					cur_cmd->reserved7);
-				ret = -1;
-				goto out;
-			}
-			bool is_iomem;
-			struct ttm_bo_kmap_obj vp8_ref__kmap;
-			ret = ttm_bo_kmap(ref_vp8_bo, 0,
-					ref_vp8_bo->num_pages,
-					&vp8_ref__kmap);
-			if (ret) {
-				DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
-				ttm_bo_unref(&ref_vp8_bo);
-				goto out;
-			}
-			struct VssProcPictureVP8* ref =
-				(struct VssProcPictureVP8*)
-					ttm_kmap_obj_virtual(&vp8_ref__kmap,
-							     &is_iomem);
-
-			ref = ((char *)ref)+256;
-			for (i = 0; i<4; i++) {
-			vsp_priv->ref_frame_buffers[i] = ref[i];
-			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d]=%x\n",
-					i,vsp_priv->ref_frame_buffers[i]);
-			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d].surface_id=%x\n",
-					i,vsp_priv->ref_frame_buffers[i].surface_id);
-			VSP_DEBUG("vsp_priv->ref_frame_buffers[%d].base=%x\n",
-					i,vsp_priv->ref_frame_buffers[i].base);
-			}
-
-			ttm_bo_kunmap(&vp8_ref__kmap);
-			ttm_bo_unref(&ref_vp8_bo);
 		} else
 			/* calculate the numbers of cmd send to VSP */
 			vsp_cmd_num++;
@@ -977,20 +912,15 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 
 	VSP_DEBUG("save vp8 pic param address %x\n", pic_param);
 
-	VSP_DEBUG("bo addr %x  kernel addr %x surfaceid %x base %x\n",
+	VSP_DEBUG("bo addr %x kernel addr %x surfaceid %x base %x base_uv %x\n",
 			pic_param_bo,
 			pic_param,
 			pic_param->input_frame.surface_id,
-			pic_param->input_frame.base);
+			pic_param->input_frame.base,
+			pic_param->input_frame.base_uv);
 
 	VSP_DEBUG("pic_param->encoded_frame_base = %p\n",
 			pic_param->encoded_frame_base);
-
-	pic_param->recon_frame =
-		vsp_priv->ref_frame_buffers[vsp_priv->available_recon_buffer];
-	vsp_priv->rec_surface_id = pic_param->recon_frame.surface_id;
-	VSP_DEBUG("vsp_priv->rec_surface_id = %x\n",
-			vsp_priv->rec_surface_id);
 
 	vsp_priv->vp8_encode_frame_cmd = (void *)pic_param;
 
@@ -1013,6 +943,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 		ttm_kmap_obj_virtual(
 				&vsp_priv->coded_buf_kmap,
 				&is_iomem);
+
 
 	/* just fence pic param if this is not end command */
 	/* only send last output fence_arg back */
@@ -1097,7 +1028,7 @@ void vsp_rm_context(struct drm_device *dev, int ctx_type)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	bool ret;
+	bool ret = true;
 
 	dev_priv = dev->dev_private;
 	if (dev_priv == NULL) {
@@ -1121,6 +1052,7 @@ void vsp_rm_context(struct drm_device *dev, int ctx_type)
 			ttm_bo_unref(&vsp_priv->coded_buf_bo);
 			vsp_priv->coded_buf = NULL;
 		}
+
 		struct vsp_context_settings_t *context_setting;
 		context_setting =
 			&(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8]);

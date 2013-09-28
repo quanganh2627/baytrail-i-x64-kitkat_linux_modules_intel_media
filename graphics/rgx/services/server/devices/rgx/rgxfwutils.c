@@ -520,10 +520,8 @@ static PVRSRV_ERROR RGXSetupKernelCCB(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 
 
 	/*
-	 * FIXME: the write offset need not be writeable by the firmware, indeed may
-	 * not even be needed for reading. Consider moving it to its own data
-	 * structure.
-	 */
+	 * 
+*/
 	uiCCBCtlMemAllocFlags = PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
 							PVRSRV_MEMALLOCFLAG_GPU_READABLE |
 							PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
@@ -665,10 +663,8 @@ static PVRSRV_ERROR RGXSetupFirmwareCCB(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 	IMG_UINT32			ui32FWCCBSize = (1U << ui32NumCmdsLog2);
 
 	/*
-	 * FIXME: the write offset need not be writeable by the host, indeed may
-	 * not even be needed for reading. Consider moving it to its own data
-	 * structure.
-	 */
+	 * 
+*/
 	uiCCBCtlMemAllocFlags = PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
 							PVRSRV_MEMALLOCFLAG_GPU_READABLE |
 							PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
@@ -986,8 +982,8 @@ static PVRSRV_ERROR RGXHwBrn37200(PVRSRV_RGXDEV_INFO *psDevInfo)
 				PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC;
 
 	eError = DevmemFindHeapByName(psDevInfo->psKernelDevmemCtx,
-							  "HWBRN37200", /* FIXME: We need to create an IDENT macro for this string.
-							                 Make sure the IDENT macro is not accessible to userland */
+							  "HWBRN37200", /* 
+*/
 							  &psBRNHeap);
 
 	if (eError != PVRSRV_OK)
@@ -1084,7 +1080,7 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 						PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE |
 						PVRSRV_MEMALLOCFLAG_UNCACHED |
 						PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC;
-						/* FIXME: Change to Cached */
+						/* */
 
 	PDUMPCOMMENT("Allocate RGXFWIF_INIT structure");
 	eError = DevmemFwAllocate(psDevInfo,
@@ -1184,9 +1180,11 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 		goto failFWIfInitHWPerfInfoMemDescAlloc;
 	}
 
+	/* Meta cached flag removed from this allocation as it was found
+	 * FW performance was better without it. */
 	RGXSetFirmwareAddress(&psRGXFWInit->psHWPerfInfoCtl,
 						  psDevInfo->psRGXFWIfHWPerfBufCtlMemDesc,
-						  0, RFW_FWADDR_NOREF_FLAG | RFW_FWADDR_METACACHED_FLAG);
+						  0, RFW_FWADDR_NOREF_FLAG);
 
 	eError = DevmemAcquireCpuVirtAddr(psDevInfo->psRGXFWIfHWPerfBufCtlMemDesc,
 									  (IMG_VOID**)&psDevInfo->psRGXFWIfHWPerfBuf);
@@ -1653,8 +1651,8 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	
 	/* Dump the config options so they can be edited.
 	 * 
-	 * FIXME: Need new DevmemPDumpWRW API which writes a WRW to load ui32ConfigFlags
-	 */
+	 * 
+*/
 	PDUMPCOMMENT("(Set the FW config options here)");
 	PDUMPCOMMENT("( bit 0: Ctx Switch TA Enable)");
 	PDUMPCOMMENT("( bit 1: Ctx Switch 3D Enable)");
@@ -1960,7 +1958,7 @@ PVRSRV_ERROR RGXStartFirmware(PVRSRV_RGXDEV_INFO 	*psDevInfo)
 	/*
 	 * Run init script.
 	 */
-	eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asInitCommands, RGX_MAX_INIT_COMMANDS, PDUMP_FLAGS_POWERTRANS|PDUMP_FLAGS_CONTINUOUS);
+	eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asInitCommands, RGX_MAX_INIT_COMMANDS, PDUMP_FLAGS_POWERTRANS|PDUMP_FLAGS_CONTINUOUS, IMG_NULL);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXStart: RGXRunScript failed (%d)", eError));
@@ -2537,7 +2535,7 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 			 ui32MaxRetries > 0;
 			 ui32MaxRetries--)
 		{
-			/* FIXME: Need to re-think PVRSRVLocking */
+			/* */
 			OSSetKeepPVRLock();
 			eError = PVRSRVWaitForValueKM(psSyncPrim->pui32LinAddr, 1, 0xffffffff);
 			OSSetReleasePVRLock();
@@ -2645,7 +2643,7 @@ PVRSRV_ERROR RGXScheduleCleanupCommand(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 			 ui32MaxRetries > 0;
 			 ui32MaxRetries--)
 		{
-			/* FIXME: Need to re-think PVRSRVLocking */
+			/* */
 			OSSetKeepPVRLock();
 			eError = PVRSRVWaitForValueKM(psSyncPrim->pui32LinAddr, RGXFWIF_CLEANUP_RUN, RGXFWIF_CLEANUP_RUN);
 			OSSetReleasePVRLock();

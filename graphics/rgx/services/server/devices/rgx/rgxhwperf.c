@@ -64,6 +64,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define HWPERF_TL_STREAM_NAME  "hwperf"
 
+/* Defined to ensure HWPerf packets are not delayed */
+#define SUPPORT_TL_PROODUCER_CALLBACK 1
+
 
 /******************************************************************************
  *
@@ -226,8 +229,7 @@ static IMG_UINT32 RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo)
 {
 	RGXFWIF_TRACEBUF    *psRGXFWIfTraceBufCtl = psDevInfo->psRGXFWIfTraceBuf;
 	IMG_BYTE*           psHwPerfInfo = psDevInfo->psRGXFWIfHWPerfBuf;
-	PVRSRV_ERROR		eError = PVRSRV_OK;
-	IMG_UINT32			ui32SrcRIdx, ui32SrcWIdx, ui32SrcWrap;
+	IMG_UINT32			ui32SrcRIdx, ui32SrcWIdx, ui32SrcWrapCount;
 	IMG_UINT32			ui32BytesExp = 0, ui32BytesCopied = 0, ui32BytesCopiedSum = 0;
 #ifdef HWPERF_MISR_FUNC_DEBUG
 	IMG_UINT32			ui32BytesExpSum = 0;
@@ -241,11 +243,12 @@ static IMG_UINT32 RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo)
  	/* Get a copy of the current
 	 *   read (first packet to read) 
 	 *   write (empty location for the next write to be inserted) 
-	 *   WrapCount (# bytes passed the normal buffer end)
+	 *   WrapCount (size in bytes of the buffer at or past end)
 	 * indexes of the FW buffer */
 	ui32SrcRIdx = psRGXFWIfTraceBufCtl->ui32HWPerfRIdx;
 	ui32SrcWIdx = psRGXFWIfTraceBufCtl->ui32HWPerfWIdx;
-	ui32SrcWrap = psRGXFWIfTraceBufCtl->ui32HWPerfWrapCount;
+	OSMemoryBarrier();
+	ui32SrcWrapCount = psRGXFWIfTraceBufCtl->ui32HWPerfWrapCount;
 
 	/* Is there any data in the buffer not yet retrieved? */
 	if ( ui32SrcRIdx != ui32SrcWIdx )
@@ -278,7 +281,7 @@ static IMG_UINT32 RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo)
 			/* Byte count equal to 
 			 *     number of bytes from read position to the end of the buffer, 
 			 *   + data in the extra space in the end of the buffer. */
-			ui32BytesExp = psDevInfo->ui32RGXFWIfHWPerfBufSize + ui32SrcWrap - ui32SrcRIdx;
+			ui32BytesExp = ui32SrcWrapCount - ui32SrcRIdx;
 
 #ifdef HWPERF_MISR_FUNC_DEBUG
 			ui32BytesExpSum += ui32BytesExp;
@@ -296,9 +299,9 @@ static IMG_UINT32 RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo)
 					ui32BytesCopied);
 
 			/* Update Wrap Count */
-			if ( 0 == ui32SrcRIdx )
+			if ( ui32SrcRIdx == 0)
 			{
-				psRGXFWIfTraceBufCtl->ui32HWPerfWrapCount = 0;
+				psRGXFWIfTraceBufCtl->ui32HWPerfWrapCount = psDevInfo->ui32RGXFWIfHWPerfBufSize;
 			}
 			psRGXFWIfTraceBufCtl->ui32HWPerfRIdx = ui32SrcRIdx;
 			
@@ -329,18 +332,7 @@ static IMG_UINT32 RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo)
 			PVR_DPF((PVR_DBG_WARNING, "RGXHWPerfDataStore: FW L1 RIdx:%u. Not all bytes copied to L2: %u bytes out of %u expected", psRGXFWIfTraceBufCtl->ui32HWPerfRIdx, ui32BytesCopiedSum, ui32BytesExpSum));
 		}
 #endif
-		if ( ui32BytesCopiedSum )
-		{	/* Signal consumers that packets may be available to read when 
-		     * running from a HW kick, not when called by client APP thread
-			 * via the transport layer CB as this can lead to stream 
-			 * corruption.*/
-			eError = TLStreamSync(psDevInfo->hHWPerfStream);
-			PVR_ASSERT(eError == PVRSRV_OK);
-		}
-        else
-        {
-            PVR_DPF((PVR_DBG_VERBOSE, "RGXHWPerfDataStore: Zero bytes copied from FW L1 to L2."));
-        }
+
 	}
 	else
 	{
@@ -353,7 +345,10 @@ static IMG_UINT32 RGXHWPerfDataStore(PVRSRV_RGXDEV_INFO	*psDevInfo)
 
 PVRSRV_ERROR RGXHWPerfDataStoreCB(PVRSRV_DEVICE_NODE *psDevInfo)
 {
+	PVRSRV_ERROR		eError = PVRSRV_OK;
 	PVRSRV_RGXDEV_INFO* psRgxDevInfo;
+	IMG_UINT32          ui32BytesCopied;
+
 
 	PVR_DPF_ENTERED;
 
@@ -363,8 +358,21 @@ PVRSRV_ERROR RGXHWPerfDataStoreCB(PVRSRV_DEVICE_NODE *psDevInfo)
 	if (psRgxDevInfo->hHWPerfStream != 0)
 	{
 		OSLockAcquire(psRgxDevInfo->hLockHWPerfStream);
-		RGXHWPerfDataStore(psRgxDevInfo);
+		ui32BytesCopied = RGXHWPerfDataStore(psRgxDevInfo);
 		OSLockRelease(psRgxDevInfo->hLockHWPerfStream);
+
+		if ( ui32BytesCopied )
+		{	/* Signal consumers that packets may be available to read when
+		     * running from a HW kick, not when called by client APP thread
+			 * via the transport layer CB as this can lead to stream
+			 * corruption.*/
+			eError = TLStreamSync(psRgxDevInfo->hHWPerfStream);
+			PVR_ASSERT(eError == PVRSRV_OK);
+		}
+        else
+        {
+            PVR_DPF((PVR_DBG_VERBOSE, "RGXHWPerfDataStoreCB: Zero bytes copied from FW L1 to L2."));
+        }
 	}
 
 	PVR_DPF_RETURN_OK;
@@ -389,7 +397,7 @@ static PVRSRV_ERROR RGXHWPerfTLCB(IMG_HANDLE hStream,
 		if (psRgxDevInfo->hHWPerfStream != 0)
 		{
 			OSLockAcquire(psRgxDevInfo->hLockHWPerfStream);
-			RGXHWPerfDataStore(psRgxDevInfo);
+			(void) RGXHWPerfDataStore(psRgxDevInfo);
 			OSLockRelease(psRgxDevInfo->hLockHWPerfStream);
 		}
 		break;
@@ -416,16 +424,27 @@ PVRSRV_ERROR RGXHWPerfInit(PVRSRV_DEVICE_NODE *psRgxDevNode, IMG_BOOL bEnable)
 
 	PVR_DPF_ENTERED;
 
-	PVR_ASSERT(psRgxDevNode);
-	gpsRgxDevNode = psRgxDevNode;
-	PVR_ASSERT(psRgxDevNode->pvDevice);
-	gpsRgxDevInfo = psRgxDevNode->pvDevice;
+	/* On first call at driver initialisation we get the RGX device,
+	 * in later on-demand calls this parameter is optional. */
+	if (psRgxDevNode)
+	{
+		gpsRgxDevNode = psRgxDevNode;
+		gpsRgxDevInfo = psRgxDevNode->pvDevice;
+	}
+
+	/* Before proper initialisation make sure we have a valid RGX device. */
+	if (!gpsRgxDevInfo)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "HWPerf module not initialised"));
+		PVR_DPF_RETURN_RC(PVRSRV_ERROR_INVALID_DEVICE);
+	}
 
 	/* Initialise first in case of an error condition or if it is not enabled
 	 */
 	gpsRgxDevInfo->hLockHWPerfStream = IMG_NULL;
 	gpsRgxDevInfo->hHWPerfStream = IMG_NULL;
 
+	/* Does the caller want to enable data collection resources? */
 	if (!bEnable)
 	{
 		PVR_DPF_RETURN_OK;
@@ -452,7 +471,7 @@ PVRSRV_ERROR RGXHWPerfInit(PVRSRV_DEVICE_NODE *psRgxDevNode, IMG_BOOL bEnable)
 					IMG_NULL, IMG_NULL
 #else
                     /* Not enabled  by default */
-					RGXHWPerfTLCB, gpsRgxDevNode
+					RGXHWPerfTLCB, gpsRgxDevInfo
 #endif
 					);
 
@@ -523,7 +542,7 @@ PVRSRV_ERROR PVRSRVRGXCtrlHWPerfKM(
 	if (psDevice->hHWPerfStream == 0)
 	{
 		eError = RGXHWPerfInit(psDeviceNode, IMG_TRUE);
-		PVR_LOGR_IF_ERROR(eError, "TLStreamCreate");
+		PVR_LOGR_IF_ERROR(eError, "RGXHWPerfInit");
 	}
 
 	/* Prepare command parameters ...
@@ -725,7 +744,7 @@ PVRSRV_ERROR PVRSRVRGXCtrlHWPerfCountersKM(
 	if (bEnable)
 		PVR_DPF((PVR_DBG_WARNING, "HWPerf %d counter blocks have been ENABLED",  ui32ArrayLen));
 	else
-		PVR_DPF((PVR_DBG_WARNING, "HWPerf %d counter blocks have been DISBALED",  ui32ArrayLen));
+		PVR_DPF((PVR_DBG_WARNING, "HWPerf %d counter blocks have been DISABLED",  ui32ArrayLen));
 #endif
 
 	PVR_DPF_RETURN_OK;
@@ -1154,21 +1173,33 @@ PVRSRV_ERROR RGXHWPerfConnect(
 		return PVRSRV_ERROR_INVALID_PARAMS;
 	}
 
+	/* Clear the handle to aid error checking by caller */
+	*phDevData = IMG_NULL;
+
 	/* Check the HWPerf module is initialised before we allow a connection */
 	if (!gpsRgxDevNode || !gpsRgxDevInfo)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfConnect: HWPerf module not initialised"));
 		return PVRSRV_ERROR_INVALID_DEVICE;
+	}
+
+	/* In the case where the AppHint has not been set we need to
+	 * initialise the host driver HWPerf resources here. Allocated on
+	 * demand to reduce RAM foot print on systems not needing HWPerf.
+	 */
+	if (gpsRgxDevInfo->hHWPerfStream == IMG_NULL)
+	{
+		eError = RGXHWPerfInit(IMG_NULL, IMG_TRUE);
+		PVR_LOGR_IF_ERROR(eError, "RGXHWPerfInit");
 	}
 
 	/* Allocation the session object for this connection */
 	psDevData = OSAllocZMem(sizeof(*psDevData));
 	if (psDevData == IMG_NULL)
 	{
-		phDevData = IMG_NULL;
 		return PVRSRV_ERROR_OUT_OF_MEMORY;
 	}
 	psDevData->psRgxDevNode = gpsRgxDevNode;
+
 
 	/* Open a TL connection and store it in the session object */
 	eError = TLClientConnect(&psDevData->hTLConnection);
@@ -1196,7 +1227,6 @@ e2:
 e1:
 	OSFREEMEM(psDevData);
 // e0:
-	phDevData = IMG_NULL;
 	return eError;
 }
 
@@ -1213,14 +1243,12 @@ PVRSRV_ERROR RGXHWPerfControl(
 	/* Valid input argument values supplied by the caller */
 	if (!psDevData)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "Invalid parameters in %s()", __func__));
 		return PVRSRV_ERROR_INVALID_PARAMS;
 	}
 
 	/* Ensure we are initialised and have a valid device node */
 	if (!psDevData->psRgxDevNode)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfControl: HWPerf module not initialised"));
 		return PVRSRV_ERROR_INVALID_DEVICE;
 	}
 
@@ -1241,14 +1269,12 @@ PVRSRV_ERROR RGXHWPerfConfigureAndEnableCounters(
 	/* Valid input argument values supplied by the caller */
 	if (!psDevData || ui32NumBlocks==0 || !asBlockConfigs)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "Invalid parameters in %s()", __func__));
 		return PVRSRV_ERROR_INVALID_PARAMS;
 	}
 
 	/* Ensure we are initialised and have a valid device node */
 	if (!psDevData->psRgxDevNode)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfConfigureAndEnableCounters: HWPerf module not initialised"));
 		return PVRSRV_ERROR_INVALID_DEVICE;
 	}
 
@@ -1270,14 +1296,12 @@ PVRSRV_ERROR RGXHWPerfDisableCounters(
 	/* Valid input argument values supplied by the caller */
 	if (!psDevData || ui32NumBlocks==0 || !aeBlockIDs)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "Invalid parameters in %s()", __func__));
 		return PVRSRV_ERROR_INVALID_PARAMS;
 	}
 
 	/* Ensure we are initialised and have a valid device node */
 	if (!psDevData->psRgxDevNode)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfControl: HWPerf module not initialised"));
 		return PVRSRV_ERROR_INVALID_DEVICE;
 	}
 
@@ -1306,6 +1330,12 @@ PVRSRV_ERROR RGXHWPerfAcquireData(
 	/* Reset the output arguments in case we discover an error */
 	*ppBuf = IMG_NULL;
 	*pui32BufLen = 0;
+
+	/* Valid input argument values supplied by the caller */
+	if (!psDevData)
+	{
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
 
 	/* Acquire some data to read from the HWPerf TL stream */
 	eError = TLClientAcquireData(psDevData->hTLConnection,
@@ -1391,6 +1421,12 @@ PVRSRV_ERROR RGXHWPerfReleaseData(
 	PVRSRV_ERROR           eError;
 	RGX_KM_HWPERF_DEVDATA* psDevData = (RGX_KM_HWPERF_DEVDATA*)hDevData;
 
+	/* Valid input argument values supplied by the caller */
+	if (!psDevData)
+	{
+		return PVRSRV_ERROR_INVALID_PARAMS;
+	}
+
 	/* Free the client buffer if allocated and reset length */
 	if (psDevData->pHwpBuf)
 	{
@@ -1408,7 +1444,7 @@ PVRSRV_ERROR RGXHWPerfReleaseData(
 PVRSRV_ERROR RGXHWPerfDisconnect(
 		IMG_HANDLE hDevData)
 {
-	PVRSRV_ERROR           eError;
+	PVRSRV_ERROR           eError = PVRSRV_OK;
 	RGX_KM_HWPERF_DEVDATA* psDevData = (RGX_KM_HWPERF_DEVDATA*)hDevData;
 
 	/* Check session handle is not zero */
@@ -1426,27 +1462,36 @@ PVRSRV_ERROR RGXHWPerfDisconnect(
 		{
 			PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfDisconnect: Failed to release data (%d)", eError));
 		}
+		/* RGXHWPerfReleaseData call abouve will null out the buffer 
+		 * fields and length */
 	}
 
 	/* Close the TL stream, ignore the error if it occurs as we
 	 * are disconnecting */
-	eError = TLClientCloseStream(psDevData->hTLConnection,
-								 psDevData->hSD);
-	if (eError != PVRSRV_OK)
+	if (psDevData->hSD)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfDisconnect: Failed to close handle on HWPerf stream (%d)", eError));
+		eError = TLClientCloseStream(psDevData->hTLConnection,
+									 psDevData->hSD);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfDisconnect: Failed to close handle on HWPerf stream (%d)", eError));
+		}
+		psDevData->hSD = IMG_NULL;
 	}
-	psDevData->hSD = IMG_NULL;
 
 	/* End the TL connection as we don't require it anymore */
-	eError = TLClientDisconnect(psDevData->hTLConnection);
-	if (eError != PVRSRV_OK)
+	if (psDevData->hTLConnection)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfDisconnect: Failed to disconnect from the Transport (%d)", eError));
+		eError = TLClientDisconnect(psDevData->hTLConnection);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfDisconnect: Failed to disconnect from the Transport (%d)", eError));
+		}
+		psDevData->hTLConnection = IMG_NULL;
 	}
-	psDevData->hTLConnection = IMG_NULL;
 
 	/* Free the session memory */
+	psDevData->psRgxDevNode = IMG_NULL;
 	OSFREEMEM(psDevData);
 	return eError;
 }

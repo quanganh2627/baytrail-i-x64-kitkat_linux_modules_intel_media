@@ -105,6 +105,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/jdi_cmd.o \
 	$(DISPLAYDIR)/cmi_vid.o \
 	$(DISPLAYDIR)/cmi_cmd.o \
+	$(DISPLAYDIR)/sharp25x16_vid.o \
 	$(DISPLAYDIR)/dc_callbacks.o \
 	$(DISPLAYDIR)/ospm/pwr_mgmt.o \
 	$(DISPLAYDIR)/ospm/gfx_ospm.o \

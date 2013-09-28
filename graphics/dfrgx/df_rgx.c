@@ -1,28 +1,30 @@
-/**
- * df_rgx.c - devfreq driver for IMG rgx graphics in Tangier.
- *
- * To-do - before merge:
- * - Ensure this driver can be loaded as a built-in or via insmod in init.rc
- *   (early on).  It hangs now, probably due to accessing frequency register
- *   when device is not yet initialized/powered.
- * - See above.  Ensure that rgx frequency control is not attempted until
- *   device is known to be ready, with power on.
- *
- * To-do:
- * - Ensure that this driver also works as built-in (not just module).
- * - Add and use utilization computation based on performance counters.
- * - Change or remove program symbol names that start with gbp_*
- * - Expose more information and control through sysfs or debugfs.
- * - Polling interval should be 5ms, so use hrtimer and separate work thread
- *   instead of using devfreq polling based on HZ.
- * - When Tangier supports frequency-changed interrupt, use it to update
- *   rgx driver notion of clock frequency.
- *
- * Notes:
- * Not using "opp" - operating power points.
- */
+/**************************************************************************
+ * Copyright (c) 2012, Intel Corporation.
+ * All Rights Reserved.
 
-/**
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice (including the next
+ * paragraph) shall be included in all copies or substantial portions of the
+ * Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ * Authors:
+ *    Javier Torres Castillo <javier.torres.castillo@intel.com>
+ *
+ * df_rgx.c - devfreq driver for IMG rgx graphics in Tangier.
  * Description:
  *  Early devfreq driver for rgx.  Utilization measures and on-demand
  *  frequency control will be added later.  For now, only thermal
@@ -36,7 +38,7 @@
  *      sysfs file                           initial value (KHz)
  *      ---------------------------------    -------------------
  *      /sys/class/devfreq/dfrgx/min_freq    200000
- *      /sys/class/devfreq/dfrgx/max_freq    320000
+ *      /sys/class/devfreq/dfrgx/max_freq    320000, 533000 on B0
  *  and provides current frequency from:
  *      /sys/class/devfreq/dfrgx/cur_freq
  *
@@ -79,23 +81,14 @@
 #include <ospm/gfx_freq.h>
 #include "dev_freq_debug.h"
 #include "dev_freq_graphics_pm.h"
+#include "df_rgx_defs.h"
+#include "df_rgx_burst.h"
 #define DFRGX_GLOBAL_ENABLE_DEFAULT 1
 
 #define DF_RGX_NAME_DEV    "dfrgx"
 #define DF_RGX_NAME_DRIVER "dfrgxdrv"
 
 #define DFRGX_HEADING DF_RGX_NAME_DEV ": "
-
-/* FIXME - Temporary limits to frequency range, pending further testing. */
-#define DF_RGX_FREQ_KHZ_MIN             200000
-#define DF_RGX_FREQ_KHZ_MAX             533000
-
-#define DF_RGX_FREQ_KHZ_MIN_INITIAL     DF_RGX_FREQ_KHZ_MIN
-#define DF_RGX_FREQ_KHZ_MAX_INITIAL     320000
-
-#define DF_RGX_INITIAL_FREQ_KHZ         320000
-
-#define DF_RGX_THERMAL_LIMITED_FREQ_KHZ 200000
 
 /* DF_RGX_POLLING_INTERVAL_MS - Polling interval in milliseconds.
  * FIXME - Need to have this be 5 ms, but have to workaround HZ tick usage.
@@ -111,35 +104,14 @@
 
 #define GOVERNOR_TO_USE devfreq_performance
 
-
-/**
- * THERMAL_COOLING_DEVICE_MAX_STATE - The maximum cooling state that this
- * driver (as a thermal cooling device by reducing frequency) supports.
- */
-#define THERMAL_COOLING_DEVICE_MAX_STATE 1
-
-
-struct busfreq_data {
-	struct device        *dev;
-	struct devfreq       *devfreq;
-	struct notifier_block pm_notifier;
-	struct mutex          lock;
-	bool                  disabled;
-	unsigned long int     bf_freq_mhz_rlzd;
-
-	struct thermal_cooling_device *gbp_cooldv_hdl;
-	int                   gbp_cooldv_state_cur;
-	int                   gbp_cooldv_state_prev;
-	int                   gbp_cooldv_state_highest;
-	int                   gbp_cooldv_state_override;
-};
+/*is tng B0 hw*/
+extern int is_tng_b0;
 
 /* df_rgx_created_dev - Pointer to created device, if any. */
 static struct platform_device *df_rgx_created_dev;
 
 /*Need to check if this is the 1st request*/
 static int firstRequest = 1;
-
 
 /**
  * Module parameters:
@@ -193,111 +165,6 @@ MODULE_LICENSE("GPL");
  *
  * Example invocation:
  *     MODULE_VERSION("0.1");
- */
-
-
-/**
- * set_desired_frequency_khz() - Set gpu frequency.
- * @bfdata: Pointer to private data structure
- * @freq_khz: Desired frequency in KHz (not MHz).
- * Returns: <0 if error, 0 if success, but no frequency update, or
- * realized frequency in KHz.
- */
-static long set_desired_frequency_khz(struct busfreq_data *bfdata,
-	unsigned long freq_khz)
-{
-	int sts;
-	struct devfreq *df;
-	unsigned long freq_req;
-	unsigned long freq_limited;
-	unsigned long freq_mhz;
-	unsigned int freq_mhz_quantized;
-	u32 freq_code;
-	int thermal_state;
-
-	sts = 0;
-
-	/* Warning - this function may be called from devfreq_add_device,
-	 * but if it is, bfdata->devfreq will not yet be set.
-	 */
-	df = bfdata->devfreq;
-
-	if (!df) {
-	    /*
-	     * Initial call, so set initial frequency.	Limits from min_freq
-	     * and max_freq would not have been applied by caller.
-	     */
-	    freq_req = DF_RGX_INITIAL_FREQ_KHZ;
-	}
-	else if ((freq_khz == 0) && df->previous_freq)
-		freq_req = df->previous_freq;
-	else
-		freq_req = freq_khz;
-
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: entry, caller requesting %luKHz\n",
-		__func__, freq_khz);
-
-	if (freq_req < DF_RGX_FREQ_KHZ_MIN)
-		freq_limited = DF_RGX_FREQ_KHZ_MIN;
-	else if (freq_req > DF_RGX_FREQ_KHZ_MAX)
-		freq_limited = DF_RGX_FREQ_KHZ_MAX;
-	else
-		freq_limited = freq_req;
-
-	if (bfdata->gbp_cooldv_state_override >= 0)
-		thermal_state = bfdata->gbp_cooldv_state_override;
-	else
-		thermal_state = bfdata->gbp_cooldv_state_cur;
-
-	if (thermal_state != 0) {
-		if (freq_limited > DF_RGX_THERMAL_LIMITED_FREQ_KHZ)
-			freq_limited = DF_RGX_THERMAL_LIMITED_FREQ_KHZ;
-	}
-
-	if (df && (freq_limited == df->previous_freq))
-		return df->previous_freq;
-
-	freq_mhz = freq_limited / 1000;
-
-	mutex_lock(&bfdata->lock);
-
-	if (bfdata->disabled)
-		goto out;
-
-	freq_code = gpu_freq_mhz_to_code(freq_mhz, &freq_mhz_quantized);
-
-	if (bfdata->bf_freq_mhz_rlzd != freq_mhz_quantized) {
-		sts = gpu_freq_set_from_code(freq_code);
-		if (sts < 0) {
-			DFRGX_DPF(DFRGX_DEBUG_MED,
-				"%s: error (%d) from gpu_freq_set_from_code for %uMHz\n",
-				__func__, sts, freq_mhz_quantized);
-			goto out;
-		} else {
-			bfdata->bf_freq_mhz_rlzd = sts;
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: freq MHz(requested, realized) = %u, %lu\n",
-				__func__, freq_mhz_quantized,
-				bfdata->bf_freq_mhz_rlzd);
-		}
-
-		if (df) {
-			/*
-			 * Setting df->previous_freq will be redundant
-			 * when called from target dispatch function, but
-			 * not otherwise.
-			 */
-			df->previous_freq = bfdata->bf_freq_mhz_rlzd * 1000;
-		}
-	}
-
-	sts = bfdata->bf_freq_mhz_rlzd * 1000;
-
-out:
-	mutex_unlock(&bfdata->lock);
-
-	return sts;
-}
-
 
 /**
  * df_rgx_bus_target - Request setting of a new frequency.
@@ -375,7 +242,7 @@ static int df_rgx_bus_get_dev_status(struct device *dev,
 static int tcd_get_max_state(struct thermal_cooling_device *tcd,
 	unsigned long *pms)
 {
-	*pms = THERMAL_COOLING_DEVICE_MAX_STATE;
+	*pms = THERMAL_COOLING_DEVICE_MAX_STATE - 1;
 
 	return 0;
 }
@@ -414,39 +281,146 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 {
 	struct devfreq *df;
 	struct busfreq_data *bfdata;
+	int ret = 0;
 
 	bfdata = (struct busfreq_data *) tcd->devdata;
 
-	if (cs > THERMAL_COOLING_DEVICE_MAX_STATE)
-		cs = THERMAL_COOLING_DEVICE_MAX_STATE;
+	if (cs >= THERMAL_COOLING_DEVICE_MAX_STATE)
+		cs = THERMAL_COOLING_DEVICE_MAX_STATE - 1;
 
-	/* If state change between zero and non-zero... */
-	if (!!bfdata->gbp_cooldv_state_cur != !!cs) {
+	/*If different state*/
+	if(bfdata->gbp_cooldv_state_cur != cs)
+	{
+		if(!df_rgx_is_active())
+			return -EBUSY;
+
+		ret = set_desired_frequency_khz(bfdata, bfdata->gpudata[cs].freq_limit);
+		if (ret <= 0)
+			return ret;
+
+		mutex_lock(&bfdata->lock);
 		bfdata->gbp_cooldv_state_prev = bfdata->gbp_cooldv_state_cur;
 		bfdata->gbp_cooldv_state_cur = cs;
+		df = bfdata->devfreq;
+		mutex_unlock(&bfdata->lock);
 
-		if (bfdata->gbp_cooldv_state_highest <
-			bfdata->gbp_cooldv_state_cur) {
-			bfdata->gbp_cooldv_state_highest =
-				bfdata->gbp_cooldv_state_cur;
-		}
-
-		if (mprm_verbosity >= 2)
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "Thermal state changed from %d to %d\n",
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "Thermal state changed from %d to %d\n",
 				bfdata->gbp_cooldv_state_prev,
 				bfdata->gbp_cooldv_state_cur);
 
-		df = bfdata->devfreq;
-		if (df) {
-			mutex_lock(&df->lock);
-			update_devfreq(df);
-			mutex_unlock(&df->lock);
-		}
 	}
 
 	return 0;
 }
 
+#if defined(THERMAL_DEBUG)
+/**
+ * tcd_get_available_states() - thermal cooling device callback get_available_states.
+ * @tcd: Thermal cooling device structure.
+ * @pcs: Pointer to char through which output values are stored.
+ *
+ * Invoked via interrupt/callback.
+ * Function return value: 0 if success, otherwise -error.
+ * Execution context: non-atomic
+ */
+static int tcd_get_available_states(struct thermal_cooling_device *tcd,
+	char *buf)
+{
+	struct busfreq_data *bfdata = (struct busfreq_data *) tcd->devdata;
+	int ret = 0;
+
+	if(is_tng_b0){
+	ret = sprintf(buf, "%d %d %d %d %d %d %d %d\n", aAvailableStateFreq[0].freq,
+			 aAvailableStateFreq[1].freq,
+			 aAvailableStateFreq[2].freq,
+			 aAvailableStateFreq[3].freq,
+			 aAvailableStateFreq[4].freq,
+			 aAvailableStateFreq[5].freq,
+			 aAvailableStateFreq[6].freq,
+			 aAvailableStateFreq[7].freq);
+	}
+	else{
+	ret = sprintf(buf, "%d %d %d %d\n", aAvailableStateFreq[0].freq,
+			 aAvailableStateFreq[1].freq,
+			 aAvailableStateFreq[2].freq,
+			 aAvailableStateFreq[3].freq);
+	}
+
+	return ret;
+}
+
+/**
+ * tcd_get_force_state_override() - thermal cooling device callback get_force_state_override.
+ * @tcd: Thermal cooling device structure.
+ * @pcs: Pointer to char through which output values are stored.
+ *
+ * Invoked via interrupt/callback.
+ * Function return value: 0 if success, otherwise -error.
+ * Execution context: non-atomic
+ */
+static int tcd_get_force_state_override(struct thermal_cooling_device *tcd,
+	char *buf)
+{
+	struct busfreq_data *bfdata = (struct busfreq_data *) tcd->devdata;
+
+	return sprintf(buf, "%d %d %d %d\n", bfdata->gpudata[0].freq_limit,
+			 bfdata->gpudata[1].freq_limit,
+			 bfdata->gpudata[2].freq_limit,
+			 bfdata->gpudata[3].freq_limit);
+}
+
+/**
+ * tcd_set_force_state_override() - thermal cooling device callback set_force_state_override.
+ * @tcd: Thermal cooling device structure.
+ * @pcs: Pointer to char containing the input values.
+ *
+ * Invoked via interrupt/callback.
+ * Function return value: 0 if success, otherwise -error.
+ * Execution context: non-atomic
+ */
+static int tcd_set_force_state_override(struct thermal_cooling_device *tcd,
+	char *buf)
+{
+	struct busfreq_data *bfdata = (struct busfreq_data *) tcd->devdata;
+	unsigned long int freqs[THERMAL_COOLING_DEVICE_MAX_STATE];
+	unsigned long int prev_freq = DFRGX_FREQ_320_MHZ;
+	int i = 0;
+
+	if(is_tng_b0)
+		prev_freq = DFRGX_FREQ_533_MHZ;
+
+	sscanf(buf, "%u %u %u %u\n", &freqs[0],
+			 &freqs[1],
+			 &freqs[2],
+			 &freqs[3]);
+
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s values: %u %u %u %u\n", __func__,
+			freqs[0],
+			freqs[1],
+			freqs[2],
+			freqs[3]);
+
+	for(i = 0; (i < THERMAL_COOLING_DEVICE_MAX_STATE) &&
+				df_rgx_is_valid_freq(freqs[i]) &&
+				prev_freq >= freqs[i]; i++)
+	{
+		prev_freq = freqs[i];
+	}
+
+	if(i < THERMAL_COOLING_DEVICE_MAX_STATE)
+	{
+		return -EINVAL;
+	}
+
+	for(i = 0; i < THERMAL_COOLING_DEVICE_MAX_STATE; i++)
+	{
+		bfdata->gpudata[i].freq_limit = freqs[i];
+	}
+
+	return 0;
+}
+
+#endif /*THERMAL_DEBUG*/
 
 /**
  * df_rgx_bus_exit() - An optional callback that is called when devfreq is
@@ -515,7 +489,9 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct busfreq_data *bfdata;
 	struct devfreq *df;
+	int error = 0;
 	int sts = 0;
+	int i = 0, j=0;
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
@@ -546,9 +522,20 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	bfdata->devfreq = df;
 
 	df->min_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
-	df->max_freq = DF_RGX_FREQ_KHZ_MAX_INITIAL;
 
+	if(is_tng_b0)
+		df->max_freq = DF_RGX_FREQ_KHZ_MAX;
+	else
+		df->max_freq = DF_RGX_FREQ_KHZ_MAX_INITIAL;
 	bfdata->gbp_cooldv_state_override = -1;
+
+	j = 0;
+	/*Initial states*/
+	for ( i = THERMAL_COOLING_DEVICE_MAX_STATE - 1; i >= 0; i-- )
+	{
+		bfdata->gpudata[j].freq_limit = aAvailableStateFreq[i].freq;
+		j++;
+	}
 
 	{
 		static const char *tcd_type = "gpu_burst";
@@ -556,6 +543,11 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 			.get_max_state = tcd_get_max_state,
 			.get_cur_state = tcd_get_cur_state,
 			.set_cur_state = tcd_set_cur_state,
+#if defined(THERMAL_DEBUG)
+			.get_force_state_override = tcd_get_force_state_override,
+			.set_force_state_override = tcd_set_force_state_override,
+			.get_available_states = tcd_get_available_states,
+#endif
 		};
 		struct thermal_cooling_device *tcdhdl;
 
@@ -589,6 +581,17 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		goto err_002;
 	}
 
+	bfdata->g_dfrgx_data.bus_freq_data = bfdata;
+	bfdata->g_dfrgx_data.g_enable = mprm_enable;
+	bfdata->g_dfrgx_data.gpu_utilization_record_index = 3; /*Index for 320 MHZ, initial freq*/
+	error = dfrgx_burst_init(&bfdata->g_dfrgx_data);
+
+	if(error){
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: dfrgx_burst_init failed!, no utilization data\n", __func__);
+		sts = -1;
+		goto err_002;
+	}
+
 	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: success\n", __func__);
 
 	return 0;
@@ -608,6 +611,8 @@ err_000:
 static int df_rgx_busfreq_remove(struct platform_device *pdev)
 {
 	struct busfreq_data *bfdata = platform_get_drvdata(pdev);
+
+	dfrgx_burst_deinit(&bfdata->g_dfrgx_data);
 
 	unregister_pm_notifier(&bfdata->pm_notifier);
 	devfreq_remove_device(bfdata->devfreq);

@@ -100,7 +100,11 @@ ccflags-y += \
 	-DPVR_ANDROID_HAS_CORKSCREW_API=1 \
 	-DSUPPORT_GPUTRACE_EVENTS \
 	-DSUPPORT_KERNEL_HWPERF \
+	-DPVRSRV_ENABLE_PROCESS_STATS \
+	-DRGXFW_POWMON_TIMERCTL \
 	$(NULL)
+
+#	-DPVRSRV_ENABLE_FW_TRACE_DEBUGFS \
 
 ccflags-y += \
 	-DCLIENT_DRIVER_DEFAULT_WAIT_RETRIES=50 \
@@ -260,7 +264,9 @@ $(DRIVER_NAME)-y += \
 
 # For devfreq
 $(DRIVER_NAME)-y += \
-	$(RGXDIR)/services/server/devices/rgx/rgxdf.o
+	$(RGXDIR)/services/server/devices/rgx/rgxdf.o \
+	$(RGXDIR)/services/server/devices/rgx/dfrgx_utilstats.o \
+	$(RGXDIR)/services/server/devices/rgx/dfrgx_interface.o
 
 $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/cmm_bridge/server_cmm_bridge.o \

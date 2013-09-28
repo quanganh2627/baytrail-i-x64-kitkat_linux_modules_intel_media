@@ -37,6 +37,7 @@
 #include "displays/jdi_cmd.h"
 #include "displays/cmi_vid.h"
 #include "displays/cmi_cmd.h"
+#include "displays/sharp25x16_vid.h"
 #include "psb_drv.h"
 #include "android_hdmi.h"
 
@@ -44,7 +45,8 @@ static struct intel_mid_panel_list panel_list[] = {
 	{JDI_VID, MDFLD_DSI_ENCODER_DPI, jdi_vid_init},
 	{JDI_CMD, MDFLD_DSI_ENCODER_DBI, jdi_cmd_init},
 	{CMI_VID, MDFLD_DSI_ENCODER_DPI, cmi_vid_init},
-	{CMI_CMD, MDFLD_DSI_ENCODER_DBI, cmi_cmd_init}
+	{CMI_CMD, MDFLD_DSI_ENCODER_DBI, cmi_cmd_init},
+	{SHARP25x16_VID, MDFLD_DSI_ENCODER_DPI, sharp25x16_vid_init},
 };
 
 enum panel_type get_panel_type(struct drm_device *dev, int pipe)
@@ -97,7 +99,7 @@ void init_panel(struct drm_device *dev, int mipi_pipe, enum panel_type p_type)
 		list_for_each_entry(connector,
 				&dev->mode_config.connector_list, head) {
 			if ((connector->connector_type !=
-						DRM_MODE_CONNECTOR_MIPI) &&
+						DRM_MODE_CONNECTOR_DSI) &&
 					(connector->connector_type !=
 					 DRM_MODE_CONNECTOR_LVDS))
 				connector->polled = DRM_CONNECTOR_POLL_HPD;

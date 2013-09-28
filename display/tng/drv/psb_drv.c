@@ -1580,6 +1580,9 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	bdev = &dev_priv->bdev;
 
 	hdmi_state = 0;
+	dev_priv->ied_enabled = false;
+	dev_priv->ied_context = NULL;
+
 	drm_hdmi_hpd_auto = 0;
 
 	ret = psb_ttm_global_init(dev_priv);
@@ -2096,14 +2099,77 @@ static int psb_vbt_ioctl(struct drm_device *dev, void *data,
 static int psb_enable_ied_session_ioctl(struct drm_device *dev, void *data,
 						struct drm_file *file_priv)
 {
-	/* TODO */
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct mdfld_dsi_config *dsi_config = dev_priv->dsi_configs[0];
+
+	DRM_DEBUG("Enabling IED session...\n");
+
+	if (file_priv == NULL) {
+		DRM_ERROR("%s: file_priv is NULL.\n", __func__);
+		return -1;
+	}
+
+	if (dev_priv->ied_enabled) {
+		DRM_ERROR("%s: ied_enabled has been set.\n", __func__);
+		return 0;
+	}
+
+	dev_priv->ied_enabled = true;
+	dev_priv->ied_context = file_priv->filp;
+
+	if (power_island_get(OSPM_DISPLAY_A)) {
+		mdfld_dsi_dsr_forbid(dsi_config);
+
+		/* Set bit 31 to enable IED pipeline */
+		REG_WRITE(PSB_IED_DRM_CNTL_STATUS, 0x80000000);
+		power_island_put(OSPM_DISPLAY_A);
+		return 0;
+	} else {
+		DRM_ERROR("%s: Failed to power on display island.\n", __func__);
+		return -1;
+	}
+
 	return 0;
 }
 
 static int psb_disable_ied_session_ioctl(struct drm_device *dev, void *data,
 					struct drm_file *file_priv)
 {
-	/* TODO */
+	int ret = 0;
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct mdfld_dsi_config *dsi_config = dev_priv->dsi_configs[0];
+
+	DRM_DEBUG("Disabling IED session...\n");
+
+	if (file_priv == NULL) {
+		DRM_ERROR("%s: file_priv is NULL.\n", __func__);
+		return -1;
+	}
+
+	if (dev_priv->ied_enabled == false) {
+		DRM_ERROR("%s: ied_enabled is not set.\n", __func__);
+		return 0;
+	}
+
+	if (dev_priv->ied_context != file_priv->filp) {
+		DRM_ERROR("%s: Wrong context.\n", __func__);
+		return -1;
+	}
+
+	if (power_island_get(OSPM_DISPLAY_A)) {
+		REG_WRITE(PSB_IED_DRM_CNTL_STATUS, 0);
+		mdfld_dsi_dsr_allow(dsi_config);
+
+		power_island_put(OSPM_DISPLAY_A);
+
+		dev_priv->ied_enabled = false;
+		dev_priv->ied_context = NULL;
+		ret = 0;
+	} else {
+		DRM_ERROR("%s: Failed to power on display island.\n", __func__);
+		ret = -1;
+	}
+
 	return 0;
 }
 
@@ -2874,7 +2940,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				if (ret) {
 					DRM_ERROR("Fail to get pipe %d vsync\n",
 							pipe);
-					schedule_work(&dev_priv->reset_panel_work);
+					if (pipe != 1)
+						schedule_work(&dev_priv->reset_panel_work);
 				}
 
 				mdfld_dsi_dsr_allow(dsi_config);

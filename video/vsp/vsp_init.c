@@ -96,7 +96,6 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->dev = dev;
 	vsp_priv->coded_buf = NULL;
 
-	vsp_priv->available_recon_buffer = 0;
 	vsp_priv->context_num = 0;
 	atomic_set(&dev_priv->vsp_mmu_invaldc, 0);
 

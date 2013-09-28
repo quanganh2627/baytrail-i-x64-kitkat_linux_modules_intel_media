@@ -44,10 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
     This file has a mixture of top-level exported API functions, and
     low level functions used by services.  
 
-    FIXME:
-    This makes enforcement of a strict hierarchy impossible, and nasty 
-    circular references are inevitable.
-    Separate out these functions into two levels.
+    
 */
 
    
@@ -369,16 +366,8 @@ PVRSRV_ERROR PDumpTransition(PDUMP_CONNECTION_DATA *psPDumpConnectionData, IMG_B
 
 PVRSRV_ERROR PDumpIsCaptureFrameKM(IMG_BOOL *bIsCapturing)
 {
-	/* FIXME:
-	 * WDDM has an extended init phase to work around RA suballocs not
-     * having a PDump MALLOC.
-     * As a consequence, the WDDM init phase contains some FW command submissions.
-     * These commands were discarded due to being outside a capture range. In order
-	 * to correctly PDump these commands the init phase is considered to be a
-	 * capture range.
-	 * Note that PDumpOSIsInitPhaseKM and DBGDrivIsInitPhase were invented for
-	 * this purpose. They are not otherwise required.
-	 */
+	/* 
+*/
 	if(PDumpOSIsInitPhaseKM())
 	{
 		*bIsCapturing = IMG_TRUE;
@@ -666,7 +655,7 @@ PVRSRV_ERROR PDumpRegPolKM(IMG_CHAR				*pszPDumpRegName,
 						   PDUMP_POLL_OPERATOR	eOperator)
 {
 	/* Timings correct for linux and XP */
-	/* FIXME: Timings should be passed in */
+	/* */
 	#define POLL_DELAY			1000U
 	#define POLL_COUNT_LONG		(2000000000U / POLL_DELAY)
 	#define POLL_COUNT_SHORT	(1000000U / POLL_DELAY)
@@ -1377,13 +1366,13 @@ PDumpWriteShiftedMaskedValue(const IMG_CHAR *pszDestRegspaceName,
 
     pszWrwSuffix = (uiWordSize == 8) ? "64" : "";
 
-    /* FIXME: "Acquire" a pdump register */
+    /* */
     pszPDumpIntRegSpace = pszDestRegspaceName;
     uiPDumpIntRegNum = 1;
         
     eError = PDumpOSBufprintf(hScript,
                               ui32MaxLen,
-                              /* NB: should be "MOV" -- FIXME! */
+                              /* NB: should be "MOV" -- */
                               "WRW :%s:$%d :%s:%s:" IMG_DEVMEM_OFFSET_FMTSPEC "\n",
                               /* dest */
                               pszPDumpIntRegSpace,
@@ -1394,7 +1383,7 @@ PDumpWriteShiftedMaskedValue(const IMG_CHAR *pszDestRegspaceName,
                               uiRefOffset);
     if (eError != PVRSRV_OK)
     {
-        goto ErrOut; /* FIXME: proper error handling */
+        goto ErrOut; /* */
     }
 
     PDUMP_LOCK();
@@ -1415,7 +1404,7 @@ PDumpWriteShiftedMaskedValue(const IMG_CHAR *pszDestRegspaceName,
                                   uiSHRAmount);
         if (eError != PVRSRV_OK)
         {
-            goto ErrUnlock; /* FIXME: proper error handling */
+            goto ErrUnlock; /* */
         }
         PDumpOSWriteString2(hScript, uiPDumpFlags);
     }
@@ -1435,7 +1424,7 @@ PDumpWriteShiftedMaskedValue(const IMG_CHAR *pszDestRegspaceName,
                                   uiSHLAmount);
         if (eError != PVRSRV_OK)
         {
-            goto ErrUnlock; /* FIXME: proper error handling */
+            goto ErrUnlock; /* */
         }
         PDumpOSWriteString2(hScript, uiPDumpFlags);
     }
@@ -1455,7 +1444,7 @@ PDumpWriteShiftedMaskedValue(const IMG_CHAR *pszDestRegspaceName,
                                   uiMask);
         if (eError != PVRSRV_OK)
         {
-            goto ErrUnlock; /* FIXME: proper error handling */
+            goto ErrUnlock; /* */
         }
         PDumpOSWriteString2(hScript, uiPDumpFlags);
     }
@@ -1473,7 +1462,7 @@ PDumpWriteShiftedMaskedValue(const IMG_CHAR *pszDestRegspaceName,
                               uiPDumpIntRegNum);
     if(eError != PVRSRV_OK)
     {
-        goto ErrUnlock; /* FIXME: proper error handling */
+        goto ErrUnlock; /* */
     }
     PDumpOSWriteString2(hScript, uiPDumpFlags);
 
@@ -1947,7 +1936,7 @@ IMG_UINT32 DbgWrite(PDBG_STREAM psStream, IMG_UINT8 *pui8Data, IMG_UINT32 ui32BC
 	}
 
 
-	/* FIXME: translate ui32BytesWritten to error here */
+	/* */
 	return ui32BytesWritten;
 }
 

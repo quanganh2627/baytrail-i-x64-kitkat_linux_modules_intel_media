@@ -1173,12 +1173,21 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	ctx->vgacntr = 0x80000000;
 
 	/*set up pipe timings */
-	ctx->htotal = (mode->crtc_hdisplay - 1) |
-	    ((mode->crtc_htotal - 1) << 16);
-	ctx->hblank = (mode->crtc_hblank_start - 1) |
-	    ((mode->crtc_hblank_end - 1) << 16);
-	ctx->hsync = (mode->crtc_hsync_start - 1) |
-	    ((mode->crtc_hsync_end - 1) << 16);
+	if (get_panel_type(dev, 0) == SHARP25x16_VID) {
+		ctx->htotal = (mode->crtc_hdisplay / 2 - 1) |
+		    ((mode->crtc_htotal / 2 - 1) << 16);
+		ctx->hblank = (mode->crtc_hblank_start / 2 - 1) |
+		    ((mode->crtc_hblank_end / 2 - 1) << 16);
+		ctx->hsync = (mode->crtc_hsync_start - mode->crtc_hdisplay / 2 - 1) |
+		    ((mode->crtc_hsync_end - mode->crtc_hdisplay / 2 - 1) << 16);
+	} else {
+		ctx->htotal = (mode->crtc_hdisplay - 1) |
+		    ((mode->crtc_htotal - 1) << 16);
+		ctx->hblank = (mode->crtc_hblank_start - 1) |
+		    ((mode->crtc_hblank_end - 1) << 16);
+		ctx->hsync = (mode->crtc_hsync_start - 1) |
+		    ((mode->crtc_hsync_end - 1) << 16);
+	}
 	ctx->vtotal = (mode->crtc_vdisplay - 1) |
 	    ((mode->crtc_vtotal - 1) << 16);
 	ctx->vblank = (mode->crtc_vblank_start - 1) |
@@ -1187,8 +1196,12 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	    ((mode->crtc_vsync_end - 1) << 16);
 
 	/*pipe source */
-	ctx->pipesrc = ((mode->crtc_hdisplay - 1) << 16) |
+	if (get_panel_type(dev, 0) == SHARP25x16_VID)
+		ctx->pipesrc = ((mode->crtc_hdisplay / 2 - 1) << 16) |
 	    (mode->crtc_vdisplay - 1);
+	else
+		ctx->pipesrc = ((mode->crtc_hdisplay - 1) << 16) |
+		    (mode->crtc_vdisplay - 1);
 
 	/*setup dsp plane */
 	ctx->dsppos = 0;
@@ -1200,11 +1213,15 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	if (get_panel_type(dev, 0) == TMD_6X10_VID)
 		ctx->dspsize = ((mode->crtc_vdisplay - 1) << 16) |
 		    (mode->crtc_hdisplay - 200 - 1);
+	else if (get_panel_type(dev, 0) == SHARP25x16_VID)
+		ctx->dspsize = ((mode->crtc_vdisplay - 1) << 16) |
+		    (mode->crtc_hdisplay / 2 - 1);
 	else
 		ctx->dspsize = ((mode->crtc_vdisplay - 1) << 16) |
 		    (mode->crtc_hdisplay - 1);
 
 	ctx->dspstride = fb_pitch;
+
 	ctx->dspsurf = mode_dev->bo_offset(dev, mdfld_fb);
 	ctx->dsplinoff = y * fb_pitch + x * (fb_bpp / 8);
 

@@ -33,6 +33,13 @@ endif
 # MY_DEBUG - 1 to force compilation to include "-g".
 MY_DEBUG := 1
 
+# THERMAL_DEBUG for force_states and get_available_states sysfs entries
+THERMAL_DEBUG := 0
+
+ifeq ($(THERMAL_DEBUG),1)
+ccflags-y += -DTHERMAL_DEBUG
+endif
+
 # This makefile written for dir: drivers/staging/intel_media/graphics/dfrgx
 
 ifneq ($(MY_DEBUG),)
@@ -50,6 +57,8 @@ obj-$(CONFIG_GFX_RGX_DEVFREQ)	+= dfrgx.o
 dfrgx-y :=
 dfrgx-y += df_rgx.o
 dfrgx-y += dev_freq_graphics_pm.o
+dfrgx-y += df_rgx_utils.o
+dfrgx-y += df_rgx_burst.o
 
 include ../modules/intel_media/graphics/dfrgx/dependencies/Makefile
 
@@ -83,4 +92,8 @@ CFLAGS_df_rgx.o += \
 	-I$(INCLUDES_RGX)
 
 CFLAGS_dev_freq_graphics_pm.o += -I$(INCLUDES_RGX)
+
+CFLAGS_df_rgx_burst.o += \
+	-I../modules/intel_media/display/tng/drv \
+	-I$(INCLUDES_RGX)
 
