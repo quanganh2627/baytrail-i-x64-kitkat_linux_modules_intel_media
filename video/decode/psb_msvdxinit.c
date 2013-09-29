@@ -42,9 +42,7 @@
 #include <linux/firmware.h>
 
 #ifdef CONFIG_DX_SEP54
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 extern int sepapp_image_verify(u8 *addr, ssize_t size, u32 key_index, u32 magic_num);
-#endif
 #endif
 
 uint8_t psb_rev_id;
@@ -625,7 +623,6 @@ int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 	release_firmware(fw);
 
 #ifdef CONFIG_DX_SEP54
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 	DRM_INFO("sepapp_image_verify\n");
 
 	DRM_INFO("imr5 L 0x94 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X94));
@@ -646,7 +643,7 @@ int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 	DRM_INFO("imr5 H 0x95 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X95));
 	DRM_INFO("imr5 RAC 0x96 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X96));
 	DRM_INFO("imr5 WAC 0x97 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X97));
-#endif
+
 	pwr_mask = intel_mid_msgbus_read32(0x04, 0x32);
 	DRM_INFO("VEDSSPM0 = 0x%x", pwr_mask);
 
