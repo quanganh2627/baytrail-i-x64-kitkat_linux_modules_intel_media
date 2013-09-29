@@ -667,16 +667,14 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 
 	if (topaz_priv->topaz_fw_loaded == 0) {
 		/* #.# load fw to driver */
-		PSB_DEBUG_INIT("TOPAZ: load /lib/firmware/topazhp_fw.bin\n");
+		PSB_DEBUG_TOPAZ("TOPAZ:load /lib/firmware/topazhp_fw.bin\n");
 		if (Is_Mrfld_B0())
 			ret = tng_topaz_init_fw_chaabi(dev);
 		else
 			ret = tng_topaz_init_fw(dev);
 		if (ret) {
 			/* FIXME: find a proper return value */
-			DRM_ERROR("TOPAX:load /lib/firmware/topaz_fwsc.bin" \
-				  " fails, ensure udevd is configured" \
-				  " correctly!\n");
+			DRM_ERROR("TOPAX:load firmware from storage failed\n");
 			return -EFAULT;
 		}
 		topaz_priv->topaz_fw_loaded = 1;
@@ -2471,6 +2469,15 @@ static int tng_setup_new_context(
 		(unsigned int)video_ctx, codec_to_string(codec), \
 		topaz_priv->cur_context);
 
+	if (Is_Mrfld_B0() && drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM) {
+		PSB_DEBUG_TOPAZ("TOPAZ: new context, force a poweroff to reload firmware anyway\n");
+
+		drm_topaz_pmpolicy = PSB_PMPOLICY_POWERDOWN; /* off NOPM policy */
+		tng_topaz_power_off(dev);
+		drm_topaz_pmpolicy = PSB_PMPOLICY_NOPM; /* reset back to NOPM */
+	}
+
+	
 	if (topaz_priv->cur_context &&
 		topaz_priv->cur_context != video_ctx) {
 		if (topaz_priv->cur_context->status & \
@@ -2571,7 +2578,7 @@ static int tng_setup_new_context(
 	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
 				& 0xffff0000)  >> 16) ;
 	*/
-
+	
 	if (Is_Mrfld_B0()) {
 		ret = tng_topaz_power_up(dev, codec);
 		if (ret) {
@@ -3416,8 +3423,8 @@ int tng_topaz_power_up(
 	PSB_DEBUG_TOPAZ("TOPAZ: power up start\n");
 
 	if (Is_Mrfld_B0()) {
-		if (ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
-			PSB_DEBUG_TOPAZ("TOPAZ: power is already up\n");
+		if (is_island_on(OSPM_VIDEO_ENC_ISLAND)) {
+			PSB_DEBUG_TOPAZ("TOPAZ: power is already up, end and return\n");
 			return 0;
 		}
 		reg_val = intel_mid_msgbus_read32(PUNIT_PORT, VEC_SS_PM0);
@@ -3459,16 +3466,12 @@ int tng_topaz_power_up(
 	}
 #endif
 
-	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM) {
-		if (!power_island_get_dummy(dev)) {
-			DRM_ERROR("Failed to power on ENC island\n");
-			return -1;
-		}
-	} else {
-		if (!power_island_get(OSPM_VIDEO_ENC_ISLAND)) {
-			DRM_ERROR("Failed to power on ENC island\n");
-			return -1;
-		}
+	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
+		PSB_DEBUG_TOPAZ("Topaz: NOPM policy, but still need powerup here\n");
+
+	if (!power_island_get(OSPM_VIDEO_ENC_ISLAND)) {
+		DRM_ERROR("Failed to power on ENC island\n");
+		return -1;
 	}
 
 	/* Must flush here in case of invalid cache data */
@@ -3484,14 +3487,14 @@ int tng_topaz_power_off(struct drm_device *dev)
 
 	PSB_DEBUG_TOPAZ("TOPAZ: power off start\n");
 	if (Is_Mrfld_B0()) {
-		if (!ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
+		if (!is_island_on(OSPM_VIDEO_ENC_ISLAND)) {
 			PSB_DEBUG_TOPAZ("TOPAZ: power is already off\n");
 			return 0;
 		}
 	}
 
 	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
-		power_island_put_dummy(dev);
+		PSB_DEBUG_TOPAZ("TOPAZ: skip power off since NOPM policy\n");
 	else
 		power_island_put(OSPM_VIDEO_ENC_ISLAND);
 
