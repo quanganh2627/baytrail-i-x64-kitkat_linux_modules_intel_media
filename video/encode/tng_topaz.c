@@ -2205,11 +2205,18 @@ static int tng_context_switch(
 	PSB_DEBUG_TOPAZ("TOPAZ: Frame (%d)\n", video_ctx->frame_count);
 	tng_topaz_trace_ctx("input Context", video_ctx);
 
+	/* Handle JPEG burst mode, save current context only if it's not JPEG */
 	if (codec == IMG_CODEC_JPEG) {
-		PSB_DEBUG_TOPAZ("TOPAZ: JPEG context(%08x)\n",
-			(unsigned int)video_ctx);
-		PSB_DEBUG_TOPAZ("continue doing other commands\n");
+		if (topaz_priv->cur_context &&
+		    topaz_priv->cur_context->codec != IMG_CODEC_JPEG &&
+		    !(topaz_priv->cur_context->status & MASK_TOPAZ_CONTEXT_SAVED)) {
 
+			ret = tng_topaz_save_mtx_state(dev);
+			if (ret) {
+				DRM_ERROR("Failed to save mtx status");
+				return ret;
+			}
+		}
 		topaz_priv->cur_context = video_ctx;
 		topaz_priv->cur_codec = codec;
 		return ret;
@@ -2288,11 +2295,14 @@ static int tng_context_switch(
 					return ret;
 				}
 			} else {
-				ret = tng_topaz_save_mtx_state(dev);
-				if (ret) {
-					DRM_ERROR("Failed to save mtx status");
-					return ret;
-				}
+				if (topaz_priv->cur_context->codec != IMG_CODEC_JPEG) {
+					ret = tng_topaz_save_mtx_state(dev);
+					if (ret) {
+						DRM_ERROR("Failed to save mtx status");
+						return ret;
+					}
+				} else
+					PSB_DEBUG_TOPAZ("TOPAZ: Bypass saving JPEG context\n");
 			}
 		}
 
@@ -2316,10 +2326,12 @@ static int tng_context_switch(
 				return ret;
 			}
 		} else {
-			ret = tng_topaz_restore_mtx_state(dev);
-			if (ret) {
-				DRM_ERROR("Failed to restore mtx status");
-				return ret;
+			if (topaz_priv->cur_context->codec != IMG_CODEC_JPEG) {
+				ret = tng_topaz_restore_mtx_state(dev);
+				if (ret) {
+					DRM_ERROR("Failed to restore mtx status");
+					return ret;
+				}
 			}
 		}
 	}
@@ -2459,35 +2471,39 @@ static int tng_setup_new_context(
 		(unsigned int)video_ctx, codec_to_string(codec), \
 		topaz_priv->cur_context);
 
-	if (video_ctx->codec != IMG_CODEC_JPEG) {
-
-		if (topaz_priv->cur_context &&
-		    topaz_priv->cur_context != video_ctx) {
-
-			if (topaz_priv->cur_context->status & \
-			    MASK_TOPAZ_CONTEXT_SAVED) {
-				PSB_DEBUG_TOPAZ("Context %08x(%s)" \
-					" has been saved, continue\n");
-			/* If the previous context not saved */
+	if (topaz_priv->cur_context &&
+		topaz_priv->cur_context != video_ctx) {
+		if (topaz_priv->cur_context->status & \
+		    MASK_TOPAZ_CONTEXT_SAVED) {
+			PSB_DEBUG_TOPAZ("Context %08x(%s)" \
+				" has been saved, continue\n", \
+				topaz_priv->cur_context, \
+				codec_to_string(topaz_priv->cur_context->codec));
+		/* If the previous context not saved */
+		} else {
+			if (Is_Mrfld_B0()) {
+				ret = tng_topaz_power_off(dev);
+				if (ret) {
+					DRM_ERROR("TOPAZ: Failed");
+					DRM_ERROR("to power off");
+					goto out;
+				}
 			} else {
-				if (Is_Mrfld_B0()) {
-					ret = tng_topaz_power_off(dev);
-					if (ret) {
-						DRM_ERROR("TOPAZ: Failed");
-						DRM_ERROR("to power off");
-						goto out;
-					}
-				} else {
-					ret = tng_topaz_save_mtx_state(dev);
-					if (ret) {
-						DRM_ERROR("Failed to save");
-						DRM_ERROR("mtx status");
-						goto out;
-					}
+				PSB_DEBUG_TOPAZ("Context %08x(%s)" \
+					" has not been saved, save it\n", \
+					topaz_priv->cur_context, \
+					codec_to_string(topaz_priv->cur_context->codec));
+				ret = tng_topaz_save_mtx_state(dev);
+				if (ret) {
+					DRM_ERROR("Failed to save");
+					DRM_ERROR("mtx status");
+					goto out;
 				}
 			}
 		}
+	}
 
+	if (video_ctx->codec != IMG_CODEC_JPEG) {
 		/* Register state BO */
 		video_ctx->reg_saving_bo = ttm_buffer_object_lookup(
 						tfile, *(cmd + 2));

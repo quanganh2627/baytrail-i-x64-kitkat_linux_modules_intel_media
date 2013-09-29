@@ -849,7 +849,7 @@ int tng_topaz_reset(struct drm_psb_private *dev_priv)
 	uint32_t reg_val;
 
 	topaz_priv = dev_priv->topaz_private;
-	topaz_priv->topaz_busy = 0;
+	/* topaz_priv->topaz_busy = 0; */
 
 	topaz_priv->topaz_needs_reset = 0;
 
