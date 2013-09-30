@@ -2843,8 +2843,17 @@ tng_topaz_send(
                 case MTX_CMDID_SETUP_INTERFACE:
 			if (video_ctx && video_ctx->wb_bo) {
 				PSB_DEBUG_TOPAZ("TOPAZ: reset\n");
-				tng_topaz_reset(dev_priv);
-				tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
+				if (Is_Mrfld_B0()) {
+					tng_topaz_power_off(dev);
+					PSB_DEBUG_TOPAZ("TOPAZ: re-copy/verify firmware "
+							"to workaround JPEG issue\n");
+					tng_topaz_init_fw_chaabi(dev);
+					tng_topaz_power_up(dev, 0);
+					tng_topaz_fw_run(dev, video_ctx, 0);
+				} else {
+					tng_topaz_reset(dev_priv);
+					tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
+				}
 
 				PSB_DEBUG_TOPAZ("TOPAZ: unref write back bo\n");
 				ttm_bo_kunmap(&video_ctx->wb_bo_kmap);
