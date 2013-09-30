@@ -2566,6 +2566,11 @@ static int tng_setup_new_context(
 			return ret;
 		}
 	} else {
+		if (Is_Mrfld_B0()) {
+			PSB_DEBUG_TOPAZ("TOPAZ: re-copy/verify firmware to workaround JPEG issue\n");
+			tng_topaz_init_fw_chaabi(dev);
+		}
+
 		video_ctx->reg_saving_bo = NULL;
 		video_ctx->data_saving_bo = NULL;
 		topaz_priv->issuebuf_cmd_count = *(cmd + 2);
