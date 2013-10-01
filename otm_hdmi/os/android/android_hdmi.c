@@ -1605,9 +1605,11 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 
 	otm_hdmi_power_rails_off();
 
+	/* disable hotplug detection */
+	otm_hdmi_enable_hpd(false);
+
 	return;
 }
-
 
 /**
  * Prepare HDMI EDID-like data and copy it to the given buffer
@@ -1719,6 +1721,9 @@ void android_hdmi_resume_display(struct drm_device *dev)
 		/* power off rails, HPD will continue to work */
 		otm_hdmi_power_rails_off();
 	}
+
+	/* enable hotplug detection */
+	otm_hdmi_enable_hpd(true);
 }
 
 /**
@@ -2674,6 +2679,9 @@ void android_hdmi_driver_init(struct drm_device *dev,
 	power_on = otm_hdmi_power_rails_on();
 	if (!power_on)
 		pr_err("%s: Unable to power on HDMI rails\n", __func__);
+
+	/* Enable hotplug detection */
+	otm_hdmi_enable_hpd(true);
 
 	pr_info("%s: Done with driver init\n", __func__);
 	pr_info("Exit %s\n", __func__);
