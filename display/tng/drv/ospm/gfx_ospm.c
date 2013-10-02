@@ -375,14 +375,14 @@ EXPORT_SYMBOL(gpu_freq_mhz_to_code);
 void gpu_freq_set_suspend_func(int (*suspend_func)(void))
 {
 	pSuspend_func = suspend_func;
-	OSPM_DPF("OSPM: suspend \n");
+	PSB_DEBUG_PM("OSPM: suspend \n");
 }
 EXPORT_SYMBOL(gpu_freq_set_suspend_func);
 
 void gpu_freq_set_resume_func(int (*resume_func)(void))
 {
 	pResume_func = resume_func;
-	OSPM_DPF("OSPM: Resume \n");
+	PSB_DEBUG_PM("OSPM: Resume \n");
 }
 EXPORT_SYMBOL(gpu_freq_set_resume_func);
 
@@ -406,12 +406,12 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	if(pResume_func){
 		error = (*pResume_func)();
 		if(error){
-			OSPM_DPF("OSPM: Could not resume DFRGX");
+			PSB_DEBUG_PM("OSPM: Could not resume DFRGX");
 			return false;
 		}
 	}
 
-	OSPM_DPF("Pre-power-up status = 0x%08lX\n",
+	PSB_DEBUG_PM("Pre-power-up status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
 	if (first_boot) {
@@ -457,7 +457,7 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 		WRAPPER_REG_WRITE(slc_bypass, data);
 	}
 
-	OSPM_DPF("Post-power-up status = 0x%08lX\n",
+	PSB_DEBUG_PM("Post-power-up status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
 	if ((!gbSystemActivePMEnabled) && gbSystemActivePMInit)
@@ -478,17 +478,17 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 	bool ret = true;
 	int error = 0;
 
-	OSPM_DPF("OSPM: ospm_gfx_power_down \n");
+	PSB_DEBUG_PM("OSPM: ospm_gfx_power_down \n");
 
 	if(pSuspend_func){
 	error = (*pSuspend_func)();
 		if(error){
-			OSPM_DPF("OSPM :Could not suspend DFRGX");
+			PSB_DEBUG_PM("OSPM :Could not suspend DFRGX");
 			return false;
 		}
 	}
 
-	OSPM_DPF("Pre-power-off Status = 0x%08lX\n",
+	PSB_DEBUG_PM("Pre-power-off Status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
 	if ((!gbSystemActivePMEnabled) && gbSystemActivePMInit) {
@@ -509,7 +509,7 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 	if (gfx_island_selected & GFX_SLC_LDO_SSC)
 		ret = GFX_POWER_DOWN(PMU_LDO);
 
-	OSPM_DPF("Post-power-off Status = 0x%08lX\n",
+	PSB_DEBUG_PM("Post-power-off Status = 0x%08lX\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
 	return !ret;
@@ -526,7 +526,7 @@ void ospm_gfx_init(struct drm_device *dev,
 	if (IS_TNG_B0(dev))
 		is_tng_b0 = 1;
 
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 	p_island->p_funcs->power_up = ospm_gfx_power_up;
 	p_island->p_funcs->power_down = ospm_gfx_power_down;
 	p_island->p_dependency = NULL;

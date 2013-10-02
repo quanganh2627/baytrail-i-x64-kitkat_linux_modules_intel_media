@@ -41,7 +41,7 @@ int rtpm_suspend(struct device *dev)
 	int ref_count = 0;
 	int i;
 
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 
 	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
 		if (island_list[i].island & OSPM_DISPLAY_ISLAND)
@@ -57,7 +57,7 @@ int rtpm_suspend(struct device *dev)
 
 int rtpm_resume(struct device *dev)
 {
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 	/* No OPs of GFX/VED/VEC/VSP/DISP */
 	return 0;
 }
@@ -67,7 +67,7 @@ int rtpm_idle(struct device *dev)
 	int ref_count = 0;
 	int i;
 
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 
 	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
 		if (island_list[i].island & OSPM_DISPLAY_ISLAND)
@@ -76,7 +76,7 @@ int rtpm_idle(struct device *dev)
 	}
 
 	if (ref_count) {
-		OSPM_DPF("%s return busy\n", __func__);
+		PSB_DEBUG_PM("%s return busy\n", __func__);
 		return -EBUSY;
 	} else
 		return 0;
@@ -85,7 +85,7 @@ int rtpm_idle(struct device *dev)
 int rtpm_allow(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 	pm_runtime_allow(&dev->pdev->dev);
 	dev_priv->rpm_enabled = 1;
 	return 0;
@@ -94,7 +94,7 @@ int rtpm_allow(struct drm_device *dev)
 void rtpm_forbid(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 	pm_runtime_forbid(&dev->pdev->dev);
 	dev_priv->rpm_enabled = 0;
 	return;
