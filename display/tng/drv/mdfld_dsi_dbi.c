@@ -25,6 +25,7 @@
  *  Jackie Li<yaodong.li@intel.com>
  */
 
+#include <linux/pm_qos.h>
 #include "mdfld_dsi_dbi.h"
 #include "mdfld_dsi_dbi_dpu.h"
 #include "mdfld_dsi_pkg_sender.h"
@@ -33,6 +34,8 @@
 #include "mdfld_dsi_dbi_dsr.h"
 #include "mrfld_clock.h"
 #include "psb_drv.h"
+
+static struct pm_qos_request qos_request;
 
 /**
  * Enter DSR
@@ -532,6 +535,12 @@ static int __dbi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 
 	if (!dsi_config)
 		return -EINVAL;
+
+	/* When display is on, block s0i3*/
+	pm_qos_add_request(&qos_request,
+				PM_QOS_CPU_DMA_LATENCY,
+				CSTATE_EXIT_LATENCY_S0i3-1);
+
 	regs = &dsi_config->regs;
 	ctx = &dsi_config->dsi_hw_context;
 	dev = dsi_config->dev;
@@ -676,6 +685,9 @@ static int __dbi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 		return -EINVAL;
 
 	PSB_DEBUG_ENTRY("\n");
+
+	/* When display is off, enable S0i3*/
+	pm_qos_remove_request(&qos_request);
 
 	regs = &dsi_config->regs;
 	ctx = &dsi_config->dsi_hw_context;
