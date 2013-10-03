@@ -22,7 +22,8 @@
  * SOFTWARE.
  *
  * Authors:
- *    Javier Torres Castillo <javier.torres.castillo@intel.com>
+ *     Dale B. Stimson <dale.b.stimson@intel.com>
+ *     Javier Torres Castillo <javier.torres.castillo@intel.com>
  *
  * df_rgx.c - devfreq driver for IMG rgx graphics in Tangier.
  * Description:
@@ -293,6 +294,11 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 	{
 		if(!df_rgx_is_active())
 			return -EBUSY;
+
+		/* If thermal state is specified explicitely then suspend burst/unburst thread
+	 	* because the user needs the GPU to run at specific frequency/thermal state level
+	 	*/
+		dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
 
 		ret = set_desired_frequency_khz(bfdata, bfdata->gpudata[cs].freq_limit);
 		if (ret <= 0)
@@ -584,6 +590,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	bfdata->g_dfrgx_data.bus_freq_data = bfdata;
 	bfdata->g_dfrgx_data.g_enable = mprm_enable;
 	bfdata->g_dfrgx_data.gpu_utilization_record_index = 3; /*Index for 320 MHZ, initial freq*/
+
 	error = dfrgx_burst_init(&bfdata->g_dfrgx_data);
 
 	if(error){

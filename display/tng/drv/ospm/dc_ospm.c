@@ -87,7 +87,7 @@ static bool disp_a_power_up(struct drm_device *dev,
 	 * This workarounds are only needed for TNG A0/A1 silicon.
 	 * Any TNG SoC which is newer than A0/A1 won't need this.
 	 */
-	if (!IS_TNG_B0(dev))
+	if (IS_TNG_A0(dev))
 	{
 		if (!ret)
 			apply_A0_workarounds(OSPM_DISPLAY_ISLAND, 0);
@@ -259,7 +259,7 @@ static bool mio_power_up(struct drm_device *dev,
 {
 	bool ret = false;
 
-	if (!IS_TNG_B0(dev))
+	if (IS_TNG_A0(dev))
 	{
 		sb_write_packet(true);
 		udelay(50);

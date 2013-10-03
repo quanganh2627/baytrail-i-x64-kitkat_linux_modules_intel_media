@@ -25,6 +25,7 @@
  *  Jackie Li<yaodong.li@intel.com>
  */
 
+#include <linux/pm_qos.h>
 #include "mdfld_dsi_dbi.h"
 #include "mdfld_dsi_dbi_dpu.h"
 #include "mdfld_dsi_pkg_sender.h"
@@ -33,6 +34,8 @@
 #include "mdfld_dsi_dbi_dsr.h"
 #include "mrfld_clock.h"
 #include "psb_drv.h"
+
+static struct pm_qos_request qos_request;
 
 /**
  * Enter DSR
@@ -306,21 +309,16 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 
 	power_island = pipe_to_island(dsi_config->pipe);
 
+	/* always power on display C island for overlay c and sprite D */
+	power_island |= OSPM_DISPLAY_C;
+
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
-
-	/*
-	 * FIXME: need to dynamically power un-gate DISPLAY C island for
-	 * Overlay C & Sprite D planes.
-	 */
-	if (!ctx->ovcadd || (((ctx->ovcadd & OV_PIPE_SELECT) >>
-					OV_PIPE_SELECT_POS) != OV_PIPE_B))
-		power_island |= OSPM_DISPLAY_C;
 
 	if (!power_island_get(power_island))
 		return -EAGAIN;
 
-	if (IS_TNG_B0(dev)) {
+	if (dev_priv->bUseHFPLL) {
 		/* Disable PLL*/
 		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
 		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
@@ -391,6 +389,13 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	/*unready dsi adapter for re-programming*/
 	REG_WRITE(regs->device_ready_reg,
 		REG_READ(regs->device_ready_reg) & ~(DSI_DEVICE_READY));
+	/*
+	 * According to MIPI D-PHY spec, if clock stop feature is enabled (EOT
+	 * Disable), un-ready MIPI adapter needs to wait for 20 cycles from HS
+	 * to LP mode. Per calculation 1us is enough.
+	 */
+	if (ctx->eot_disable & CLOCK_STOP)
+		udelay(1);
 
 	/*D-PHY parameter*/
 	REG_WRITE(regs->dphy_param_reg, ctx->dphy_param);
@@ -530,6 +535,12 @@ static int __dbi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 
 	if (!dsi_config)
 		return -EINVAL;
+
+	/* When display is on, block s0i3*/
+	pm_qos_add_request(&qos_request,
+				PM_QOS_CPU_DMA_LATENCY,
+				CSTATE_EXIT_LATENCY_S0i3-1);
+
 	regs = &dsi_config->regs;
 	ctx = &dsi_config->dsi_hw_context;
 	dev = dsi_config->dev;
@@ -645,18 +656,11 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 power_off_err:
 
 	power_island = pipe_to_island(dsi_config->pipe);
+	/* power gate display island C for overlay C and sprite D */
+	power_island |= OSPM_DISPLAY_C;
 
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
-
-	/*
-	 * FIXME: need to dynamically power gate DISPLAY C island for
-	 * Overlay C & Sprite D planes.
-	 */
-	/* Don't power gate Display C when Overlay C is attahced to Pipe B. */
-	if (!ctx->ovcadd || (((ctx->ovcadd & OV_PIPE_SELECT) >>
-					OV_PIPE_SELECT_POS) != OV_PIPE_B))
-		power_island |= OSPM_DISPLAY_C;
 
 	if (!power_island_put(power_island))
 		return -EINVAL;
@@ -681,6 +685,9 @@ static int __dbi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 		return -EINVAL;
 
 	PSB_DEBUG_ENTRY("\n");
+
+	/* When display is off, enable S0i3*/
+	pm_qos_remove_request(&qos_request);
 
 	regs = &dsi_config->regs;
 	ctx = &dsi_config->dsi_hw_context;

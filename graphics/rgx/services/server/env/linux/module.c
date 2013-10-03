@@ -115,11 +115,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "srvkm.h"
 #include "connection_server.h"
 #include "handle.h"
-
-#ifdef CONFIG_PVR_PROC
-#include "proc.h"
-#endif
-
 #include "pvr_debugfs.h"
 #include "pvrmodule.h"
 #include "private_data.h"
@@ -969,18 +964,38 @@ static int __init PVRCore_Init(void)
 	PVRDPFInit();
 #endif
 
-#if defined(PVR_LDM_MODULE) || defined(SUPPORT_DRM)
-	LinuxInitMutex(&gsPMMutex);
-#endif
-	LinuxInitMutex(&gPVRSRVLock);
+	PVR_TRACE(("PVRCore_Init"));
 
-#ifdef CONFIG_PVR_PROC
-	if (CreateProcEntries ())
+#if defined(SUPPORT_DRM)
+#if defined(PDUMP)
+	error = dbgdrv_init();
+	if (error != 0)
 	{
-		error = -ENOMEM;
 		return error;
 	}
 #endif
+#endif
+
+	LinuxInitMutex(&gsPMMutex);
+
+	LinuxInitMutex(&gPVRSRVLock);
+
+	error = PVRDebugFSInit();
+	if (error != 0)
+	{
+		goto dbgdrv_cleanup;
+	}
+
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	eError = PVRSRVStatsInitialise();
+	if (eError != PVRSRV_OK)
+	{
+		error = -ENOMEM;
+
+		goto debugfs_deinit;
+	}
+#endif
+
 	if (PVROSFuncInit() != PVRSRV_OK)
 	{
 		error = -ENOMEM;
@@ -1098,6 +1113,20 @@ static int __init PVRCore_Init(void)
 	}
 #endif
 
+	error = PVRDebugCreateDebugFSEntries();
+	if (error != 0)
+	{
+		PVR_DPF((PVR_DBG_WARNING, "PVRCore_Init: failed to create default debugfs entries (%d)", error));
+	}
+
+#if defined(SUPPORT_GPUTRACE_EVENTS)
+	error = PVRGpuTraceInit();
+	if (error != 0)
+	{
+		PVR_DPF((PVR_DBG_WARNING, "PVRCore_Init: failed to initialise PVR GPU Tracing (%d)", error));
+	}
+#endif
+
 	return 0;
 
 #if !defined(SUPPORT_DRM)
@@ -1132,8 +1161,16 @@ init_failed:
 	PVRMMapCleanup();
 	LinuxBridgeDeInit();
 	PVROSFuncDeInit();
-#ifdef CONFIG_PVR_PROC
-	RemoveProcEntries();
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	PVRSRVStatsDestroy();
+debugfs_deinit:
+#endif
+	PVRDebugFSDeInit();
+dbgdrv_cleanup:
+#if defined(SUPPORT_DRM)
+#if defined(PDUMP)
+	dbgdrv_cleanup();
+#endif
 #endif
 	return error;
 
@@ -1240,8 +1277,16 @@ static void __exit PVRCore_Cleanup(void)
 	LinuxBridgeDeInit();
 
 	PVROSFuncDeInit();
-#ifdef CONFIG_PVR_PROC
-	RemoveProcEntries();
+
+#if defined(PVRSRV_ENABLE_PROCESS_STATS)
+	PVRSRVStatsDestroy();
+#endif
+	PVRDebugFSDeInit();
+
+#if defined(SUPPORT_DRM)
+#if defined(PDUMP)
+	dbgdrv_cleanup();
+#endif
 #endif
 	PVR_TRACE(("PVRCore_Cleanup: unloading"));
 }

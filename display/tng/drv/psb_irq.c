@@ -785,8 +785,10 @@ int psb_enable_vblank(struct drm_device *dev, int pipe)
 
 	reg_val = REG_READ(pipeconf_reg);
 
-	if (!(reg_val & PIPEACONF_ENABLE))
+	if (!(reg_val & PIPEACONF_ENABLE)) {
+		DRM_ERROR("%s: pipe %d is disabled\n", __func__, pipe);
 		return -EINVAL;
+	}
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 
@@ -1004,8 +1006,10 @@ int mdfld_enable_te(struct drm_device *dev, int pipe)
 
 	reg_val = REG_READ(pipeconf_reg);
 
-	if (!(reg_val & PIPEACONF_ENABLE))
+	if (!(reg_val & PIPEACONF_ENABLE)) {
+		DRM_ERROR("%s: pipe %d is disabled\n", __func__, pipe);
 		return -EINVAL;
+	}
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 

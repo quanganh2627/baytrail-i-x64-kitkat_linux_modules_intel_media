@@ -35,8 +35,76 @@
 #include "df_rgx_defs.h"
 #include "df_rgx_burst.h"
 #include "dfrgx_interface.h"
+#include "dev_freq_attrib.h"
 
 #define MAX_NUM_SAMPLES		10
+
+/*Profiling Information - */
+struct gpu_profiling_record aProfilingInformation[NUMBER_OF_LEVELS_B0];
+
+/**
+ * gpu_profiling_records_init() - Initializes profiling array.
+ */
+static void gpu_profiling_records_init()
+{
+	gpu_profiling_records_restart();
+}
+
+/**
+ * gpu_profiling_records_restart() - Memset to 0, profiling stats array.
+ */
+void gpu_profiling_records_restart()
+{
+	memset(aProfilingInformation, 0, sizeof(aProfilingInformation));
+}
+
+/**
+ * gpu_profiling_records_update_entry() - Updates the profiling calculations.
+ * @util_index: Frequency level index.
+ * @is_current_entry: 1 if We want to update teh current freq level , 0 if it the previous.
+ * realized frequency in KHz.
+ */
+static void gpu_profiling_records_update_entry( int util_index , int is_current_entry)
+{
+	long long time_diff_ms;
+
+	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: index %d, current %d \n",
+		__func__, util_index, is_current_entry);
+
+	ktime_t time_now = ktime_get();
+	
+	if(is_current_entry)
+	{
+		aProfilingInformation[util_index].last_timestamp_ns = time_now;
+	}
+	else
+	{
+		ktime_t time_diff_ns = ktime_sub(time_now, aProfilingInformation[util_index].last_timestamp_ns);
+		time_diff_ms = ktime_to_ms(time_diff_ns);
+		aProfilingInformation[util_index].time_ms += time_diff_ms;
+	}
+
+}
+
+/**
+ * gpu_profiling_records_show() - Shows profiling stats.
+ * @buf: Buffer for sysfs entry.
+ */
+int gpu_profiling_records_show(char *buf)
+{
+	int i;
+	int ret = 0;
+
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: \n",
+	__func__);
+	
+	for(i = 0; i < NUMBER_OF_LEVELS_B0; i++)
+	{
+		ret += sprintf((buf+ret), "Time for %lu KHZ : %llu ms \n", aAvailableStateFreq[i].freq,
+			aProfilingInformation[i].time_ms);
+	}
+	return ret;
+}
 
 /**
  * set_desired_frequency_khz() - Set gpu frequency.
@@ -53,9 +121,11 @@ long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	unsigned long freq_req;
 	unsigned long freq_limited;
 	unsigned long freq_mhz;
+	unsigned long prev_freq = 0;
 	unsigned int freq_mhz_quantized;
 	u32 freq_code;
 	int thermal_state;
+	int prev_util_record_index = -1;
 
 	sts = 0;
 
@@ -113,6 +183,8 @@ long set_desired_frequency_khz(struct busfreq_data *bfdata,
 		}
 
 		if (df) {
+
+			prev_freq = df->previous_freq;
 			/*
 			 * Setting df->previous_freq will be redundant
 			 * when called from target dispatch function, but
@@ -123,10 +195,20 @@ long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	}
 
 	sts = bfdata->bf_freq_mhz_rlzd * 1000;
-
+	
 	/* Update our record accordingly*/
 	bfdata->g_dfrgx_data.gpu_utilization_record_index = df_rgx_get_util_record_index_by_freq(sts);
+	
+	if(bfdata->g_dfrgx_data.g_profiling_enable)
+	{
+		/* for profiling purposes*/
+		prev_util_record_index = df_rgx_get_util_record_index_by_freq(prev_freq);
+		if(prev_util_record_index >= 0)	
+			gpu_profiling_records_update_entry( prev_util_record_index , 0);
 
+		if(bfdata->g_dfrgx_data.gpu_utilization_record_index >= 0)	
+			gpu_profiling_records_update_entry( bfdata->g_dfrgx_data.gpu_utilization_record_index , 1);
+	}
 out:
 	mutex_unlock(&bfdata->lock);
 
@@ -161,7 +243,7 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s * g_dfrgx, struct gpu_uti
 		sum_samples_active = 0;
 		num_samples = 0;
 
-		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Average Active: %d !\n",
+		DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Average Active: %d !\n",
 		__func__, average_active_util);
 
 		burst = df_rgx_request_burst(&g_dfrgx->gpu_utilization_record_index, average_active_util);
@@ -177,7 +259,7 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s * g_dfrgx, struct gpu_uti
 
 			if (ret <= 0)
 			{
-				DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Failed to burst/unburst at : %l !\n",
+				DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Failed to burst/unburst at : %l !\n",
 				__func__,aAvailableStateFreq[g_dfrgx->gpu_utilization_record_index].freq);
 
 			}
@@ -235,7 +317,7 @@ static int df_rgx_action(struct df_rgx_data_s * g_dfrgx)
 	}
 	else
 	{
-		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Invalid Util stats !\n",
+		DFRGX_DPF(DFRGX_DEBUG_MED, "%s: Invalid Util stats !\n",
 		__func__);
 	}
 go_out:
@@ -281,7 +363,7 @@ static int df_rgx_worker_thread(void *pvd)
 			break;
 	}
 
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: kernel thread stopping !\n",
+	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: kernel thread stopping !\n",
 		__func__);
 
 	return 0;
@@ -471,7 +553,7 @@ static int dfrgx_burst_resume(struct df_rgx_data_s *g_dfrgx)
 {
 	//smp_rmb();
 
-	if (!g_dfrgx|| !g_dfrgx->g_initialized)
+	if (!g_dfrgx|| !g_dfrgx->g_initialized || !g_dfrgx->g_enable)
 		return 0;
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: resume!\n",
@@ -501,7 +583,7 @@ static int dfrgx_burst_suspend(struct df_rgx_data_s *g_dfrgx)
 {
 	//smp_rmb();
 
-	if (!g_dfrgx|| !g_dfrgx->g_initialized)
+	if (!g_dfrgx|| !g_dfrgx->g_initialized || !g_dfrgx->g_enable)
 		return 0;
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: suspend!\n",
@@ -515,6 +597,114 @@ static int dfrgx_burst_suspend(struct df_rgx_data_s *g_dfrgx)
 	//mutex_unlock(&g_dfrgx->g_mutex_sts);
 
 	return 0;
+}
+
+/**
+ * frgx_burst_set_enable() - Is burst enabled?.
+ * @df_rgx_data_s: dfrgx burst handle.
+ *
+ * Device power on.  Assume the device has retained no state.
+ * Invoked via interrupt/callback.
+ * Execution context: non-atomic
+ */
+void dfrgx_burst_set_enable(struct df_rgx_data_s *g_dfrgx, int enable)
+{	
+	
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s enable: %d \n",
+				__func__, enable);
+
+	if (!g_dfrgx|| !g_dfrgx->g_initialized)
+		return;
+
+
+	//mutex_lock(&g_dfrgx->g_mutex_sts);
+	if(g_dfrgx->g_enable != enable)
+	{	
+		g_dfrgx->g_enable = enable;
+
+		if(g_dfrgx->g_enable)
+			hrt_start(g_dfrgx);
+		else
+			hrt_cancel(g_dfrgx);	
+	}
+	//mutex_unlock(&g_dfrgx->g_mutex_sts);
+}
+
+/**
+ * dfrgx_burst_is_enabled() - Is burst enabled?.
+ * @df_rgx_data_s: dfrgx burst handle.
+ *
+ * Device power on.  Assume the device has retained no state.
+ * Invoked via interrupt/callback.
+ * Execution context: non-atomic
+ */
+int dfrgx_burst_is_enabled(struct df_rgx_data_s *g_dfrgx)
+{
+	int enabled;	
+	
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s \n",
+				__func__);
+
+	if (!g_dfrgx|| !g_dfrgx->g_initialized)
+		return 0;
+
+
+	//mutex_lock(&g_dfrgx->g_mutex_sts);
+	enabled = g_dfrgx->g_enable;
+	//mutex_unlock(&g_dfrgx->g_mutex_sts);
+	
+	return enabled;
+}
+
+/**
+ * dfrgx_profiling_is_enabled() - Is profiling enabled?.
+ * @df_rgx_data_s: dfrgx burst handle.
+ *
+ * Device power on.  Assume the device has retained no state.
+ * Invoked via interrupt/callback.
+ * Execution context: non-atomic
+ */
+void dfrgx_profiling_set_enable(struct df_rgx_data_s *g_dfrgx, int enable)
+{
+	
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s enable: %d \n",
+				__func__, enable);
+
+	if (!g_dfrgx|| !g_dfrgx->g_initialized)
+		return;
+
+
+	//mutex_lock(&g_dfrgx->g_mutex_sts);
+	if(g_dfrgx->g_profiling_enable != enable)
+		g_dfrgx->g_profiling_enable = enable;
+	//mutex_unlock(&g_dfrgx->g_mutex_sts);
+	
+}
+
+/**
+ * dfrgx_profiling_is_enabled() - Is profiling enabled?.
+ * @df_rgx_data_s: dfrgx burst handle.
+ *
+ * Device power on.  Assume the device has retained no state.
+ * Invoked via interrupt/callback.
+ * Execution context: non-atomic
+ */
+int dfrgx_profiling_is_enabled(struct df_rgx_data_s *g_dfrgx)
+{
+	int enabled;	
+	
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s \n",
+				__func__);
+
+	if (!g_dfrgx|| !g_dfrgx->g_initialized)
+		return 0;
+
+
+	//mutex_lock(&g_dfrgx->g_mutex_sts);
+	enabled = g_dfrgx->g_profiling_enable;
+	//mutex_unlock(&g_dfrgx->g_mutex_sts);
+	
+	return enabled;
 }
 
 
@@ -570,6 +760,16 @@ int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx)
 		dfrgx_interface_set_data(&dfrgx_interface);
 	}
 
+	error = dev_freq_add_attributes_to_sysfs(g_dfrgx->bus_freq_data->dev);
+	if(error)
+	{
+		goto attrib_creation_failed;
+	}
+
+	/* Initialize profiling info*/
+	g_dfrgx->g_profiling_enable = 0;
+	gpu_profiling_records_init();
+
 	/* Initialize timer.  This does not start the timer. */
 	hrtimer_init(&g_dfrgx->g_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	g_dfrgx->g_timer.function = &hrt_event_processor;
@@ -614,6 +814,7 @@ int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx)
 error_init_obj:
 	df_rgx_stop_worker_thread(g_dfrgx);
 
+attrib_creation_failed:
 err_thread_creation:
 
 	{
@@ -646,6 +847,8 @@ void dfrgx_burst_deinit(struct df_rgx_data_s *g_dfrgx)
 		memset(&dfrgx_interface, 0, sizeof(struct dfrgx_interface_s));
 		dfrgx_interface_set_data(&dfrgx_interface);
 	}
+
+	dev_freq_remove_attributes_on_sysfs(g_dfrgx->bus_freq_data->dev);
 
 	gpu_rgx_utilstats_deinit_obj();
 

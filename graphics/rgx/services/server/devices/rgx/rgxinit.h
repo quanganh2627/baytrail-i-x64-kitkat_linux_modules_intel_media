@@ -126,7 +126,9 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 									    IMG_UINT32					ui32ConfigFlags,
 									    IMG_UINT32					ui32LogType,
 										IMG_UINT32					ui32FilterMode,
-									    RGXFWIF_COMPCHECKS_BVNC     *psClientBVNC);
+									    RGXFWIF_COMPCHECKS_BVNC     *psClientBVNC,
+									    IMG_UINT32 ui32APMLatency,
+									    IMG_UINT32 ui32CoreClockSpeed);
 
 
 /*!

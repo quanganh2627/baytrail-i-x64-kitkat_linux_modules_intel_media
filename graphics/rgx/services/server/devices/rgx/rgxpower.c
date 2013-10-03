@@ -523,6 +523,7 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 				}
 				else
 				{
+
 					eError = RGXStop(psDevInfo);
 					if (eError != PVRSRV_OK)
 					{
@@ -533,6 +534,7 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 
 					/*Report dfrgx We have the device OFF*/
 					dfrgx_interface_power_state_set(0);
+
 				}
 			}
 			else
@@ -580,7 +582,6 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 			/*
 				Coming up from off, re-initialise RGX.
 			*/
-			psDevInfo->bIgnoreFurtherIRQs = IMG_FALSE;
 
 
 			/* Reset DVFS history */
@@ -599,15 +600,18 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 			/*
 				Run the RGX init script.
 			*/
+
 			eError = RGXStart(psDevInfo, psDevConfig);
 			if (eError != PVRSRV_OK)
 			{
 				PVR_DPF((PVR_DBG_ERROR,"RGXPostPowerState: RGXStart failed"));
 				return eError;
 			}
+			psDevInfo->bIgnoreFurtherIRQs = IMG_FALSE;
 
 			/*Report dfrgx We have the device back ON*/
 			dfrgx_interface_power_state_set(1);
+
 		}
 	}
 

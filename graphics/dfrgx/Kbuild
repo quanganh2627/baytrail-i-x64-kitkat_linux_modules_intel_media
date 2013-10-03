@@ -59,6 +59,7 @@ dfrgx-y += df_rgx.o
 dfrgx-y += dev_freq_graphics_pm.o
 dfrgx-y += df_rgx_utils.o
 dfrgx-y += df_rgx_burst.o
+dfrgx-y += dev_freq_attrib.o
 
 include ../modules/intel_media/graphics/dfrgx/dependencies/Makefile
 

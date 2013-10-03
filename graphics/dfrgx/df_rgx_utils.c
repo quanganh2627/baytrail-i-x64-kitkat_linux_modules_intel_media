@@ -45,8 +45,7 @@ unsigned int df_rgx_is_valid_freq(unsigned long int freq)
 	if(is_tng_b0)
 		aSize = NUMBER_OF_LEVELS_B0;
 
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s freq: %d\n", __func__
-			freq);
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s freq: %d\n", __func__, freq);
 
 	for(i = 0; i < aSize; i++)
 	{

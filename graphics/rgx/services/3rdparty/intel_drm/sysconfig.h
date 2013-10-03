@@ -65,16 +65,14 @@ static PVRSRV_ERROR SysDevicePrePowerState(
 		PVRSRV_DEV_POWER_STATE eCurrentPowerState,
 		IMG_BOOL bForced);
 
-#define SYS_RGX_ACTIVE_POWER_LATENCY_MS (10)
 static RGX_TIMING_INFORMATION sRGXTimingInfo =
 {
-	.ui32CoreClockSpeed        = 230000000, /* changed from 100000000, */
-	//.ui32CoreClockSpeed        = 400000000, /* changed from 100000000, */
-	.bEnableActivePM           = IMG_FALSE,
-	.bEnableRDPowIsland	       = IMG_FALSE,
+	.ui32CoreClockSpeed		= RGX_CORE_CLOCK_SPEED_DEFAULT,
+	.bEnableActivePM		= IMG_FALSE,
+	.bEnableRDPowIsland		= IMG_FALSE,
 
 	/* ui32ActivePMLatencyms */
-	.ui32ActivePMLatencyms 	   = SYS_RGX_ACTIVE_POWER_LATENCY_MS
+	.ui32ActivePMLatencyms		= RGX_APM_LATENCY_DEFAULT
 };
 
 static RGX_DATA sRGXData =

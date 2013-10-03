@@ -61,10 +61,8 @@
 #define FW_NAME_A0 "topazhp_fw.bin"
 #define FW_NAME_B0 "topazhp_fw_b0.bin"
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 #ifdef CONFIG_DX_SEP54
 extern int sepapp_image_verify(u8 *addr, ssize_t size, u32 key_index, u32 magic_num);
-#endif
 #endif
 
 extern int drm_psb_msvdx_tiling;
@@ -1012,7 +1010,7 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	PSB_DEBUG_TOPAZ("iounmap IMR6 0x%08x\n", imr_ptr);
 	/* unmap the region */
 	iounmap(imr_ptr);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+
 #ifdef CONFIG_DX_SEP54
 	PSB_DEBUG_TOPAZ("CALL chaabi API to verify it\n");
 	ret = sepapp_image_verify(imr_addr, imr_size, 0,
@@ -1032,7 +1030,6 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	PSB_DEBUG_TOPAZ("TOPAZ: RAC = 0x%08x\n",
 		ret);
 	udelay(10);
-#endif
 #endif
 #endif
 

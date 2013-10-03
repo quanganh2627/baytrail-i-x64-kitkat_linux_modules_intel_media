@@ -55,7 +55,9 @@ void DCCBFlipPrimary(struct drm_device *dev,
 void DCCBSetupZorder(struct drm_device *dev,
 			struct intel_dc_plane_zorder *zorder,
 			int pipe);
-void DCCBUpdateDbiPanel(struct drm_device *dev, int pipe);
+int DCCBUpdateDbiPanel(struct drm_device *dev, int pipe);
+int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
+			int index);
 int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
 int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,

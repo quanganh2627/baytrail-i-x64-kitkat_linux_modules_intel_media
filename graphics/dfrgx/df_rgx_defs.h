@@ -77,6 +77,14 @@ struct gpu_util_stats {
 	unsigned int				ui32GpuStatIdle;    /* GPU idle    ratio expressed in 0,01% units */
 };
 
+/**
+ * struct gpu_profiling_record - profiling information
+ */
+struct gpu_profiling_record{
+	ktime_t		last_timestamp_ns;
+	long long	time_ms;
+};
+
 struct gpu_utilization_record {
 	unsigned long		freq;
 	int			code;
@@ -108,6 +116,7 @@ struct df_rgx_data_s {
 
 	/* gbp_enable - Usually 1.  If 0, gpu burst is disabled. */
 	int                     	g_enable;
+	int				g_profiling_enable;
 	int                     	g_timer_is_enabled;
 
 	struct mutex            	g_mutex_sts;

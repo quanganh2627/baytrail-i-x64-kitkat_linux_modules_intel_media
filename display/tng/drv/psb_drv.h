@@ -343,6 +343,8 @@ enum {
 		((dev->pci_device & 0xffff) == 0x08c8))
 #define IS_MRFLD(dev) (((dev)->pci_device & 0xfff8) == 0x1180 || ((dev)->pci_device & 0xfff8) == 0x1480)
 
+#define IS_TNG_A0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && (intel_mid_soc_stepping() == 0))
+
 #if defined(CONFIG_DRM_CTP)
 #define IS_TNG_B0(dev) 		0
 #elif defined(CONFIG_DRM_VXD_BYT)
@@ -1082,6 +1084,8 @@ struct drm_psb_private {
 	bool bDVIport;
 
 	struct pci_dev *pci_root;
+	bool bUseHFPLL;
+	bool bRereadZero;
 };
 
 struct psb_mmu_driver;
@@ -1264,9 +1268,8 @@ static inline uint32_t REGISTER_READ(struct drm_device *dev, uint32_t reg)
 	int i = 0;
 	int reg_val = ioread32(dev_priv->vdc_reg + (reg));
 
-	/* we might need to re-read registers if B0 video mode panel */
-	if ((IS_TNG_B0(dev)) &&
-		(dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DPI)) {
+	/* we might need to re-read registers if video mode panel */
+	if (dev_priv->bRereadZero) {
 		if (!reg_val) {
 			for (i = 0; i < MAX_READ_COUNT; i++) {
 				reg_val = ioread32(dev_priv->vdc_reg + (reg));

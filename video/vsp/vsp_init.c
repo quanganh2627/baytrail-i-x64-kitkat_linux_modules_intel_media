@@ -484,7 +484,6 @@ int vsp_init_fw(struct drm_device *dev)
 		/* unmap the region */
 		iounmap(imr_ptr);
 #ifdef CONFIG_DX_SEP54
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 		ret = sepapp_image_verify(imr_addr, imr_size, 0,
 					vsp_magic_num);
 		if (ret) {
@@ -493,7 +492,6 @@ int vsp_init_fw(struct drm_device *dev)
 			ret = -1;
 			goto out;
 		}
-#endif
 #endif
 	} else {
 		/* If the memory is less than FW, re-alloc it */
