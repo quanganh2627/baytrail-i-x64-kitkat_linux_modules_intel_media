@@ -45,9 +45,7 @@
 #include <linux/atomic.h>
 
 #include <linux/version.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 #define SUPPORT_EARLY_SUSPEND 1
-#endif
 #include <asm/intel_scu_pmic.h>
 
 #if SUPPORT_EARLY_SUSPEND
