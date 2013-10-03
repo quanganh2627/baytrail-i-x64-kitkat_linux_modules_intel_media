@@ -97,7 +97,8 @@ int DCCBEnableVSyncInterrupt(struct drm_device *dev, int pipe)
 	int ret = 0;
 
 	dev_priv = (struct drm_psb_private *)dev->dev_private;
-	if (drm_vblank_get(dev, pipe)) {
+	ret = psb_vsync_get(dev_priv, pipe);
+	if (ret) {
 		DRM_DEBUG("Couldn't enable vsync interrupt\n");
 		ret = -EINVAL;
 	}
@@ -110,7 +111,7 @@ void DCCBDisableVSyncInterrupt(struct drm_device *dev, int pipe)
 	struct drm_psb_private *dev_priv;
 
 	dev_priv = (struct drm_psb_private *)dev->dev_private;
-	drm_vblank_put(dev, pipe);
+	psb_vsync_put(dev_priv, pipe);
 }
 
 void DCCBInstallVSyncISR(struct drm_device *dev,
@@ -643,17 +644,7 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe)
 
 	/* get display a for register reading */
 	if (power_island_get(OSPM_DISPLAY_A)) {
-		if ((pipe != 1) && dev_priv->dsi_configs) {
-			dsi_config = (pipe == 0) ? dev_priv->dsi_configs[0] :
-				dev_priv->dsi_configs[1];
-		}
-
-		mdfld_dsi_dsr_forbid(dsi_config);
-
 		active = (PSB_RVDC32(pipeconf_reg) & BIT31) ? 1 : 0 ;
-
-		mdfld_dsi_dsr_allow(dsi_config);
-
 		power_island_put(OSPM_DISPLAY_A);
 	}
 

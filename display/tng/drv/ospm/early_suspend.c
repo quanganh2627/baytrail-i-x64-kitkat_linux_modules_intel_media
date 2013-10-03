@@ -64,10 +64,7 @@ static void gfx_early_suspend(struct early_suspend *h)
 			android_hdmi_suspend_display(dev);
 
 			/* Turn off vsync interrupt. */
-			drm_vblank_off(dev, 1);
-
-			/* Make the pending flip request as completed. */
-			DCUnAttachPipe(1);
+			psb_vsync_on_pipe_off(dev_priv, 1);
 		}
 	}
 
@@ -108,7 +105,6 @@ static void gfx_late_resume(struct early_suspend *h)
 		if (encoder->encoder_type == DRM_MODE_ENCODER_TMDS) {
 			android_hdmi_resume_display(dev);
 
-			DCAttachPipe(1);
 			/*
 			 * Devices connect status will be changed
 			 * when system suspend,re-detect once here.
