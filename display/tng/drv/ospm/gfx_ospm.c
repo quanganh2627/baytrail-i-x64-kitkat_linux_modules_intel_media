@@ -450,11 +450,20 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 #endif /*USE_GFX_INTERNAL_PM_FUNC*/
 
 	if (IS_TNG_B0(dev)) {
-		/* enable bypass SLC */
-		uint32_t slc_bypass = 0x160854 - GFX_WRAPPER_OFFSET;
-		uint32_t data = WRAPPER_REG_READ(slc_bypass);
+		uint32_t reg, data;
+
+		/* soc.gfx_wrapper.gbypassenable_sw = 1 */
+		reg = 0x160854 - GFX_WRAPPER_OFFSET;
+		data = WRAPPER_REG_READ(reg);
 		data |= 0x1;
-		WRAPPER_REG_WRITE(slc_bypass, data);
+		WRAPPER_REG_WRITE(reg, data);
+
+		/* soc.gfx_wrapper.gclip_control.aes_bypass_disable = 1*/
+		reg = 0x160020 - GFX_WRAPPER_OFFSET;
+		data = WRAPPER_REG_READ(reg);
+
+		data |= 0x1;
+		WRAPPER_REG_WRITE(reg, data);
 	}
 
 	PSB_DEBUG_PM("Post-power-up status = 0x%08lX\n",
