@@ -792,9 +792,16 @@ static void intel_output_poll_execute(struct work_struct *work)
 			mode_config.output_poll_work);
 	struct drm_connector *connector;
 	bool repoll = false, changed = false;
+	bool dpms_state = true;
 
 	mutex_lock(&dev->mode_config.mutex);
 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
+
+		if (((connector->connector_type == DRM_MODE_CONNECTOR_MIPI) ||
+					(connector->connector_type ==
+					 DRM_MODE_CONNECTOR_LVDS)) &&
+				(connector->dpms != DRM_MODE_DPMS_ON))
+			dpms_state = false;
 
 		/* if this is HPD or polled don't check it -
 		   TV out for instance */
@@ -819,7 +826,7 @@ static void intel_output_poll_execute(struct work_struct *work)
 
 	if (changed) {
 		/* call fbdev then send a uevent */
-		if (dev->mode_config.funcs->output_poll_changed)
+		if (dev->mode_config.funcs->output_poll_changed && dpms_state)
 			dev->mode_config.funcs->output_poll_changed(dev);
 
 		drm_sysfs_hotplug_event(dev);

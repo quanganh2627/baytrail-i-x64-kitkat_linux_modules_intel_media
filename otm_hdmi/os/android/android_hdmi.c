@@ -1715,6 +1715,9 @@ void android_hdmi_resume_display(struct drm_device *dev)
 	otm_hdmi_restore_and_enable_display(hdmi_priv->context,
 				was_connected & is_connected);
 
+	drm_sysfs_hotplug_event(dev);
+	drm_helper_hpd_irq_event(dev);
+
 	if (!is_connected) {
 		/* power off rails, HPD will continue to work */
 		otm_hdmi_power_rails_off();

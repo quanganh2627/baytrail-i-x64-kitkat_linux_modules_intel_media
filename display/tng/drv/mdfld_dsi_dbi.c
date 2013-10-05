@@ -654,7 +654,6 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 		goto power_off_err;
 	}
 power_off_err:
-
 	power_island = pipe_to_island(dsi_config->pipe);
 	/* power gate display island C for overlay C and sprite D */
 	power_island |= OSPM_DISPLAY_C;
@@ -872,6 +871,7 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 	struct drm_device *dev;
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_psb_private *dev_priv;
+	struct drm_connector *connector;
 
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
@@ -887,6 +887,10 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 
 	mutex_lock(&dev_priv->dpms_mutex);
 
+	list_for_each_entry(connector, &dev->mode_config.connector_list, head)
+		if (connector->encoder == encoder)
+			connector->dpms = mode;
+
 	if (mode == DRM_MODE_DPMS_ON)
 		mdfld_generic_dsi_dbi_set_power(encoder, true);
 	else
@@ -901,6 +905,7 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 	struct mdfld_dsi_encoder *dsi_encoder;
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
 	int pipe;
 
 	PSB_DEBUG_ENTRY("\n");
@@ -911,15 +916,12 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
 	dev = dsi_config->dev;
+	dev_priv = dev->dev_private;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
-	mdfld_generic_dsi_dbi_set_power(encoder, false);
+	mdfld_generic_dsi_dbi_dpms(encoder, DRM_MODE_DPMS_OFF);
 
-	/* Turn off vsync (TE) interrupt. */
-	drm_vblank_off(dev, pipe);
-
-	/* Make the pending flip request as completed. */
-	DCUnAttachPipe(pipe);
+	psb_vsync_on_pipe_off(dev_priv, pipe);
 }
 
 static
@@ -940,9 +942,7 @@ void mdfld_generic_dsi_dbi_restore(struct drm_encoder *encoder)
 	dev = dsi_config->dev;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
-	mdfld_generic_dsi_dbi_set_power(encoder, true);
-
-	DCAttachPipe(pipe);
+	mdfld_generic_dsi_dbi_dpms(encoder, DRM_MODE_DPMS_ON);
 }
 
 static

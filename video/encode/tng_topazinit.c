@@ -849,7 +849,7 @@ int tng_topaz_reset(struct drm_psb_private *dev_priv)
 	uint32_t reg_val;
 
 	topaz_priv = dev_priv->topaz_private;
-	topaz_priv->topaz_busy = 0;
+	/* topaz_priv->topaz_busy = 0; */
 
 	topaz_priv->topaz_needs_reset = 0;
 
@@ -962,13 +962,13 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 		return ret;
 	}
 
-	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size 0x%08x\n", raw->size);
-
 	if ((NULL == raw) || (raw->size < 20)) {
 		DRM_ERROR("TOPAZ: Firmware file size is not correct.\n");
 		ret = -1;
 		goto out;
 	}
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size 0x%08x\n", raw->size);
 
 	uc_ptr = (unsigned char *) raw->data;
 	if (!uc_ptr) {

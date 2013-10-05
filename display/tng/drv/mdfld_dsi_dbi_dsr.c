@@ -138,16 +138,11 @@ static int enter_dsr_locked(struct mdfld_dsi_config *dsi_config, int level)
 		return err;
 	}
 
-	/*
-	 * To set the vblank_enabled to false with drm_vblank_off(), as
-	 * vblank_disable_and_save() would be scheduled late (<= 5s), and it
-	 * would cause drm_vblank_get() fail to turn on vsync interrupt
-	 * immediately.
-	 */
-	drm_vblank_off(dev, dsi_config->pipe);
-
 	/*turn off dbi interface put in ulps*/
 	__dbi_power_off(dsi_config);
+
+	/*turn off vblank*/
+	drm_vblank_off(dev, dsi_config->pipe);
 
 	PSB_DEBUG_ENTRY("entered\n");
 	return 0;

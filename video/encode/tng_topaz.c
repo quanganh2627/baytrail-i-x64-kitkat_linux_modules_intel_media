@@ -667,16 +667,14 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 
 	if (topaz_priv->topaz_fw_loaded == 0) {
 		/* #.# load fw to driver */
-		PSB_DEBUG_INIT("TOPAZ: load /lib/firmware/topazhp_fw.bin\n");
+		PSB_DEBUG_TOPAZ("TOPAZ:load /lib/firmware/topazhp_fw.bin\n");
 		if (Is_Mrfld_B0())
 			ret = tng_topaz_init_fw_chaabi(dev);
 		else
 			ret = tng_topaz_init_fw(dev);
 		if (ret) {
 			/* FIXME: find a proper return value */
-			DRM_ERROR("TOPAX:load /lib/firmware/topaz_fwsc.bin" \
-				  " fails, ensure udevd is configured" \
-				  " correctly!\n");
+			DRM_ERROR("TOPAX:load firmware from storage failed\n");
 			return -EFAULT;
 		}
 		topaz_priv->topaz_fw_loaded = 1;
@@ -2205,11 +2203,18 @@ static int tng_context_switch(
 	PSB_DEBUG_TOPAZ("TOPAZ: Frame (%d)\n", video_ctx->frame_count);
 	tng_topaz_trace_ctx("input Context", video_ctx);
 
+	/* Handle JPEG burst mode, save current context only if it's not JPEG */
 	if (codec == IMG_CODEC_JPEG) {
-		PSB_DEBUG_TOPAZ("TOPAZ: JPEG context(%08x)\n",
-			(unsigned int)video_ctx);
-		PSB_DEBUG_TOPAZ("continue doing other commands\n");
+		if (topaz_priv->cur_context &&
+		    topaz_priv->cur_context->codec != IMG_CODEC_JPEG &&
+		    !(topaz_priv->cur_context->status & MASK_TOPAZ_CONTEXT_SAVED)) {
 
+			ret = tng_topaz_save_mtx_state(dev);
+			if (ret) {
+				DRM_ERROR("Failed to save mtx status");
+				return ret;
+			}
+		}
 		topaz_priv->cur_context = video_ctx;
 		topaz_priv->cur_codec = codec;
 		return ret;
@@ -2288,11 +2293,14 @@ static int tng_context_switch(
 					return ret;
 				}
 			} else {
-				ret = tng_topaz_save_mtx_state(dev);
-				if (ret) {
-					DRM_ERROR("Failed to save mtx status");
-					return ret;
-				}
+				if (topaz_priv->cur_context->codec != IMG_CODEC_JPEG) {
+					ret = tng_topaz_save_mtx_state(dev);
+					if (ret) {
+						DRM_ERROR("Failed to save mtx status");
+						return ret;
+					}
+				} else
+					PSB_DEBUG_TOPAZ("TOPAZ: Bypass saving JPEG context\n");
 			}
 		}
 
@@ -2316,10 +2324,12 @@ static int tng_context_switch(
 				return ret;
 			}
 		} else {
-			ret = tng_topaz_restore_mtx_state(dev);
-			if (ret) {
-				DRM_ERROR("Failed to restore mtx status");
-				return ret;
+			if (topaz_priv->cur_context->codec != IMG_CODEC_JPEG) {
+				ret = tng_topaz_restore_mtx_state(dev);
+				if (ret) {
+					DRM_ERROR("Failed to restore mtx status");
+					return ret;
+				}
 			}
 		}
 	}
@@ -2459,35 +2469,48 @@ static int tng_setup_new_context(
 		(unsigned int)video_ctx, codec_to_string(codec), \
 		topaz_priv->cur_context);
 
-	if (video_ctx->codec != IMG_CODEC_JPEG) {
+	if (Is_Mrfld_B0() && drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM) {
+		PSB_DEBUG_TOPAZ("TOPAZ: new context, force a poweroff to reload firmware anyway\n");
 
-		if (topaz_priv->cur_context &&
-		    topaz_priv->cur_context != video_ctx) {
+		drm_topaz_pmpolicy = PSB_PMPOLICY_POWERDOWN; /* off NOPM policy */
+		tng_topaz_power_off(dev);
+		drm_topaz_pmpolicy = PSB_PMPOLICY_NOPM; /* reset back to NOPM */
+	}
 
-			if (topaz_priv->cur_context->status & \
-			    MASK_TOPAZ_CONTEXT_SAVED) {
-				PSB_DEBUG_TOPAZ("Context %08x(%s)" \
-					" has been saved, continue\n");
-			/* If the previous context not saved */
+	
+	if (topaz_priv->cur_context &&
+		topaz_priv->cur_context != video_ctx) {
+		if (topaz_priv->cur_context->status & \
+		    MASK_TOPAZ_CONTEXT_SAVED) {
+			PSB_DEBUG_TOPAZ("Context %08x(%s)" \
+				" has been saved, continue\n", \
+				topaz_priv->cur_context, \
+				codec_to_string(topaz_priv->cur_context->codec));
+		/* If the previous context not saved */
+		} else {
+			if (Is_Mrfld_B0()) {
+				ret = tng_topaz_power_off(dev);
+				if (ret) {
+					DRM_ERROR("TOPAZ: Failed");
+					DRM_ERROR("to power off");
+					goto out;
+				}
 			} else {
-				if (Is_Mrfld_B0()) {
-					ret = tng_topaz_power_off(dev);
-					if (ret) {
-						DRM_ERROR("TOPAZ: Failed");
-						DRM_ERROR("to power off");
-						goto out;
-					}
-				} else {
-					ret = tng_topaz_save_mtx_state(dev);
-					if (ret) {
-						DRM_ERROR("Failed to save");
-						DRM_ERROR("mtx status");
-						goto out;
-					}
+				PSB_DEBUG_TOPAZ("Context %08x(%s)" \
+					" has not been saved, save it\n", \
+					topaz_priv->cur_context, \
+					codec_to_string(topaz_priv->cur_context->codec));
+				ret = tng_topaz_save_mtx_state(dev);
+				if (ret) {
+					DRM_ERROR("Failed to save");
+					DRM_ERROR("mtx status");
+					goto out;
 				}
 			}
 		}
+	}
 
+	if (video_ctx->codec != IMG_CODEC_JPEG) {
 		/* Register state BO */
 		video_ctx->reg_saving_bo = ttm_buffer_object_lookup(
 						tfile, *(cmd + 2));
@@ -2543,6 +2566,11 @@ static int tng_setup_new_context(
 			return ret;
 		}
 	} else {
+		if (Is_Mrfld_B0()) {
+			PSB_DEBUG_TOPAZ("TOPAZ: re-copy/verify firmware to workaround JPEG issue\n");
+			tng_topaz_init_fw_chaabi(dev);
+		}
+
 		video_ctx->reg_saving_bo = NULL;
 		video_ctx->data_saving_bo = NULL;
 		topaz_priv->issuebuf_cmd_count = *(cmd + 2);
@@ -2555,7 +2583,7 @@ static int tng_setup_new_context(
 	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
 				& 0xffff0000)  >> 16) ;
 	*/
-
+	
 	if (Is_Mrfld_B0()) {
 		ret = tng_topaz_power_up(dev, codec);
 		if (ret) {
@@ -2815,8 +2843,17 @@ tng_topaz_send(
                 case MTX_CMDID_SETUP_INTERFACE:
 			if (video_ctx && video_ctx->wb_bo) {
 				PSB_DEBUG_TOPAZ("TOPAZ: reset\n");
-				tng_topaz_reset(dev_priv);
-				tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
+				if (Is_Mrfld_B0()) {
+					tng_topaz_power_off(dev);
+					PSB_DEBUG_TOPAZ("TOPAZ: re-copy/verify firmware "
+							"to workaround JPEG issue\n");
+					tng_topaz_init_fw_chaabi(dev);
+					tng_topaz_power_up(dev, 0);
+					tng_topaz_fw_run(dev, video_ctx, 0);
+				} else {
+					tng_topaz_reset(dev_priv);
+					tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
+				}
 
 				PSB_DEBUG_TOPAZ("TOPAZ: unref write back bo\n");
 				ttm_bo_kunmap(&video_ctx->wb_bo_kmap);
@@ -3400,8 +3437,8 @@ int tng_topaz_power_up(
 	PSB_DEBUG_TOPAZ("TOPAZ: power up start\n");
 
 	if (Is_Mrfld_B0()) {
-		if (ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
-			PSB_DEBUG_TOPAZ("TOPAZ: power is already up\n");
+		if (is_island_on(OSPM_VIDEO_ENC_ISLAND)) {
+			PSB_DEBUG_TOPAZ("TOPAZ: power is already up, end and return\n");
 			return 0;
 		}
 		reg_val = intel_mid_msgbus_read32(PUNIT_PORT, VEC_SS_PM0);
@@ -3443,16 +3480,12 @@ int tng_topaz_power_up(
 	}
 #endif
 
-	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM) {
-		if (!power_island_get_dummy(dev)) {
-			DRM_ERROR("Failed to power on ENC island\n");
-			return -1;
-		}
-	} else {
-		if (!power_island_get(OSPM_VIDEO_ENC_ISLAND)) {
-			DRM_ERROR("Failed to power on ENC island\n");
-			return -1;
-		}
+	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
+		PSB_DEBUG_TOPAZ("Topaz: NOPM policy, but still need powerup here\n");
+
+	if (!power_island_get(OSPM_VIDEO_ENC_ISLAND)) {
+		DRM_ERROR("Failed to power on ENC island\n");
+		return -1;
 	}
 
 	/* Must flush here in case of invalid cache data */
@@ -3468,14 +3501,14 @@ int tng_topaz_power_off(struct drm_device *dev)
 
 	PSB_DEBUG_TOPAZ("TOPAZ: power off start\n");
 	if (Is_Mrfld_B0()) {
-		if (!ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND)) {
+		if (!is_island_on(OSPM_VIDEO_ENC_ISLAND)) {
 			PSB_DEBUG_TOPAZ("TOPAZ: power is already off\n");
 			return 0;
 		}
 	}
 
 	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
-		power_island_put_dummy(dev);
+		PSB_DEBUG_TOPAZ("TOPAZ: skip power off since NOPM policy\n");
 	else
 		power_island_put(OSPM_VIDEO_ENC_ISLAND);
 
