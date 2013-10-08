@@ -96,14 +96,25 @@
  */
 #define DF_RGX_POLLING_INTERVAL_MS 50
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+/**
+ * Potential governors:
+ *     #define GOVERNOR_TO_USE "performance"
+ *     #define GOVERNOR_TO_USE "simple_ondemand"
+ *     #define GOVERNOR_TO_USE "userspace"
+ *     #define GOVERNOR_TO_USE "powersave"
+ */
+#define GOVERNOR_TO_USE "performance"
+#else
 /**
  * Potential governors:
  *     #define GOVERNOR_TO_USE devfreq_simple_ondemand
  *     #define GOVERNOR_TO_USE devfreq_performance
  *     #define GOVERNOR_TO_USE devfreq_powersave
  */
-
 #define GOVERNOR_TO_USE devfreq_performance
+#endif
+
 
 /*is tng B0 hw*/
 extern int is_tng_b0;
@@ -518,7 +529,11 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	busfreq_mon_reset(bfdata);
 
 	df = devfreq_add_device(dev, &df_rgx_devfreq_profile,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+					   GOVERNOR_TO_USE, NULL);
+#else
 					   &GOVERNOR_TO_USE, NULL);
+#endif
 
 	if (IS_ERR(df)) {
 		sts = PTR_ERR(bfdata->devfreq);
