@@ -618,6 +618,7 @@ bool ospm_power_is_hw_on(u32 hw_island)
 {
 	return is_island_on(hw_island);
 }
+EXPORT_SYMBOL(ospm_power_is_hw_on);
 
 void ospm_power_using_hw_end(int hw_island)
 {

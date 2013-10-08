@@ -1655,6 +1655,7 @@ bool ospm_power_is_hw_on(int hw_islands)
 	spin_unlock_irqrestore(&dev_priv->ospm_lock, flags);
 	return ret;
 }
+EXPORT_SYMBOL(ospm_power_is_hw_on);
 
 /* For video case, we only force enable hw in process context.
  * Protected by g_ospm_mutex */
