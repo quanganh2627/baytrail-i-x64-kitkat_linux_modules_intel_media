@@ -28,6 +28,7 @@
 
 #include "mdfld_dsi_output.h"
 #include "mdfld_dsi_pkg_sender.h"
+#include "mdfld_dsi_dbi_dsr.h"
 #include "mdfld_dsi_dbi.h"
 #include "mdfld_dsi_dpi.h"
 
@@ -70,6 +71,49 @@ const char *dsi_errors[] = {
 	"[31:Tearing Effect]",
 };
 
+static void debug_dbi_hang(struct mdfld_dsi_pkg_sender *sender) {
+  struct mdfld_dsi_connector *dsi_connector = sender->dsi_connector;
+  struct mdfld_dsi_config *dsi_config = (struct mdfld_dsi_config *)dsi_connector->private;
+  struct drm_device *dev = sender->dev;
+  struct drm_psb_private *dev_priv = (struct drm_psb_private *)dev->dev_private;
+  bool pmon = ospm_power_is_hw_on(OSPM_DISPLAY_ISLAND);
+
+  DRM_ERROR("sender->pipe: 0x%08x\n", sender->pipe);
+  DRM_ERROR("dev_priv->um_start: 0x%08x\n", dev_priv->um_start);
+  DRM_ERROR("ospm_power_is_hw_on(OSPM_DISPLAY_ISLAND): 0x%08x\n", pmon);
+  DRM_ERROR("dsi_config->dsi_hw_context.panel_on: 0x%08x\n", dsi_config->dsi_hw_context.panel_on);
+	if (dsi_config->dsr) {
+	  DRM_ERROR("dsi_config->dsr->dsr_enabled: 0x%08x\n", ((struct mdfld_dsi_dsr *)dsi_config->dsr)->dsr_enabled);
+	  DRM_ERROR("dsi_config->dsr->dsr_state: 0x%08x\n", ((struct mdfld_dsi_dsr *)dsi_config->dsr)->dsr_state);
+	}
+	if (!pmon) {
+	  /* Not safe to dump registers when the power is off */
+	  return;
+	}
+  DRM_ERROR("dsi_config->regs.dspcntr_reg: 0x%08x\n", REG_READ(dsi_config->regs.dspcntr_reg));
+
+  DRM_ERROR("MIPIA_DEVICE_READY_REG: 0x%08x\n", REG_READ(MIPIA_DEVICE_READY_REG));
+  DRM_ERROR("MIPIA_DEVICE_READY_REG + MIPIC_REG_OFFSET: 0x%08x\n", REG_READ(MIPIA_DEVICE_READY_REG + MIPIC_REG_OFFSET));
+  DRM_ERROR("sender->dpll_reg: 0x%08x\n", REG_READ(sender->dpll_reg));
+  DRM_ERROR("sender->dspcntr_reg: 0x%08x\n", REG_READ(sender->dspcntr_reg));
+  DRM_ERROR("sender->pipeconf_reg: 0x%08x\n", REG_READ(sender->pipeconf_reg));
+  DRM_ERROR("sender->pipestat_reg: 0x%08x\n", REG_READ(sender->pipestat_reg));
+  DRM_ERROR("sender->dsplinoff_reg: 0x%08x\n", REG_READ(sender->dsplinoff_reg));
+  DRM_ERROR("sender->dspsurf_reg: 0x%08x\n", REG_READ(sender->dspsurf_reg));
+
+  DRM_ERROR("sender->mipi_intr_stat_reg: 0x%08x\n", REG_READ(sender->mipi_intr_stat_reg));
+  DRM_ERROR("sender->mipi_lp_gen_data_reg: 0x%08x\n", REG_READ(sender->mipi_lp_gen_data_reg));
+  DRM_ERROR("sender->mipi_hs_gen_data_reg: 0x%08x\n", REG_READ(sender->mipi_hs_gen_data_reg));
+  DRM_ERROR("sender->mipi_lp_gen_ctrl_reg: 0x%08x\n", REG_READ(sender->mipi_lp_gen_ctrl_reg));
+  DRM_ERROR("sender->mipi_hs_gen_ctrl_reg: 0x%08x\n", REG_READ(sender->mipi_hs_gen_ctrl_reg));
+  DRM_ERROR("sender->mipi_gen_fifo_stat_reg: 0x%08x\n", REG_READ(sender->mipi_gen_fifo_stat_reg));
+  DRM_ERROR("sender->mipi_data_addr_reg: 0x%08x\n", REG_READ(sender->mipi_data_addr_reg));
+  DRM_ERROR("sender->mipi_data_len_reg: 0x%08x\n", REG_READ(sender->mipi_data_len_reg));
+  DRM_ERROR("sender->mipi_cmd_addr_reg: 0x%08x\n", REG_READ(sender->mipi_cmd_addr_reg));
+  DRM_ERROR("sender->mipi_cmd_len_reg: 0x%08x\n", REG_READ(sender->mipi_cmd_len_reg));
+  DRM_ERROR("sender->mipi_dpi_control_reg: 0x%08x\n", REG_READ(sender->mipi_dpi_control_reg));
+}
+
 static inline int wait_for_gen_fifo_empty(struct mdfld_dsi_pkg_sender *sender,
 						u32 mask)
 {
@@ -84,6 +128,8 @@ static inline int wait_for_gen_fifo_empty(struct mdfld_dsi_pkg_sender *sender,
 	}
 
 	DRM_ERROR("fifo is NOT empty 0x%08x\n", REG_READ(gen_fifo_stat_reg));
+	debug_dbi_hang(sender);
+	panic("Timeout waiting for fifo(s) to be empty - mask is 0x%08x\n", mask);
 	sender->status = MDFLD_DSI_CONTROL_ABNORMAL;
 	return -EIO;
 }
@@ -1321,6 +1367,8 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 		if (!retry) {
 			DRM_ERROR("DBI FIFO timeout, drop frame\n");
 			spin_unlock(&sender->lock);
+			debug_dbi_hang(sender);
+	    panic("DBI FIFO timeout, drop frame\n");
 			return 0;
 		}
 
