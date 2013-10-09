@@ -80,6 +80,7 @@ struct ospm_power_island island_list[] = {
 #error Function in_atomic (in general) requires CONFIG_PREEMPT
 #endif
 
+#undef OSPM_DEBUG_INFO
 #ifdef OSPM_DEBUG_INFO
 const char *get_island_name(u32 hw_island)
 {
@@ -127,7 +128,7 @@ static void dump_ref_count(u32 hw_island)
 	int ref_value = 0;
 	struct ospm_power_island *p_island = NULL;
 
-	OSPM_DPF("*** power island refrence count. ***\n");
+	PSB_DEBUG_PM("*** power island refrence count. ***\n");
 
 	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
 		if (hw_island & island_list[i].island) {
@@ -156,7 +157,7 @@ static void ospm_suspend_pci(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	int bsm, vbt, bgsm;
 
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 
 	pci_save_state(pdev);
 	pci_read_config_dword(pdev, 0x5C, &bsm);
@@ -184,7 +185,7 @@ static void ospm_resume_pci(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	int mmadr, ret = 0;
 
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 
 	pci_set_power_state(pdev, PCI_D0);
 	pci_restore_state(pdev);
@@ -217,7 +218,7 @@ static void ospm_resume_pci(struct drm_device *dev)
 	}
 
 	if (ret != 0)
-		OSPM_DPF("pci_enable_device failed: %d\n", ret);
+		PSB_DEBUG_PM("pci_enable_device failed: %d\n", ret);
 }
 
 /**
@@ -248,7 +249,7 @@ struct ospm_power_island *get_island_ptr(u32 hw_island)
 	}
 
 	if (i == ARRAY_SIZE(island_list))
-		OSPM_DPF("island %x not found\n", hw_island);
+		PSB_DEBUG_PM("island %x not found\n", hw_island);
 
 	return p_island;
 }
@@ -275,12 +276,12 @@ static bool power_up_island(struct ospm_power_island *p_island)
 	/* if successfully handled dependency */
 	if (!atomic_read(&p_island->ref_count)) {
 		/* power on the island */
-		OSPM_DPF("Power up island %x\n", p_island->island);
+		PSB_DEBUG_PM("Power up island %x\n", p_island->island);
 		ret = p_island->p_funcs->power_up(g_ospm_data->dev, p_island);
 		if (ret)
 			p_island->island_state = OSPM_POWER_ON;
 		else {
-			OSPM_DPF("Power up island %x failed!\n", p_island->island);
+			PSB_DEBUG_PM("Power up island %x failed!\n", p_island->island);
 			if (p_island->p_dependency)
 				power_down_island(p_island->p_dependency);
 			return ret;
@@ -303,7 +304,7 @@ static bool power_down_island(struct ospm_power_island *p_island)
 	bool ret = true;
 
 	if (atomic_dec_return(&p_island->ref_count) < 0) {
-		OSPM_DPF("Island %x, UnExpect RefCount %d\n",
+		PSB_DEBUG_PM("Island %x, UnExpect RefCount %d\n",
 				p_island->island,
 				p_island->ref_count);
 		goto power_down_err;
@@ -312,7 +313,7 @@ static bool power_down_island(struct ospm_power_island *p_island)
 	/* check to see if island is turned off */
 	if (!atomic_read(&p_island->ref_count)) {
 		/* power on the island */
-		OSPM_DPF("Power down island %x\n", p_island->island);
+		PSB_DEBUG_PM("Power down island %x\n", p_island->island);
 		ret = p_island->p_funcs->power_down(
 				g_ospm_data->dev,
 				p_island);
@@ -380,7 +381,7 @@ bool power_island_get(u32 hw_island)
 #endif
 
 	if (!any_island_on()) {
-		OSPM_DPF("Resuming PCI\n");
+		PSB_DEBUG_PM("Resuming PCI\n");
 		ospm_resume_pci(g_ospm_data->dev);
 	}
 
@@ -389,7 +390,7 @@ bool power_island_get(u32 hw_island)
 			p_island = &island_list[i];
 			ret = power_up_island(p_island);
 			if (!ret) {
-				OSPM_DPF("power up failed %x\n",
+				PSB_DEBUG_PM("power up failed %x\n",
 					island_list[i].island);
 				goto out_err;
 			}
@@ -424,7 +425,7 @@ bool power_island_put(u32 hw_island)
 			p_island = &island_list[i];
 			ret = power_down_island(p_island);
 			if (!ret) {
-				OSPM_DPF("power down failed %x\n",
+				PSB_DEBUG_PM("power down failed %x\n",
 					island_list[i].island);
 				goto out_err;
 			}
@@ -434,7 +435,7 @@ bool power_island_put(u32 hw_island)
 out_err:
 	/* Check to see if we need to suspend PCI */
 	if (!any_island_on()) {
-		OSPM_DPF("Suspending PCI\n");
+		PSB_DEBUG_PM("Suspending PCI\n");
 		ospm_suspend_pci(g_ospm_data->dev);
 	}
 
@@ -540,7 +541,7 @@ out_err:
 void ospm_power_uninit(void)
 {
 	int i;
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 
 #ifdef CONFIG_GFX_RTPM
 	rtpm_uninit(gpDrmDevice);
@@ -566,7 +567,7 @@ void ospm_power_uninit(void)
  */
 bool ospm_power_suspend(void)
 {
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 	/* Asking RGX to power off */
 	if (!PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_OFF))
 	        return false;
@@ -581,7 +582,7 @@ bool ospm_power_suspend(void)
  */
 void ospm_power_resume(void)
 {
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 
 	/* restore Graphics State */
 	PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_ON);
