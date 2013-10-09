@@ -498,8 +498,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	 * Enable TE to trigger "write_mem_start" issuing
 	 * in non-normal boot modes.
 	 */
-	if (!dev_priv->um_start)
-		mdfld_enable_te(dev, dsi_config->pipe);
+	mdfld_enable_te(dev, dsi_config->pipe);
 	return err;
 
 power_on_err:
