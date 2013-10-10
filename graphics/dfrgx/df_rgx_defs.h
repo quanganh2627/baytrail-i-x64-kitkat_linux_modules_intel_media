@@ -121,7 +121,11 @@ struct df_rgx_data_s {
 
 	struct mutex            	g_mutex_sts;
 	unsigned long			g_recommended_freq_level;
+	unsigned long int		g_freq_mhz_min;
+	unsigned long int		g_freq_mhz_max;
 	int 				gpu_utilization_record_index;
+	int				g_min_freq_index;
+	int				g_max_freq_index;
 };
 
 
@@ -156,7 +160,7 @@ const static struct gpu_utilization_record aAvailableStateFreq[] = {
 
 
 unsigned int df_rgx_is_valid_freq(unsigned long int freq);
-unsigned int df_rgx_request_burst(int *p_freq_table_index, int util_percentage);
+unsigned int df_rgx_request_burst(struct df_rgx_data_s *pdfrgx_data, int util_percentage);
 int df_rgx_get_util_record_index_by_freq(unsigned long freq);
 long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	unsigned long freq_khz);

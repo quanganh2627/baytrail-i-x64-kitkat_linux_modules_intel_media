@@ -246,7 +246,7 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s * g_dfrgx, struct gpu_uti
 		DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Average Active: %d !\n",
 		__func__, average_active_util);
 
-		burst = df_rgx_request_burst(&g_dfrgx->gpu_utilization_record_index, average_active_util);
+		burst = df_rgx_request_burst(g_dfrgx, average_active_util);
 				
 		if( burst == DFRGX_NO_BURST_REQ )
 		{
