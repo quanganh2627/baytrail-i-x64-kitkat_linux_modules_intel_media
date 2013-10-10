@@ -3079,6 +3079,8 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 
 	if (arg->overlay_read_mask & OVSTATUS_REGRBIT_OVR_UPDT) {
 		u32 ovstat_reg = OV_DOVASTA;
+		u32 pipe = arg->plane.ctx;
+		u32 pipeconf_reg;
 		power_island |= OSPM_DISPLAY_A;
 		if (arg->plane.index) {
 			power_island |= OSPM_DISPLAY_C;
@@ -3086,11 +3088,23 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 		}
 		/* By default overlay is not updated since last vblank event*/
 		arg->plane.ctx = 1;
-		if (power_island_get(power_island)) {
-			arg->plane.ctx =
-				(PSB_RVDC32(ovstat_reg) & BIT31) == 0 ? 0 : 1;
-			power_island_put(power_island);
+		if (pipe == PIPEA)
+			pipeconf_reg = PIPEACONF;
+		else if (pipe == PIPEB)
+			pipeconf_reg = PIPEBCONF;
+		else {
+			DRM_ERROR("Invalid pipe:%d!\n", pipe);
+			return -EINVAL;
 		}
+
+		if (REG_READ(pipeconf_reg) & BIT31) {
+			if (power_island_get(power_island)) {
+				arg->plane.ctx =
+					(PSB_RVDC32(ovstat_reg) & BIT31) == 0 ? 0 : 1;
+				power_island_put(power_island);
+			}
+		} else
+			DRM_INFO("%s: pipe %d is disabled!\n", __func__, pipe);
 	}
 	return 0;
 }
