@@ -44,6 +44,7 @@
 #include "pvrsrv_interface.h"
 #include "displayclass_interface.h"
 #include "display_callbacks.h"
+#include <linux/wakelock.h>
 
 /*  Name changed with kernel 3.10 gen graphics patches. */
 #if !defined DRM_MODE_ENCODER_DSI
@@ -549,6 +550,7 @@ struct drm_psb_private {
 	 */
 	uint8_t panel_desc;
 	bool early_suspended;
+	struct wake_lock ospm_wake_lock;
 
 	/*
 	 * Sizes info
