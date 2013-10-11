@@ -466,8 +466,8 @@ static void PVRSyncPrint(struct seq_file *s, struct sync_pt *psPt)
 {
 	struct PVR_SYNC *psSync = (struct PVR_SYNC *)psPt;
 
-	if (!(psSync->psSyncData->psSyncInfo)) {
-		PVR_DPF((PVR_DBG_ERROR, "%s: Syncinfo is null\n", __func__));
+	if (!(psSync->psSyncData)) {
+		PVR_DPF((PVR_DBG_ERROR, "%s: SyncData is null\n", __func__));
 		return;
 	}
 
