@@ -130,13 +130,6 @@ bool is_island_on(u32 hw_island);
 /* Get Display island from the pipe */
 u32 pipe_to_island(u32 pipe);
 
-#undef OSPM_DEBUG_INFO
-#ifdef OSPM_DEBUG_INFO
-#define OSPM_DPF(...)	printk(KERN_ALERT __VA_ARGS__)
-#else
-#define OSPM_DPF(...)
-#endif
-
 /* FIXME: hkpatel */
 /*** LEGACY SUPPORT ****/
 /*** REMOVE ONCE CONVERTED ALL FUNCTIONS TO NEW ARCH */

@@ -93,7 +93,7 @@ static bool disp_a_power_up(struct drm_device *dev,
 			apply_A0_workarounds(OSPM_DISPLAY_ISLAND, 0);
 	}
 
-	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power on island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -114,7 +114,7 @@ static bool disp_a_power_down(struct drm_device *dev,
 	ret = pmu_set_power_state_tng(DSP_SS_PM, DPA_SSC, TNG_COMPOSITE_D3);
 #endif
 
-	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power off island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -150,7 +150,7 @@ static bool disp_b_power_up(struct drm_device *dev,
 #else
 	ret = pmu_set_power_state_tng(DSP_SS_PM, DPB_SSC, TNG_COMPOSITE_I0);
 #endif
-	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power on island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -170,7 +170,7 @@ static bool disp_b_power_down(struct drm_device *dev,
 #else
 	ret = pmu_set_power_state_tng(DSP_SS_PM, DPB_SSC, TNG_COMPOSITE_D3);
 #endif
-	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power off island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -207,7 +207,7 @@ static bool disp_c_power_up(struct drm_device *dev,
 	ret = pmu_set_power_state_tng(DSP_SS_PM, DPC_SSC, TNG_COMPOSITE_I0);
 #endif
 
-	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power on island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -228,7 +228,7 @@ static bool disp_c_power_down(struct drm_device *dev,
 	ret = pmu_set_power_state_tng(DSP_SS_PM, DPC_SSC, TNG_COMPOSITE_D3);
 #endif
 
-	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power off island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -267,7 +267,7 @@ static bool mio_power_up(struct drm_device *dev,
 		udelay(50);
 		sb_write_packet(true);
 		udelay(50);
-		OSPM_DPF("%s:using sideband to powerup MIO\n", __func__);
+		PSB_DEBUG_PM("%s:using sideband to powerup MIO\n", __func__);
 	} else {
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_MIO, OSPM_ISLAND_UP, MIO_SS_PM);
@@ -276,7 +276,7 @@ static bool mio_power_up(struct drm_device *dev,
 #endif
 	}
 
-	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power on island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -297,7 +297,7 @@ static bool mio_power_down(struct drm_device *dev,
 	ret = pmu_set_power_state_tng(MIO_SS_PM, MIO_SSC, TNG_COMPOSITE_D3);
 #endif
 
-	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power off island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -334,7 +334,7 @@ static bool hdmi_power_up(struct drm_device *dev,
 	ret = pmu_set_power_state_tng(HDMIO_SS_PM, HDMIO_SSC, TNG_COMPOSITE_I0);
 #endif
 
-	OSPM_DPF("Power on island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power on island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }
@@ -354,7 +354,7 @@ static bool hdmi_power_down(struct drm_device *dev,
 #else
 	ret = pmu_set_power_state_tng(HDMIO_SS_PM, HDMIO_SSC, TNG_COMPOSITE_D3);
 #endif
-	OSPM_DPF("Power off island %x, returned %d\n", p_island->island, ret);
+	PSB_DEBUG_PM("Power off island %x, returned %d\n", p_island->island, ret);
 
 	return !ret;
 }

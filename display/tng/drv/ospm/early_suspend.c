@@ -46,7 +46,7 @@ static void gfx_early_suspend(struct early_suspend *h)
 	struct drm_encoder *encoder;
 	struct drm_encoder_helper_funcs *enc_funcs;
 
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 
 	/* protect early_suspend with dpms and mode config */
 	mutex_lock(&dev->mode_config.mutex);
@@ -85,7 +85,7 @@ static void gfx_late_resume(struct early_suspend *h)
 	struct drm_encoder *encoder;
 	struct drm_encoder_helper_funcs *enc_funcs;
 
-	OSPM_DPF("%s\n", __func__);
+	PSB_DEBUG_PM("%s\n", __func__);
 
 	/* protect early_suspend with dpms and mode config */
 	mutex_lock(&dev->mode_config.mutex);
