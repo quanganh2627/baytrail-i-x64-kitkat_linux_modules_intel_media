@@ -64,7 +64,7 @@ ccflags-y += \
 	-I$(DISPINC)/drv \
 	-Iinclude/linux \
 	-Iinclude/drm \
-	-I$(KERNELDIR)/drivers/staging/android \
+	-Idrivers/staging/android \
 	-Iarch/arm/include
 
 ccflags-y += \
@@ -94,6 +94,7 @@ ccflags-y += \
 	-DSUPPORT_HW_RECOVERY \
 	-DSUPPORT_RGXFW_LOG \
 	-DLMA \
+	-DPVR_ANDROID_NATIVE_WINDOW_HAS_SYNC \
 	$(NULL)
 
 #	-DPVRSRV_ENABLE_FW_TRACE_DEBUGFS \
@@ -211,7 +212,7 @@ $(DRIVER_NAME)-y += \
 #	$(RGXDIR)/services/server/env/linux/physmem_ion.o
 
 # WINDOW_HAS_SYNC
-merrifield_gfx-y += \
+$(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/pvr_sync.o
 
 # for PDUMP

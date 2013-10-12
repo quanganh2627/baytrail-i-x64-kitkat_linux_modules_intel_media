@@ -895,6 +895,12 @@ void otm_hdmi_power_islands_off()
 	ps_hdmi_power_islands_off();
 }
 
+/* enable/disable IRQ and CPD_HPD */
+bool otm_hdmi_enable_hpd(bool enable)
+{
+	return ps_hdmi_enable_hpd(enable);
+}
+
 /* control HDMI vblank interrupt */
 void otm_hdmi_vblank_control(struct drm_device *dev, bool on)
 {

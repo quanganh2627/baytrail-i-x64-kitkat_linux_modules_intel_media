@@ -52,6 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sync_server.h"
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+#include <linux/version.h>
 #include <linux/file.h>
 #include <linux/seq_file.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))

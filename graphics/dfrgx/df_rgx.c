@@ -186,13 +186,64 @@ MODULE_LICENSE("GPL");
 static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 			      u32 flags)
 {
-	struct platform_device *pdev;
-	struct busfreq_data *bfdata;
+	struct platform_device	*pdev;
+	struct busfreq_data	*bfdata;
+	struct df_rgx_data_s 	*pdfrgx_data;
+	struct devfreq       	*df;
+	unsigned long desired_freq = *p_freq;
 	int ret = 0;
 	(void) flags;
 
 	pdev = container_of(dev, struct platform_device, dev);
 	bfdata = platform_get_drvdata(pdev);
+
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:TARGET ***********!\n",
+				__func__);
+	/*Update max and min freqs in burst table*/
+	if(bfdata)
+	{
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s bfdata Valid!\n",
+				__func__);
+
+		df = bfdata->devfreq;
+		pdfrgx_data = &bfdata->g_dfrgx_data;
+
+		if(df)
+		{
+			int new_index = -1;
+
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Devfreq Valid!\n",
+				__func__);
+
+			/* Dynamic burst needs to be stopped*/
+			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
+
+			if(df->min_freq != pdfrgx_data->g_freq_mhz_min){
+				DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Min freq changed!\n",
+				__func__);
+				new_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
+				if(new_index > -1){
+					pdfrgx_data->g_freq_mhz_min = df->min_freq;
+					pdfrgx_data->g_min_freq_index = new_index;
+					desired_freq = 	aAvailableStateFreq[pdfrgx_data->g_min_freq_index].freq;
+				}
+			}
+
+			if(df->max_freq != pdfrgx_data->g_freq_mhz_max){
+				DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Max freq changed!\n",
+				__func__);
+				new_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
+				if(new_index > -1){
+					pdfrgx_data->g_freq_mhz_max = df->max_freq;
+					pdfrgx_data->g_max_freq_index = new_index;
+					desired_freq = 	aAvailableStateFreq[pdfrgx_data->g_max_freq_index].freq;
+				}
+			}
+
+			/* Resuming dynamic burst*/
+			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 1);
+		}
+	}
 
 	/*FIXME: Need to rethink about this scenario*/
 	if(firstRequest){
@@ -205,7 +256,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 		return -EBUSY;
 	}
 
-	ret = set_desired_frequency_khz(bfdata, *p_freq);
+	ret = set_desired_frequency_khz(bfdata, desired_freq);
 	if (ret <= 0)
 		return ret;
 
@@ -605,6 +656,10 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	bfdata->g_dfrgx_data.bus_freq_data = bfdata;
 	bfdata->g_dfrgx_data.g_enable = mprm_enable;
 	bfdata->g_dfrgx_data.gpu_utilization_record_index = 3; /*Index for 320 MHZ, initial freq*/
+	bfdata->g_dfrgx_data.g_min_freq_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
+	bfdata->g_dfrgx_data.g_freq_mhz_min = df->min_freq;
+	bfdata->g_dfrgx_data.g_max_freq_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
+	bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
 
 	error = dfrgx_burst_init(&bfdata->g_dfrgx_data);
 
