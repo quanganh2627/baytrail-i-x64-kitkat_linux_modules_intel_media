@@ -63,7 +63,10 @@ static void gfx_early_suspend(struct early_suspend *h)
 		if (encoder->encoder_type == DRM_MODE_ENCODER_TMDS) {
 
 			/* Turn off vsync interrupt. */
-			psb_vsync_on_pipe_off(dev_priv, 1);
+			drm_vblank_off(dev, 1);
+
+			/* Make the pending flip request as completed. */
+			DCUnAttachPipe(1);
 		}
 	}
 
@@ -114,9 +117,10 @@ static void gfx_late_resume(struct early_suspend *h)
 	 * Devices connect status will be changed
 	 * when system suspend,re-detect once here.
 	 */
-	if (android_hdmi_is_connected(dev))
+	if (android_hdmi_is_connected(dev)) {
+		DCAttachPipe(1);
 		mid_hdmi_audio_resume(dev);
-
+	}
 
 	mutex_unlock(&dev->mode_config.mutex);
 

@@ -165,12 +165,13 @@ static void _Setup_ZOrder(DC_MRFLD_DEVICE *psDevice,
 
 static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 {
-	DC_MRFLD_SURF_CUSTOM *psSurfCustom = NULL;
+	DC_MRFLD_SURF_CUSTOM *psSurfCustom;
 	DC_MRFLD_BUFFER *pasBuffers;
 	IMG_UINT32 uiNumBuffers;
 	IMG_UINT32 ulAddr;
 	IMG_PIXFMT eFormat;
 	IMG_UINT32 ulStride;
+	IMG_BOOL bUpdated;
 	int i, j;
 
 	if (!gpsDevice || !psFlip) {
@@ -200,6 +201,21 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 		return IMG_FALSE;
 
 	/* start update display controller hardware */
+	bUpdated = IMG_FALSE;
+
+	/*
+	 * make sure vsync interrupt of this pipe is active before kicking
+	 * off flip
+	 */
+	if (DCCBEnableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe)) {
+		DRM_ERROR("%s: failed to enable vsync on pipe %d\n",
+				__func__, iPipe);
+		goto err_out;
+	}
+
+	if (iPipe != DC_PIPE_B)
+		DCCBDsrForbid(gpsDevice->psDrmDevice, iPipe);
+
 	for (i = 0; i < uiNumBuffers; i++) {
 		if (pasBuffers[i].eFlipOp == DC_MRFLD_FLIP_SURFACE) {
 			/*No context attach just flip the primary surface*/
@@ -260,8 +276,13 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 
 	psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DC_UPDATED;
 
+	bUpdated = IMG_TRUE;
+err_out:
+	if (iPipe != DC_PIPE_B)
+		DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
+
 	power_island_put(psFlip->uiPowerIslands);
-	return IMG_TRUE;
+	return bUpdated;
 }
 
 static DC_MRFLD_FLIP *_Next_Queued_Flip(int iPipe)
@@ -290,10 +311,10 @@ static DC_MRFLD_FLIP *_Next_Queued_Flip(int iPipe)
 
 static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 {
-	struct drm_device *psDrmDev = gpsDevice->psDrmDevice;
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom;
 	DC_MRFLD_BUFFER *pasBuffers;
 	IMG_UINT32 uiNumBuffers;
+	IMG_BOOL bUpdated;
 	int i, j;
 
 	if (!gpsDevice || !psFlip) {
@@ -365,21 +386,10 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 	mutex_lock(&gpsDevice->sFlipQueueLock);
 	/* dispatch this flip*/
 	for (i = 0; i < MAX_PIPE_NUM; i++) {
-		if (psFlip->bActivePipes[i]) {
-			/* make sure dsr is forbid */
-			DCCBDsrForbid(psDrmDev, i);
-
+		if (psFlip->bActivePipes[i] && gpsDevice->bFlipEnabled[i]) {
 			/* if pipe is not active */
-			if (!DCCBIsPipeActive(psDrmDev, i)) {
-				DCCBDsrAllow(psDrmDev, i);
+			if (!DCCBIsPipeActive(gpsDevice->psDrmDevice, i))
 				continue;
-			}
-
-			/* make sure vsync interrupt is on */
-			if (DCCBEnableVSyncInterrupt(psDrmDev, i)) {
-				DCCBDsrAllow(psDrmDev, i);
-				continue;
-			}
 
 			/*turn on pipe power island*/
 			if (i == 0)
@@ -393,13 +403,8 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 			/* if there's no pending queued flip, flip it*/
 			if (!_Next_Queued_Flip(i)) {
 				/* don't queue it, if failed to update DC*/
-				if (!_Do_Flip(psFlip,i)) {
-					/*disable vsync interrupt*/
-					DCCBDisableVSyncInterrupt(psDrmDev, i);
-					/*allow dsr*/
-					DCCBDsrAllow(psDrmDev, i);
+				if (!_Do_Flip(psFlip,i))
 					continue;
-				}
 			}
 
 			INIT_LIST_HEAD(&psFlip->sFlips[i]);
@@ -503,9 +508,6 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 		if (eFlipState == DC_MRFLD_FLIP_DISPLAYED) {
 			/* done with this flip item, disable vsync now*/
 			DCCBDisableVSyncInterrupt(psDrmDev, iPipe);
-
-			/* allow dsr */
-			DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
 
 			/*remove this entry from flip queue, decrease refCount*/
 			list_del(&psFlip->sFlips[iPipe]);
@@ -1216,6 +1218,7 @@ static PVRSRV_ERROR DC_MRFLD_init(struct drm_device *psDrmDev)
 	/*init flip queues*/
 	for (i = 0; i < MAX_PIPE_NUM; i++) {
 		INIT_LIST_HEAD(&psDevice->sFlipQueues[i]);
+		psDevice->bFlipEnabled[i] = IMG_TRUE;
 	}
 
 	/*unblank fbdev*/
@@ -1262,7 +1265,23 @@ static PVRSRV_ERROR DC_MRFLD_exit(void)
 	return PVRSRV_OK;
 }
 
-void DCFlushFlipQueue(uint32_t iPipe)
+void DCAttachPipe(uint32_t iPipe)
+{
+	if (!gpsDevice)
+		return;
+
+	DRM_DEBUG("%s: pipe %d\n", __func__, iPipe);
+
+	if (iPipe != DC_PIPE_A && iPipe != DC_PIPE_B)
+		return;
+
+	/* acquire flip queue mutex */
+	mutex_lock(&gpsDevice->sFlipQueueLock);
+	gpsDevice->bFlipEnabled[iPipe] = IMG_TRUE;
+	mutex_unlock(&gpsDevice->sFlipQueueLock);
+}
+
+void DCUnAttachPipe(uint32_t iPipe)
 {
 	struct list_head *psFlipQueue;
 	DC_MRFLD_FLIP *psFlip, *psTmp;
@@ -1284,8 +1303,6 @@ void DCFlushFlipQueue(uint32_t iPipe)
 		/* Put pipe's vsync which has been enabled. */
 		DCCBDisableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe);
 
-		DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
-
 		/*remove this entry from flip queue, decrease refCount*/
 		list_del(&psFlip->sFlips[iPipe]);
 
@@ -1300,6 +1317,8 @@ void DCFlushFlipQueue(uint32_t iPipe)
 
 	if (list_empty_careful(psFlipQueue))
 		INIT_LIST_HEAD(&gpsDevice->sFlipQueues[iPipe]);
+
+	gpsDevice->bFlipEnabled[iPipe] = IMG_FALSE;
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
 }
