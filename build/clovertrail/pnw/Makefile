@@ -49,6 +49,7 @@ ccflags-y += -DOTM_HDMI_UNIT_TEST
 
 #enable HDCP
 ccflags-y += -DOTM_HDMI_HDCP_ENABLE
+ccflags-y += -DCONFIG_VIDEO_MRFLD_EC
 
 ccflags-y += $(include_dirs)
 
@@ -89,6 +90,7 @@ $(DRIVER_NAME)-objs += $(ENCODE_DIR)/pnw_topaz.o \
 	$(VIDEO_COMMON_DIR)/psb_fence.o \
 	$(VIDEO_COMMON_DIR)/psb_mmu.o \
 	$(DECODE_DIR)/psb_msvdx.o \
+	$(DECODE_DIR)/psb_msvdx_ec.o \
 	$(DECODE_DIR)/psb_msvdxinit.o \
 	$(DECODE_DIR)/psb_msvdx_fw.o \
 	$(VIDEO_COMMON_DIR)/psb_ttm_glue.o \

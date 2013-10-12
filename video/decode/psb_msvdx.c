@@ -36,9 +36,7 @@
 #include "psb_msvdx.h"
 #include "psb_msvdx_msg.h"
 #include "psb_msvdx_reg.h"
-#ifdef CONFIG_VIDEO_MRFLD
 #include "psb_msvdx_ec.h"
-#endif
 
 #include <linux/io.h>
 #include <linux/delay.h>
@@ -237,12 +235,10 @@ static int psb_msvdx_map_command(struct drm_device *dev,
 			break;
 		}
 
-#ifdef CONFIG_VIDEO_MRFLD
 		case MTX_MSGID_HOST_BE_OPP_MFLD:
 			msvdx_priv->host_be_opp_enabled = 1;
 			msvdx_priv->deblock_cmd_offset =
 					cmd_size - cmd_size_remaining;
-#endif
 		case MTX_MSGID_INTRA_OOLD_MFLD:
 		case MTX_MSGID_DEBLOCK_MFLD: {
 			if (sizeof(struct fw_deblock_msg) > cmd_size_remaining) {
@@ -551,6 +547,9 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 			for (offset = 0; offset < 4; ++offset)
 				PSB_WMSVDX32(msvdx_priv->vec_ec_mem_data[offset],
 					     0x2cb0 + offset * 4);
+
+			PSB_WMSVDX32(msvdx_priv->vec_ec_mem_data[4],
+				     0x2cc4);
 			msvdx_priv->vec_ec_mem_saved = 0;
 		}
 #endif
@@ -796,6 +795,7 @@ static void psb_msvdx_mtx_interrupt(struct drm_device *dev)
 	uint32_t num, ofs; /* message num and offset */
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	int i;
+	int cmd_complete = 0;
 
 	PSB_DEBUG_GENERAL("MSVDX:Got a MSVDX MTX interrupt\n");
 
@@ -849,6 +849,8 @@ loop: /* just for coding style check */
 
 		struct fw_panic_msg *panic_msg = (struct fw_panic_msg *)buf;
 
+		cmd_complete = 1;
+
 		PSB_DEBUG_WARN("MSVDX: MSGID_CMD_HW_PANIC:"
 				  "Fault detected"
 				  " - Fence: %08x"
@@ -901,7 +903,6 @@ loop: /* just for coding style check */
 
 		/* Flush the command queue */
 		psb_msvdx_flush_cmd_queue(dev);
-#ifdef CONFIG_VIDEO_MRFLD
 		if (msvdx_priv->host_be_opp_enabled) {
 			/*get the frame_info struct for error concealment frame*/
 			for (i = 0; i < MAX_DECODE_BUFFERS; i++) {
@@ -918,7 +919,6 @@ loop: /* just for coding style check */
 
 			failed_frame->fw_status = 1; /* set ERROR flag */
 		}
-#endif
 		msvdx_priv->decoding_err = 1;
 
 		goto done;
@@ -943,6 +943,8 @@ loop: /* just for coding style check */
 			completed_msg->be_begin_decode,
 			completed_msg->be_end_decode);
 
+		cmd_complete = 1;
+
 		flags = completed_msg->flags;
 		fence = completed_msg->header.bits.msg_fence;
 
@@ -965,7 +967,6 @@ loop: /* just for coding style check */
 		break;
 	}
 
-#ifdef CONFIG_VIDEO_MRFLD
 	case MTX_MSGID_CONTIGUITY_WARNING: {
 		drm_psb_msvdx_decode_status_t *fault_region = NULL;
 		struct psb_msvdx_ec_ctx *msvdx_ec_ctx = NULL;
@@ -1080,7 +1081,6 @@ loop: /* just for coding style check */
 		schedule_work(&msvdx_priv->ec_work);
 		break;
 	}
-#endif
 #ifdef CONFIG_SLICE_HEADER_PARSING
 	/* extract done msg didn't return the msg id, which is not reasonable */
 	case MTX_MSGID_SLICE_HEADER_EXTRACT_DONE: {
@@ -1107,7 +1107,8 @@ done:
 	}
 
 	if (drm_msvdx_pmpolicy == PSB_PMPOLICY_NOPM ||
-			(IS_MDFLD(dev) && (msvdx_priv->msvdx_busy))) {
+			(IS_MDFLD(dev) && (msvdx_priv->msvdx_busy)) ||
+			(IS_MRFLD(dev) && !cmd_complete)) {
 		DRM_MEMORYBARRIER();	/* TBD check this... */
 		return;
 	}
@@ -1165,29 +1166,29 @@ int psb_msvdx_interrupt(void *pvData)
 	 * if HW/FW is totally hang, the lockup function will handle
 	 * the reseting
 	 */
-	if (msvdx_stat & MSVDX_INTERRUPT_STATUS__MMU_FAULT_IRQ_MASK) {
+	if (msvdx_stat & MSVDX_INTERRUPT_STATUS_MMU_FAULT_IRQ_MASK) {
 		/*Ideally we should we should never get to this */
 		PSB_DEBUG_IRQ("MSVDX:MMU Fault:0x%x\n", msvdx_stat);
 
 		/* Pause MMU */
-		PSB_WMSVDX32(MSVDX_MMU_CONTROL0__MMU_PAUSE_MASK,
+		PSB_WMSVDX32(MSVDX_MMU_CONTROL0_MMU_PAUSE_MASK,
 			     MSVDX_MMU_CONTROL0_OFFSET);
 		DRM_WRITEMEMORYBARRIER();
 
 		/* Clear this interupt bit only */
-		PSB_WMSVDX32(MSVDX_INTERRUPT_STATUS__MMU_FAULT_IRQ_MASK,
+		PSB_WMSVDX32(MSVDX_INTERRUPT_STATUS_MMU_FAULT_IRQ_MASK,
 			     MSVDX_INTERRUPT_CLEAR_OFFSET);
 		PSB_RMSVDX32(MSVDX_INTERRUPT_CLEAR_OFFSET);
 		DRM_READMEMORYBARRIER();
 
 		msvdx_priv->msvdx_needs_reset = 1;
-	} else if (msvdx_stat & MSVDX_INTERRUPT_STATUS__MTX_IRQ_MASK) {
+	} else if (msvdx_stat & MSVDX_INTERRUPT_STATUS_MTX_IRQ_MASK) {
 		PSB_DEBUG_IRQ
 			("MSVDX: msvdx_stat: 0x%x(MTX)\n", msvdx_stat);
 
 		/* Clear all interupt bits */
 		if (msvdx_priv->fw_loaded_by_punit)
-			PSB_WMSVDX32(MSVDX_INTERRUPT_STATUS__MTX_IRQ_MASK,
+			PSB_WMSVDX32(MSVDX_INTERRUPT_STATUS_MTX_IRQ_MASK,
 				     MSVDX_INTERRUPT_CLEAR_OFFSET);
 		else
 			PSB_WMSVDX32(0xffff, MSVDX_INTERRUPT_CLEAR_OFFSET);
@@ -1275,7 +1276,7 @@ int psb_check_msvdx_idle(struct drm_device *dev)
 	 * need call psb_msvdx_core_reset as the work around */
 	if ((PSB_RMSVDX32(MSVDX_CORE_REV_OFFSET) < 0x00050502) &&
 		(PSB_RMSVDX32(MSVDX_INTERRUPT_STATUS_OFFSET)
-			& MSVDX_INTERRUPT_STATUS__MMU_FAULT_IRQ_MASK) &&
+			& MSVDX_INTERRUPT_STATUS_MMU_FAULT_IRQ_MASK) &&
 		(PSB_RMSVDX32(MSVDX_MMU_STATUS_OFFSET) & 1)) {
 		PSB_DEBUG_WARN("mmu page fault, recover by core_reset.\n");
 		return 0;
@@ -1339,11 +1340,20 @@ int psb_msvdx_save_context(struct drm_device *dev)
 	for (offset = 0; offset < 4; ++offset)
 		msvdx_priv->vec_ec_mem_data[offset] =
 			PSB_RMSVDX32(0x2cb0 + offset * 4);
+
+	msvdx_priv->vec_ec_mem_data[4] =
+		PSB_RMSVDX32(0x2cc4);
+
 	msvdx_priv->vec_ec_mem_saved = 1;
+	PSB_DEBUG_MSVDX("ec last mb %d %d %d %d\n", msvdx_priv->vec_ec_mem_data[0],
+				msvdx_priv->vec_ec_mem_data[1],
+				msvdx_priv->vec_ec_mem_data[2],
+				msvdx_priv->vec_ec_mem_data[3]);
+	PSB_DEBUG_MSVDX("ec error state %d\n", msvdx_priv->vec_ec_mem_data[4]);
 #endif
 
 	/* Reset MTX */
-	PSB_WMSVDX32(MTX_SOFT_RESET__MTXRESET, MTX_SOFT_RESET_OFFSET);
+	PSB_WMSVDX32(MTX_SOFT_RESET_MTXRESET, MTX_SOFT_RESET_OFFSET);
 
 	/* why need reset msvdx before power off it, need check IMG */
 	if (psb_msvdx_core_reset(dev_priv))
@@ -1451,13 +1461,13 @@ void psb_msvdx_mtx_set_clocks(struct drm_device *dev, uint32_t clock_state)
 		if (old_clock_state) {
 			/* Turn off all the clocks except core */
 			PSB_WMSVDX32(
-				MSVDX_MAN_CLK_ENABLE__CORE_MAN_CLK_ENABLE_MASK,
+				MSVDX_MAN_CLK_ENABLE_CORE_MAN_CLK_ENABLE_MASK,
 				MSVDX_MAN_CLK_ENABLE_OFFSET);
 
 			/* Make sure all the clocks are off except core */
 			psb_wait_for_register(dev_priv,
 				MSVDX_MAN_CLK_ENABLE_OFFSET,
-				MSVDX_MAN_CLK_ENABLE__CORE_MAN_CLK_ENABLE_MASK,
+				MSVDX_MAN_CLK_ENABLE_CORE_MAN_CLK_ENABLE_MASK,
 				0xffffffff, 2000000, 5);
 
 			/* Turn off core clock */
@@ -1467,19 +1477,19 @@ void psb_msvdx_mtx_set_clocks(struct drm_device *dev, uint32_t clock_state)
 		uint32_t clocks_en = clock_state;
 
 		/*Make sure that core clock is not accidentally turned off */
-		clocks_en |= MSVDX_MAN_CLK_ENABLE__CORE_MAN_CLK_ENABLE_MASK;
+		clocks_en |= MSVDX_MAN_CLK_ENABLE_CORE_MAN_CLK_ENABLE_MASK;
 
 		/* If all clocks were disable do the bring up procedure */
 		if (old_clock_state == 0) {
 			/* turn on core clock */
 			PSB_WMSVDX32(
-				MSVDX_MAN_CLK_ENABLE__CORE_MAN_CLK_ENABLE_MASK,
+				MSVDX_MAN_CLK_ENABLE_CORE_MAN_CLK_ENABLE_MASK,
 				MSVDX_MAN_CLK_ENABLE_OFFSET);
 
 			/* Make sure core clock is on */
 			psb_wait_for_register(dev_priv,
 				MSVDX_MAN_CLK_ENABLE_OFFSET,
-				MSVDX_MAN_CLK_ENABLE__CORE_MAN_CLK_ENABLE_MASK,
+				MSVDX_MAN_CLK_ENABLE_CORE_MAN_CLK_ENABLE_MASK,
 				0xffffffff, 2000000, 5);
 
 			/* turn on the other clocks as well */

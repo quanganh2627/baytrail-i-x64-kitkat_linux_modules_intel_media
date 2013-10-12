@@ -30,7 +30,7 @@ ccflags-y += \
 	-Iinclude/drm
 
 ccflags-y += -DANDROID -DLINUX -D_linux_ -D__KERNEL__
-ccflags-y += -DMERRIFIELD -DCONFIG_PCI_MSI
+ccflags-y += -DMERRIFIELD -DCONFIG_PCI_MSI -DCONFIG_GFX_RTPM -DCONFIG_VIDEO_MRFLD_EC
 
 #
 # HDMI
@@ -151,6 +151,7 @@ $(DRIVER_NAME)-objs += \
 	$(VIDEO_COMMON_DIR)/psb_ttm_fence_user.o \
 	$(VIDEO_COMMON_DIR)/psb_ttm_placement_user.o \
 	$(DECODE_DIR)/psb_msvdx.o \
+	$(DECODE_DIR)/psb_msvdx_ec.o \
 	$(DECODE_DIR)/psb_msvdxinit.o \
 	$(DECODE_DIR)/psb_msvdx_fw.o \
 	$(ENCODE_DIR)/tng_topaz.o \
