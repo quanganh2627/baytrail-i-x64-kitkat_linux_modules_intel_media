@@ -1625,6 +1625,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	spin_lock_init(&dev_priv->irqmask_lock);
 
 	DRM_INIT_WAITQUEUE(&dev_priv->rel_mapped_queue);
+	init_waitqueue_head(&dev_priv->eof_wait);
 
 	dev->dev_private = (void *)dev_priv;
 	dev_priv->chipset = chipset;

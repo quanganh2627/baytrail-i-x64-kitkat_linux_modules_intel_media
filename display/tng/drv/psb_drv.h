@@ -720,6 +720,9 @@ struct drm_psb_private {
 	struct mdfld_dsi_dbi_output *dbi_output2;
 	/* MDFLD_DSI private date end */
 
+	/* wait queue for write_mem_status complete (EOF interrupt) */
+	wait_queue_head_t eof_wait;
+
 	/*runtime PM state */
 	int rpm_enabled;
 
