@@ -260,7 +260,7 @@ struct vsp_private {
 	struct delayed_work vsp_suspend_wq;
 
 	/* irq tasklet */
-	struct tasklet_struct vsp_irq_tasklet;
+	struct delayed_work vsp_irq_wq;
 
 	/* the number of cmd will send to VSP */
 	int vsp_cmd_num;
@@ -297,7 +297,7 @@ extern int vsp_cmdbuf_vpp(struct drm_file *priv,
 			  struct ttm_buffer_object *cmd_buffer,
 			  struct psb_ttm_fence_rep *fence_arg);
 
-extern void vsp_fence_poll(struct drm_device *dev);
+extern bool vsp_fence_poll(struct drm_device *dev);
 
 extern void vsp_new_context(struct drm_device *dev);
 extern void vsp_rm_context(struct drm_device *dev, int ctx_type);
@@ -314,7 +314,7 @@ int vsp_resume_function(struct drm_psb_private *dev_priv);
 extern int psb_vsp_dump_info(struct drm_psb_private *dev_priv);
 
 extern void psb_powerdown_vsp(struct work_struct *work);
-extern void vsp_irq_task(unsigned long data);
+extern void vsp_irq_task(struct work_struct *work);
 
 static inline
 unsigned int vsp_is_idle(struct drm_psb_private *dev_priv,

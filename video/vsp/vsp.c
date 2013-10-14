@@ -85,15 +85,21 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 	uint32_t sequence;
 	uint32_t status;
 
-	rd = vsp_priv->ctrl->ack_rd;
-	wr = vsp_priv->ctrl->ack_wr;
-	msg_num = wr > rd ? wr - rd : wr == rd ? 0 :
-		VSP_ACK_QUEUE_SIZE - (rd - wr);
-	VSP_DEBUG("ack rd %d wr %d, msg_num %d, size %d\n",
-		  rd, wr, msg_num, VSP_ACK_QUEUE_SIZE);
-
 	sequence = vsp_priv->current_sequence;
-	for (idx = 0; idx < msg_num; ++idx) {
+	while (1) {
+		rd = vsp_priv->ctrl->ack_rd;
+		wr = vsp_priv->ctrl->ack_wr;
+		msg_num = wr > rd ? wr - rd : wr == rd ? 0 :
+			VSP_ACK_QUEUE_SIZE - (rd - wr);
+		VSP_DEBUG("ack rd %d wr %d, msg_num %d, size %d\n",
+			  rd, wr, msg_num, VSP_ACK_QUEUE_SIZE);
+
+		if (msg_num == 0)
+			break;
+		else if ( msg_num < 0) {
+			DRM_ERROR("invalid msg num, exit\n");
+			break;
+		}
 
 		msg = vsp_priv->ack_queue + (idx + rd) % VSP_ACK_QUEUE_SIZE;
 		VSP_DEBUG("ack[%d]->type = %x\n", idx, msg->type);
@@ -122,8 +128,7 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			break;
 
 		case VssOutputSurfaceReadyResponse:
-			PSB_DEBUG_GENERAL("sequence %x is done!!\n",
-					  msg->buffer);
+			VSP_DEBUG("sequence %x is done!!\n", msg->buffer);
 			VSP_DEBUG("VSP clock cycles from pre response %x\n",
 				  msg->vss_cc);
 			vsp_priv->vss_cc_acc += msg->vss_cc;
@@ -333,7 +338,7 @@ bool vsp_interrupt(void *pvData)
 	}
 
 	if (vsp_priv->fw_loaded_by_punit) {
-		tasklet_hi_schedule(&vsp_priv->vsp_irq_tasklet);
+		schedule_delayed_work(&vsp_priv->vsp_irq_wq, 0);
 	} else {
 		/* handle the response message */
 		spin_lock(&vsp_priv->lock);
@@ -371,6 +376,7 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	struct ttm_bo_kmap_obj cmd_kmap;
 	bool is_iomem;
 	uint32_t invalid_mmu = 0;
+	unsigned long irq_flags;
 
 	/* check if mmu should be invalidated */
 	invalid_mmu = atomic_cmpxchg(&dev_priv->vsp_mmu_invaldc, 1, 0);
@@ -462,6 +468,11 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 		}
 	}
 
+	if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
+		ret = vsp_resume_function(dev_priv);
+		VSP_DEBUG("The VSP is on suspend, send resume!\n");
+	}
+
 	/* submit command to HW */
 	ret = vsp_send_command(dev, cmd_start, cmd_size);
 	if (ret != 0) {
@@ -475,13 +486,13 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 		vsp_continue_function(dev_priv);
 		VSP_DEBUG("The VSP is on idle, send continue!\n");
 	}
-
+#if 0
 	/* If the VSP is in Suspend, need to send "Resume" */
 	if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
 		ret = vsp_resume_function(dev_priv);
 		VSP_DEBUG("The VSP is on suspend, send resume!\n");
 	}
-
+#endif
 	return ret;
 }
 
@@ -502,11 +513,13 @@ int vsp_send_command(struct drm_device *dev,
 	cur_cmd = (struct vss_command_t *)cmd_start;
 
 	/* if the VSP in suspend, update the saved config info */
+#if 0
 	if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
 		VSP_DEBUG("In suspend, need update saved cmd_wr!\n");
 		vsp_priv->ctrl = (struct vsp_ctrl_reg *)
 				 &(vsp_priv->saved_config_regs[2]);
 	}
+#endif
 
 	while (cmd_size) {
 		rd = vsp_priv->ctrl->cmd_rd;
@@ -861,6 +874,11 @@ int vsp_fence_surfaces(struct drm_file *priv,
 		VSP_DEBUG("fence sequence %x at output pic %d\n",
 			  fence->sequence, idx);
 		pic_param->output_picture[idx].surface_id = fence->sequence;
+
+		if (drm_vsp_single_int)
+			for (idx = 0; idx < output_surf_num - 1; ++idx)
+				pic_param->output_picture[idx].surface_id = 0;
+
 		ttm_fence_object_unref(&fence);
 	}
 
@@ -967,7 +985,7 @@ out:
 	return ret;
 }
 
-void vsp_fence_poll(struct drm_device *dev)
+bool vsp_fence_poll(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
@@ -979,11 +997,6 @@ void vsp_fence_poll(struct drm_device *dev)
 	struct vss_response_t *msg;
 
 	VSP_DEBUG("polling vsp msg\n");
-
-	if (vsp_priv->vsp_state == VSP_STATE_HANG &&
-	    vsp_priv->vsp_state == VSP_STATE_DOWN &&
-	    vsp_priv->vsp_state == VSP_STATE_SUSPEND)
-		return;
 
 	sequence = vsp_priv->current_sequence;
 
@@ -997,9 +1010,10 @@ void vsp_fence_poll(struct drm_device *dev)
 	if (sequence != vsp_priv->current_sequence) {
 		vsp_priv->current_sequence = sequence;
 		psb_fence_handler(dev, VSP_ENGINE_VPP);
+		return true;
 	}
-out:
-	return;
+
+	return false;
 }
 
 void vsp_new_context(struct drm_device *dev)
@@ -1191,20 +1205,20 @@ void psb_powerdown_vsp(struct work_struct *work)
 }
 
 /* vsp irq tasklet function */
-void vsp_irq_task(unsigned long data)
+void vsp_irq_task(struct work_struct *work)
 {
-	struct drm_device *dev = (struct drm_device *)data;
+	struct vsp_private *vsp_priv =
+		container_of(work, struct vsp_private, vsp_irq_wq.work);
+	struct drm_device *dev = vsp_priv->dev;
 	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	uint32_t sequence;
 
 	if (!vsp_priv)
 		return;
 
+	mutex_lock(&vsp_priv->vsp_mutex);
 	/* handle the response message */
-	spin_lock(&vsp_priv->lock);
 	sequence = vsp_handle_response(dev_priv);
-	spin_unlock(&vsp_priv->lock);
 
 	/* handle fence info */
 	if (sequence != vsp_priv->current_sequence) {
@@ -1216,8 +1230,18 @@ void vsp_irq_task(unsigned long data)
 	}
 
 	if (vsp_priv->fw_loaded_by_punit &&
-	    vsp_priv->vsp_state == VSP_STATE_IDLE)
-		ospm_apm_power_down_vsp(dev);
+	    vsp_priv->vsp_state == VSP_STATE_IDLE) {
+		if (vsp_priv->ctrl->cmd_rd == vsp_priv->ctrl->cmd_wr)
+			ospm_apm_power_down_vsp(dev);
+		else {
+			while (ospm_power_is_hw_on(OSPM_VIDEO_VPP_ISLAND))
+				ospm_apm_power_down_vsp(dev);
+			DRM_ERROR("successfully power down VSP\n");
+			power_island_get(OSPM_VIDEO_VPP_ISLAND);
+			vsp_resume_function(dev_priv);
+		}
+	}
+	mutex_unlock(&vsp_priv->vsp_mutex);
 
 	return;
 }

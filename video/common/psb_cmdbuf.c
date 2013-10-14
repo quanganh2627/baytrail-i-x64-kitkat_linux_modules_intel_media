@@ -916,6 +916,10 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 #endif
 	} else if (arg->engine == VSP_ENGINE_VPP) {
 #ifdef SUPPORT_VSP
+		ret = mutex_lock_interruptible(&vsp_priv->vsp_mutex);
+		if (unlikely(ret != 0))
+			goto out_err0;
+
 		if (vsp_priv->fw_loaded_by_punit) {
 			if (unlikely(vsp_priv->fw_loaded == 0)) {
 				ret = vsp_init_fw(dev);
@@ -936,9 +940,6 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 			goto out_err0;
 		}
 
-		ret = mutex_lock_interruptible(&vsp_priv->vsp_mutex);
-		if (unlikely(ret != 0))
-			goto out_err0;
 		context = &dev_priv->vsp_context;
 #endif
 	} else {
