@@ -2918,6 +2918,10 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 
 	if (arg->vsync_operation_mask) {
 		pipe = arg->vsync.pipe;
+		if (pipe < 0 || pipe > 2) {
+			DRM_ERROR("%s: invalid pipe %d", __func__, pipe);
+			return -EINVAL;
+		}
 
 		if (arg->vsync_operation_mask & GET_VSYNC_COUNT) {
 			vbl_count = drm_vblank_count(dev, pipe);
@@ -2969,20 +2973,29 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
-			mdfld_dsi_dsr_forbid(dsi_config);
-
-			if ((pipe == 0) || (pipe == 1) || (pipe == 2)) {
-				ret = drm_vblank_get(dev, pipe);
-				if (ret != 0)
-					DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
-						__func__, pipe);
+			if (dev_priv->vsync_enabled[pipe]) {
+				DRM_ERROR("%s: vsync has been enabled on pipe %d",
+					__func__, pipe);
+				return 0;
 			}
+			mdfld_dsi_dsr_forbid(dsi_config);
+			ret = drm_vblank_get(dev, pipe);
+			if (ret != 0) {
+				DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
+					__func__, pipe);
+				mdfld_dsi_dsr_allow(dsi_config);
+			} else
+				dev_priv->vsync_enabled[pipe] = true;
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
-			if ((pipe == 0) || (pipe == 1) || (pipe == 2))
-				drm_vblank_put(dev, pipe);
-
+			if (!dev_priv->vsync_enabled[pipe]) {
+				DRM_ERROR("%s: vsync has been disabled on pipe %d",
+					__func__, pipe);
+				return 0;
+			}
+			dev_priv->vsync_enabled[pipe] = false;
+			drm_vblank_put(dev, pipe);
 			mdfld_dsi_dsr_allow(dsi_config);
 		}
 	}

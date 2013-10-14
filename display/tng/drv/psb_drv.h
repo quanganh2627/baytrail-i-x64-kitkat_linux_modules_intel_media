@@ -409,6 +409,7 @@ struct drm_psb_private {
 
 	struct mutex vsync_lock;
 	atomic_t *vblank_count;
+	bool vsync_enabled[3];
 
 	/*
 	 *TTM Glue.
@@ -1016,7 +1017,6 @@ struct drm_psb_private {
 
 	uint32_t hdmi_audio_interrupt_mask;
 
-	//RAJESH
 	struct mdfld_dsi_encoder *encoder0;
 	struct mdfld_dsi_encoder *encoder2;
 	mdfld_dsi_encoder_t mipi_encoder_type;
