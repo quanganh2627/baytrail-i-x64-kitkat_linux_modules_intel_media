@@ -368,7 +368,7 @@ void vsp_enableirq(struct drm_device *dev)
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_ENB, enable);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_MASK, mask);
 	/* use the Level type interrupt */
-	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_LEVEL_PULSE, 1);
+	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_LEVEL_PULSE, 0x80);
 }
 
 void vsp_disableirq(struct drm_device *dev)
