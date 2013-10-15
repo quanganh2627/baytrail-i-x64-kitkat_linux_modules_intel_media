@@ -104,7 +104,7 @@
  *     #define GOVERNOR_TO_USE "userspace"
  *     #define GOVERNOR_TO_USE "powersave"
  */
-#define GOVERNOR_TO_USE "performance"
+#define GOVERNOR_TO_USE "simple_ondemand"
 #else
 /**
  * Potential governors:
@@ -112,7 +112,7 @@
  *     #define GOVERNOR_TO_USE devfreq_performance
  *     #define GOVERNOR_TO_USE devfreq_powersave
  */
-#define GOVERNOR_TO_USE devfreq_performance
+#define GOVERNOR_TO_USE devfreq_simple_ondemand
 #endif
 
 
@@ -121,9 +121,6 @@ extern int is_tng_b0;
 
 /* df_rgx_created_dev - Pointer to created device, if any. */
 static struct platform_device *df_rgx_created_dev;
-
-/*Need to check if this is the 1st request*/
-static int firstRequest = 1;
 
 /**
  * Module parameters:
@@ -190,88 +187,137 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 	struct busfreq_data	*bfdata;
 	struct df_rgx_data_s 	*pdfrgx_data;
 	struct devfreq       	*df;
-	unsigned long desired_freq = *p_freq;
+	unsigned long desired_freq = 0;
 	int ret = 0;
 	(void) flags;
+	int adjust_curfreq = 0;
+	int set_freq = 0;
 
 	pdev = container_of(dev, struct platform_device, dev);
 	bfdata = platform_get_drvdata(pdev);
 
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:TARGET ***********!\n",
-				__func__);
-	/*Update max and min freqs in burst table*/
-	if(bfdata)
+	if(bfdata && bfdata->devfreq)
 	{
-		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s bfdata Valid!\n",
-				__func__);
-
+		int gpu_defer_req = 0;
 		df = bfdata->devfreq;
 		pdfrgx_data = &bfdata->g_dfrgx_data;
 
-		if(df)
+		desired_freq = *p_freq;
+
+		/* Governor changed, will be updated after updatedevfreq() */
+		if (strncmp(df->governor->name, bfdata->prev_governor, DEVFREQ_NAME_LEN))
 		{
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Governor changed, prev : %s, current : %s!\n",
+				__func__, bfdata->prev_governor, df->governor->name);
+
+			if(dfrgx_burst_is_enabled(pdfrgx_data))
+				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
+
+			df_rgx_set_governor_profile(df->governor->name, pdfrgx_data);
+			strncpy(bfdata->prev_governor, df->governor->name, DEVFREQ_NAME_LEN);
+
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Governors should be the same now, prev : %s, current : %s!\n",
+					__func__, bfdata->prev_governor, df->governor->name);
+
+			set_freq = 1;
+		}
+		/* Min freq changed*/
+		else if(df->min_freq != pdfrgx_data->g_freq_mhz_min){
 			int new_index = -1;
 
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Devfreq Valid!\n",
-				__func__);
+			if(dfrgx_burst_is_enabled(pdfrgx_data))
+				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
 
-			/* Dynamic burst needs to be stopped*/
-			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
-
-			if(df->min_freq != pdfrgx_data->g_freq_mhz_min){
-				DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Min freq changed!\n",
-				__func__);
-				new_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
-				if(new_index > -1){
-					pdfrgx_data->g_freq_mhz_min = df->min_freq;
-					pdfrgx_data->g_min_freq_index = new_index;
-					if (pdfrgx_data->g_min_freq_index < NUMBER_OF_LEVELS_B0) {
-					desired_freq = 	aAvailableStateFreq[pdfrgx_data->g_min_freq_index].freq;
-					}
-				}
+			new_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
+			if(new_index > -1){
+				mutex_lock(&pdfrgx_data->g_mutex_sts);
+				pdfrgx_data->g_freq_mhz_min = df->min_freq;
+				pdfrgx_data->g_min_freq_index = new_index;
+				mutex_unlock(&pdfrgx_data->g_mutex_sts);
 			}
+				DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Min freq changed!, prev_freq %u, min_freq %u \n",
+					__func__, df->previous_freq, df->min_freq);
 
-			if(df->max_freq != pdfrgx_data->g_freq_mhz_max){
-				DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Max freq changed!\n",
-				__func__);
-				new_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
-				if(new_index > -1){
-					pdfrgx_data->g_freq_mhz_max = df->max_freq;
-					pdfrgx_data->g_max_freq_index = new_index;
-					desired_freq = 	aAvailableStateFreq[pdfrgx_data->g_max_freq_index].freq;
-				}
+			if(df->previous_freq < df->min_freq)
+			{
+				desired_freq = df->min_freq;
+				adjust_curfreq = 1;
 			}
-
-			/* Resuming dynamic burst*/
-			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 1);
 		}
+		/* Max freq changed*/
+		else if(df->max_freq != pdfrgx_data->g_freq_mhz_max){
+
+			int new_index = -1;
+
+			if(dfrgx_burst_is_enabled(pdfrgx_data))
+				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
+
+			new_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
+			if(new_index > -1){
+				mutex_lock(&pdfrgx_data->g_mutex_sts);
+				pdfrgx_data->g_freq_mhz_max = df->max_freq;
+				pdfrgx_data->g_max_freq_index = new_index;
+				mutex_unlock(&pdfrgx_data->g_mutex_sts);
+			}
+
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Max freq changed!, prev_freq %u, max_freq %u\n",
+				__func__, df->previous_freq, df->max_freq);
+
+			if(df->previous_freq > df->max_freq)
+			{
+				desired_freq = df->max_freq;
+				adjust_curfreq  = 1;
+			}
+		}
+		/* return if is a simple_ondemand request, we have our own dynamic frequency scaling*/
+		else if(!strncmp(df->governor->name, "simple_ondemand", DEVFREQ_NAME_LEN)){
+			*p_freq = df->previous_freq;
+			goto out;
+		}
+
+		/* set_freq changed on userspace governor*/
+		if(!strncmp(df->governor->name, "userspace", DEVFREQ_NAME_LEN)){
+			/* update userspace freq*/
+			struct userspace_gov_data *data = df->data;
+
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:userspace governor, desired %u, data->user_frequency %u, input_freq = %u \n",
+				__func__, desired_freq,data->user_frequency, *p_freq);
+
+			data->valid = 1;
+			data->user_frequency = desired_freq;
+			set_freq = 1;
+		}
+
+		if(adjust_curfreq)
+			set_freq = 1;
+
+		if(set_freq)
+		{
+			/* Freq will be reflected once GPU is back on*/
+			if(!df_rgx_is_active()){
+				bfdata->bf_desired_freq = desired_freq;
+				*p_freq = desired_freq;
+				gpu_defer_req = 1;
+			}
+			else {
+				ret = df_rgx_set_freq_khz(bfdata, desired_freq);
+				if (ret > 0){
+					*p_freq = ret;
+					ret = 0;
+				}
+			}
+		}
+		else {
+			*p_freq = df->previous_freq;
+		}
+
+		if( (!strncmp(df->governor->name, "simple_ondemand", DEVFREQ_NAME_LEN) && !dfrgx_burst_is_enabled(&bfdata->g_dfrgx_data)) 
+			|| gpu_defer_req )
+			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 1);
 	}
-
-	/*FIXME: Need to rethink about this scenario*/
-	if(firstRequest){
-		*p_freq = DF_RGX_INITIAL_FREQ_KHZ;
-		firstRequest = 0;
-		goto out;
-	}
-
-	if(!df_rgx_is_active()){
-		return -EBUSY;
-	}
-
-    	if (!bfdata) {
-		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: dfdata is NULL\n", __func__);
-		goto out;
-
-        }
-	
-	ret = set_desired_frequency_khz(bfdata, desired_freq);
-	if (ret <= 0)
-		return ret;
-
-	*p_freq = ret;
 
 out:
-	return 0;
+	return ret;
 }
 
 
@@ -377,7 +423,7 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 			* because the user needs the GPU to run at specific frequency/thermal state level
 			*/
 
-			ret = set_desired_frequency_khz(bfdata, bfdata->gpudata[cs].freq_limit);
+			ret = df_rgx_set_freq_khz(bfdata, bfdata->gpudata[cs].freq_limit);
 			if (ret <= 0)
 				return ret;
 		}
@@ -620,9 +666,13 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		goto err_000;
 	}
 
+	strncpy(bfdata->prev_governor, df->governor->name, DEVFREQ_NAME_LEN);
+
 	bfdata->devfreq = df;
 
 	df->min_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
+	df->previous_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
+	bfdata->bf_prev_freq_rlzd = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 
 	if(is_tng_b0){
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX;
@@ -696,6 +746,8 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	bfdata->g_dfrgx_data.g_freq_mhz_min = df->min_freq;
 	bfdata->g_dfrgx_data.g_max_freq_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
 	bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
+
+	df_rgx_set_governor_profile(df->governor->name, &bfdata->g_dfrgx_data);
 
 	error = dfrgx_burst_init(&bfdata->g_dfrgx_data);
 

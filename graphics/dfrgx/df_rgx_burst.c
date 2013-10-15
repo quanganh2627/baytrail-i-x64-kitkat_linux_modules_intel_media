@@ -113,7 +113,7 @@ int gpu_profiling_records_show(char *buf)
  * Returns: <0 if error, 0 if success, but no frequency update, or
  * realized frequency in KHz.
  */
-long set_desired_frequency_khz(struct busfreq_data *bfdata,
+static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	unsigned long freq_khz)
 {
 	int sts;
@@ -140,8 +140,8 @@ long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	     */
 	    freq_req = DF_RGX_INITIAL_FREQ_KHZ;
 	}
-	else if ((freq_khz == 0) && df->previous_freq)
-		freq_req = df->previous_freq;
+	else if ((freq_khz == 0) &&  bfdata->bf_prev_freq_rlzd)
+		freq_req =  bfdata->bf_prev_freq_rlzd;
 	else
 		freq_req = freq_khz;
 
@@ -155,8 +155,8 @@ long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	else
 		freq_limited = freq_req;
 
-	if (df && (freq_limited == df->previous_freq))
-		return df->previous_freq;
+	if (df && (freq_limited ==  bfdata->bf_prev_freq_rlzd))
+		return  bfdata->bf_prev_freq_rlzd;
 
 	freq_mhz = freq_limited / 1000;
 
@@ -183,18 +183,21 @@ long set_desired_frequency_khz(struct busfreq_data *bfdata,
 
 		if (df) {
 
-			prev_freq = df->previous_freq;
+			prev_freq = bfdata->bf_prev_freq_rlzd;
 			/*
 			 * Setting df->previous_freq will be redundant
 			 * when called from target dispatch function, but
 			 * not otherwise.
 			 */
-			df->previous_freq = bfdata->bf_freq_mhz_rlzd * 1000;
+
+			bfdata->bf_prev_freq_rlzd = bfdata->bf_freq_mhz_rlzd * 1000;
+			df->previous_freq = bfdata->bf_prev_freq_rlzd;
+			bfdata->bf_desired_freq = bfdata->bf_prev_freq_rlzd;
 		}
 	}
 
 	sts = bfdata->bf_freq_mhz_rlzd * 1000;
-	
+
 	/* Update our record accordingly*/
 	bfdata->g_dfrgx_data.gpu_utilization_record_index = df_rgx_get_util_record_index_by_freq(sts);
 	
@@ -214,6 +217,35 @@ out:
 	return sts;
 }
 
+/**
+ * df_rgx_set_freq_khz() - Set gpu frequency, public version of set_desired_frequency_khz .
+ * @bfdata: Pointer to private data structure
+ * @freq_khz: Desired frequency in KHz (not MHz).
+ * Returns: <0 if error, 0 if success, but no frequency update, or
+ * realized frequency in KHz.
+ */
+long df_rgx_set_freq_khz(struct busfreq_data *bfdata,
+	unsigned long freq_khz)
+{
+	struct devfreq *df = bfdata->devfreq;
+	unsigned long ret = 0;
+
+	ret = set_desired_frequency_khz(bfdata, freq_khz);
+
+	if(!df)
+		goto go_ret;
+
+	if(!strncmp(df->governor->name, "userspace", DEVFREQ_NAME_LEN))
+	{
+		/* update userspace freq*/
+		struct userspace_gov_data *data = df->data;
+
+		data->user_frequency = ret;
+	}
+
+go_ret:
+	return ret;
+}
 
 /**
  * wake_thread() - Wake the work thread.
@@ -221,22 +253,18 @@ out:
  */
 static void dfrgx_add_sample_data(struct df_rgx_data_s * g_dfrgx, struct gpu_util_stats util_stats_sample)
 {
-	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: !\n",
-				__func__);
 	static int num_samples = 0;
 	static int sum_samples_active = 0;
-	int average_active_util;
-	unsigned int burst;
-	int ret;
+	int ret = 0;
 
-	sum_samples_active += (util_stats_sample.ui32GpuStatActive / 100);
+	sum_samples_active += ((util_stats_sample.ui32GpuStatActive) / 100);
 	num_samples++;
 
 	/* When we collect MAX_NUM_SAMPLES samples we need to decide bursting or unbursting*/
 	if(num_samples == MAX_NUM_SAMPLES)
 	{
-
-		average_active_util = sum_samples_active / MAX_NUM_SAMPLES;
+		int average_active_util = sum_samples_active / MAX_NUM_SAMPLES;
+		unsigned int burst = DFRGX_NO_BURST_REQ;
 
 		/* Reset */
 		sum_samples_active = 0;
@@ -245,6 +273,8 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s * g_dfrgx, struct gpu_uti
 		DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Average Active: %d !\n",
 		__func__, average_active_util);
 
+		mutex_lock(&g_dfrgx->g_mutex_sts);
+
 		burst = df_rgx_request_burst(g_dfrgx, average_active_util);
 				
 		if( burst == DFRGX_NO_BURST_REQ )
@@ -252,7 +282,7 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s * g_dfrgx, struct gpu_uti
 			DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: NO BURST REQ!\n",
 				__func__);
 		}
-		else{
+		else if(df_rgx_is_active()){
 			ret = set_desired_frequency_khz(g_dfrgx->bus_freq_data,
 				aAvailableStateFreq[g_dfrgx->gpu_utilization_record_index].freq);
 
@@ -263,6 +293,8 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s * g_dfrgx, struct gpu_uti
 
 			}
 		}
+
+		mutex_unlock(&g_dfrgx->g_mutex_sts);
 	}
 }
 
@@ -286,14 +318,9 @@ static void wake_thread(struct df_rgx_data_s *g_dfrgx)
 static int df_rgx_action(struct df_rgx_data_s * g_dfrgx)
 {
 	struct gpu_util_stats utilStats;
-	utilStats.ui32GpuStatActive = 0;
-	utilStats.ui32GpuStatBlocked = 0;
-	utilStats.ui32GpuStatIdle = 0;
-	/* Get GPU utilisation numbers*/
 
-	utilStats.ui32GpuStatActive = 0;
-	utilStats.ui32GpuStatBlocked = 0;
-	utilStats.ui32GpuStatIdle = 0;
+	/*Initialize the data*/
+	memset(&utilStats, 0, sizeof(struct gpu_util_stats));
 
 	//smp_rmb();
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: !\n",
@@ -310,10 +337,42 @@ static int df_rgx_action(struct df_rgx_data_s * g_dfrgx)
 
 	if(!df_rgx_is_active())
 	{
-		DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: RGX not Active !\n",
+		DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: RGX not Active!\n",
 		__func__);
 		goto go_out;
 	}
+
+
+	/* This will happen when min or max freq are modified or using userpace governor*/
+	if(g_dfrgx->bus_freq_data->bf_desired_freq != g_dfrgx->bus_freq_data->bf_prev_freq_rlzd && g_dfrgx->bus_freq_data->bf_desired_freq)
+	{
+		int ret = 0;
+
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: desiredfreq: %u, prevrlzd %u, prevfreq %u !\n",
+			__func__,g_dfrgx->bus_freq_data->bf_desired_freq, g_dfrgx->bus_freq_data->bf_prev_freq_rlzd, 
+			g_dfrgx->bus_freq_data->devfreq->previous_freq);
+
+		ret = set_desired_frequency_khz(g_dfrgx->bus_freq_data,
+			g_dfrgx->bus_freq_data->bf_desired_freq);
+
+		if (ret <= 0)
+		{
+			DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Failed to set at : %l !\n",
+			__func__,g_dfrgx->bus_freq_data->bf_desired_freq);
+		}
+		/*freq was changed and We don't need this thread working for now, so let it be disabled*/
+		else if (dfrgx_burst_is_enabled(g_dfrgx)
+				&& g_dfrgx->g_profile_index != DFRGX_TURBO_PROFILE_SIMPLE_ON_DEMAND
+				&& g_dfrgx->g_profile_index != DFRGX_TURBO_PROFILE_CUSTOM){
+			dfrgx_burst_set_enable(g_dfrgx, 0);
+			return 1;
+		}
+	}
+
+	/*So don't need to do any utilization polling when simple_on_demand is not the current governor*/
+	if(g_dfrgx->g_profile_index != DFRGX_TURBO_PROFILE_SIMPLE_ON_DEMAND
+		&& g_dfrgx->g_profile_index != DFRGX_TURBO_PROFILE_CUSTOM)
+		return 1;
 
 	if(gpu_rgx_get_util_stats(&utilStats))
 	{
@@ -623,7 +682,7 @@ void dfrgx_burst_set_enable(struct df_rgx_data_s *g_dfrgx, int enable)
 		return;
 
 
-	//mutex_lock(&g_dfrgx->g_mutex_sts);
+	mutex_lock(&g_dfrgx->g_mutex_sts);
 	if(g_dfrgx->g_enable != enable)
 	{	
 		g_dfrgx->g_enable = enable;
@@ -633,7 +692,7 @@ void dfrgx_burst_set_enable(struct df_rgx_data_s *g_dfrgx, int enable)
 		else
 			hrt_cancel(g_dfrgx);	
 	}
-	//mutex_unlock(&g_dfrgx->g_mutex_sts);
+	mutex_unlock(&g_dfrgx->g_mutex_sts);
 }
 
 /**
@@ -655,9 +714,9 @@ int dfrgx_burst_is_enabled(struct df_rgx_data_s *g_dfrgx)
 		return 0;
 
 
-	//mutex_lock(&g_dfrgx->g_mutex_sts);
+	mutex_lock(&g_dfrgx->g_mutex_sts);
 	enabled = g_dfrgx->g_enable;
-	//mutex_unlock(&g_dfrgx->g_mutex_sts);
+	mutex_unlock(&g_dfrgx->g_mutex_sts);
 	
 	return enabled;
 }
@@ -873,7 +932,4 @@ void dfrgx_burst_deinit(struct df_rgx_data_s *g_dfrgx)
 	return;
 
 }
-
-
-
 

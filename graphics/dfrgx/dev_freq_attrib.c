@@ -31,6 +31,7 @@
 #include "dev_freq_debug.h"
 #include "df_rgx_burst.h"
 
+extern struct gpu_freq_thresholds aGovernorProfile[3];
 /**
  * show_dynamic_turbo_state() - Read function for sysfs sys/devices/platform/dfrgx/dynamic_turbo_state.
  * @dev: platform device.
@@ -164,12 +165,68 @@ static ssize_t reset_profiling_stats (struct device *dev, struct device_attribut
 	return 0;
 }
 
+/**
+ * show_turbo_profile() - Read function for sysfs sys/devices/platform/dfrgx/custom_turbo_profile.
+ * @dev: platform device.
+ * @attr: 1 Attribute associated to this entry.
+ * @buf: Buffer to write to.
+ */
+static ssize_t show_turbo_profile (struct device *dev, struct device_attribute *attr,
+			char *buf)
+{
+	struct busfreq_data *bfdata = dev_get_drvdata(dev);
+
+	DFRGX_DPF( DFRGX_DEBUG_HIGH,"%s: \n",
+				__func__);
+
+	return sprintf(buf, "%d %d\n",
+			aGovernorProfile[DFRGX_TURBO_PROFILE_CUSTOM].util_th_low,
+			aGovernorProfile[DFRGX_TURBO_PROFILE_CUSTOM].util_th_high);
+}
+
+/**
+ * store_turbo_profile() - Write function for sysfs sys/devices/platform/dfrgx/custom_turbo_profile.
+ * @dev: platform device.
+ * @attr: 1 Attribute associated to this entry.
+ * @buf: Buffer to write to.
+ */
+static ssize_t store_turbo_profile (struct device *dev, struct device_attribute *attr,
+			char *buf, size_t count)
+{
+	struct busfreq_data *bfdata = dev_get_drvdata(dev);
+	int profiling_state;
+	int ret = -EINVAL;
+	int low_th = 0, high_th = 0;
+
+	ret = sscanf(buf, "%d %d", &low_th, &high_th);
+
+	DFRGX_DPF( DFRGX_DEBUG_HIGH,"%s: count = %u, ret = %u\n",
+				__func__, count, ret);
+	if (ret != 2)
+		goto out;
+
+	if( low_th > high_th)
+	{
+		ret = 0;
+		goto out;
+	}
+
+	aGovernorProfile[DFRGX_TURBO_PROFILE_CUSTOM].util_th_low = low_th;
+	aGovernorProfile[DFRGX_TURBO_PROFILE_CUSTOM].util_th_high = high_th;
+
+	bfdata->g_dfrgx_data.g_profile_index = DFRGX_TURBO_PROFILE_CUSTOM;
+	ret = count;
+
+out:
+	return ret;
+}
 
 static const struct device_attribute devfreq_attrs[] = {
 	__ATTR(dynamic_turbo_state, S_IRUGO | S_IWUSR, show_dynamic_turbo_state, store_dynamic_turbo_state),
 	__ATTR(profiling_state, S_IRUGO | S_IWUSR, show_profiling_state, store_profiling_state),
 	__ATTR(profiling_show_stats, S_IRUGO, show_profiling_stats, NULL),
 	__ATTR(profiling_reset_stats, S_IRUGO, reset_profiling_stats, NULL),
+	__ATTR(custom_turbo_profile, S_IRUGO | S_IWUSR, show_turbo_profile, store_turbo_profile),
 	__ATTR(empty, 0, NULL, NULL)
 };
 
