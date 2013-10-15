@@ -345,7 +345,7 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 	/*
 	 * Initialise SLC.
 	 */
-	RGXInitSLC(psDevInfo);
+	/* RGXInitSLC(psDevInfo); */
 
 #if !defined(SUPPORT_META_SLAVE_BOOT)
 	/* Configure META to Master boot */
