@@ -95,6 +95,7 @@ typedef struct {
 	struct mutex sFlipQueueLock;
 	/*context configure queue*/
 	struct list_head sFlipQueues[MAX_PIPE_NUM];
+	IMG_BOOL bFlipEnabled[MAX_PIPE_NUM];
 } DC_MRFLD_DEVICE;
 
 typedef struct {

@@ -408,7 +408,8 @@ struct drm_psb_private {
 	int vsync_pipe;
 
 	struct mutex vsync_lock;
-	atomic_t vsync_enabled[3];
+	atomic_t *vblank_count;
+	bool vsync_enabled[3];
 
 	/*
 	 *TTM Glue.
@@ -1016,7 +1017,6 @@ struct drm_psb_private {
 
 	uint32_t hdmi_audio_interrupt_mask;
 
-	//RAJESH
 	struct mdfld_dsi_encoder *encoder0;
 	struct mdfld_dsi_encoder *encoder2;
 	mdfld_dsi_encoder_t mipi_encoder_type;
@@ -1166,13 +1166,6 @@ extern int mid_irq_disable_hdmi_audio(struct drm_device *dev);
 /* modesetting */
 extern void psb_modeset_init(struct drm_device *dev);
 extern void psb_modeset_cleanup(struct drm_device *dev);
-
-/* vsync */
-extern int psb_vsync_init(struct drm_psb_private *dev_priv);
-extern void psb_vsync_on_pipe_off(struct drm_psb_private *dev_priv,
-				int pipe);
-extern void psb_vsync_put(struct drm_psb_private *dev_priv, int pipe);
-extern int psb_vsync_get(struct drm_psb_private *dev_priv, int pipe);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
 /*fbdev*/

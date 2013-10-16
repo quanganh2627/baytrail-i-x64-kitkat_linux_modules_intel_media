@@ -455,14 +455,14 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 		/* soc.gfx_wrapper.gbypassenable_sw = 1 */
 		reg = 0x160854 - GFX_WRAPPER_OFFSET;
 		data = WRAPPER_REG_READ(reg);
-		data |= 0x1;
+		data |= 0x101;
 		WRAPPER_REG_WRITE(reg, data);
 
 		/* soc.gfx_wrapper.gclip_control.aes_bypass_disable = 1*/
 		reg = 0x160020 - GFX_WRAPPER_OFFSET;
 		data = WRAPPER_REG_READ(reg);
 
-		data |= 0x1;
+		data |= 0x80;
 		WRAPPER_REG_WRITE(reg, data);
 	}
 

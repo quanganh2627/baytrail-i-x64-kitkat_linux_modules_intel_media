@@ -405,6 +405,8 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 		psb_intel_crtc_load_lut(crtc);
 
+		DCAttachPipe(pipe);
+
 		/* Give the overlay scaler a chance to enable
 		   if it's on this pipe */
 		/* psb_intel_crtc_dpms_video(crtc, true); TODO */
@@ -467,8 +469,11 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 			}
 		}
 
-		psb_vsync_on_pipe_off(dev_priv, pipe);
+		/* Turn off vsync interrupt. */
+		drm_vblank_off(dev, pipe);
 
+		/* Make the pending flip request as completed. */
+		DCUnAttachPipe(pipe);
 		break;
 	}
 
