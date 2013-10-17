@@ -85,6 +85,7 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 	uint32_t sequence;
 	uint32_t status;
 
+	idx = 0;
 	sequence = vsp_priv->current_sequence;
 	while (1) {
 		rd = vsp_priv->ctrl->ack_rd;
@@ -1209,12 +1210,13 @@ void vsp_irq_task(struct work_struct *work)
 {
 	struct vsp_private *vsp_priv =
 		container_of(work, struct vsp_private, vsp_irq_wq.work);
-	struct drm_device *dev = vsp_priv->dev;
+	struct drm_device *dev;
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	uint32_t sequence;
 
 	if (!vsp_priv)
 		return;
+	dev = vsp_priv->dev;
 
 	mutex_lock(&vsp_priv->vsp_mutex);
 	/* handle the response message */
@@ -1236,7 +1238,7 @@ void vsp_irq_task(struct work_struct *work)
 		else {
 			while (ospm_power_is_hw_on(OSPM_VIDEO_VPP_ISLAND))
 				ospm_apm_power_down_vsp(dev);
-			DRM_ERROR("successfully power down VSP\n");
+			VSP_DEBUG("successfully power down VSP\n");
 			power_island_get(OSPM_VIDEO_VPP_ISLAND);
 			vsp_resume_function(dev_priv);
 		}

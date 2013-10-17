@@ -3877,11 +3877,21 @@ static void psb_debugfs_cleanup(struct drm_minor *minor)
 	mdfld_debugfs_cleanup(minor);
 }
 #endif
+static int psb_suspend_noirq(struct device *dev)
+{
+	struct pci_dev * pci_dev = to_pci_dev(dev);
+	
+	pci_dev->state_saved = true;
 
+	printk("HACK pci config \n");
+
+	return 0;
+}
 static const struct dev_pm_ops psb_pm_ops = {
 	.runtime_suspend = rtpm_suspend,
 	.runtime_resume = rtpm_resume,
 	.runtime_idle = rtpm_idle,
+	.suspend_noirq = psb_suspend_noirq,
 };
 
 static struct vm_operations_struct psb_ttm_vm_ops;
