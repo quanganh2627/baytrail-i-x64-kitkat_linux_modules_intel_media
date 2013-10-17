@@ -2236,6 +2236,10 @@ static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 	RGXFWIF_DM			eDM;
 	PVRSRV_ERROR		eError;
 
+	/* If RGX is not powered on, don't continue */
+	if (!PVRSRVIsDevicePowered(psDeviceNode->sDevId.ui32DeviceIndex))
+		return;
+
 	/* Ensure RGX is powered up before kicking MTS */
 	eError = PVRSRVPowerLock();
 	if (eError != PVRSRV_OK) 
@@ -2243,20 +2247,6 @@ static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 		PVR_DPF((PVR_DBG_WARNING, "RGXScheduleProcessQueuesKM: failed to acquire powerlock (%s)",
 					PVRSRVGetErrorStringKM(eError)));
 
-		return;
-	}
-
-	/* We don't need to acquire the BridgeLock as this power transition won't
-	   send a command to the FW */
-	eError = PVRSRVSetDevicePowerStateKM(psDeviceNode->sDevId.ui32DeviceIndex,
-										 PVRSRV_DEV_POWER_STATE_ON,
-										 IMG_FALSE);
-	if (eError != PVRSRV_OK) 
-	{
-		PVR_DPF((PVR_DBG_WARNING, "RGXScheduleProcessQueuesKM: failed to transition RGX to ON (%s)",
-					PVRSRVGetErrorStringKM(eError)));
-
-		PVRSRVPowerUnlock();
 		return;
 	}
 
