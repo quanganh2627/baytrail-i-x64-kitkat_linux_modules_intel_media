@@ -30,9 +30,7 @@
 #include <asm/intel-mid.h>
 #include <asm/intel_scu_ipc.h>
 
-#ifdef CONFIG_GFX_RTPM
 #include <linux/pm_runtime.h>
-#endif
 
 #include "psb_drv.h"
 #include "pmu_tng.h"
@@ -160,7 +158,6 @@ static void ospm_suspend_pci(struct drm_device *dev)
 
 	PSB_DEBUG_PM("%s\n", __func__);
 
-	pci_save_state(pdev);
 	pci_read_config_dword(pdev, 0x5C, &bsm);
 	dev_priv->saveBSM = bsm;
 	pci_read_config_dword(pdev, 0xFC, &vbt);
@@ -169,10 +166,6 @@ static void ospm_suspend_pci(struct drm_device *dev)
 	dev_priv->saveBGSM = bgsm;
 	pci_read_config_dword(pdev, PSB_PCIx_MSI_ADDR_LOC, &dev_priv->msi_addr);
 	pci_read_config_dword(pdev, PSB_PCIx_MSI_DATA_LOC, &dev_priv->msi_data);
-
-	pci_disable_device(pdev);
-	pci_set_power_state(pdev, PCI_D3hot);
-	wake_unlock(&dev_priv->ospm_wake_lock);
 }
 
 /**
@@ -188,11 +181,6 @@ static void ospm_resume_pci(struct drm_device *dev)
 	int mmadr, ret = 0;
 
 	PSB_DEBUG_PM("%s\n", __func__);
-
-	wake_lock(&dev_priv->ospm_wake_lock);
-
-	pci_set_power_state(pdev, PCI_D0);
-	pci_restore_state(pdev);
 
 	if (dev_priv->saveBGSM != 0)
 		pci_write_config_dword(pdev, 0x70, dev_priv->saveBGSM);
@@ -224,6 +212,17 @@ static void ospm_resume_pci(struct drm_device *dev)
 	if (ret != 0)
 		PSB_DEBUG_PM("pci_enable_device failed: %d\n", ret);
 }
+
+void rtpm_suspend_pci(void)
+{
+	ospm_suspend_pci(g_ospm_data->dev);
+}
+
+void rtpm_resume_pci(void)
+{
+	ospm_resume_pci(g_ospm_data->dev);
+}
+
 
 /**
  * get_island_ptr
@@ -380,13 +379,13 @@ bool power_island_get(u32 hw_island)
 
 	mutex_lock(&g_ospm_data->ospm_lock);
 
-#ifdef CONFIG_GFX_RTPM
-	pm_runtime_get(&g_ospm_data->dev->pdev->dev);
-#endif
-
 	if (!any_island_on()) {
 		PSB_DEBUG_PM("Resuming PCI\n");
-		ospm_resume_pci(g_ospm_data->dev);
+		/* Here, we use runtime pm framework to suit
+		 * S3 PCI suspend/resume
+		 */
+		wake_lock(&dev_priv->ospm_wake_lock);
+		pm_runtime_get_sync(&g_ospm_data->dev->pdev->dev);
 	}
 
 	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
@@ -440,12 +439,12 @@ out_err:
 	/* Check to see if we need to suspend PCI */
 	if (!any_island_on()) {
 		PSB_DEBUG_PM("Suspending PCI\n");
-		ospm_suspend_pci(g_ospm_data->dev);
+		/* Here, we use runtime pm framework to suit
+		 * S3 PCI suspend/resume
+		 */
+		pm_runtime_put(&g_ospm_data->dev->pdev->dev);
+		wake_unlock(&dev_priv->ospm_wake_lock);
 	}
-
-#ifdef CONFIG_GFX_RTPM
-	pm_runtime_put(&g_ospm_data->dev->pdev->dev);
-#endif
 	mutex_unlock(&g_ospm_data->ospm_lock);
 
 	return ret;
@@ -532,9 +531,7 @@ void ospm_power_init(struct drm_device *dev)
 	intel_media_early_suspend_init(dev);
 #endif
 
-#ifdef CONFIG_GFX_RTPM
 	rtpm_init(dev);
-#endif
 out_err:
 	return;
 }
@@ -549,9 +546,7 @@ void ospm_power_uninit(void)
 	int i;
 	PSB_DEBUG_PM("%s\n", __func__);
 
-#ifdef CONFIG_GFX_RTPM
 	rtpm_uninit(gpDrmDevice);
-#endif
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	/* un-init early suspend */
@@ -808,8 +803,5 @@ void ospm_runtime_pm_forbid(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 
-#ifdef CONFIG_GFX_RTPM
 	pm_runtime_forbid(&dev->pdev->dev);
-#endif
-	dev_priv->rpm_enabled = 0;
 }

@@ -322,7 +322,7 @@ void psb_remove_videoctx(struct drm_psb_private *dev_priv, struct file *filp)
 		}
 
 		kfree(found_ctx);
-		#ifdef CONFIG_GFX_RTPM
+		#if (defined CONFIG_GFX_RTPM) && (!defined MERRIFIELD)
 		psb_ospm_post_power_down();
 		#endif
 	}

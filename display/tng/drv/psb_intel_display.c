@@ -19,7 +19,6 @@
  */
 
 #include <linux/i2c.h>
-#include <linux/pm_runtime.h>
 
 #include <drm/drmP.h>
 #include "psb_fb.h"

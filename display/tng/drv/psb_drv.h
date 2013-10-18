@@ -723,9 +723,6 @@ struct drm_psb_private {
 	/* wait queue for write_mem_status complete (EOF interrupt) */
 	wait_queue_head_t eof_wait;
 
-	/*runtime PM state */
-	int rpm_enabled;
-
 	/*
 	 *Register state
 	 */
