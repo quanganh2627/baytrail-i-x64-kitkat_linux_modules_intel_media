@@ -285,6 +285,11 @@ int vsp_init(struct drm_device *dev)
 						&vsp_priv->context_setting_kmap,
 						&is_iomem);
 
+	vsp_priv->vp8_filp[0] = NULL;
+	vsp_priv->vp8_filp[1] = NULL;
+	vsp_priv->context_vp8_id = 0;
+	vsp_priv->context_vp8_num = 0;
+
 	spin_lock_init(&vsp_priv->lock);
 	mutex_init(&vsp_priv->vsp_mutex);
 

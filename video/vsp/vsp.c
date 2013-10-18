@@ -41,9 +41,11 @@
 #define REF_FRAME_GOLD	2
 
 static int vsp_submit_cmdbuf(struct drm_device *dev,
+			     struct file *filp,
 			     unsigned char *cmd_start,
 			     unsigned long cmd_size);
 static int vsp_send_command(struct drm_device *dev,
+			    struct file *filp,
 			    unsigned char *cmd_start,
 			    unsigned long cmd_size);
 static int vsp_prehandle_command(struct drm_file *priv,
@@ -378,6 +380,7 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	bool is_iomem;
 	uint32_t invalid_mmu = 0;
 	unsigned long irq_flags;
+	struct file *filp = priv->filp;
 
 	/* check if mmu should be invalidated */
 	invalid_mmu = atomic_cmpxchg(&dev_priv->vsp_mmu_invaldc, 1, 0);
@@ -419,7 +422,7 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 		goto out;
 
 	VSP_DEBUG("will submit command\n");
-	ret = vsp_submit_cmdbuf(dev, cmd_start, arg->cmdbuf_size);
+	ret = vsp_submit_cmdbuf(dev, filp, cmd_start, arg->cmdbuf_size);
 	if (ret)
 		goto out;
 
@@ -436,6 +439,7 @@ out:
 }
 
 int vsp_submit_cmdbuf(struct drm_device *dev,
+		      struct file *filp,
 		      unsigned char *cmd_start,
 		      unsigned long cmd_size)
 {
@@ -475,7 +479,7 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 	}
 
 	/* submit command to HW */
-	ret = vsp_send_command(dev, cmd_start, cmd_size);
+	ret = vsp_send_command(dev, filp, cmd_start, cmd_size);
 	if (ret != 0) {
 		DRM_ERROR("VSP: failed to send command\n");
 		return ret;
@@ -498,6 +502,7 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 }
 
 int vsp_send_command(struct drm_device *dev,
+		     struct file *filp,
 		     unsigned char *cmd_start,
 		     unsigned long cmd_size)
 {
@@ -512,6 +517,7 @@ int vsp_send_command(struct drm_device *dev,
 		  cmd_start, cmd_size);
 
 	cur_cmd = (struct vss_command_t *)cmd_start;
+
 
 	/* if the VSP in suspend, update the saved config info */
 #if 0
@@ -563,8 +569,9 @@ int vsp_send_command(struct drm_device *dev,
 			} else if (cur_cmd->type == VspSetContextCommand ||
 				cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND ||
 				cur_cmd->type == Vss_Sys_Ref_Frame_COMMAND) {
-				VSP_DEBUG("skip VspSetContextCommand");
+				VSP_DEBUG("VspSetContextCommand | Vss_Sys_STATE_BUF_COMMAND\n");
 				cur_cmd++;
+
 				cmd_size -= sizeof(*cur_cmd);
 				if (cmd_size == 0)
 					goto out;
@@ -576,6 +583,12 @@ int vsp_send_command(struct drm_device *dev,
 			cur_cell_cmd = vsp_priv->cmd_queue +
 				(wr + cmd_idx) % VSP_CMD_QUEUE_SIZE;
 			++cmd_idx;
+
+			if (filp == vsp_priv->vp8_filp[0])
+				cur_cmd->context = 1;
+			if (filp == vsp_priv->vp8_filp[1])
+				cur_cmd->context = 2;
+
 			memcpy(cur_cell_cmd, cur_cmd, sizeof(*cur_cmd));
 			VSP_DEBUG("cmd: %.8x %.8x %.8x %.8x %.8x %.8x\n",
 				cur_cell_cmd->context, cur_cell_cmd->type,
@@ -677,6 +690,22 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			struct vsp_context_settings_t *context_setting;
 			context_setting =
 			    &(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8]);
+			/* create 3 context_setting buffer in vsp_init *
+			 * FRC/VPP take buf_0, 2 VP8 processes take buf_1 and buf_2 *
+			 * */
+			if (context_setting->usage == vsp_context_unused) {
+				context_setting =
+				    &(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8]);
+				vsp_priv->context_vp8_id = 0;
+			} else {
+				context_setting =
+				    &(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8 + 1]);
+				vsp_priv->context_vp8_id = 1;
+			}
+
+			/* store the fd of 2 vp8 encoding processes */
+			vsp_priv->vp8_filp[vsp_priv->context_vp8_id] = priv->filp;
+
 			VSP_DEBUG("set context and new vsp VP8 context\n");
 			VSP_DEBUG("set context base %x, size %x\n",
 				  cur_cmd->buffer, cur_cmd->size);
@@ -694,6 +723,14 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			vsp_cmd_num++;
 
 		if (cur_cmd->type == VssVp8encEncodeFrameCommand) {
+			/* set 1st VP8 process context_vp8_id=1 *
+			 * set 2nd VP8 process context_vp8_id=2 *
+			 * */
+			if (priv->filp == vsp_priv->vp8_filp[0])
+				cur_cmd->context = 1;
+			else if (priv->filp == vsp_priv->vp8_filp[1])
+				cur_cmd->context = 2;
+
 			pic_bo_vp8 =
 				ttm_buffer_object_lookup(tfile,
 						cur_cmd->reserved7);
@@ -1017,7 +1054,7 @@ bool vsp_fence_poll(struct drm_device *dev)
 	return false;
 }
 
-void vsp_new_context(struct drm_device *dev)
+int vsp_new_context(struct drm_device *dev, int ctx_type)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
@@ -1036,10 +1073,18 @@ void vsp_new_context(struct drm_device *dev)
 
 	vsp_priv->context_num++;
 
-	return;
+	if (VAEntrypointEncSlice == ctx_type) {
+		vsp_priv->context_vp8_num++;
+		if (vsp_priv->context_vp8_num > 2) {
+			DRM_ERROR("Only support dual vp8 encoding!\n");
+		}
+		return vsp_priv->context_vp8_num;
+	}
+
+	return vsp_priv->context_num;
 }
 
-void vsp_rm_context(struct drm_device *dev, int ctx_type)
+void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
@@ -1068,13 +1113,27 @@ void vsp_rm_context(struct drm_device *dev, int ctx_type)
 			vsp_priv->coded_buf = NULL;
 		}
 
+		vsp_priv->context_vp8_num--;
+
+		/* judge which vp8 process should be remove context */
 		struct vsp_context_settings_t *context_setting;
-		context_setting =
-			&(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8]);
-		context_setting->app_id = 0;
-		context_setting->usage = vsp_context_unused;
-		context_setting->state_buffer_size = 0;
-		context_setting->state_buffer_addr = 0;
+		if (filp == vsp_priv->vp8_filp[0]) {
+			context_setting =
+				&(vsp_priv->context_setting[1]);
+			context_setting->app_id = 0;
+			context_setting->usage = vsp_context_unused;
+			context_setting->state_buffer_size = 0;
+			context_setting->state_buffer_addr = 0;
+		} else if (filp == vsp_priv->vp8_filp[1]){
+			context_setting =
+				&(vsp_priv->context_setting[2]);
+			context_setting->app_id = 0;
+			context_setting->usage = vsp_context_unused;
+			context_setting->state_buffer_size = 0;
+			context_setting->state_buffer_addr = 0;
+		} else {
+			DRM_ERROR("Remove 3rd vp8 process\n");
+		}
 	 } else {
 		struct vsp_context_settings_t *context_setting;
 		context_setting =
