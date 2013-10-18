@@ -1304,6 +1304,7 @@ gamma settings.
 #define SKU_BYPASS 					0x08
 
 /* MDFLD delta registers */
+#define PIPEA			0x0
 #define PIPEB			0x1
 #define PIPEC			0x2
 #define PIPEB_OFFSET		0x1000

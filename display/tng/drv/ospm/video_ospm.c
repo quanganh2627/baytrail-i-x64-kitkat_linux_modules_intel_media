@@ -43,6 +43,8 @@ static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd);
 static void vsp_set_max_frequency(struct drm_device *dev);
 static void vsp_set_default_frequency(struct drm_device *dev);
 
+static int psb_msvdx_set_ved_freq(u32 freq_code);
+
 extern struct drm_device *gpDrmDevice;
 /***********************************************************
  * vsp islands
@@ -84,6 +86,9 @@ static bool vsp_power_up(struct drm_device *dev,
 	if (vsp_priv->fw_loaded_by_punit && drm_vsp_burst)
 		vsp_set_max_frequency(dev);
 
+	psb_irq_preinstall_islands(dev, OSPM_VIDEO_VPP_ISLAND);
+	psb_irq_postinstall_islands(dev, OSPM_VIDEO_VPP_ISLAND);
+
 	PSB_DEBUG_PM("Power ON VSP!\n");
 	return ret;
 }
@@ -106,6 +111,8 @@ static bool vsp_power_down(struct drm_device *dev,
 		PSB_DEBUG_PM("The VSP isn't in idle!\n");
 		return false;
 	}
+
+	psb_irq_uninstall_islands(dev, OSPM_VIDEO_VPP_ISLAND);
 
 	/* save VSP registers */
 	psb_vsp_save_context(dev);
@@ -170,6 +177,9 @@ static bool ved_power_up(struct drm_device *dev,
 
 	iowrite32(0xffffffff, dev_priv->ved_wrapper_reg + 0);
 
+        if (!psb_msvdx_set_ved_freq(IP_FREQ_320_00))
+                PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
+                        "320MHZ after power up\n");
 	return ret;
 }
 
@@ -193,6 +203,10 @@ static bool ved_power_down(struct drm_device *dev,
 	*/
 
 	psb_msvdx_save_context(dev);
+
+        if (!psb_msvdx_set_ved_freq(IP_FREQ_200_00))
+                PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
+                        "200MHZ after power up\n");
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_DEC, OSPM_ISLAND_DOWN, VED_SS_PM0);
@@ -448,4 +462,18 @@ static void vsp_set_default_frequency(struct drm_device *dev)
 
 	PSB_DEBUG_PM("set default frequency\n");
 	return;
+}
+
+static int psb_msvdx_set_ved_freq(u32 freq_code)
+{
+       u32 freq_code_rlzd;
+       int ret;
+
+       ret = pm_cmd_freq_set(VED_SS_PM1, freq_code, &freq_code_rlzd);
+       if (ret < 0) {
+               DRM_ERROR("failed to set freqency, current is %x\n",
+                               freq_code_rlzd);
+       }
+
+       return ret;
 }

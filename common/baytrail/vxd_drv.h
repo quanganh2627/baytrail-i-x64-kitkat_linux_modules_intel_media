@@ -250,6 +250,8 @@ extern int drm_psb_debug;
 #define PSB_DEBUG_MIPI(_fmt, _arg...) \
 	PSB_DEBUG(PSB_D_MIPI, _fmt, ##_arg)
 
+#define IS_MSVDX_MEM_TILE(dev) 1
+
 #if DRM_DEBUG_CODE
 #define PSB_DEBUG(_flag, _fmt, _arg...)					\
 	do {								\

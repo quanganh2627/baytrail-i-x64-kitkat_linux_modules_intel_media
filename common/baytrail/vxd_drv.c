@@ -54,6 +54,7 @@ static struct pci_dev *pci_root;
 int drm_psb_trap_pagefaults;
 
 extern struct drm_device *i915_drm_dev;
+int drm_psb_msvdx_tiling;
 
 atomic_t g_videodec_access_count;
 
@@ -471,6 +472,11 @@ static int __init vxd_driver_load()
 		dev_priv->sizes.mmu_size = PSB_MEM_TT_START / (1024 * 1024);
 	}
 
+        /* Create tiling MMU region managed by TTM */
+        if (!ttm_bo_init_mm(bdev, DRM_PSB_MEM_MMU_TILING,
+			    (0x10000000) >> PAGE_SHIFT))
+                dev_priv->have_mem_mmu_tiling = 1;
+
 	PSB_DEBUG_INIT("Init MSVDX\n");
 	psb_msvdx_init(i915_dev_priv->dev);
 
@@ -479,6 +485,8 @@ static int __init vxd_driver_load()
 #if 0
 	ospm_post_init(dev);
 #endif
+	/* enable msvdx tiling on BYT */
+	drm_psb_msvdx_tiling = 1;
 	return 0;
 out_err:
 	__vxd_driver_unload();

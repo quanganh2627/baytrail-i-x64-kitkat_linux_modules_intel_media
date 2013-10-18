@@ -64,7 +64,7 @@ ccflags-y += \
 	-I$(DISPINC)/drv \
 	-Iinclude/linux \
 	-Iinclude/drm \
-	-I$(KERNELDIR)/drivers/staging/android \
+	-Idrivers/staging/android \
 	-Iarch/arm/include
 
 ccflags-y += \
@@ -211,7 +211,7 @@ $(DRIVER_NAME)-y += \
 #	$(RGXDIR)/services/server/env/linux/physmem_ion.o
 
 # WINDOW_HAS_SYNC
-merrifield_gfx-y += \
+$(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/pvr_sync.o
 
 # for PDUMP

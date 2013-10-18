@@ -153,7 +153,6 @@ void mid_enable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 void mid_disable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 {
 	struct drm_device *dev = dev_priv->dev;
-
 	if (dev_priv->pipestat[pipe] == 0) {
 		u32 pipe_event = mid_pipe_event(pipe);
 		dev_priv->vdc_irq_mask &= ~pipe_event;
@@ -189,6 +188,14 @@ static void mid_check_vblank(struct drm_device *dev, uint32_t pipe)
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 }
 #endif /* if KEEP_UNUSED_CODE */
+
+u32 intel_vblank_count(struct drm_device *dev, int pipe)
+{
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+
+	return atomic_read(&dev_priv->vblank_count[pipe]);
+}
 
 /**
  *  Display controller interrupt handler for vsync/vblank.

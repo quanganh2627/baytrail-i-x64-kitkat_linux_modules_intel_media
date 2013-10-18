@@ -1619,6 +1619,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	mutex_init(&dev_priv->dpms_mutex);
 	mutex_init(&dev_priv->dsr_mutex);
+	mutex_init(&dev_priv->vsync_lock);
 
 	spin_lock_init(&dev_priv->reloc_lock);
 	spin_lock_init(&dev_priv->irqmask_lock);
@@ -1838,7 +1839,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 		}
 	}
 
-	ret = psb_vsync_init(dev_priv);
+	ret = drm_vblank_init(dev, dev_priv->num_pipe);
 	if (ret)
 		goto out_err;
 
@@ -2902,185 +2903,101 @@ static void overlay_wait_vblank(struct drm_device *dev, uint32_t ovadd)
 }
 #endif /* if KEEP_UNUSED_CODE */
 
-int psb_vsync_get(struct drm_psb_private *dev_priv, int pipe)
-{
-	struct drm_device *dev = dev_priv->dev;
-	u32 power_island = pipe_to_island(pipe);
-	int ret = 0;
-
-	if (!power_island_get(power_island)) {
-		DRM_ERROR("%s: failed to get power island\n", __func__);
-		return -EINVAL;
-	}
-
-	ret = drm_vblank_get(dev, pipe);
-	if (ret)
-		DRM_DEBUG("%s: failed to get vsync, err = %d\n", __func__, ret);
-
-
-	power_island_put(power_island);
-	return ret;
-}
-
-void psb_vsync_put(struct drm_psb_private *dev_priv, int pipe)
-{
-	struct drm_device *dev = dev_priv->dev;
-	u32 power_island = pipe_to_island(pipe);
-	int ret = 0;
-
-	if (!power_island_get(power_island)) {
-		DRM_ERROR("%s: failed to get power island\n", __func__);
-		return;
-	}
-
-	drm_vblank_put(dev, pipe);
-
-	power_island_put(power_island);
-}
-
-int psb_vsync_wait(struct drm_psb_private *dev_priv, int pipe)
-{
-	struct drm_device *dev = dev_priv->dev;
-	int ret = 0;
-	unsigned int seq, request_seq;
-
-	if ((!drm_dev_to_irq(dev)) || (!dev->irq_enabled))
-		return -EINVAL;
-
-	ret = drm_vblank_get(dev, pipe);
-	if (ret) {
-		DRM_ERROR("failed to get vblank on pipe %d\n", pipe);
-		return ret;
-	}
-
-	seq = drm_vblank_count(dev, pipe);
-	request_seq = seq + 1;
-
-	DRM_WAIT_ON(ret, dev->vbl_queue[pipe], 3 * DRM_HZ,
-		(((drm_vblank_count(dev, pipe) - request_seq) <= (1 << 23)) ||
-		!dev->irq_enabled) ||
-		!atomic_read(&dev_priv->vsync_enabled[pipe]));
-
-	if (ret != -EINTR) {
-		DRM_DEBUG("returning %d to client\n", ret);
-	} else {
-		/*vblank wait was interrupted by signal, ignore it*/
-		DRM_DEBUG("vblank wait interrupted by signal\n");
-		ret = 0;
-	}
-
-	drm_vblank_put(dev, pipe);
-	return ret;
-}
-
-void psb_vsync_on_pipe_off(struct drm_psb_private *dev_priv, int pipe)
-{
-	struct drm_device *dev = dev_priv->dev;
-	u32 power_island = pipe_to_island(pipe);
-
-	if (!power_island_get(power_island)) {
-		DRM_ERROR("%s: failed to get power island\n", __func__);
-		return;
-	}
-
-	/* flush flip queue */
-	DCFlushFlipQueue(pipe);
-
-	/* turn off vblank */
-	drm_vblank_off(dev, pipe);
-
-	power_island_put(power_island);
-}
-
-int psb_vsync_init(struct drm_psb_private *dev_priv)
-{
-	struct drm_device *dev = dev_priv->dev;
-	int i;
-	int ret;
-
-	/* init drm vblank */
-	ret = drm_vblank_init(dev, dev_priv->num_pipe);
-	if (ret) {
-		DRM_ERROR("%s: failed to init vblank, err = %d\n",
-			__func__, ret);
-		return ret;
-	}
-
-	for (i = 0; i < dev_priv->num_pipe; i++)
-		atomic_set(&dev_priv->vsync_enabled[i], 0);
-
-	return 0;
-}
-
 static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv)
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct drm_psb_vsync_set_arg *arg = data;
 	struct mdfld_dsi_config *dsi_config = NULL;
-	u32 power_island;
 	struct timespec now;
 	uint32_t pipe;
+	union drm_wait_vblank vblwait;
+	u32 vbl_count = 0;
 	s64 nsecs = 0;
 	int ret = 0;
 
-	if (!arg->vsync_operation_mask) {
-		DRM_DEBUG("%s: no vsync operation\n", __func__);
-		return 0;
-	}
-
-	pipe = arg->vsync.pipe;
-
-	if (pipe < 0 || pipe > 2) {
-		DRM_ERROR("%s: Invalid pipe %d\n", __func__, pipe);
-		return -EINTR;
-	}
-
-	if (!pipe)
-		dsi_config = dev_priv->dsi_configs[0];
-	else if (pipe == 2)
-		dsi_config = dev_priv->dsi_configs[1];
-
-	/*turn on power islands*/
-	power_island = pipe_to_island(pipe);
-	if (!power_island_get(power_island)) {
-		DRM_ERROR("%s: failed to get power island\n", __func__);
-		return -EINVAL;
-	}
-
-	/* forbid DSR*/
-	mdfld_dsi_dsr_forbid(dsi_config);
-
-	if (arg->vsync_operation_mask & VSYNC_WAIT) {
-		ret = psb_vsync_wait(dev_priv, pipe);
-		if (ret) {
-			DRM_ERROR("Fail to wait pipe %d vsync", pipe);
-			/*
-			 *FIXME: remove this code as it's such a WA!!!
-			 *TODO: remove it later, leave panel error detection
-			 *to ESD thread.
-			 */
-			if (pipe != 1)
-				schedule_work(&dev_priv->reset_panel_work);
+	if (arg->vsync_operation_mask) {
+		pipe = arg->vsync.pipe;
+		if (pipe < 0 || pipe > 2) {
+			DRM_ERROR("%s: invalid pipe %d", __func__, pipe);
+			return -EINVAL;
 		}
-		getrawmonotonic(&now);
-		nsecs = timespec_to_ns(&now);
 
-		arg->vsync.timestamp = (uint64_t)nsecs;
-	}
+		if (arg->vsync_operation_mask & GET_VSYNC_COUNT) {
+			vbl_count = drm_vblank_count(dev, pipe);
 
-	/* allow DSR */
-	mdfld_dsi_dsr_allow(dsi_config);
+			getrawmonotonic(&now);
+			nsecs = timespec_to_ns(&now);
 
-	/*put back power islands*/
-	power_island_put(power_island);
+			arg->vsync.timestamp = (uint64_t)nsecs;
+			arg->vsync.vsync_count = (uint64_t)vbl_count;
+		}
 
-	if (arg->vsync_operation_mask & VSYNC_ENABLE) {
-		atomic_set(&dev_priv->vsync_enabled[pipe], 1);
-	}
+		if (!pipe)
+			dsi_config = dev_priv->dsi_configs[0];
+		else if (pipe == 2)
+			dsi_config = dev_priv->dsi_configs[1];
 
-	if (arg->vsync_operation_mask & VSYNC_DISABLE) {
-		atomic_set(&dev_priv->vsync_enabled[pipe], 0);
+		if (arg->vsync_operation_mask & VSYNC_WAIT) {
+			/* TODO: find a clean way to protect vblank_enabled */
+			if (dev->vblank_enabled[pipe]) {
+				vblwait.request.type =
+					(_DRM_VBLANK_RELATIVE |
+					 _DRM_VBLANK_NEXTONMISS);
+				vblwait.request.sequence = 1;
+
+				if (pipe == 1)
+					vblwait.request.type |=
+						_DRM_VBLANK_SECONDARY;
+
+				mdfld_dsi_dsr_forbid(dsi_config);
+
+				ret = drm_wait_vblank(dev, (void *)&vblwait,
+						file_priv);
+				if (ret) {
+					DRM_ERROR("%s: fail to get pipe %d vsync\n",
+							__func__, pipe);
+					if (pipe != 1)
+						schedule_work(&dev_priv->reset_panel_work);
+				}
+
+				mdfld_dsi_dsr_allow(dsi_config);
+			}
+
+			getrawmonotonic(&now);
+			nsecs = timespec_to_ns(&now);
+
+			arg->vsync.timestamp = (uint64_t)nsecs;
+
+			return ret;
+		}
+
+		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
+			if (dev_priv->vsync_enabled[pipe]) {
+				DRM_ERROR("%s: vsync has been enabled on pipe %d",
+					__func__, pipe);
+				return 0;
+			}
+			mdfld_dsi_dsr_forbid(dsi_config);
+			ret = drm_vblank_get(dev, pipe);
+			if (ret != 0) {
+				DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
+					__func__, pipe);
+				mdfld_dsi_dsr_allow(dsi_config);
+			} else
+				dev_priv->vsync_enabled[pipe] = true;
+		}
+
+		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
+			if (!dev_priv->vsync_enabled[pipe]) {
+				DRM_ERROR("%s: vsync has been disabled on pipe %d",
+					__func__, pipe);
+				return 0;
+			}
+			dev_priv->vsync_enabled[pipe] = false;
+			drm_vblank_put(dev, pipe);
+			mdfld_dsi_dsr_allow(dsi_config);
+		}
 	}
 
 	return ret;
@@ -3162,6 +3079,8 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 
 	if (arg->overlay_read_mask & OVSTATUS_REGRBIT_OVR_UPDT) {
 		u32 ovstat_reg = OV_DOVASTA;
+		u32 pipe = arg->plane.ctx;
+		u32 pipeconf_reg;
 		power_island |= OSPM_DISPLAY_A;
 		if (arg->plane.index) {
 			power_island |= OSPM_DISPLAY_C;
@@ -3169,11 +3088,23 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 		}
 		/* By default overlay is not updated since last vblank event*/
 		arg->plane.ctx = 1;
-		if (power_island_get(power_island)) {
-			arg->plane.ctx =
-				(PSB_RVDC32(ovstat_reg) & BIT31) == 0 ? 0 : 1;
-			power_island_put(power_island);
+		if (pipe == PIPEA)
+			pipeconf_reg = PIPEACONF;
+		else if (pipe == PIPEB)
+			pipeconf_reg = PIPEBCONF;
+		else {
+			DRM_ERROR("Invalid pipe:%d!\n", pipe);
+			return -EINVAL;
 		}
+
+		if (REG_READ(pipeconf_reg) & BIT31) {
+			if (power_island_get(power_island)) {
+				arg->plane.ctx =
+					(PSB_RVDC32(ovstat_reg) & BIT31) == 0 ? 0 : 1;
+				power_island_put(power_island);
+			}
+		} else
+			DRM_INFO("%s: pipe %d is disabled!\n", __func__, pipe);
 	}
 	return 0;
 }
@@ -3946,11 +3877,21 @@ static void psb_debugfs_cleanup(struct drm_minor *minor)
 	mdfld_debugfs_cleanup(minor);
 }
 #endif
+static int psb_suspend_noirq(struct device *dev)
+{
+	struct pci_dev * pci_dev = to_pci_dev(dev);
+	
+	pci_dev->state_saved = true;
 
+	printk("HACK pci config \n");
+
+	return 0;
+}
 static const struct dev_pm_ops psb_pm_ops = {
 	.runtime_suspend = rtpm_suspend,
 	.runtime_resume = rtpm_resume,
 	.runtime_idle = rtpm_idle,
+	.suspend_noirq = psb_suspend_noirq,
 };
 
 static struct vm_operations_struct psb_ttm_vm_ops;

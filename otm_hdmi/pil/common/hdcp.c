@@ -1271,7 +1271,6 @@ bool otm_hdmi_hdcp_set_power_save(hdmi_context_t *hdmi_context,
 		return false;
 
 	if (hdcp_context->suspend != suspend) {
-		hdcp_context->suspend = suspend;
 		p_suspend = kmalloc(sizeof(bool), GFP_KERNEL);
 		if (p_suspend != NULL) {
 			*p_suspend = suspend;

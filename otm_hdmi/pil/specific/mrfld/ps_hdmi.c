@@ -86,7 +86,7 @@
 #define PS_HDMI_HPD_PCI_DRIVER_NAME "Merrifield HDMI HPD Driver"
 
 /* Globals */
-static hdmi_context_t *g_context;
+static hdmi_context_t *g_context = NULL;
 
 #define PS_HDMI_MMIO_RESOURCE 0
 #define PS_VDC_OFFSET 0x00000000
@@ -97,6 +97,7 @@ static hdmi_context_t *g_context;
 #define PS_MSIC_LS_EN_GPIO_PIN 177
 #define PS_MSIC_HPD_GPIO_PIN_NAME "HDMI_HPD"
 #define PS_MSIC_LS_EN_GPIO_PIN_NAME "HDMI_LS_EN"
+#define PS_MSIC_CPD_HPD_GPIO_PIN 0x7F
 
 /* For Merrifield, it is required that SW pull up or pull down the
  * LS_OE GPIO pin based on cable status. This is needed before
@@ -244,18 +245,25 @@ otm_hdmi_ret_t ps_hdmi_i2c_edid_read(void *ctx, unsigned int sp,
 bool ps_hdmi_power_rails_on(void)
 {
 	pr_debug("Entered %s\n", __func__);
-
-	intel_scu_ipc_iowrite8(0x7F, 0x31);
-	pr_debug("Leaving %s\n", __func__);
 	return true;
 }
 
 bool ps_hdmi_power_rails_off(void)
 {
 	pr_debug("Entered %s\n", __func__);
-
 	return 0;
+}
 
+/* enable/disable IRQ and CPD_HPD */
+bool ps_hdmi_enable_hpd(bool enable)
+{
+	pr_debug("Entered %s: %s\n", __func__, enable ? "enable" : "disable");
+
+	if (enable)
+		intel_scu_ipc_iowrite8(PS_MSIC_CPD_HPD_GPIO_PIN, 0x31);
+	else
+		intel_scu_ipc_iowrite8(PS_MSIC_CPD_HPD_GPIO_PIN, 0x30);
+	return true;
 }
 
 bool ps_hdmi_power_islands_on()

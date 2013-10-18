@@ -290,8 +290,8 @@ int vsp_init(struct drm_device *dev)
 
 	INIT_DELAYED_WORK(&vsp_priv->vsp_suspend_wq,
 			&psb_powerdown_vsp);
-	tasklet_init(&vsp_priv->vsp_irq_tasklet,
-			vsp_irq_task, (unsigned long)dev);
+	INIT_DELAYED_WORK(&vsp_priv->vsp_irq_wq,
+			&vsp_irq_task);
 
 	return 0;
 out_clean:

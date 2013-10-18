@@ -707,7 +707,6 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_device *dev;
 	struct drm_psb_private *dev_priv;
-	struct drm_connector *connector;
 
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
@@ -721,11 +720,6 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	PSB_DEBUG_ENTRY("%s\n", (mode == DRM_MODE_DPMS_ON ? "on" : "off"));
 
 	mutex_lock(&dev_priv->dpms_mutex);
-
-	list_for_each_entry(connector, &dev->mode_config.connector_list, head)
-		if (connector->encoder == encoder)
-			connector->dpms = mode;
-
 	if (mode == DRM_MODE_DPMS_ON)
 		mdfld_dsi_dpi_set_power(encoder, true);
 	else
@@ -862,7 +856,6 @@ void mdfld_dsi_dpi_save(struct drm_encoder *encoder)
 	struct mdfld_dsi_encoder *dsi_encoder;
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_device *dev;
-	struct drm_psb_private *dev_priv;
 	int pipe;
 
 	if (!encoder)
@@ -873,12 +866,15 @@ void mdfld_dsi_dpi_save(struct drm_encoder *encoder)
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
 	dev = dsi_config->dev;
-	dev_priv = dev->dev_private;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
-	mdfld_dsi_dpi_dpms(encoder, DRM_MODE_DPMS_OFF);
+	__mdfld_dsi_dpi_set_power(encoder, false);
 
-	psb_vsync_on_pipe_off(dev_priv, pipe);
+	/* Turn off vsync interrupt. */
+	drm_vblank_off(dev, pipe);
+
+	/* Make the pending flip request as completed. */
+	DCUnAttachPipe(pipe);
 }
 
 static
@@ -899,7 +895,9 @@ void mdfld_dsi_dpi_restore(struct drm_encoder *encoder)
 	dev = dsi_config->dev;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
-	mdfld_dsi_dpi_dpms(encoder, DRM_MODE_DPMS_ON);
+	__mdfld_dsi_dpi_set_power(encoder, true);
+
+	DCAttachPipe(pipe);
 }
 
 static const

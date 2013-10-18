@@ -98,9 +98,9 @@ int df_rgx_get_util_record_index_by_freq(unsigned long freq)
  * Function return value: DFRGX_NO_BURST_REQ, DFRGX_BURST_REQ,
  * DFRGX_UNBURST_REQ.
  */
-unsigned int df_rgx_request_burst(int *p_freq_table_index, int util_percentage)
+unsigned int df_rgx_request_burst(struct df_rgx_data_s *pdfrgx_data, int util_percentage)
 {
-	int current_index = *p_freq_table_index;
+	int current_index = pdfrgx_data->gpu_utilization_record_index;
 	unsigned long freq = aAvailableStateFreq[current_index].freq;
 	int new_index;
 	unsigned int burst = DFRGX_NO_BURST_REQ;
@@ -116,16 +116,16 @@ unsigned int df_rgx_request_burst(int *p_freq_table_index, int util_percentage)
 
 	/* Decide unbusrt/burst based on utilization*/
 
-	if(util_percentage > aAvailableStateFreq[current_index].util_th_high && new_index < n_levels - 1)
+	if(util_percentage > aAvailableStateFreq[current_index].util_th_high && new_index < pdfrgx_data->g_max_freq_index)
 	{
 		/* Provide recommended burst*/
-		*p_freq_table_index = new_index+1;
+		pdfrgx_data->gpu_utilization_record_index = new_index+1;
 		burst = DFRGX_BURST_REQ;
 	}
-	else if(util_percentage <  aAvailableStateFreq[current_index].util_th_low && new_index > 0)
+	else if(util_percentage <  aAvailableStateFreq[current_index].util_th_low && new_index > pdfrgx_data->g_min_freq_index)
 	{
 		/* Provide recommended unburst*/
-		*p_freq_table_index = new_index-1;
+		pdfrgx_data->gpu_utilization_record_index = new_index-1;
 		burst = DFRGX_UNBURST_REQ;
 	}
 

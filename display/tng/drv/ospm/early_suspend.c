@@ -61,12 +61,19 @@ static void gfx_early_suspend(struct early_suspend *h)
 			enc_funcs->save(encoder);
 
 		if (encoder->encoder_type == DRM_MODE_ENCODER_TMDS) {
-			android_hdmi_suspend_display(dev);
 
 			/* Turn off vsync interrupt. */
-			psb_vsync_on_pipe_off(dev_priv, 1);
+			drm_vblank_off(dev, 1);
+
+			/* Make the pending flip request as completed. */
+			DCUnAttachPipe(1);
 		}
 	}
+
+	/* Suspend hdmi
+	 * Note: hotplug detection is disabled if audio is not playing
+	 */
+	android_hdmi_suspend_display(dev);
 
 	ospm_power_suspend();
 	dev_priv->early_suspended = true;
@@ -101,17 +108,18 @@ static void gfx_late_resume(struct early_suspend *h)
 			continue;
 		if (enc_funcs && enc_funcs->save)
 			enc_funcs->restore(encoder);
+	}
 
-		if (encoder->encoder_type == DRM_MODE_ENCODER_TMDS) {
-			android_hdmi_resume_display(dev);
+	/* Resume HDMI */
+	android_hdmi_resume_display(dev);
 
-			/*
-			 * Devices connect status will be changed
-			 * when system suspend,re-detect once here.
-			 */
-			if (android_hdmi_is_connected(dev))
-				mid_hdmi_audio_resume(dev);
-		}
+	/*
+	 * Devices connect status will be changed
+	 * when system suspend,re-detect once here.
+	 */
+	if (android_hdmi_is_connected(dev)) {
+		DCAttachPipe(1);
+		mid_hdmi_audio_resume(dev);
 	}
 
 	mutex_unlock(&dev->mode_config.mutex);

@@ -302,6 +302,7 @@ config DRM_MRFLD
         select FB_CFB_FILLRECT
         select FB_CFB_IMAGEBLIT
         select DRM_KMS_HELPER
+        select GENERIC_ALLOCATOR
         help
           Choose this option if you have a Merrifield platform.
           If M is selected the module will be called mid_gfx.
