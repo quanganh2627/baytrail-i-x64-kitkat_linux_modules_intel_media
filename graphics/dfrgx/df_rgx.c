@@ -354,22 +354,44 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 	/*If different state*/
 	if(bfdata->gbp_cooldv_state_cur != cs)
 	{
-		if(!df_rgx_is_active())
-			return -EBUSY;
 
-		/* If thermal state is specified explicitely then suspend burst/unburst thread
-	 	* because the user needs the GPU to run at specific frequency/thermal state level
-	 	*/
-		dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
-
-		ret = set_desired_frequency_khz(bfdata, bfdata->gpudata[cs].freq_limit);
-		if (ret <= 0)
-			return ret;
+		int new_index = -1;
 
 		mutex_lock(&bfdata->lock);
+
+		/* Dynamic turbo is not enabled so try to change the state */
+		if(!bfdata->g_dfrgx_data.g_enable)
+		{
+
+			if(!df_rgx_is_active())
+				return -EBUSY;
+
+			/* If thermal state is specified explicitely then suspend burst/unburst thread
+			* because the user needs the GPU to run at specific frequency/thermal state level
+			*/
+
+			ret = set_desired_frequency_khz(bfdata, bfdata->gpudata[cs].freq_limit);
+			if (ret <= 0)
+				return ret;
+		}
+		/* In this case we want to limit the max_freq to the thermal state limit*/
+		else{
+			df = bfdata->devfreq;
+			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
+			df->max_freq = bfdata->gpudata[cs].freq_limit;
+
+			new_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
+
+			if(new_index > -1){
+				bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
+				bfdata->g_dfrgx_data.g_max_freq_index = new_index;
+			}
+
+			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 1);
+		}
+
 		bfdata->gbp_cooldv_state_prev = bfdata->gbp_cooldv_state_cur;
 		bfdata->gbp_cooldv_state_cur = cs;
-		df = bfdata->devfreq;
 		mutex_unlock(&bfdata->lock);
 
 		DFRGX_DPF(DFRGX_DEBUG_HIGH, "Thermal state changed from %d to %d\n",
@@ -559,7 +581,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	struct devfreq *df;
 	int error = 0;
 	int sts = 0;
-	int i = 0, j=0;
+	int i = 0, j = 0, start = 0;
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
@@ -595,15 +617,19 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 
 	df->min_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 
-	if(is_tng_b0)
+	if(is_tng_b0){
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX;
-	else
+		start = sizeof(aAvailableStateFreq)/sizeof(aAvailableStateFreq[0]);
+	}
+	else{
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX_INITIAL;
+		start = THERMAL_COOLING_DEVICE_MAX_STATE;
+	}
 	bfdata->gbp_cooldv_state_override = -1;
 
 	j = 0;
 	/*Initial states*/
-	for ( i = THERMAL_COOLING_DEVICE_MAX_STATE - 1; i >= 0; i-- )
+	for ( i = start - 1; j < THERMAL_COOLING_DEVICE_MAX_STATE; i-- )
 	{
 		bfdata->gpudata[j].freq_limit = aAvailableStateFreq[i].freq;
 		j++;

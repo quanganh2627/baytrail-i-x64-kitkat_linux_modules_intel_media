@@ -56,6 +56,7 @@ struct ospm_power_island island_list[] = {
 	{OSPM_DISPLAY_MIO, OSPM_POWER_OFF, {0}, ospm_mio_init, NULL},
 	{OSPM_DISPLAY_HDMI, OSPM_POWER_OFF, {0}, ospm_hdmi_init, NULL},
 	{OSPM_GRAPHICS_ISLAND, OSPM_POWER_OFF, {0}, ospm_gfx_init, NULL},
+	{OSPM_SLC_ISLAND, OSPM_POWER_OFF, {0}, ospm_slc_init, NULL},
 	{OSPM_VIDEO_VPP_ISLAND, OSPM_POWER_OFF, {0}, ospm_vsp_init, NULL},
 	{OSPM_VIDEO_DEC_ISLAND, OSPM_POWER_OFF, {0}, ospm_ved_init, NULL},
 	{OSPM_VIDEO_ENC_ISLAND, OSPM_POWER_OFF, {0}, ospm_vec_init, NULL},

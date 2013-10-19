@@ -390,13 +390,18 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		schedule_work(&dev_priv->te_work);
 	}
 
-#ifdef CONFIG_SUPPORT_HDMI
-	if (pipe_stat_val & PIPE_HDMI_AUDIO_UNDERRUN_STATUS) {
-		schedule_work(&dev_priv->hdmi_audio_underrun_wq);
+	if (pipe == 0) { /* only for pipe A */
+		if (pipe_stat_val & PIPE_FRAME_DONE_STATUS)
+			wake_up_interruptible(&dev_priv->eof_wait);
 	}
 
-	if (pipe_stat_val & PIPE_HDMI_AUDIO_BUFFER_DONE_STATUS) {
-		schedule_work(&dev_priv->hdmi_audio_bufferdone_wq);
+#ifdef CONFIG_SUPPORT_HDMI
+	if (pipe == 1) { /* HDMI is only on PIPE B */
+		if (pipe_stat_val & PIPE_HDMI_AUDIO_UNDERRUN_STATUS)
+			schedule_work(&dev_priv->hdmi_audio_underrun_wq);
+
+		if (pipe_stat_val & PIPE_HDMI_AUDIO_BUFFER_DONE_STATUS)
+			schedule_work(&dev_priv->hdmi_audio_bufferdone_wq);
 	}
 #endif
 }
@@ -1015,6 +1020,7 @@ int mdfld_enable_te(struct drm_device *dev, int pipe)
 
 	mid_enable_pipe_event(dev_priv, pipe);
 	psb_enable_pipestat(dev_priv, pipe, PIPE_TE_ENABLE);
+	psb_enable_pipestat(dev_priv, pipe, PIPE_FRAME_DONE_ENABLE);
 
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 	PSB_DEBUG_ENTRY("%s: Enabled TE for pipe %d\n", __func__, pipe);
@@ -1059,6 +1065,7 @@ void mdfld_disable_te(struct drm_device *dev, int pipe)
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 
 	mid_disable_pipe_event(dev_priv, pipe);
+	psb_disable_pipestat(dev_priv, pipe, PIPE_FRAME_DONE_ENABLE);
 	psb_disable_pipestat(dev_priv, pipe, PIPE_TE_ENABLE);
 
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);

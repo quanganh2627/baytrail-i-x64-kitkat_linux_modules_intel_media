@@ -247,8 +247,8 @@ void ospm_ved_init(struct drm_device *dev,
 static bool vec_power_up(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
-	bool ret = true;
 	int pm_ret = 0;
+	int freq_code = 0;
 
 	PSB_DEBUG_PM("powering up vec\n");
 #ifndef USE_GFX_INTERNAL_PM_FUNC
@@ -261,15 +261,20 @@ static bool vec_power_up(struct drm_device *dev,
 		return false;
 	}
 
-	if (IS_TNG_B0(dev)) {
-		if (!tng_topaz_set_vec_freq(IP_FREQ_400_00)) {
-			PSB_DEBUG_PM("TOPAZ: Set VEC frequency to\n");
-			PSB_DEBUG_PM("400MHZ after power up\n");
-		}
-	} else {
-		if (!tng_topaz_set_vec_freq(IP_FREQ_320_00))
-			PSB_DEBUG_PM("TOPAZ: Set VEC frequency to " \
-				"320MHZ after power up\n");
+	if (drm_vec_force_up_freq < 0)
+		drm_vec_force_up_freq = 0;
+
+	if (!drm_vec_force_up_freq)
+		freq_code = IS_TNG_B0(dev)? IP_FREQ_400_00:IP_FREQ_320_00;
+	else
+		freq_code = drm_vec_force_up_freq;
+
+	if(!tng_topaz_set_vec_freq(freq_code))
+		PSB_DEBUG_PM("TOPAZ: Set VEC freq by code %d\n", freq_code);
+	else {
+		PSB_DEBUG_PM("TOPAZ: Fail to set VEC freq by code %d!\n",
+			freq_code);
+		return false;
 	}
 
 	if (drm_topaz_cgpolicy != PSB_CGPOLICY_ON)
@@ -277,7 +282,7 @@ static bool vec_power_up(struct drm_device *dev,
 
 	PSB_DEBUG_PM("powering up vec done\n");
 
-	return ret;
+	return true;
 }
 
 /**
@@ -288,8 +293,8 @@ static bool vec_power_up(struct drm_device *dev,
 static bool vec_power_down(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
-	bool ret = true;
 	int pm_ret = 0;
+	int freq_code = 0;
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 
@@ -303,9 +308,21 @@ static bool vec_power_down(struct drm_device *dev,
 
 	tng_topaz_save_mtx_state(dev);
 
-	if (!tng_topaz_set_vec_freq(IP_FREQ_200_00))
-		PSB_DEBUG_PM("TOPAZ: Set VEC frequency to 200MHZ " \
-			"before power down\n");
+	if (drm_vec_force_down_freq < 0)
+		drm_vec_force_down_freq = 0;
+
+	if (!drm_vec_force_down_freq)
+		freq_code = IP_FREQ_200_00;
+	else
+		freq_code = drm_vec_force_down_freq;
+
+	if(!tng_topaz_set_vec_freq(freq_code))
+		PSB_DEBUG_PM("TOPAZ: Set VEC freq by code %d\n", freq_code);
+	else {
+		PSB_DEBUG_PM("TOPAZ: Fail to set VEC freq by code %d!\n",
+			freq_code);
+		return false;
+	}
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_ENC, \
@@ -320,7 +337,7 @@ static bool vec_power_down(struct drm_device *dev,
 
 	PSB_DEBUG_PM("TOPAZ: powering down vec done\n");
 
-	return ret;
+	return true;
 }
 
 /**

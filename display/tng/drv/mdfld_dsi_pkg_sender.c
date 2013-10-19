@@ -1268,12 +1268,15 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 {
 	u32 cb_phy;
 	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
 	u32 index = 0;
 	u8 *cb;
-	int retry;
+	int retry = 1;
 	u8 *dst = NULL;
 	u8 *pSendparam = NULL;
 	int err = 0;
+	int ret_wait;
+	u32 fifo_sr;
 
 	if (!sender) {
 		DRM_ERROR("Invalid parameter\n");
@@ -1283,6 +1286,7 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 	cb_phy = sender->dbi_cb_phy;
 	dev = sender->dev;
 	cb = (u8 *)sender->dbi_cb_addr;
+	dev_priv = dev->dev_private;
 
 	if (!sender->dbi_pkg_support) {
 		DRM_ERROR("No DBI pkg sending on this sender\n");
@@ -1294,17 +1298,23 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 	 * DSI adapter interface
 	 */
 	if (dcs == write_mem_start) {
-		spin_lock(&sender->lock);
 
 		/**
 		 * query whether DBI FIFO is empty,
-		 * if not wait it becoming empty
+		 * if not sleep the drv and wait for it to become empty.
+		 * The MIPI frame done interrupt will wake up the drv.
 		 */
-		retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
-		while (retry && !(REG_READ(sender->mipi_gen_fifo_stat_reg) &
-					BIT27)) {
-			udelay(500);
-			retry--;
+		if (IS_TNG_B0(dev)) {
+			ret_wait = wait_event_interruptible(dev_priv->eof_wait,
+			  (REG_READ(sender->mipi_gen_fifo_stat_reg) & BIT27));
+			spin_lock(&sender->lock);
+		} else {
+			spin_lock(&sender->lock);
+			retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
+			while (retry && !(REG_READ(sender->mipi_gen_fifo_stat_reg) & BIT27)) {
+				udelay(500);
+				retry--;
+			}
 		}
 
 		/*if DBI FIFO timeout, drop this frame*/
