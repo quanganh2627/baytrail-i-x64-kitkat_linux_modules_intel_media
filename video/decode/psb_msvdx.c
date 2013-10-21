@@ -530,6 +530,9 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 			ret = psb_msvdx_post_init(dev);
 			if (ret) {
 				ret = -EBUSY;
+#ifdef MERRIFIELD
+				power_island_put(OSPM_VIDEO_DEC_ISLAND);
+#endif
 				PSB_DEBUG_WARN("WARN: psb_msvdx_post_init failed.\n");
 				return ret;
 			}

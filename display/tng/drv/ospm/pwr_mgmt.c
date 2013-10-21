@@ -661,7 +661,20 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 			p_island->island_state = OSPM_POWER_OFF;
 
 		mutex_unlock(&g_ospm_data->ospm_lock);
+
 		/* MSVDX_NEW_PMSTATE(dev, msvdx_priv, PSB_PMSTATE_POWERDOWN); */
+
+		mutex_lock(&g_ospm_data->ospm_lock);
+		ret = p_island->p_funcs->power_up(
+			g_ospm_data->dev,
+			p_island);
+
+		/* set the island state */
+		if (ret)
+			p_island->island_state = OSPM_POWER_ON;
+
+		mutex_unlock(&g_ospm_data->ospm_lock);
+
 		return;
 	}
 

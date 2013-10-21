@@ -705,15 +705,14 @@ int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 	DRM_INFO("imr5 WAC 0x97 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X97));
 
 	pwr_mask = intel_mid_msgbus_read32(0x04, 0x32);
-	DRM_INFO("VEDSSPM0 = 0x%x", pwr_mask);
+	DRM_INFO("VEDSSPM0 = 0x%x\n", pwr_mask);
 
 	intel_mid_msgbus_write32(0x04, 0x32, PSB_VEDSSPM0_OFF_STATE);
 	udelay(10);
 
 	pwr_mask = intel_mid_msgbus_read32(0x04, 0x32);
-	DRM_INFO("VEDSSPM0 = 0x%x", pwr_mask);
+	DRM_INFO("VEDSSPM0 = 0x%x\n", pwr_mask);
 
-	DRM_INFO("VED  FW is ready!!!\n");
 #endif
 	return 0;
 }
