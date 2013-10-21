@@ -140,7 +140,6 @@ static const unsigned int vsp_processor_base[] = {
 #define INVALID_MMU MM_WRITE32(0, MMU_INVALID, 0x1)
 #define SET_MMU_PTD(address)						\
 	do {								\
-		INVALID_MMU;						\
 		MM_WRITE32(0, MMU_TABLE_ADDR, address);			\
 	} while (0)
 

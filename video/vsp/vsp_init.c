@@ -592,7 +592,7 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 				vsp_priv->context_setting_bo->offset;
 
 	vsp_priv->ctrl->setting_addr = vsp_priv->setting_bo->offset;
-
+	vsp_priv->ctrl->mmu_tlb_soft_invalidate = 0;
 	vsp_priv->ctrl->cmd_rd = 0;
 	vsp_priv->ctrl->cmd_wr = 0;
 	vsp_priv->ctrl->ack_rd = 0;
