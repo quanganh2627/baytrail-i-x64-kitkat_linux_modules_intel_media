@@ -411,7 +411,6 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 	return 0;
 }
 
-#if defined(THERMAL_DEBUG)
 /**
  * tcd_get_available_states() - thermal cooling device callback get_available_states.
  * @tcd: Thermal cooling device structure.
@@ -447,6 +446,7 @@ static int tcd_get_available_states(struct thermal_cooling_device *tcd,
 	return ret;
 }
 
+#if defined(THERMAL_DEBUG)
 /**
  * tcd_get_force_state_override() - thermal cooling device callback get_force_state_override.
  * @tcd: Thermal cooling device structure.
@@ -652,8 +652,11 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 #if defined(THERMAL_DEBUG)
 			.get_force_state_override = tcd_get_force_state_override,
 			.set_force_state_override = tcd_set_force_state_override,
-			.get_available_states = tcd_get_available_states,
+#else
+			.get_force_state_override = NULL,
+			.set_force_state_override = NULL,
 #endif
+			.get_available_states = tcd_get_available_states,
 		};
 		struct thermal_cooling_device *tcdhdl;
 
