@@ -1211,12 +1211,14 @@ void vsp_irq_task(struct work_struct *work)
 	struct vsp_private *vsp_priv =
 		container_of(work, struct vsp_private, vsp_irq_wq.work);
 	struct drm_device *dev;
-	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct drm_psb_private *dev_priv;
 	uint32_t sequence;
 
 	if (!vsp_priv)
 		return;
+
 	dev = vsp_priv->dev;
+	dev_priv = dev->dev_private;
 
 	mutex_lock(&vsp_priv->vsp_mutex);
 	/* handle the response message */
