@@ -123,7 +123,6 @@ static struct file_operations dbgdrv_fops =
 
 #endif  /* defined(SUPPORT_DRM) */
 
-/* FIXME: Should go in its own header */
 IMG_VOID DBGDrvGetServiceTable(IMG_VOID **fn_table);
 
 IMG_VOID DBGDrvGetServiceTable(IMG_VOID **fn_table)

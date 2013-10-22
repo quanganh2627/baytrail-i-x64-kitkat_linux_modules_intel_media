@@ -116,8 +116,8 @@ typedef struct _PVRSRV_PANEL_INFO_
 {
 	PVRSRV_SURFACE_INFO sSurfaceInfo;
 	IMG_UINT32			ui32RefreshRate;
-	IMG_UINT32			ui32PhysicalWidthmm;
-	IMG_UINT32			ui32PhysicalHeightmm;
+	IMG_UINT32			ui32XDpi;
+	IMG_UINT32			ui32YDpi;
 } PVRSRV_PANEL_INFO;
 
 /*

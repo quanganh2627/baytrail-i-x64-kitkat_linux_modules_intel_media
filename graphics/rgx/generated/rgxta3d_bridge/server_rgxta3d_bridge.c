@@ -282,7 +282,6 @@ PVRSRVBridgeRGXCreateHWRTData(IMG_UINT32 ui32BridgeID,
 	hCleanupCookieInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_RGX_FWIF_HWRTDATA,
 												psCleanupCookieInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&RGXDestroyHWRTData);
 	if (hCleanupCookieInt2 == IMG_NULL)
 	{
@@ -445,7 +444,6 @@ PVRSRVBridgeRGXCreateRenderTarget(IMG_UINT32 ui32BridgeID,
 	hsRenderTargetMemDescInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_RGX_FWIF_RENDERTARGET,
 												pssRenderTargetMemDescInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&RGXDestroyRenderTarget);
 	if (hsRenderTargetMemDescInt2 == IMG_NULL)
 	{
@@ -625,7 +623,6 @@ PVRSRVBridgeRGXCreateZSBuffer(IMG_UINT32 ui32BridgeID,
 	hsZSBufferKMInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_RGX_FWIF_ZSBUFFER,
 												pssZSBufferKMInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&RGXDestroyZSBufferKM);
 	if (hsZSBufferKMInt2 == IMG_NULL)
 	{
@@ -763,7 +760,6 @@ PVRSRVBridgeRGXPopulateZSBuffer(IMG_UINT32 ui32BridgeID,
 	hsPopulationInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_RGX_POPULATION,
 												pssPopulationInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&RGXUnpopulateZSBufferKM);
 	if (hsPopulationInt2 == IMG_NULL)
 	{
@@ -923,7 +919,6 @@ PVRSRVBridgeRGXCreateFreeList(IMG_UINT32 ui32BridgeID,
 	hCleanupCookieInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_RGX_FWIF_FREELIST,
 												psCleanupCookieInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&RGXDestroyFreeList);
 	if (hCleanupCookieInt2 == IMG_NULL)
 	{
@@ -1190,7 +1185,6 @@ PVRSRVBridgeRGXCreateRenderContext(IMG_UINT32 ui32BridgeID,
 	hRenderContextInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_RGX_SERVER_RENDER_CONTEXT,
 												psRenderContextInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVRGXDestroyRenderContextKM);
 	if (hRenderContextInt2 == IMG_NULL)
 	{

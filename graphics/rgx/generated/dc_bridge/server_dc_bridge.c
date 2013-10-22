@@ -271,7 +271,6 @@ PVRSRVBridgeDCDeviceAcquire(IMG_UINT32 ui32BridgeID,
 	hDeviceInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DC_DEVICE,
 												psDeviceInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DCDeviceRelease);
 	if (hDeviceInt2 == IMG_NULL)
 	{
@@ -918,7 +917,6 @@ PVRSRVBridgeDCSystemBufferAcquire(IMG_UINT32 ui32BridgeID,
 	hBufferInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DC_BUFFER,
 												psBufferInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DCSystemBufferRelease);
 	if (hBufferInt2 == IMG_NULL)
 	{
@@ -1056,7 +1054,6 @@ PVRSRVBridgeDCDisplayContextCreate(IMG_UINT32 ui32BridgeID,
 	hDisplayContextInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DC_DISPLAY_CONTEXT,
 												psDisplayContextInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DCDisplayContextDestroy);
 	if (hDisplayContextInt2 == IMG_NULL)
 	{
@@ -1555,7 +1552,6 @@ PVRSRVBridgeDCBufferAlloc(IMG_UINT32 ui32BridgeID,
 	hBufferInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DC_BUFFER,
 												psBufferInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DCBufferFree);
 	if (hBufferInt2 == IMG_NULL)
 	{
@@ -1707,7 +1703,6 @@ PVRSRVBridgeDCBufferImport(IMG_UINT32 ui32BridgeID,
 	hBufferInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DC_BUFFER,
 												psBufferInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DCBufferFree);
 	if (hBufferInt2 == IMG_NULL)
 	{
@@ -1895,7 +1890,6 @@ PVRSRVBridgeDCBufferPin(IMG_UINT32 ui32BridgeID,
 	hPinHandleInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DC_PIN_HANDLE,
 												hPinHandleInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DCBufferUnpin);
 	if (hPinHandleInt2 == IMG_NULL)
 	{
@@ -2033,7 +2027,6 @@ PVRSRVBridgeDCBufferAcquire(IMG_UINT32 ui32BridgeID,
 	hExtMemInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_PMR,
 												psExtMemInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DCBufferRelease);
 	if (hExtMemInt2 == IMG_NULL)
 	{

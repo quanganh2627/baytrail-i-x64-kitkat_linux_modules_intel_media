@@ -173,7 +173,6 @@ PVRSRVBridgeRGXCreateTransferContext(IMG_UINT32 ui32BridgeID,
 	hTransferContextInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_RGX_SERVER_TQ_CONTEXT,
 												psTransferContextInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVRGXDestroyTransferContextKM);
 	if (hTransferContextInt2 == IMG_NULL)
 	{

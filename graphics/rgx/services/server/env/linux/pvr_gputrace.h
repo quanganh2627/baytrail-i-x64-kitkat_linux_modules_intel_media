@@ -1,9 +1,7 @@
 /*************************************************************************/ /*!
-@File
-@Title          Common bridge header for pdumpcmm
+@File           pvr_gputrace.h
+@Title          PVR GPU Trace module common environment interface
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    Declares common defines and structures that are used by both
-                the client and sever side of the bridge for pdumpcmm
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -42,46 +40,58 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef COMMON_PDUMPCMM_BRIDGE_H
-#define COMMON_PDUMPCMM_BRIDGE_H
+#ifndef PVR_GPUTRACE_H_
+#define PVR_GPUTRACE_H_
 
-#include "devicemem_typedefs.h"
-#include "pdumpdefs.h"
-
-
-#include "pvr_bridge.h"
-
-#define PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST			(PVRSRV_BRIDGE_PDUMPCMM_START)
-#define PVRSRV_BRIDGE_PDUMPCMM_DEVMEMPDUMPBITMAP			PVRSRV_IOWR(PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST+0)
-#define PVRSRV_BRIDGE_PDUMPCMM_CMD_LAST			(PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST+0)
+#include "img_types.h"
 
 
-/*******************************************
-            DevmemPDumpBitmap          
- *******************************************/
+/******************************************************************************
+ Module out-bound API
+******************************************************************************/
 
-/* Bridge in structure for DevmemPDumpBitmap */
-typedef struct PVRSRV_BRIDGE_IN_DEVMEMPDUMPBITMAP_TAG
-{
-	IMG_HANDLE hDeviceNode;
-	IMG_CHAR * puiFileName;
-	IMG_UINT32 ui32FileOffset;
-	IMG_UINT32 ui32Width;
-	IMG_UINT32 ui32Height;
-	IMG_UINT32 ui32StrideInBytes;
-	IMG_DEV_VIRTADDR sDevBaseAddr;
-	IMG_HANDLE hDevmemCtx;
-	IMG_UINT32 ui32Size;
-	PDUMP_PIXEL_FORMAT ePixelFormat;
-	IMG_UINT32 ui32AddrMode;
-	IMG_UINT32 ui32PDumpFlags;
-} PVRSRV_BRIDGE_IN_DEVMEMPDUMPBITMAP;
+/*
+  The higher layers of the driver define these two APIs to allow this module
+  to set and retrieve the feature's on/off state. These symbols resolve at
+  link time for the driver.
+*/
+extern IMG_VOID PVRGpuTraceEnabledSet(IMG_BOOL bNewValue);
+extern IMG_BOOL PVRGpuTraceEnabled(IMG_VOID);
 
 
-/* Bridge out structure for DevmemPDumpBitmap */
-typedef struct PVRSRV_BRIDGE_OUT_DEVMEMPDUMPBITMAP_TAG
-{
-	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_DEVMEMPDUMPBITMAP;
+/******************************************************************************
+ Module In-bound API
+******************************************************************************/
 
-#endif /* COMMON_PDUMPCMM_BRIDGE_H */
+typedef enum {
+	PVR_GPUTRACE_SWITCH_TYPE_UNDEF = 0,
+
+	PVR_GPUTRACE_SWITCH_TYPE_BEGIN = 1,
+	PVR_GPUTRACE_SWITCH_TYPE_END = 2
+
+} PVR_GPUTRACE_SWITCH_TYPE;
+
+
+IMG_VOID PVRGpuTraceClientWork(
+		const IMG_UINT32 ui32Pid,
+		const IMG_UINT32 ui32FrameNo,
+		const IMG_UINT32 ui32RTDataID,
+		const IMG_CHAR* pszKickType);
+
+
+IMG_VOID PVRGpuTraceWorkSwitch(
+		IMG_UINT64 ui64OSTimestamp,
+		const IMG_UINT32 ui32Pid,
+		const IMG_UINT32 ui32FrameNo,
+		const IMG_UINT32 ui32RTDataID,
+		const IMG_CHAR* pszWorkType,
+		PVR_GPUTRACE_SWITCH_TYPE eSwType);
+
+
+PVRSRV_ERROR PVRGpuTraceInit(IMG_VOID);
+
+
+IMG_VOID PVRGpuTraceDeInit(IMG_VOID);
+
+
+#endif /* PVR_GPUTRACE_H_ */

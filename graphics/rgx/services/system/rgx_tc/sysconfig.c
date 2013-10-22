@@ -273,11 +273,14 @@ static PVRSRV_ERROR AcquireLocalMemory(SYS_DATA *psSysData, IMG_CPU_PHYADDR *psM
 
 	if (ui32PCIVersion < 18)
 	{
-		PVR_DPF((PVR_DBG_WARNING,"\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
-		PVR_DPF((PVR_DBG_WARNING, "%s: YOU HAVE AN OUTDATED TEST CHIP FPGA IMAGE. RESTRICTING AVAILABLE GRAPHICS MEMORY TO 512MB AS A WORKAROUND.", __FUNCTION__));
-		PVR_DPF((PVR_DBG_WARNING, "THIS RESTRICTION MAY CAUSE TEST FAILURES FOR THOSE TESTS THAT REQUIRE A LARGE AMOUNT OF GRAPHICS MEMORY."));
-		PVR_DPF((PVR_DBG_WARNING, "PLEASE SPEAK TO YOUR CUSTOMER SUPPORT REPRESENTATIVE ABOUT UPGRADING YOUR TEST CHIP FPGA IMAGE."));
-		PVR_DPF((PVR_DBG_WARNING, "\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"));
+		PVR_DPF((PVR_DBG_WARNING,"\n*********************************************************************************"));
+		PVR_DPF((PVR_DBG_WARNING, "%s: You have an outdated test chip fpga image.", __FUNCTION__));
+		PVR_DPF((PVR_DBG_WARNING, "Restricting available graphics memory to 512mb as a workaround."));
+		PVR_DPF((PVR_DBG_WARNING, "This restriction may cause test failures for those tests"));
+		PVR_DPF((PVR_DBG_WARNING, "that require a large amount of graphics memory."));
+		PVR_DPF((PVR_DBG_WARNING, "Please speak to your customer support representative about"));
+		PVR_DPF((PVR_DBG_WARNING, "upgrading your test chip fpga image."));
+		PVR_DPF((PVR_DBG_WARNING, "\n********************************************************************************"));
 
 		/* limit to 512mb */
 		uiMemLimit = 512 * 1024 * 1024;
@@ -1265,7 +1268,7 @@ PVRSRV_ERROR SysCreateConfigData(PVRSRV_SYSTEM_CONFIG **ppsSysConfig)
 #elif TC_MEMORY_CONFIG == TC_MEMORY_HYBRID
 	IonInit(NULL);
 #else
-#error SUPPORT_ION must be used with TC_MEMORY_LOCAL or TC_MEMORY_HYBRID
+#error Ion support requires TC_MEMORY_LOCAL or TC_MEMORY_HYBRID
 #endif /* TC_MEMORY_CONFIG */
 #endif /* defined(SUPPORT_ION) */
 

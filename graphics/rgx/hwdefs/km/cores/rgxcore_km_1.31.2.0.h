@@ -1,9 +1,6 @@
 /*************************************************************************/ /*!
-@File
-@Title          Common bridge header for pdumpcmm
+@Title          RGX Core BVNC 1.31.2.0
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    Declares common defines and structures that are used by both
-                the client and sever side of the bridge for pdumpcmm
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -42,46 +39,34 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef COMMON_PDUMPCMM_BRIDGE_H
-#define COMMON_PDUMPCMM_BRIDGE_H
+#ifndef _RGXCORE_KM_1_31_2_0_H_
+#define _RGXCORE_KM_1_31_2_0_H_
 
-#include "devicemem_typedefs.h"
-#include "pdumpdefs.h"
-
-
-#include "pvr_bridge.h"
-
-#define PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST			(PVRSRV_BRIDGE_PDUMPCMM_START)
-#define PVRSRV_BRIDGE_PDUMPCMM_DEVMEMPDUMPBITMAP			PVRSRV_IOWR(PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST+0)
-#define PVRSRV_BRIDGE_PDUMPCMM_CMD_LAST			(PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST+0)
+/***** Automatically generated file (8/20/2013 10:28:38 AM): Do not edit manually ********************/
+/***** Timestamp:  (8/20/2013 10:28:38 AM)************************************************************/
+/***** CS: @2236231 ******************************************************************/
 
 
-/*******************************************
-            DevmemPDumpBitmap          
- *******************************************/
+/******************************************************************************
+ * BVNC = 1.31.2.0 
+ *****************************************************************************/
+#define RGX_BVNC_KM_B 1
+#define RGX_BVNC_KM_V 31
+#define RGX_BVNC_KM_N 2
+#define RGX_BVNC_KM_C 0
 
-/* Bridge in structure for DevmemPDumpBitmap */
-typedef struct PVRSRV_BRIDGE_IN_DEVMEMPDUMPBITMAP_TAG
-{
-	IMG_HANDLE hDeviceNode;
-	IMG_CHAR * puiFileName;
-	IMG_UINT32 ui32FileOffset;
-	IMG_UINT32 ui32Width;
-	IMG_UINT32 ui32Height;
-	IMG_UINT32 ui32StrideInBytes;
-	IMG_DEV_VIRTADDR sDevBaseAddr;
-	IMG_HANDLE hDevmemCtx;
-	IMG_UINT32 ui32Size;
-	PDUMP_PIXEL_FORMAT ePixelFormat;
-	IMG_UINT32 ui32AddrMode;
-	IMG_UINT32 ui32PDumpFlags;
-} PVRSRV_BRIDGE_IN_DEVMEMPDUMPBITMAP;
+/******************************************************************************
+ * Errata 
+ *****************************************************************************/
+
+#define FIX_HW_BRN_38344
 
 
-/* Bridge out structure for DevmemPDumpBitmap */
-typedef struct PVRSRV_BRIDGE_OUT_DEVMEMPDUMPBITMAP_TAG
-{
-	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_DEVMEMPDUMPBITMAP;
+ 
+/******************************************************************************
+ * Enhancements 
+ *****************************************************************************/
 
-#endif /* COMMON_PDUMPCMM_BRIDGE_H */
+
+
+#endif /* _RGXCORE_KM_1_31_2_0_H_ */

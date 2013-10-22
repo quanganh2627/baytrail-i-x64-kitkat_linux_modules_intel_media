@@ -229,8 +229,8 @@ PVRSRVBridgeRGXInitFirmware(IMG_UINT32 ui32BridgeID,
 					psRGXInitFirmwareIN->ui32LogType,
 					psRGXInitFirmwareIN->ui32FilterFlags,
 					&psRGXInitFirmwareIN->sClientBVNC,
-					psRGXInitFirmwareIN->ui32APMLatency,
-					psRGXInitFirmwareIN->ui32CoreClockSpeed);
+                                        psRGXInitFirmwareIN->ui32APMLatency,
+                                        psRGXInitFirmwareIN->ui32CoreClockSpeed);
 
 
 

@@ -224,7 +224,6 @@ PVRSRVBridgePMRExportPMR(IMG_UINT32 ui32BridgeID,
 	hPMRExportInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_PMR_EXPORT,
 												psPMRExportInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PMRUnexportPMR);
 	if (hPMRExportInt2 == IMG_NULL)
 	{
@@ -232,7 +231,6 @@ PVRSRVBridgePMRExportPMR(IMG_UINT32 ui32BridgeID,
 		goto PMRExportPMR_exit;
 	}
 	/* see if it's already exported */
-	/* FIXME: This code should go when we implement serverImport, serverUnimport */
 	psPMRExportPMROUT->eError =
 		PVRSRVFindHandle(KERNEL_HANDLE_BASE,
 							&psPMRExportPMROUT->hPMRExport,
@@ -419,7 +417,6 @@ PVRSRVBridgePMRMakeServerExportClientExport(IMG_UINT32 ui32BridgeID,
 	hPMRExportOutInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_PMR_EXPORT,
 												psPMRExportOutInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PMRUnmakeServerExportClientExport);
 	if (hPMRExportOutInt2 == IMG_NULL)
 	{
@@ -427,7 +424,6 @@ PVRSRVBridgePMRMakeServerExportClientExport(IMG_UINT32 ui32BridgeID,
 		goto PMRMakeServerExportClientExport_exit;
 	}
 	/* see if it's already exported */
-	/* FIXME: This code should go when we implement serverImport, serverUnimport */
 	psPMRMakeServerExportClientExportOUT->eError =
 		PVRSRVFindHandle(KERNEL_HANDLE_BASE,
 							&psPMRMakeServerExportClientExportOUT->hPMRExportOut,
@@ -581,7 +577,6 @@ PVRSRVBridgePMRImportPMR(IMG_UINT32 ui32BridgeID,
 	hPMRInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_PMR,
 												psPMRInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PMRUnrefPMR);
 	if (hPMRInt2 == IMG_NULL)
 	{
@@ -668,7 +663,6 @@ PVRSRVBridgeDevmemIntCtxCreate(IMG_UINT32 ui32BridgeID,
 	hDevMemServerContextInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DEVICEMEM2_CONTEXT,
 												psDevMemServerContextInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DevmemIntCtxDestroy);
 	if (hDevMemServerContextInt2 == IMG_NULL)
 	{
@@ -826,7 +820,6 @@ PVRSRVBridgeDevmemIntHeapCreate(IMG_UINT32 ui32BridgeID,
 	hDevmemHeapPtrInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DEVICEMEM2_HEAP,
 												psDevmemHeapPtrInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DevmemIntHeapDestroy);
 	if (hDevmemHeapPtrInt2 == IMG_NULL)
 	{
@@ -1013,7 +1006,6 @@ PVRSRVBridgeDevmemIntMapPMR(IMG_UINT32 ui32BridgeID,
 	hMappingInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DEVICEMEM2_MAPPING,
 												psMappingInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DevmemIntUnmapPMR);
 	if (hMappingInt2 == IMG_NULL)
 	{
@@ -1153,7 +1145,6 @@ PVRSRVBridgeDevmemIntReserveRange(IMG_UINT32 ui32BridgeID,
 	hReservationInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_DEVICEMEM2_RESERVATION,
 												psReservationInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&DevmemIntUnreserveRange);
 	if (hReservationInt2 == IMG_NULL)
 	{
@@ -1311,7 +1302,6 @@ PVRSRVBridgePhysmemNewRamBackedPMR(IMG_UINT32 ui32BridgeID,
 	hPMRPtrInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_PMR,
 												psPMRPtrInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PMRUnrefPMR);
 	if (hPMRPtrInt2 == IMG_NULL)
 	{
@@ -1407,7 +1397,6 @@ PVRSRVBridgePMRLocalImportPMR(IMG_UINT32 ui32BridgeID,
 	hPMRInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_PMR,
 												psPMRInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PMRUnrefPMR);
 	if (hPMRInt2 == IMG_NULL)
 	{

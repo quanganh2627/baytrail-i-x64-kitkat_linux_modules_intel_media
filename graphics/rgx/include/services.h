@@ -54,9 +54,6 @@ extern "C" {
 #include "lock_types.h"
 #include "pvr_debug.h"
 
-/* FIXME: Can't do this as dc_client includes services.h
-#include "dc_client.h"
-*/
 
 #if defined(LDDM)
 /* LDDM build needs to include this for the allocation structure */
@@ -97,11 +94,6 @@ extern "C" {
 /*
 	Pdump flags which are accessible to Services clients
 */
-/* FIXME: defined to be the same as
- * #define PDUMP_FLAGS_CONTINUOUS		0x40000000UL
- * (from services/include/pdump.h)
- * The flags need to either be moved here, or e.g. all PDump functions need a bContinuous parameter
- */
 #define PVRSRV_PDUMP_FLAGS_CONTINUOUS		0x40000000UL /*!< pdump continuous */
 
 #define PVRSRV_UNDEFINED_HEAP_ID			(~0LU)
@@ -1020,6 +1012,18 @@ IMG_IMPORT IMG_PVOID IMG_CALLCONV PVRSRVReallocUserModeMemTracking(IMG_VOID *pvM
  */ /**************************************************************************/
 IMG_IMPORT IMG_VOID
 PVRSRVDumpDebugInfo(const PVRSRV_CONNECTION *psConnection, IMG_UINT32 ui32VerbLevel);
+
+/**************************************************************************/ /*!
+@Function       PVRSRVGetDevClockSpeed
+@Description    Gets the RGX clock speed
+@Input          psConnection		Services connection
+@Input          psDevData			Pointer to the PVRSRV_DEV_DATA context
+@Output         pui32RGXClockSpeed  Variable for storing clock speed
+@Return         IMG_BOOL			True if the operation was successful
+ */ /**************************************************************************/
+IMG_IMPORT IMG_BOOL IMG_CALLCONV PVRSRVGetDevClockSpeed(const PVRSRV_CONNECTION *psConnection,
+														PVRSRV_DEV_DATA  *psDevData,
+														IMG_PUINT32 pui32RGXClockSpeed);
 
 
 /******************************************************************************

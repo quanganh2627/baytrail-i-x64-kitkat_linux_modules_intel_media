@@ -326,7 +326,7 @@ PVRSRV_ERROR OSMMUPxMap(PVRSRV_DEVICE_NODE *psDevNode, Px_HANDLE *psMemHandle,
 		sCpuPAddr.uiAddr = 0;
 
 		PVRSRVStatsAddMemAllocRecord(PVRSRV_MEM_ALLOC_TYPE_VMAP,
-									 uiCPUVAddr,
+									 (IMG_VOID *)uiCPUVAddr,
 									 sCpuPAddr,
 									 uiSize,
 									 IMG_NULL);
