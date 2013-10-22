@@ -522,7 +522,7 @@ int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 	u32 power_islands = (OSPM_DISPLAY_A | OSPM_DISPLAY_C);
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct mdfld_dsi_config *dsi_config = NULL;
-	struct mdfld_dsi_hw_context *dsi_ctx;
+	struct mdfld_dsi_hw_context *dsi_ctx = NULL;
 
 	if (index != 0) {
 		DRM_ERROR("Invalid overlay index %d\n", index);

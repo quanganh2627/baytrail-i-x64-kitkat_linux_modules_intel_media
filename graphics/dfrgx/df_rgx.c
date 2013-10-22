@@ -225,7 +225,9 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 				if(new_index > -1){
 					pdfrgx_data->g_freq_mhz_min = df->min_freq;
 					pdfrgx_data->g_min_freq_index = new_index;
+					if (pdfrgx_data->g_min_freq_index < NUMBER_OF_LEVELS_B0) {
 					desired_freq = 	aAvailableStateFreq[pdfrgx_data->g_min_freq_index].freq;
+					}
 				}
 			}
 
@@ -256,6 +258,12 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 		return -EBUSY;
 	}
 
+    	if (!bfdata) {
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: dfdata is NULL\n", __func__);
+		goto out;
+
+        }
+	
 	ret = set_desired_frequency_khz(bfdata, desired_freq);
 	if (ret <= 0)
 		return ret;
