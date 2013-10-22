@@ -90,6 +90,7 @@ typedef struct {
 	/*plane enabling*/
 	IMG_UINT32 ui32ActiveOverlays;
 	IMG_UINT32 ui32ActiveSprites;
+	IMG_UINT32 ui32ActivePrimarys;
 
 	/*mutex lock for flip queue*/
 	struct mutex sFlipQueueLock;

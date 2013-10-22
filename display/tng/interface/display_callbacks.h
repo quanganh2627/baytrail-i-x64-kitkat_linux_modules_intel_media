@@ -62,6 +62,8 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
 int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
+int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
+			int index, int enabled);
 void DCCBFlipDSRCb(struct drm_device *dev);
 void DCCBUnblankDisplay(struct drm_device *dev);
 int DCCBgttMapMemory(struct drm_device *dev,

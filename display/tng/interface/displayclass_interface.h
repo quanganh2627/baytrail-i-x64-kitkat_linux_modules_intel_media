@@ -78,6 +78,8 @@ typedef enum intel_dc_plane_types {
 #define SPRITE_UPDATE_WAIT_VBLANK		(0X00000010UL)
 #define SPRITE_UPDATE_ALL			(0x0000001fUL)
 
+#define MRFLD_PRIMARY_COUNT			3
+
 typedef struct intel_dc_overlay_ctx {
 	uint32_t index;
 	uint32_t pipe;
