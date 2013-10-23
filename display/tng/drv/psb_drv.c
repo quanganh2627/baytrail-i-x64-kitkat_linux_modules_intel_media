@@ -1582,7 +1582,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	if (dev_priv == NULL)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&dev_priv->video_ctx);
-	mutex_init(&dev_priv->video_ctx_mutex);
+	spin_lock_init(&dev_priv->video_ctx_lock);
 	if (IS_FLDS(dev))
 		dev_priv->num_pipe = 3;
 	else

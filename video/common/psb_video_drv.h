@@ -282,6 +282,11 @@ struct psb_video_ctx {
 
 	uint32_t enc_ctx_param;
 	uint32_t enc_ctx_addr;
+#ifdef CONFIG_SLICE_HEADER_PARSING
+	uint32_t slice_extract_flag;
+	uint32_t frame_boundary;
+	uint32_t frame_end_seq;
+#endif
 };
 
 #ifdef MERRIFIELD

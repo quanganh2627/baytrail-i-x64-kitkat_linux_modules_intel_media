@@ -278,6 +278,8 @@ struct psb_msvdx_cmd_queue {
 	uint32_t host_be_opp_enabled;
 	uint32_t deblock_cmd_offset;
 	struct ttm_object_file *tfile;
+	struct psb_video_ctx *msvdx_ctx;
+	int frame_boundary;
 };
 
 #ifdef CONFIG_VIDEO_MRFLD
@@ -318,7 +320,8 @@ extern int psb_submit_video_cmdbuf(struct drm_device *dev,
 				   struct ttm_buffer_object *cmd_buffer,
 				   unsigned long cmd_offset,
 				   unsigned long cmd_size,
-				   struct psb_video_ctx *msvdx_ctx);
+				   struct psb_video_ctx *msvdx_ctx,
+				   uint32_t fence_flag);
 
 void msvdx_powerdown_tasklet(unsigned long data);
 int psb_msvdx_dequeue_send(struct drm_device *dev);

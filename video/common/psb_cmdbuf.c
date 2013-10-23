@@ -854,6 +854,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 	struct psb_video_ctx *pos = NULL;
 	struct psb_video_ctx *n = NULL;
 	struct psb_video_ctx *msvdx_ctx = NULL;
+	unsigned long irq_flags;
 	if (dev_priv == NULL)
 		return -EINVAL;
 	msvdx_priv = dev_priv->msvdx_private;
@@ -1015,7 +1016,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 		goto out_err4;
 	}
 
-	mutex_lock(&dev_priv->video_ctx_mutex);
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
 		if (pos->filp == file_priv->filp) {
 			int entrypoint = pos->ctx_type & 0xff;
@@ -1037,7 +1038,8 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 			break;
 		}
 	}
-	mutex_unlock(&dev_priv->video_ctx_mutex);
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
+
 	if (!found) {
 		PSB_DEBUG_WARN("WARN: video ctx is not found.\n");
 		goto out_err4;

@@ -379,7 +379,7 @@ static int __init vxd_driver_load()
 	if (dev_priv == NULL)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&dev_priv->video_ctx);
-	mutex_init(&dev_priv->video_ctx_mutex);
+	spin_lock_init(&dev_priv->video_ctx_lock);
 	dev_priv->dev = i915_dev_priv->dev;
 	bdev = &dev_priv->bdev;
 

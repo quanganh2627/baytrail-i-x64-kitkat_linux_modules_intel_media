@@ -112,7 +112,7 @@ struct drm_psb_private {
 
 	/* IMG video context */
 	struct list_head video_ctx;
-	struct mutex video_ctx_mutex;
+	spinlock_t video_ctx_lock;
 
 	/*
 	 *MSVDX

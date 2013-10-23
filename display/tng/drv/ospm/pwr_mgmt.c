@@ -641,8 +641,15 @@ EXPORT_SYMBOL(ospm_power_using_hw_end);
 
 void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 {
+	unsigned long irq_flags;
+	int ret, frame_finished = 0;
+	int seq_flag = 0, shp_ctx_count = 0;
 	struct ospm_power_island *p_island;
-	int ret;
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
+	struct psb_video_ctx *pos, *n;
+
+
 	p_island = get_island_ptr(OSPM_VIDEO_DEC_ISLAND);
 
 	if (!p_island) {
@@ -683,7 +690,27 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 
 	psb_msvdx_dequeue_send(dev);
 
+#ifdef CONFIG_SLICE_HEADER_PARSING
+        spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
+        list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
+		if (pos->slice_extract_flag){
+			shp_ctx_count++;
+			seq_flag = (pos->frame_end_seq == (msvdx_priv->msvdx_current_sequence & (~0xf))) ? 1 : 0;
+			if(seq_flag && pos->frame_boundary){
+				frame_finished = 1;
+				break;
+			}
+
+		}
+        }
+        spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
+
+	if (shp_ctx_count == 0 || frame_finished)
+		power_island_put(OSPM_VIDEO_DEC_ISLAND);
+
+#else
 	power_island_put(OSPM_VIDEO_DEC_ISLAND);
+#endif
 
 	return;
 }

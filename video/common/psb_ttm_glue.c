@@ -257,8 +257,9 @@ void psb_remove_videoctx(struct drm_psb_private *dev_priv, struct file *filp)
 	/* iterate to query all ctx to if there is DRM running*/
 	ied_enabled = 0;
 	int ctx_type;
+	unsigned long irq_flags;
 
-	mutex_lock(&dev_priv->video_ctx_mutex);
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
 		if (pos->filp == filp) {
 			found_ctx = pos;
@@ -268,7 +269,7 @@ void psb_remove_videoctx(struct drm_psb_private *dev_priv, struct file *filp)
 				ied_enabled = 1;
 		}
 	}
-	mutex_unlock(&dev_priv->video_ctx_mutex);
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 
 	if (found_ctx) {
 		PSB_DEBUG_PM("Video:remove context profile %d,"
@@ -331,15 +332,16 @@ static struct psb_video_ctx *psb_find_videoctx(struct drm_psb_private *dev_priv,
 						struct file *filp)
 {
 	struct psb_video_ctx *pos, *n;
+	unsigned long irq_flags;
 
-	mutex_lock(&dev_priv->video_ctx_mutex);
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
 		if (pos->filp == filp) {
-			mutex_unlock(&dev_priv->video_ctx_mutex);
+			spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 			return pos;
 		}
 	}
-	mutex_unlock(&dev_priv->video_ctx_mutex);
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 	return NULL;
 }
 
@@ -348,6 +350,7 @@ static int psb_entrypoint_number(struct drm_psb_private *dev_priv,
 {
 	struct psb_video_ctx *pos, *n;
 	int count = 0;
+	unsigned long irq_flags;
 
 	entry_type &= 0xff;
 
@@ -357,12 +360,12 @@ static int psb_entrypoint_number(struct drm_psb_private *dev_priv,
 		return -EINVAL;
 	}
 
-	mutex_lock(&dev_priv->video_ctx_mutex);
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
 		if (entry_type == (pos->ctx_type & 0xff))
 			count++;
 	}
-	mutex_unlock(&dev_priv->video_ctx_mutex);
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 
 	PSB_DEBUG_GENERAL("There are %d active entrypoint %d.\n",
 			count, entry_type);
@@ -383,6 +386,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	uint32_t imr_info[2], ci_info[2];
 	uint32_t ctx_num = 0;
+	unsigned long irq_flags;
 
 	switch (arg->key) {
 #if (!defined(MERRIFIELD) && !defined(CONFIG_DRM_VXD_BYT))
@@ -420,10 +424,18 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 		}
 		INIT_LIST_HEAD(&video_ctx->head);
 		video_ctx->ctx_type = ctx_type;
+#ifdef CONFIG_SLICE_HEADER_PARSING
+		video_ctx->frame_end_seq = 0xffffffff;
+		if (ctx_type & VA_RT_FORMAT_PROTECTED) {
+			video_ctx->slice_extract_flag = 1;
+			video_ctx->frame_boundary = 1;
+			video_ctx->frame_end_seq = 0;
+		}
+#endif
 		video_ctx->filp = file_priv->filp;
-		mutex_lock(&dev_priv->video_ctx_mutex);
+		spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 		list_add(&video_ctx->head, &dev_priv->video_ctx);
-		mutex_unlock(&dev_priv->video_ctx_mutex);
+		spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 #ifndef CONFIG_DRM_VXD_BYT
 #ifndef MERRIFIELD
 		if (IS_MDFLD(dev_priv->dev) &&
