@@ -409,8 +409,16 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	PSB_DEBUG_PM("Post-power-up status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
-	if ((!gbSystemActivePMEnabled) && gbSystemActivePMInit)
-		psb_irq_preinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+	/* If APM is enabled, then we need to make sure that the IRQs
+	 * are installed. It is possible the the GUnit has been turned
+	 * off and the IER and IMR registers have lost their state.
+	 * So we need to enable interrupts after powering on.
+	 * If the IRQs are not turned on, the interrupt sent from RGX
+	 * to indicate that it is done with processing is lost. RGX
+	 * island would then remain ON.
+	 */
+	psb_irq_preinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+	psb_irq_postinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
 
 	return !ret;
 }
@@ -440,10 +448,12 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 	PSB_DEBUG_PM("Pre-power-off Status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
-	if ((!gbSystemActivePMEnabled) && gbSystemActivePMInit) {
-		psb_irq_uninstall_islands(dev,OSPM_GRAPHICS_ISLAND);
-		synchronize_irq(dev->pdev->irq);
-	}
+	/* If APM is enabled, we can turn off the RGX interrupts. This is
+	 * kind of a no-op but still better coding to turn of IRQs for
+	 * devices/ components that are turned off
+	 */
+	psb_irq_uninstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+	synchronize_irq(dev->pdev->irq);
 
 	/* power down every thing */
 	ret = GFX_POWER_DOWN(PMU_RSCD);
