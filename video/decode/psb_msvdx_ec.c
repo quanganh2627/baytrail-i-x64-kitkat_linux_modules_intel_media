@@ -436,7 +436,8 @@ void psb_msvdx_update_frame_info(struct msvdx_private *msvdx_priv,
 
 	frame_info->fw_status = 0;
 	frame_info->handle = buffer_handle;
-	frame_info->fence = (deblock_msg->header.bits.msg_fence & 0xf);
+	frame_info->fence = (deblock_msg->header.bits.msg_fence & (~0xf));
+	frame_info->decode_status.num_region = 0;
 	ec_ctx->cur_frame_info = frame_info;
 }
 

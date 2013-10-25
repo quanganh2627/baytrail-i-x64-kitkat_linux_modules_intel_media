@@ -103,6 +103,7 @@ int psb_setup_msvdx(struct drm_device *dev);
 
 #define FW_VA_RENDER_HOST_INT		0x00004000
 #define MSVDX_DEVICE_NODE_FLAGS_MMU_HW_INVALIDATION	0x00000020
+#define FW_DEVA_ERROR_DETECTED 0x08000000
 
 /* There is no work currently underway on the hardware */
 #define MSVDX_FW_STATUS_HW_IDLE	0x00000001
@@ -239,8 +240,6 @@ struct msvdx_private {
 	drm_psb_msvdx_decode_status_t decode_status;
 	uint32_t host_be_opp_enabled;
 
-	uint32_t ec_fence;
-	uint32_t ref_pic_fence;
 	/*work for error concealment*/
 	struct work_struct ec_work;
 	struct ttm_object_file *tfile; /* protected by cmdbuf_mutex */

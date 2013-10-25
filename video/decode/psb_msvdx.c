@@ -51,6 +51,7 @@
 	list_entry((ptr)->next, type, member)
 #endif
 
+static void psb_msvdx_fw_error_detected(struct drm_device *dev, uint32_t fence, uint32_t flags);
 static int psb_msvdx_send(struct drm_device *dev, void *cmd,
 			  unsigned long cmd_size, struct psb_video_ctx* msvdx_ctx);
 static void psb_msvdx_set_tile(struct drm_device *dev,
@@ -999,8 +1000,9 @@ loop: /* just for coding style check */
 		fence = completed_msg->header.bits.msg_fence;
 
 		msvdx_priv->msvdx_current_sequence = fence;
-				;
-		msvdx_priv->ref_pic_fence = fence;
+
+		if (IS_MRFLD(dev))
+			psb_msvdx_fw_error_detected(dev, fence, flags);
 
 		psb_fence_handler(dev, PSB_ENGINE_DECODE);
 
@@ -1127,14 +1129,15 @@ loop: /* just for coding style check */
 		}
 
 		msvdx_ec_ctx->cur_frame_info->fw_status = 1;
-
-		/* try to unblock rendec */
-		/*
-		PSB_WMSVDX32(0, MSVDX_CMDS_END_SLICE_PICTURE);
-		PSB_WMSVDX32(1, MSVDX_CMDS_END_SLICE_PICTURE);
-		*/
-		/*do error concealment with hw*/
 		msvdx_priv->cur_msvdx_ec_ctx = msvdx_ec_ctx;
+
+		if (IS_MRFLD(dev)) {
+		/* try to unblock rendec */
+			PSB_WMSVDX32(0, MSVDX_CMDS_END_SLICE_PICTURE_OFFSET);
+			PSB_WMSVDX32(1, MSVDX_CMDS_END_SLICE_PICTURE_OFFSET);
+			break;
+		}
+		/*do error concealment with hw*/
 		schedule_work(&msvdx_priv->ec_work);
 		break;
 	}
@@ -1690,3 +1693,60 @@ int psb_msvdx_protected_frame_finished(struct drm_psb_private *dev_priv, uint32_
 	return 0;
 }
 #endif
+
+static void psb_msvdx_fw_error_detected(struct drm_device *dev, uint32_t fence, uint32_t flags)
+{
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
+	struct psb_msvdx_ec_ctx *msvdx_ec_ctx = NULL;
+	drm_psb_msvdx_frame_info_t *frame_info = NULL;
+	int found = 0;
+	int i;
+
+	if (!(flags & FW_DEVA_ERROR_DETECTED))
+		return;
+
+	/*get the frame_info struct for error concealment frame*/
+	for (i = 0; i < PSB_MAX_EC_INSTANCE; i++)
+		if (msvdx_priv->msvdx_ec_ctx[i]->fence ==
+						(fence & (~0xf))) {
+			msvdx_ec_ctx = msvdx_priv->msvdx_ec_ctx[i];
+			found++;
+		}
+	/* psb_msvdx_mtx_message_dump(dev); */
+	if (!msvdx_ec_ctx || !(msvdx_ec_ctx->tfile) || found > 1) {
+		PSB_DEBUG_MSVDX(
+		"no matched ctx: fence 0x%x, found %d, ctx 0x%08x\n",
+			fence, found, msvdx_ec_ctx);
+		return;
+	}
+
+	if (msvdx_ec_ctx->cur_frame_info &&
+		msvdx_ec_ctx->cur_frame_info->fence == (fence & (~0xf))) {
+		frame_info = msvdx_ec_ctx->cur_frame_info;
+	} else {
+		PSB_DEBUG_MSVDX(
+		"cur_frame_info's fence(%x) doesn't match fence (%x)\n",
+			msvdx_ec_ctx->cur_frame_info->fence, fence);
+		return;
+	}
+
+	if (frame_info->decode_status.num_region) {
+		PSB_DEBUG_MSVDX( "Error already recorded, no need to recorded again\n");
+		return;
+	}
+
+	PSB_DEBUG_MSVDX( "record error as first fault region\n");
+	frame_info->decode_status.num_region++;
+	frame_info->decode_status.mb_regions[0].start = 0;
+	frame_info->decode_status.mb_regions[0].end = 0;
+
+	/*
+	for (i = 0; i < MAX_DECODE_BUFFERS; i++) {
+		if (msvdx_ec_ctx->frame_info[i].fence == (fence & (~0xf))) {
+			break;
+		}
+
+	}
+	*/
+}

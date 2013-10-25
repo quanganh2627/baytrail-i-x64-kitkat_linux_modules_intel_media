@@ -387,6 +387,10 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 	uint32_t imr_info[2], ci_info[2];
 	uint32_t ctx_num = 0;
 	unsigned long irq_flags;
+#ifdef CONFIG_VIDEO_MRFLD
+	struct ttm_object_file *tfile = psb_fpriv(file_priv)->tfile;
+	struct psb_msvdx_ec_ctx *ec_ctx = NULL;
+#endif
 
 	switch (arg->key) {
 #if (!defined(MERRIFIELD) && !defined(CONFIG_DRM_VXD_BYT))
@@ -523,23 +527,51 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 	case IMG_VIDEO_MB_ERROR:
 		/*get the right frame_info struct for current surface*/
 		ret = copy_from_user(&handle,
-				     (void __user *)((unsigned long)arg->arg), 4);
+			(void __user *)((unsigned long)arg->arg), 4);
 		if (ret)
 			break;
 
-		for (i = 0; i < MAX_DECODE_BUFFERS; i++) {
-			if (msvdx_priv->frame_info[i].handle == handle) {
-				current_frame = &msvdx_priv->frame_info[i];
-				break;
-			}
+		if (msvdx_priv->msvdx_ec_ctx[0] == NULL) {
+			PSB_DEBUG_GENERAL(
+				"Video: ec contexts are initilized\n");
+			return -EFAULT;
 		}
-		if (!current_frame) {
-			DRM_ERROR("MSVDX: didn't find frame_info which matched the surface_id. \n");
-			ret = -EFAULT;
+
+		for (i = 0; i < PSB_MAX_EC_INSTANCE; i++)
+			if (msvdx_priv->msvdx_ec_ctx[i]->tfile == tfile)
+				ec_ctx = msvdx_priv->msvdx_ec_ctx[i];
+
+		if (!ec_ctx) {
+			PSB_DEBUG_GENERAL(
+				"Video: no ec context found\n");
+			return -EFAULT;
+		}
+
+		if (ec_ctx->cur_frame_info &&
+			ec_ctx->cur_frame_info->handle == handle) {
+			ret = copy_to_user(
+				(void __user *)((unsigned long)arg->value),
+				&(ec_ctx->cur_frame_info->decode_status),
+				sizeof(drm_psb_msvdx_decode_status_t));
+			PSB_DEBUG_GENERAL(
+			"surface is cur_frame, fault region num is %d\n",
+			ec_ctx->cur_frame_info->decode_status.num_region);
 			break;
 		}
-		ret = copy_to_user((void __user *)((unsigned long)arg->value),
-				   &(current_frame->decode_status), sizeof(drm_psb_msvdx_decode_status_t));
+		for (i = 0; i < MAX_DECODE_BUFFERS; i++)
+			if (ec_ctx->frame_info[i].handle == handle) {
+				ret = copy_to_user(
+				(void __user *)((unsigned long)arg->value),
+				&(ec_ctx->frame_info[i].decode_status),
+				sizeof(drm_psb_msvdx_decode_status_t));
+				PSB_DEBUG_GENERAL(
+					"find surface with index %d, \
+					fault region num is %d \n",
+			i, ec_ctx->frame_info[i].decode_status.num_region);
+				break;
+			}
+
+
 		break;
 #endif
 
