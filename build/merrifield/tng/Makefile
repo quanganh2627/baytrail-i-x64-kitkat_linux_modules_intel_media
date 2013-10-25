@@ -30,7 +30,7 @@ ccflags-y += \
 	-Iinclude/drm
 
 ccflags-y += -DANDROID -DLINUX -D_linux_ -D__KERNEL__
-ccflags-y += -DMERRIFIELD -DCONFIG_PCI_MSI
+ccflags-y += -DMERRIFIELD -DCONFIG_PCI_MSI -DCONFIG_GFX_RTPM
 
 #
 # HDMI

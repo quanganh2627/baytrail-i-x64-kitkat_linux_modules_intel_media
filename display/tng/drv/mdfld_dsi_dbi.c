@@ -538,7 +538,7 @@ static int __dbi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 	/* When display is on, block s0i3*/
 	pm_qos_add_request(&qos_request,
 				PM_QOS_CPU_DMA_LATENCY,
-				CSTATE_EXIT_LATENCY_S0i1-1);
+				CSTATE_EXIT_LATENCY_S0i3-1);
 
 	regs = &dsi_config->regs;
 	ctx = &dsi_config->dsi_hw_context;
