@@ -794,12 +794,13 @@ static void __mdfld_dsi_dpi_set_timing(struct mdfld_dsi_config *config,
 {
 	struct mdfld_dsi_dpi_timing dpi_timing;
 	struct mdfld_dsi_hw_context *ctx;
-	struct drm_device *dev = config->dev;
-
+	
 	if (!config) {
-		DRM_ERROR("Invalid parameters\n");
-		return;
-	}
+                DRM_ERROR("Invalid parameters\n");
+                return;
+        }
+
+	struct drm_device *dev = config->dev;
 
 	mode = adjusted_mode;
 	ctx = &config->dsi_hw_context;
@@ -847,6 +848,11 @@ void mdfld_dsi_dpi_mode_set(struct drm_encoder *encoder,
 	 * if TMD panel call new power on/off sequences instead.
 	 * NOTE: refine TOSHIBA panel code later
 	 */
+      if (!dsi_config) {
+                DRM_ERROR("Invalid dsi config\n");
+                return NULL;
+        }
+
 	__mdfld_dsi_dpi_set_timing(dsi_config, mode, adjusted_mode);
 }
 

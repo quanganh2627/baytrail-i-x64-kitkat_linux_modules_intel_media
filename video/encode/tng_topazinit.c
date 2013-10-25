@@ -1517,7 +1517,9 @@ int tng_topaz_fw_run(
 		0);
 		/* TOPAZHP_NON_SECURE_FW_MARKER); */
 		/* reg_val); */
-	MULTICORE_WRITE32(MTX_SCRATCHREG_IDLE, 0);
+
+	if (codec != IMG_CODEC_JPEG) /* Not JPEG */
+		MULTICORE_WRITE32(MTX_SCRATCHREG_IDLE, 0);
 
 	/* set up mmu */
 	tng_topaz_mmu_hwsetup(dev_priv);

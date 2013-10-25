@@ -165,7 +165,7 @@ static void _Setup_ZOrder(DC_MRFLD_DEVICE *psDevice,
 
 static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 {
-	DC_MRFLD_SURF_CUSTOM *psSurfCustom;
+	DC_MRFLD_SURF_CUSTOM *psSurfCustom = NULL;
 	DC_MRFLD_BUFFER *pasBuffers;
 	IMG_UINT32 uiNumBuffers;
 	IMG_UINT32 ulAddr;

@@ -53,9 +53,11 @@ enum POWER_ISLAND_STATE {
 };
 
 /* All Graphics Islands */
-#define	OSPM_GRAPHICS_ISLAND	(NC_PM_SSS_GFX_SLC | \
+#define	OSPM_GRAPHICS_ISLAND	NC_PM_SSS_GFX_RSCD
+
+/* All SLC Islands */
+#define	OSPM_SLC_ISLAND	(NC_PM_SSS_GFX_SLC | \
 				NC_PM_SSS_GFX_SDKCK | \
-				NC_PM_SSS_GFX_RSCD | \
 				NC_PM_SSS_GFX_SLC_LDO)
 
 /* All Display Islands */
@@ -153,7 +155,7 @@ void ospm_apm_power_down_vsp(struct drm_device *dev);
 int ospm_runtime_pm_allow(struct drm_device *dev);
 void ospm_runtime_pm_forbid(struct drm_device *dev);
 #ifdef CONFIG_GFX_RTPM
-void psb_ospm_post_power_down();
+void psb_ospm_post_power_down(void);
 #endif
 
 #endif		/* __INTEL_MEDIA_ISLAND_MANAGEMENT_H__ */

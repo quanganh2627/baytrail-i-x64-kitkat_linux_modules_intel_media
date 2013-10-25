@@ -814,8 +814,6 @@ static struct drm_display_mode
 		}
 	}
 
-	drm_mode_set_name(mode);
-
 	mode->flags |= (timings->mode_info_flags & PD_HSYNC_HIGH) ?
 		DRM_MODE_FLAG_PHSYNC : DRM_MODE_FLAG_NHSYNC;
 	mode->flags |= (timings->mode_info_flags & PD_VSYNC_HIGH) ?
@@ -826,6 +824,25 @@ static struct drm_display_mode
 		DRM_MODE_FLAG_PAR16_9 : DRM_MODE_FLAG_PAR4_3;
 
 	return mode;
+}
+
+/**
+ * helper function to check whether two clocks can fall into the same VIC.
+ *
+ * Returns: true if possible, false otherwise.
+ */
+static bool __android_check_clock_match(int target, int reference)
+{
+	/* check target clock is in range of 60Hz or 59.94 (reference * 1000/1001) with
+	 * (-0.5%, +0.5%) tolerance. Based on CEA spec, when determining whether two video timings
+	 * are identical, clock frequencey within (-0.5%, +0.5%) tolerance should be considered
+	 * as the same.
+	 */
+
+	if (target >= DIV_ROUND_UP(reference * 995, 1001) &&
+		target <= DIV_ROUND_UP(reference * 1005, 1000))
+		return true;
+	return false;
 }
 
 /**
@@ -840,7 +857,8 @@ static int android_hdmi_add_cea_edid_modes(void *context,
 {
 	hdmi_context_t *ctx = (hdmi_context_t *)context;
 	edid_info_t *edid_info;
-	struct drm_display_mode *newmode = NULL;
+	struct drm_display_mode *newmode = NULL, *mode_entry, *t;
+	unsigned int saved_flags;
 	int i = 0, ret_count = 0;
 
 	if (connector == NULL || ctx == NULL)
@@ -855,8 +873,41 @@ static int android_hdmi_add_cea_edid_modes(void *context,
 				&edid_info->timings[i], connector->dev);
 		if (!newmode)
 			continue;
+
+		/* add new mode to list */
+		drm_mode_set_name(newmode);
 		drm_mode_probed_add(connector, newmode);
 		ret_count++;
+	}
+
+	list_for_each_entry_safe(mode_entry, t, &connector->probed_modes, head) {
+		/* If DRM already correctly handled PAR, skip this mode_entry */
+		if ((mode_entry->flags & DRM_MODE_FLAG_PAR4_3) || (mode_entry->flags & DRM_MODE_FLAG_PAR16_9))
+			continue;
+
+		for (i = 0; i < edid_info->num_timings; i++) {
+			newmode = android_hdmi_get_drm_mode_from_pdt(
+					&edid_info->timings[i], connector->dev);
+			if (!newmode)
+				continue;
+
+			/* Clear PAR flag for comparison */
+			saved_flags = newmode->flags;
+			newmode->flags &= (~DRM_MODE_FLAG_PAR4_3) & (~DRM_MODE_FLAG_PAR16_9);
+
+			/* If same mode, then update PAR flag */
+			if (drm_mode_equal_no_clocks(newmode, mode_entry) &&
+					__android_check_clock_match(newmode->clock, mode_entry->clock)) {
+					if (saved_flags & DRM_MODE_FLAG_PAR4_3)
+						mode_entry->flags |= DRM_MODE_FLAG_PAR4_3;
+					else
+						mode_entry->flags |= DRM_MODE_FLAG_PAR16_9;
+					break;
+			}
+
+			/* restore flag */
+			newmode->flags = saved_flags;
+		}
 	}
 
 	return ret_count;
@@ -1171,26 +1222,6 @@ static void __android_hdmi_dump_crtc_mode(struct drm_display_mode *mode)
 	pr_debug("vtotal = %d\n", mode->vtotal);
 	pr_debug("clock = %d\n", mode->clock);
 	pr_debug("flags = 0x%x\n", mode->flags);
-}
-
-
-/**
- * helper function to check whether two clocks can fall into the same VIC.
- *
- * Returns: true if possible, false otherwise.
- */
-static bool __android_check_clock_match(int target, int reference)
-{
-	/* check target clock is in range of 60Hz or 59.94 (reference * 1000/1001) with
-	 * (-0.5%, +0.5%) tolerance. Based on CEA spec, when determining whether two video timings
-	 * are identical, clock frequencey within (-0.5%, +0.5%) tolerance should be considered
-	 * as the same.
-	 */
-
-	if (target >= DIV_ROUND_UP(reference * 995, 1001) &&
-		target <= DIV_ROUND_UP(reference * 1005, 1000))
-		return true;
-	return false;
 }
 
 /**

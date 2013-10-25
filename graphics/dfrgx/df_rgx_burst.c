@@ -203,7 +203,7 @@ long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	{
 		/* for profiling purposes*/
 		prev_util_record_index = df_rgx_get_util_record_index_by_freq(prev_freq);
-		if(prev_util_record_index >= 0)	
+		if((prev_util_record_index >= 0) && (prev_util_record_index < NUMBER_OF_LEVELS_B0))	
 			gpu_profiling_records_update_entry( prev_util_record_index , 0);
 
 		if(bfdata->g_dfrgx_data.gpu_utilization_record_index >= 0)	
@@ -287,6 +287,9 @@ static void wake_thread(struct df_rgx_data_s *g_dfrgx)
 static int df_rgx_action(struct df_rgx_data_s * g_dfrgx)
 {
 	struct gpu_util_stats utilStats;
+	utilStats.ui32GpuStatActive = 0;
+	utilStats.ui32GpuStatBlocked = 0;
+	utilStats.ui32GpuStatIdle = 0;
 	/* Get GPU utilisation numbers*/
 
 	//smp_rmb();
@@ -734,7 +737,7 @@ static void dfrgx_power_state_set(struct df_rgx_data_s *g_dfrgx, int st_on)
  */
 int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx)
 {
-	int sts;
+	int sts = 0;
 	unsigned int error = 0;
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s:gpu burst mode initialization -- begin !\n",

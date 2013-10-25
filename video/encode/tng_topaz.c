@@ -2566,11 +2566,6 @@ static int tng_setup_new_context(
 			return ret;
 		}
 	} else {
-		if (Is_Mrfld_B0()) {
-			PSB_DEBUG_TOPAZ("TOPAZ: re-copy/verify firmware to workaround JPEG issue\n");
-			tng_topaz_init_fw_chaabi(dev);
-		}
-
 		video_ctx->reg_saving_bo = NULL;
 		video_ctx->data_saving_bo = NULL;
 		topaz_priv->issuebuf_cmd_count = *(cmd + 2);
@@ -2845,11 +2840,8 @@ tng_topaz_send(
 				PSB_DEBUG_TOPAZ("TOPAZ: reset\n");
 				if (Is_Mrfld_B0()) {
 					tng_topaz_power_off(dev);
-					PSB_DEBUG_TOPAZ("TOPAZ: re-copy/verify firmware "
-							"to workaround JPEG issue\n");
-					tng_topaz_init_fw_chaabi(dev);
-					tng_topaz_power_up(dev, 0);
-					tng_topaz_fw_run(dev, video_ctx, 0);
+					tng_topaz_power_up(dev, IMG_CODEC_JPEG);
+					tng_topaz_fw_run(dev, video_ctx, IMG_CODEC_JPEG);
 				} else {
 					tng_topaz_reset(dev_priv);
 					tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);

@@ -56,6 +56,7 @@ struct ospm_power_island island_list[] = {
 	{OSPM_DISPLAY_MIO, OSPM_POWER_OFF, {0}, ospm_mio_init, NULL},
 	{OSPM_DISPLAY_HDMI, OSPM_POWER_OFF, {0}, ospm_hdmi_init, NULL},
 	{OSPM_GRAPHICS_ISLAND, OSPM_POWER_OFF, {0}, ospm_gfx_init, NULL},
+	{OSPM_SLC_ISLAND, OSPM_POWER_OFF, {0}, ospm_slc_init, NULL},
 	{OSPM_VIDEO_VPP_ISLAND, OSPM_POWER_OFF, {0}, ospm_vsp_init, NULL},
 	{OSPM_VIDEO_DEC_ISLAND, OSPM_POWER_OFF, {0}, ospm_ved_init, NULL},
 	{OSPM_VIDEO_ENC_ISLAND, OSPM_POWER_OFF, {0}, ospm_vec_init, NULL},
@@ -171,6 +172,7 @@ static void ospm_suspend_pci(struct drm_device *dev)
 
 	pci_disable_device(pdev);
 	pci_set_power_state(pdev, PCI_D3hot);
+	wake_unlock(&dev_priv->ospm_wake_lock);
 }
 
 /**
@@ -186,6 +188,8 @@ static void ospm_resume_pci(struct drm_device *dev)
 	int mmadr, ret = 0;
 
 	PSB_DEBUG_PM("%s\n", __func__);
+
+	wake_lock(&dev_priv->ospm_wake_lock);
 
 	pci_set_power_state(pdev, PCI_D0);
 	pci_restore_state(pdev);
@@ -501,7 +505,7 @@ u32 pipe_to_island(u32 pipe)
 void ospm_power_init(struct drm_device *dev)
 {
 	u32 i = 0;
-
+	struct drm_psb_private *dev_priv = dev->dev_private;
 	/* allocate ospm data */
 	g_ospm_data = kmalloc(sizeof(struct _ospm_data_), GFP_KERNEL);
 	if (!g_ospm_data)
@@ -511,6 +515,8 @@ void ospm_power_init(struct drm_device *dev)
 	g_ospm_data->dev = dev;
 	gpDrmDevice = dev;
 
+	wake_lock_init(&dev_priv->ospm_wake_lock, WAKE_LOCK_SUSPEND,
+			"ospm_wake_lock");
 	/* initilize individual islands */
 	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
 		island_list[i].p_funcs = kmalloc(sizeof(struct power_ops),

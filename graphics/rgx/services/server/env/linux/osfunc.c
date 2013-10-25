@@ -125,6 +125,12 @@ static void init_pvr_pool(void)
 	/* Reserve space in the vmalloc vm range */
 	tmp_area = __get_vm_area(POOL_SIZE, VM_ALLOC,
 			VMALLOC_START, VMALLOC_END);
+        if (!tmp_area) {
+                printk(KERN_ERR "%s:get vm area failed\n",
+                                __func__);
+		return ;
+	}
+
 	pool_start = tmp_area->addr;
 
 	if (!pool_start) {

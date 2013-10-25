@@ -121,6 +121,8 @@ int drm_vsp_burst = 0;
 int drm_vsp_force_up_freq = 0;
 int drm_vsp_force_down_freq = 0;
 int drm_vsp_single_int = 0;
+int drm_vec_force_up_freq = 0;
+int drm_vec_force_down_freq = 0;
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -155,6 +157,8 @@ MODULE_PARM_DESC(vsp_burst, "VSP burst mode enable");
 MODULE_PARM_DESC(vsp_force_up_freq, "force VSP running at certain freq");
 MODULE_PARM_DESC(vsp_force_down_freq, "force VSP power down at certain freq");
 MODULE_PARM_DESC(vsp_single_int, "force VSP VPP generate one irq per command group");
+MODULE_PARM_DESC(vec_force_up_freq, "force VEC running at certain freq");
+MODULE_PARM_DESC(vec_force_down_freq, "force VEC power down at certain freq");
 
 module_param_named(enable_color_conversion, drm_psb_enable_color_conversion,
 					int, 0600);
@@ -196,6 +200,8 @@ module_param_named(vsp_burst, drm_vsp_burst, int, 0600);
 module_param_named(vsp_force_up_freq, drm_vsp_force_up_freq, int, 0600);
 module_param_named(vsp_force_down_freq, drm_vsp_force_down_freq, int, 0600);
 module_param_named(vsp_single_int, drm_vsp_single_int, int, 0600);
+module_param_named(vec_force_up_freq, drm_vec_force_up_freq, int, 0600);
+module_param_named(vec_force_down_freq, drm_vec_force_down_freq, int, 0600);
 
 #ifndef MODULE
 /* Make ospm configurable via cmdline firstly,
@@ -1625,6 +1631,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	spin_lock_init(&dev_priv->irqmask_lock);
 
 	DRM_INIT_WAITQUEUE(&dev_priv->rel_mapped_queue);
+	init_waitqueue_head(&dev_priv->eof_wait);
 
 	dev->dev_private = (void *)dev_priv;
 	dev_priv->chipset = chipset;
@@ -3877,11 +3884,21 @@ static void psb_debugfs_cleanup(struct drm_minor *minor)
 	mdfld_debugfs_cleanup(minor);
 }
 #endif
+static int psb_suspend_noirq(struct device *dev)
+{
+	struct pci_dev * pci_dev = to_pci_dev(dev);
+	
+	pci_dev->state_saved = true;
 
+	printk("HACK pci config \n");
+
+	return 0;
+}
 static const struct dev_pm_ops psb_pm_ops = {
 	.runtime_suspend = rtpm_suspend,
 	.runtime_resume = rtpm_resume,
 	.runtime_idle = rtpm_idle,
+	.suspend_noirq = psb_suspend_noirq,
 };
 
 static struct vm_operations_struct psb_ttm_vm_ops;
