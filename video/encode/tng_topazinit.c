@@ -1,5 +1,5 @@
 /**
-#endif
+ *
  * file tng_topazinit.c
  * TOPAZ initialization and mtx-firmware upload
  *

@@ -284,19 +284,19 @@ void psb_remove_videoctx(struct drm_psb_private *dev_priv, struct file *filp)
 				(found_ctx->ctx_type & 0xff))
 			&& VAProfileVP8Version0_3 !=
 				((found_ctx->ctx_type >> 8) & 0xff)) {
-			if (dev_priv->topaz_ctx == found_ctx) {
 #ifdef MERRIFIELD
-				tng_topaz_remove_ctx(dev_priv,
-					found_ctx);
+			tng_topaz_remove_ctx(dev_priv,
+				found_ctx);
 #else
+			if (dev_priv->topaz_ctx == found_ctx) {
 				pnw_reset_fw_status(dev_priv->dev,
 					PNW_TOPAZ_END_CTX);
-#endif
 				dev_priv->topaz_ctx = NULL;
 			} else {
 				PSB_DEBUG_PM("Remove a inactive "\
 						"encoding context.\n");
 			}
+#endif
 			if (dev_priv->last_topaz_ctx == found_ctx)
 				dev_priv->last_topaz_ctx = NULL;
 #ifdef SUPPORT_VSP
