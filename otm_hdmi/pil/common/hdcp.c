@@ -564,6 +564,9 @@ static void hdcp_reset(void)
 {
 	pr_debug("hdcp: reset\n");
 
+	/* blank TV screen */
+	ipil_enable_planes_on_pipe(1, false);
+
 	/* Stop HDCP */
 	if (hdcp_context->is_phase1_enabled == true ||
 	    hdcp_context->force_reset == true) {
@@ -1512,7 +1515,13 @@ bool otm_hdmi_hdcp_disable(hdmi_context_t *hdmi_context)
 	wq_send_message(msg, NULL);
 
 	/* Cleanup WorkQueue */
-	flush_workqueue(hdcp_context->hdcp_wq);
+	/*flush_workqueue(hdcp_context->hdcp_wq);*/
+
+	/* Wait until hdcp is disabled.
+	 * No need to wait for workqueue flushed since it may block for 2sec
+	 * */
+	while (hdcp_context->is_phase1_enabled)
+		msleep(1);
 
 	hdcp_context->is_required = false;
 
@@ -1592,7 +1601,7 @@ bool otm_hdmi_hdcp_init(hdmi_context_t *hdmi_context,
 	hdcp_context->ddc_read_write = ddc_rd_wr;
 
 	/* Find hdcp delay
-	 * If attribute not set, default to 500ms
+	 * If attribute not set, default to 200ms
 	 */
 	rc = otm_hdmi_get_attribute(hdmi_context,
 				OTM_HDMI_ATTR_ID_HDCP_DELAY,
@@ -1600,7 +1609,7 @@ bool otm_hdmi_hdcp_init(hdmi_context_t *hdmi_context,
 
 	hdcp_context->hdcp_delay = (rc == OTM_HDMI_SUCCESS) ?
 			hdmi_attr.content._uint.value :
-			500;
+			200;
 
 	/* perform any hardware initializations */
 	if (ipil_hdcp_init() == true) {
