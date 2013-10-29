@@ -223,6 +223,9 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 		case VssVp8encEncodeFrameResponse:
 		{
 			sequence = msg->buffer;
+			/* received VssVp8encEncodeFrameResponse indicates cmd has been handled */
+			vsp_priv->vp8_cmd_num--;
+
 			VSP_DEBUG("sequence %d\n", sequence);
 			VSP_DEBUG("receive vp8 encoded frame response\n");
 
@@ -723,6 +726,9 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			vsp_cmd_num++;
 
 		if (cur_cmd->type == VssVp8encEncodeFrameCommand) {
+			/* calculate VssVp8encEncodeFrameCommand cmd numbers */
+			vsp_priv->vp8_cmd_num++;
+
 			/* set 1st VP8 process context_vp8_id=1 *
 			 * set 2nd VP8 process context_vp8_id=2 *
 			 * */
@@ -1010,6 +1016,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 		VSP_DEBUG("vp8 fence sequence %x at output pic %x\n",
 			  fence->sequence);
 		pic_param->input_frame.surface_id = fence->sequence;
+
 		ttm_fence_object_unref(&fence);
 	} else {
 		VSP_DEBUG("NO fence?????\n");
@@ -1089,6 +1096,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	bool ret = true;
+	int count = 0;
 
 	dev_priv = dev->dev_private;
 	if (dev_priv == NULL) {
@@ -1107,6 +1115,15 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 
 	VSP_DEBUG("ctx_type=%d\n", ctx_type);
 	if (VAEntrypointEncSlice == ctx_type) {
+		/* Wait all the cmd be finished */
+		while (vsp_priv->vp8_cmd_num > 0 && count++ < 20000) {
+			msleep(1);
+		}
+
+		if (count == 20000) {
+			DRM_ERROR("Failed to handle sigint event\n");
+		}
+
 		if (vsp_priv->coded_buf != NULL) {
 			ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
 			ttm_bo_unref(&vsp_priv->coded_buf_bo);
@@ -1145,22 +1162,19 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	 }
 
 	vsp_priv->context_num--;
+
 	if (vsp_priv->context_num >= 1) {
 		return;
 	}
 
 	vsp_priv->ctrl->entry_kind = vsp_exit;
 
-	/* in case of power mode 0, HW always active,
-	 * set state to idle here for check idle func */
 	if (vsp_priv->fw_loaded_by_punit) {
-		vsp_priv->vsp_state = VSP_STATE_IDLE;
 		ospm_apm_power_down_vsp(dev);
 	} else {
 		ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
 	}
 
-	vsp_priv->current_sequence = 0;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 
 	if (ret == false)

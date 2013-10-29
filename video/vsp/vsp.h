@@ -279,6 +279,12 @@ struct vsp_private {
 	struct file *vp8_filp[2];
 	int context_vp8_id;
 	int context_vp8_num;
+
+	/*
+	 * to fix problem when CTRL+C vp8 encoding *
+	 * save VssVp8encEncodeFrameCommand cmd numbers *
+	 * */
+	int vp8_cmd_num;
 };
 
 extern int vsp_init(struct drm_device *dev);

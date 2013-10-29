@@ -290,6 +290,8 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->context_vp8_id = 0;
 	vsp_priv->context_vp8_num = 0;
 
+	vsp_priv->vp8_cmd_num = 0;
+
 	spin_lock_init(&vsp_priv->lock);
 	mutex_init(&vsp_priv->vsp_mutex);
 
