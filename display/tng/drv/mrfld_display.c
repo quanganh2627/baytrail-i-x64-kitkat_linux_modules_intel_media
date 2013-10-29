@@ -469,6 +469,8 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 			}
 		}
 
+		drm_handle_vblank(dev, pipe);
+
 		/* Turn off vsync interrupt. */
 		drm_vblank_off(dev, pipe);
 
