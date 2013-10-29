@@ -2760,10 +2760,8 @@ tng_topaz_send(
 	PSB_DEBUG_TOPAZ("one by one, cmdsize(%d), sequence(%08x)\n",
 		cmd_size, sync_seq);
 
-	if (Is_Mrfld_B0()== 0) {
-		/* Must flush here in case of invalid cache data */
-		tng_topaz_mmu_flushcache(dev_priv);
-	}
+	/* Must flush here in case of invalid cache data */
+	tng_topaz_mmu_flushcache(dev_priv);
 
 	while (cmd_size > 0) {
 		cur_cmd_header = (struct tng_topaz_cmd_header *) command;
