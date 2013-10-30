@@ -789,6 +789,12 @@ void ospm_apm_power_down_vsp(struct drm_device *dev)
 		atomic_set(&p_island->ref_count, 0);
 	}
 
+	/* handle the dependency */
+	if (p_island->p_dependency) {
+		/* Power down dependent island */
+		power_down_island(p_island->p_dependency);
+	}
+
 	PSB_DEBUG_PM("Power down VPP done\n");
 out:
 	mutex_unlock(&g_ospm_data->ospm_lock);
