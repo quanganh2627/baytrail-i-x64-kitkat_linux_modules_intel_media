@@ -220,6 +220,9 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	/* start update display controller hardware */
 	bUpdated = IMG_FALSE;
 
+	if (iPipe != DC_PIPE_B)
+		DCCBDsrForbid(gpsDevice->psDrmDevice, iPipe);
+
 	/*
 	 * make sure vsync interrupt of this pipe is active before kicking
 	 * off flip
@@ -229,9 +232,6 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 				__func__, iPipe);
 		goto err_out;
 	}
-
-	if (iPipe != DC_PIPE_B)
-		DCCBDsrForbid(gpsDevice->psDrmDevice, iPipe);
 
 	for (i = 0; i < uiNumBuffers; i++) {
 		if (pasBuffers[i].eFlipOp == DC_MRFLD_FLIP_SURFACE) {
@@ -298,9 +298,6 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 
 	bUpdated = IMG_TRUE;
 err_out:
-	if (iPipe != DC_PIPE_B)
-		DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
-
 	power_island_put(psFlip->uiPowerIslands);
 	return bUpdated;
 }
@@ -528,6 +525,9 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 		if (eFlipState == DC_MRFLD_FLIP_DISPLAYED) {
 			/* done with this flip item, disable vsync now*/
 			DCCBDisableVSyncInterrupt(psDrmDev, iPipe);
+
+			if (iPipe != DC_PIPE_B)
+				DCCBDsrAllow(psDrmDev, iPipe);
 
 			/*remove this entry from flip queue, decrease refCount*/
 			list_del(&psFlip->sFlips[iPipe]);
@@ -1322,6 +1322,9 @@ void DCUnAttachPipe(uint32_t iPipe)
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe]) {
 		/* Put pipe's vsync which has been enabled. */
 		DCCBDisableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe);
+
+		if (iPipe != DC_PIPE_B)
+			DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
 
 		/*remove this entry from flip queue, decrease refCount*/
 		list_del(&psFlip->sFlips[iPipe]);
