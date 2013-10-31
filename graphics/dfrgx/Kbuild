@@ -34,7 +34,7 @@ endif
 MY_DEBUG := 1
 
 # THERMAL_DEBUG for force_states and get_available_states sysfs entries
-THERMAL_DEBUG := 0
+THERMAL_DEBUG := 1
 
 ifeq ($(THERMAL_DEBUG),1)
 ccflags-y += -DTHERMAL_DEBUG

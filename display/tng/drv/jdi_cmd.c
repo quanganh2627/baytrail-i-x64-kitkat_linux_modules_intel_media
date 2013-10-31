@@ -21,7 +21,7 @@
  * DEALINGS IN THE SOFTWARE.
  *
  * Authors:
- * Faxing Lu
+ * Faxing Lu <faxing.lu@intel.com>
  */
 
 #include "mdfld_dsi_dbi.h"
@@ -37,7 +37,13 @@ static u8 jdi_mcs_clumn_addr[] = {
 			0x2a, 0x00, 0x00, 0x02, 0xcf};
 static u8 jdi_mcs_page_addr[] = {
 			0x2b, 0x00, 0x00, 0x04, 0xff};
-
+static u8 jdi_timing_control[] = {
+			0xc6, 0x6d, 0x05, 0x60, 0x05,
+			0x60, 0x01, 0x01, 0x01, 0x02,
+			0x01, 0x02, 0x01, 0x01, 0x01,
+			0x01, 0x01, 0x01, 0x05, 0x15,
+			0x09
+			};
 static
 int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 {
@@ -60,7 +66,7 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		goto ic_init_err;
 	}
 
-	msleep(130);
+	msleep(120);
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 			write_display_brightness, 0x4, 1,
 			MDFLD_DSI_SEND_PACKAGE);
@@ -96,7 +102,32 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		__func__, __LINE__);
 		goto ic_init_err;
 	}
+	err = mdfld_dsi_send_gen_short_hs(sender,
+		access_protect, 4, 2,
+		MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Manufacture command protect on\n",
+		__func__, __LINE__);
+		goto ic_init_err;
+	}
 
+	err = mdfld_dsi_send_gen_long_lp(sender,
+			jdi_timing_control,
+			21, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set panel timing\n",
+		__func__, __LINE__);
+		goto ic_init_err;
+	}
+	err = mdfld_dsi_send_gen_short_hs(sender,
+		access_protect, 3, 2,
+		MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Manufacture command protect off\n",
+		__func__, __LINE__);
+		goto ic_init_err;
+	}
+	msleep(20);
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 			set_tear_on, 0x00, 1,
 			MDFLD_DSI_SEND_PACKAGE);

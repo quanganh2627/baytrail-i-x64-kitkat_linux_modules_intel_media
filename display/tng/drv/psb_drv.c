@@ -117,7 +117,7 @@ u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
 int drm_psb_msvdx_tiling = 0;
 int drm_msvdx_bottom_half;
 int drm_hdmi_hpd_auto;
-int drm_vsp_burst = 0;
+int drm_vsp_burst = 1;
 int drm_vsp_force_up_freq = 0;
 int drm_vsp_force_down_freq = 0;
 int drm_vsp_single_int = 0;

@@ -305,7 +305,7 @@ enum vsp_ctrl_reg_addr {
 	VSP_SECBOOT_DEBUG_REG     = 4,
 	VSP_ENTRY_KIND_REG        = 5,
 	VSP_POWER_SAVING_MODE_REG = 6,
-	VSP_CONTEXT_ID_REG        = 7,
+	VSP_MMU_TLB_SOFT_INVALIDATE_REG = 7,
 	VSP_CMD_QUEUE_RD_REG      = 12,
 	VSP_CMD_QUEUE_WR_REG      = 13,
 	VSP_ACK_QUEUE_RD_REG      = 14,
@@ -329,12 +329,12 @@ struct vsp_ctrl_reg {
 	/* set the power-saving-mode setting */
 	unsigned int power_saving_mode;
 
-	/* config reg which is temporary used by the firmware to track
-	 * the currently active context. The host does not need to read
-	 * or write this register and future versions of the firmware
-	 * might not need it
-	 */
-	unsigned int context_setting_addr;
+	/* config reg to request firmware to perform an MMU TLB invalidate.
+	* MMU TLB invalidation for VSP on TNG needs to be done through firmware
+	* due to a hardware bug that could trigger if TLB invalidation is done
+	* while VSP DMA is not idle.
+	*/
+	unsigned int mmu_tlb_soft_invalidate;
 
 	unsigned int reserved_8;
 	unsigned int reserved_9;

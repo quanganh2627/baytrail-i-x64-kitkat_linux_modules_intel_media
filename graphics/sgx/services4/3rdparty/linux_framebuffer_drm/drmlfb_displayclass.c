@@ -613,10 +613,9 @@ static IMG_BOOL DRMLFBFlipBlackScreen2(MRSTLFB_DEVINFO *psDevInfo,
 		dsi_config = dev_priv->dsi_configs[0];
 	} else if (psDevInfo->ui32MainPipe == 1) {
 		offset = 0x1000;
-		dsi_config = dev_priv->dsi_configs[1];
 	} else if (psDevInfo->ui32MainPipe == 2) {
 		offset = 0x2000;
-		dsi_config = dev_priv->dsi_configs[2];
+		dsi_config = dev_priv->dsi_configs[1];
 	} else
 		return IMG_FALSE;
 

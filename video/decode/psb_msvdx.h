@@ -42,6 +42,8 @@ extern int drm_psb_msvdx_tiling;
 
 #define FIRMWAREID		0x014d42ab
 
+#define GET_MSVDX_FREQUENCY(freq_code)	((1600 * 2)/((freq_code) + 1))
+
 /* psb_mmu.c */
 uint32_t psb_get_default_pd_addr(struct psb_mmu_driver *driver);
 

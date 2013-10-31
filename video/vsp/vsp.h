@@ -140,7 +140,6 @@ static const unsigned int vsp_processor_base[] = {
 #define INVALID_MMU MM_WRITE32(0, MMU_INVALID, 0x1)
 #define SET_MMU_PTD(address)						\
 	do {								\
-		INVALID_MMU;						\
 		MM_WRITE32(0, MMU_TABLE_ADDR, address);			\
 	} while (0)
 
@@ -200,7 +199,7 @@ enum vsp_irq_reg {
 enum vsp_context_num {
 	VSP_CONTEXT_NUM_VPP = 0,
 	VSP_CONTEXT_NUM_VP8 = 1,
-	VSP_CONTEXT_NUM_MAX
+	VSP_CONTEXT_NUM_MAX = 3
 };
 
 enum vsp_fw_type {
@@ -275,6 +274,11 @@ struct vsp_private {
 	struct ttm_bo_kmap_obj coded_buf_kmap;
 	struct ttm_buffer_object *coded_buf_bo;
 	int context_num;
+
+	/* For VP8 dual encoding */
+	struct file *vp8_filp[2];
+	int context_vp8_id;
+	int context_vp8_num;
 };
 
 extern int vsp_init(struct drm_device *dev);
@@ -299,8 +303,8 @@ extern int vsp_cmdbuf_vpp(struct drm_file *priv,
 
 extern bool vsp_fence_poll(struct drm_device *dev);
 
-extern void vsp_new_context(struct drm_device *dev);
-extern void vsp_rm_context(struct drm_device *dev, int ctx_type);
+extern int vsp_new_context(struct drm_device *dev, int ctx_type);
+extern void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type);
 extern uint32_t psb_get_default_pd_addr(struct psb_mmu_driver *driver);
 
 extern int psb_vsp_save_context(struct drm_device *dev);

@@ -38,6 +38,7 @@
 #include "psb_msvdx_reg.h"
 #ifdef CONFIG_VIDEO_MRFLD
 #include "psb_msvdx_ec.h"
+#include "video_ospm.h"
 #endif
 #include <linux/firmware.h>
 
@@ -308,6 +309,65 @@ static ssize_t psb_msvdx_pmstate_show(struct device *dev,
 #endif
 	return ret;
 }
+
+#ifdef CONFIG_VIDEO_MRFLD
+static ssize_t ved_freq_scaling_show(struct device *dev,
+                             struct device_attribute *attr, char *buf)
+{
+	struct drm_device *drm_dev = dev_get_drvdata(dev);
+	int ret = -EINVAL;
+	int chars;
+	int freq_code;
+	u32 freq_val;
+
+	if (drm_dev == NULL)
+               return 0;
+
+	freq_code = psb_msvdx_get_ved_freq(VED_SS_PM1);
+
+	ret = snprintf(buf, 32,"freq_code/freq: %d/%dMHz\n",
+                                       freq_code, GET_MSVDX_FREQUENCY(freq_code));
+
+	return ret;
+}
+
+static ssize_t ved_freq_scaling_store(struct device *dev,
+                               struct device_attribute *attr,
+                               const char *buf, size_t size)
+{
+	struct drm_device *drm_dev = dev_get_drvdata(dev);
+	u32 freq_code;
+	int chars;
+
+	if (drm_dev == NULL)
+		return 0;
+
+	chars = sscanf(buf, "%d", &freq_code);
+	if (chars == 0)
+		return size;
+
+	if ((freq_code ^ IP_FREQ_106_67
+		&& freq_code ^ IP_FREQ_133_30
+		&& freq_code ^ IP_FREQ_160_00
+		&& freq_code ^ IP_FREQ_177_78
+		&& freq_code ^ IP_FREQ_200_00
+		&& freq_code ^ IP_FREQ_213_33
+		&& freq_code ^ IP_FREQ_266_67
+		&& freq_code ^ IP_FREQ_320_00) == 0) {
+		psb_msvdx_set_ved_freq(freq_code);
+		psb_set_freq_control_switch(false);
+	} else {
+		if ((freq_code ^ IP_FREQ_RESUME_SET) == 0) {
+			psb_set_freq_control_switch(true);
+		} else {
+			printk(KERN_ERR "%s: invalid freq_code %d\n", freq_code);
+		}
+	}
+	return size;
+}
+
+static DEVICE_ATTR(ved_freq_scaling, 0666, ved_freq_scaling_show, ved_freq_scaling_store);
+#endif
 
 static DEVICE_ATTR(msvdx_pmstate, 0444, psb_msvdx_pmstate_show, NULL);
 
@@ -706,6 +766,11 @@ static int msvdx_startup_init(struct drm_device *dev)
 	if (device_create_file(&dev->pdev->dev,
 			       &dev_attr_msvdx_pmstate))
 		DRM_ERROR("MSVDX: could not create sysfs file\n");
+#ifdef CONFIG_VIDEO_MRFLD
+	if (device_create_file(&dev->pdev->dev,
+                               &dev_attr_ved_freq_scaling))
+		DRM_ERROR("Freq: could not create sysfs file\n");
+#endif
 	msvdx_priv->sysfs_pmstate = sysfs_get_dirent(
 					    dev->pdev->dev.kobj.sd,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35))
@@ -1082,7 +1147,9 @@ int psb_msvdx_uninit(struct drm_device *dev)
 		device_remove_file(&dev->pdev->dev, &dev_attr_msvdx_pmstate);
 		sysfs_put(msvdx_priv->sysfs_pmstate);
 		msvdx_priv->sysfs_pmstate = NULL;
-
+#ifdef CONFIG_VIDEO_MRFLD
+		device_remove_file(&dev->pdev->dev, &dev_attr_ved_freq_scaling);
+#endif
 		kfree(msvdx_priv);
 		dev_priv->msvdx_private = NULL;
 	}

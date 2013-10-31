@@ -307,7 +307,7 @@ void psb_remove_videoctx(struct drm_psb_private *dev_priv, struct file *filp)
 					((found_ctx->ctx_type >> 8) & 0xff))) {
 			ctx_type = found_ctx->ctx_type & 0xff;
 			PSB_DEBUG_PM("Remove vsp context.\n");
-			vsp_rm_context(dev_priv->dev, ctx_type);
+			vsp_rm_context(dev_priv->dev, filp, ctx_type);
 #endif
 		} else
 #endif
@@ -382,6 +382,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 	struct psb_video_ctx *video_ctx = NULL;
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	uint32_t imr_info[2], ci_info[2];
+	uint32_t ctx_num = 0;
 
 	switch (arg->key) {
 #if (!defined(MERRIFIELD) && !defined(CONFIG_DRM_VXD_BYT))
@@ -436,8 +437,14 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 		if (VAEntrypointVideoProc == (ctx_type & 0xff)
 			|| (VAEntrypointEncSlice == (ctx_type & 0xff)
 				&& VAProfileVP8Version0_3 ==
-					((ctx_type >> 8) & 0xff)))
-			vsp_new_context(dev);
+					((ctx_type >> 8) & 0xff))) {
+			ctx_num = vsp_new_context(dev, ctx_type & 0xff);
+
+			ret = copy_to_user((void __user *)((unsigned long)arg->value),
+				&ctx_num, sizeof(ctx_num));
+			if (ret)
+				break;
+		}
 #endif
 #endif
 		PSB_DEBUG_INIT("Video:add ctx profile %d, entry %d.\n",

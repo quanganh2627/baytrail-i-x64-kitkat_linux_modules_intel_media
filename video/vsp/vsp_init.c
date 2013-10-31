@@ -285,6 +285,11 @@ int vsp_init(struct drm_device *dev)
 						&vsp_priv->context_setting_kmap,
 						&is_iomem);
 
+	vsp_priv->vp8_filp[0] = NULL;
+	vsp_priv->vp8_filp[1] = NULL;
+	vsp_priv->context_vp8_id = 0;
+	vsp_priv->context_vp8_num = 0;
+
 	spin_lock_init(&vsp_priv->lock);
 	mutex_init(&vsp_priv->vsp_mutex);
 
@@ -368,7 +373,7 @@ void vsp_enableirq(struct drm_device *dev)
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_ENB, enable);
 	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_MASK, mask);
 	/* use the Level type interrupt */
-	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_LEVEL_PULSE, 1);
+	IRQ_REG_WRITE32(VSP_IRQ_CTRL_IRQ_LEVEL_PULSE, 0x80);
 }
 
 void vsp_disableirq(struct drm_device *dev)
@@ -587,7 +592,7 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 				vsp_priv->context_setting_bo->offset;
 
 	vsp_priv->ctrl->setting_addr = vsp_priv->setting_bo->offset;
-
+	vsp_priv->ctrl->mmu_tlb_soft_invalidate = 0;
 	vsp_priv->ctrl->cmd_rd = 0;
 	vsp_priv->ctrl->cmd_wr = 0;
 	vsp_priv->ctrl->ack_rd = 0;

@@ -186,12 +186,6 @@ int mdfld_dsi_dsr_update_panel_fb(struct mdfld_dsi_config *dsi_config)
 
 	mutex_lock(&dsi_config->context_lock);
 
-	/*ignore it if there are pending fb updates*/
-	if (dsr->pending_fb_updates) {
-		err = -EBUSY;
-		goto update_fb_out;
-	}
-
 	if (!dsi_config->dsi_hw_context.panel_on) {
 		PSB_DEBUG_ENTRY(
 		"if screen off, update fb is not allowed\n");
@@ -217,8 +211,6 @@ int mdfld_dsi_dsr_update_panel_fb(struct mdfld_dsi_config *dsi_config)
 		goto update_fb_out;
 	}
 
-	/*increase pending fb updates*/
-	dsr->pending_fb_updates++;
 	/*clear free count*/
 	dsr->free_count = 0;
 
@@ -284,8 +276,6 @@ int mdfld_dsi_dsr_report_te(struct mdfld_dsi_config *dsi_config)
 		dsr->dsr_state = dsr_level;
 	}
 report_te_out:
-	/*clear pending fb updates*/
-	dsr->pending_fb_updates = 0;
 	mutex_unlock(&dsi_config->context_lock);
 	return err;
 }
@@ -474,9 +464,6 @@ int mdfld_dsi_dsr_init(struct mdfld_dsi_config *dsi_config)
 
 	/*init free count*/
 	dsr->free_count = 0;
-
-	/*init pending fb updates*/
-	dsr->pending_fb_updates = 0;
 
 	/*init dsr enabled*/
 	dsr->dsr_enabled = 0;

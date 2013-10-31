@@ -277,20 +277,14 @@ unsigned long long timestamp(void)
 	return ((unsigned long long)a) | (((unsigned long long)d) << 32);
 }
 
-#if !(LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
-typedef int (read_proc_t)(char *page, char **start, off_t off,
-            int count, int *eof, void *data);
-typedef int (write_proc_t)(struct file *file, const char __user *buffer,
-        unsigned long count, void *data);
-#endif
 
 /**
  * pfs_data - Structure to describe one file under /proc/gburst.
  */
 struct pfs_data {
 	const char   *pfd_file_name;
-	read_proc_t  *pfd_func_read;
-	write_proc_t *pfd_func_write;
+	ssize_t (*pfd_func_read) (struct file *, char __user *, size_t, loff_t *);
+	ssize_t (*pfd_func_write) (struct file *, const char __user *, size_t, loff_t *);
 	mode_t        pfd_mode;
 };
 
@@ -299,62 +293,62 @@ struct pfs_data {
  * Forward references for procfs read and write functions:
  */
 
-static int pfs_debug_message_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+static int pfs_debug_message_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_debug_message_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_disable_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_disable_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_disable_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_dump_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
-static int pfs_enable_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_dump_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
+static int pfs_enable_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_enable_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_gpu_monitored_counters_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_gpu_monitored_counters_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_gpu_monitored_counters_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_pwrgt_sts_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
-static int pfs_state_times_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_pwrgt_sts_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
+static int pfs_state_times_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_state_times_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_thermal_override_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_thermal_override_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_thermal_override_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_thermal_state_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
-static int pfs_gb_threshold_down_diff_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_thermal_state_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
+static int pfs_gb_threshold_down_diff_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_gb_threshold_down_diff_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_gb_threshold_high_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_gb_threshold_high_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_gb_threshold_high_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_gb_threshold_low_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_gb_threshold_low_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_gb_threshold_low_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_timer_period_usecs_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_timer_period_usecs_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_timer_period_usecs_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_utilization_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
-static int pfs_utilization_override_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_utilization_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
+static int pfs_utilization_override_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_utilization_override_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
-static int pfs_verbosity_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
+static int pfs_verbosity_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos);
 static int pfs_verbosity_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd);
+	const char *buffer, size_t count, loff_t *ppos);
 
 
 /**
@@ -1786,15 +1780,14 @@ static int generate_dump_string(struct gburst_pvt_s *gbprv, size_t buflen,
  * Return current enable state (0 or 1) of some debug messages.
  * Associated variable to control debug messages: gburst_debug_msg_on
  */
-static int pfs_debug_message_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_debug_message_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
+	char msg[128];
+	int res;
 
-	return snprintf(buf, breq, "%d\n", gburst_debug_msg_on);
+	res = scnprintf(msg, sizeof(msg), "%d\n", gburst_debug_msg_on);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -1811,7 +1804,7 @@ static int pfs_debug_message_read(char *buf,
  * Associated variable to control debug messages: gburst_debug_msg_on
  */
 static int pfs_debug_message_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
 	unsigned int uval;
 	int rva;
@@ -1847,20 +1840,15 @@ static int pfs_debug_message_write(struct file *file,
  *    Also happens when writing 1 to /proc/gburst/enable .
  * 1: Disable gpu burst mode.  Stop the timer.  Stop the background thread.
  */
-static int pfs_disable_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_disable_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
-	u32 len;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	len = snprintf(buf, breq, "%d\n", gbprv->gbp_request_disable);
-
-	return len;
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_request_disable);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -1884,9 +1872,9 @@ static int pfs_disable_read(char *buf,
  * 1: Disable gpu burst mode.  Stop the timer.  Stop the background thread.
  */
 static int pfs_disable_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	unsigned int uval;
 	int rva;
 
@@ -1918,17 +1906,15 @@ static int pfs_disable_write(struct file *file,
  * read: return a verbose textual status dump.
  * write: null.
  */
-static int pfs_dump_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_dump_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[4096];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	return generate_dump_string(gbprv, breq, buf);
+	res = generate_dump_string(gbprv, nbytes, msg);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -1949,20 +1935,15 @@ static int pfs_dump_read(char *buf,
  * 1: Enable gpu burst mode.
  *    Also, revert any previous disable done via /proc/gburst/disable.
  */
-static int pfs_enable_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_enable_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
-	u32 len;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	len = snprintf(buf, breq, "%d\n", gbprv->gbp_enable);
-
-	return len;
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_enable);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -1982,9 +1963,9 @@ static int pfs_enable_read(char *buf,
  *    Also, revert any previous disable done via /proc/gburst/disable.
  */
 static int pfs_enable_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	unsigned int uval;
 	int rva;
 
@@ -2031,24 +2012,20 @@ static int pfs_enable_write(struct file *file,
  *
  * See function pfs_gpu_monitored_counters_write.
  */
-static int pfs_gpu_monitored_counters_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_gpu_monitored_counters_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
+	char msg[1024];
 	int ix;
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	ix = gburst_stats_gfx_hw_perf_counters_to_string(0, buf, breq);
+	ix = gburst_stats_gfx_hw_perf_counters_to_string(0, msg, sizeof(msg));
 	if (ix < 0)
 		return ix;
 
-	if (ix >= breq)
+	if (ix >= sizeof(msg))
 		return -EINVAL;
 
-	return ix;
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, ix);
 }
 
 
@@ -2078,7 +2055,7 @@ static int pfs_gpu_monitored_counters_read(char *buf,
  * Example input string: "1:0:1:16   6:0:24:32"
  */
 static int pfs_gpu_monitored_counters_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
 	char buf[128];
 	int rva;
@@ -2109,22 +2086,17 @@ static int pfs_gpu_monitored_counters_write(struct file *file,
  * with a leading "0x".
  * Write: N/A
  */
-static int pfs_pwrgt_sts_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_pwrgt_sts_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
-	u32 len;
-
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
 	read_and_process_PWRGT_STS(gbprv);
 
-	len = snprintf(buf, breq, "%#x\n", gbprv->gbp_pwrgt_sts_last_read);
-
-	return len;
+	res = scnprintf(msg, sizeof(msg), "%#x\n", gbprv->gbp_pwrgt_sts_last_read);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2149,20 +2121,15 @@ static int pfs_pwrgt_sts_read(char *buf,
  * Warning: setting override to 0 disables OS gpu burst thermal controls,
  * although firmware controls will still be in effect.
  */
-static int pfs_thermal_override_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_thermal_override_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
-	u32 len;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	len = snprintf(buf, breq, "%d\n", gbprv->gbp_cooldv_state_override);
-
-	return len;
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_cooldv_state_override);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2186,9 +2153,9 @@ static int pfs_thermal_override_read(char *buf,
  * although firmware controls will still be in effect.
  */
 static int pfs_thermal_override_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	int sval;
 	int rva;
 
@@ -2225,17 +2192,15 @@ static int pfs_thermal_override_write(struct file *file,
  * This value read does not reflect any override that may be in effect.
  * Write: N/A
  */
-static int pfs_thermal_state_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_thermal_state_read(struct file *file, char __user *buf,
+		size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	return snprintf(buf, breq, "%d\n", gbprv->gbp_cooldv_state_cur);
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_cooldv_state_cur);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2251,17 +2216,15 @@ static int pfs_thermal_state_read(char *buf,
  * @eof: Set by this function to indicate EOF.
  * @pvd: Private data (in this case, gbprv).
  */
-static int pfs_gb_threshold_down_diff_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_gb_threshold_down_diff_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	return snprintf(buf, breq, "%d\n", gbprv->gbp_burst_th_down_diff);
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_burst_th_down_diff);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2277,9 +2240,9 @@ static int pfs_gb_threshold_down_diff_read(char *buf,
  *
  */
 static int pfs_gb_threshold_down_diff_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	unsigned int uval;
 	int rva;
 
@@ -2313,9 +2276,9 @@ static int pfs_gb_threshold_down_diff_write(struct file *file,
  *
  */
 static int pfs_gb_threshold_high_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	unsigned int uval;
 	int rva;
 
@@ -2351,17 +2314,15 @@ static int pfs_gb_threshold_high_write(struct file *file,
  * @pvd: Private data (in this case, gbprv).
  *
  */
-static int pfs_gb_threshold_high_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_gb_threshold_high_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	return snprintf(buf, breq, "%d\n", gbprv->gbp_burst_th_high);
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_burst_th_high);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2376,17 +2337,15 @@ static int pfs_gb_threshold_high_read(char *buf,
  * @eof: Set by this function to indicate EOF.
  * @pvd: Private data (in this case, gbprv).
  */
-static int pfs_gb_threshold_low_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_gb_threshold_low_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	return snprintf(buf, breq, "%d\n", gbprv->gbp_burst_th_low);
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_burst_th_low);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2400,9 +2359,9 @@ static int pfs_gb_threshold_low_read(char *buf,
  * @pvd: Private data (in this case, gbprv).
  */
 static int pfs_gb_threshold_low_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	unsigned int uval;
 	int rva;
 
@@ -2450,18 +2409,16 @@ static int pfs_gb_threshold_low_write(struct file *file,
  * Example output:
  * "  12721.541788       1.349854       1.349790       0.000000"
  */
-static int pfs_state_times_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_state_times_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	return state_times_to_string(gbprv, "", 0, gbprv->gbp_state_time_header,
-		breq, buf);
+	res = state_times_to_string(gbprv, "", 0, gbprv->gbp_state_time_header,
+		sizeof(msg), msg);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2489,9 +2446,9 @@ static int pfs_state_times_read(char *buf,
  * "  12721.541788       1.349854       1.349790       0.000000"
  */
 static int pfs_state_times_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	unsigned int uval;
 	int rva;
 
@@ -2518,23 +2475,21 @@ static int pfs_state_times_write(struct file *file,
  *
  * Read/write.
  */
-static int pfs_timer_period_usecs_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_timer_period_usecs_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	int period_usecs;
-
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
 
 	period_usecs = ktime_to_us(gbprv->gbp_hrt_period);
 	if (mprm_verbosity >= 3)
 		printk(GBURST_ALERT "timer period = %u microseconds\n",
 			period_usecs);
 
-	return snprintf(buf, breq, "%u microseconds\n", period_usecs);
+	res = scnprintf(msg, sizeof(msg), "%u microseconds\n", period_usecs);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2550,9 +2505,9 @@ static int pfs_timer_period_usecs_read(char *buf,
  * Read/write.
  */
 static int pfs_timer_period_usecs_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	unsigned int uval;
 	int rva;
 
@@ -2593,17 +2548,15 @@ static int pfs_timer_period_usecs_write(struct file *file,
  * This value read does not reflect any override that may be in effect.
  * Write: N/A
  */
-static int pfs_utilization_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_utilization_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	return snprintf(buf, breq, "%d\n", gbprv->gbp_utilization_percentage);
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_utilization_percentage);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2625,17 +2578,15 @@ static int pfs_utilization_read(char *buf,
  * Write:
  * 0 to 100 - utilization override value or -1 to reset override.
  */
-static int pfs_utilization_override_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_utilization_override_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	char msg[128];
+	int res;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
-
-	return snprintf(buf, breq, "%d\n", gbprv->gbp_utilization_override);
+	res = scnprintf(msg, sizeof(msg), "%d\n", gbprv->gbp_utilization_override);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
 }
 
 
@@ -2656,9 +2607,9 @@ static int pfs_utilization_override_read(char *buf,
  * 0 to 100 - utilization override value or -1 to reset override.
  */
 static int pfs_utilization_override_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
-	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *) pvd;
+	struct gburst_pvt_s *gbprv = (struct gburst_pvt_s *)PDE_DATA(file_inode(file));
 	int sval;
 	int rva;
 
@@ -2697,15 +2648,15 @@ static int pfs_utilization_override_write(struct file *file,
  * read:  number >= 0 indicating verbosity, with 0 being most quiet.
  * write: number >= 0 indicating verbosity, with 0 being most quiet.
  */
-static int pfs_verbosity_read(char *buf,
-	char **start, off_t offset, int breq, int *eof, void *pvd)
+static int pfs_verbosity_read(struct file *file, char __user *buf,
+        size_t nbytes,loff_t *ppos)
 {
-	if (*start || (offset > 0)) {
-		*eof = 1;
-		return 0;
-	}
+	char msg[128];
+	int res;
 
-	return snprintf(buf, breq, "%d\n", mprm_verbosity);
+	res = scnprintf(msg, sizeof(msg), "%d\n", mprm_verbosity);
+	return simple_read_from_buffer(buf, nbytes, ppos, msg, res);
+
 }
 
 
@@ -2723,7 +2674,7 @@ static int pfs_verbosity_read(char *buf,
  * write: number >= 0 indicating verbosity, with 0 being most quiet.
  */
 static int pfs_verbosity_write(struct file *file,
-	const char *buffer, unsigned long count, void *pvd)
+	const char *buffer, size_t count, loff_t *ppos)
 {
 	unsigned int uval;
 	int rva;
@@ -2750,9 +2701,8 @@ static void pfs_init(struct gburst_pvt_s *gbprv)
 	const struct pfs_data *pfsdat;
 	int fmode;
 	int ix;
-#if !(LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
-    struct file_operations *pfd_proc_fops;
-#endif
+	struct file_operations *pfd_proc_fops;
+
 	/* Create /proc/gburst */
 	if (!gbprv->gbp_proc_gburst) {
 		/**
@@ -2776,35 +2726,24 @@ static void pfs_init(struct gburst_pvt_s *gbprv)
 			fmode &= ~0444;
 		if (!pfsdat->pfd_func_write)
 			fmode &= ~0222;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
-		pdehdl = create_proc_entry(pfsdat->pfd_file_name, fmode,
-			gbprv->gbp_proc_gburst);
-#else
+
                 pfd_proc_fops = kzalloc(sizeof(struct file_operations), GFP_KERNEL);
                 if(!pfd_proc_fops) {
                     printk(GBURST_ALERT "Error creating gburst proc file: %s\n",
                               pfsdat->pfd_file_name);
                     continue;
                 }
-               pfd_proc_fops->read = pfsdat->pfd_func_read;
-               pfd_proc_fops->write = pfsdat->pfd_func_write;
+                pfd_proc_fops->read = pfsdat->pfd_func_read;
+                pfd_proc_fops->write = pfsdat->pfd_func_write;
 
-               pdehdl = proc_create_data(pfsdat->pfd_file_name, fmode, 
+                pdehdl = proc_create_data(pfsdat->pfd_file_name, fmode,
                                gbprv->gbp_proc_gburst, pfd_proc_fops, gbprv);
-#endif
 
 		gbprv->gbp_pfs_handle[ix] = pdehdl;
 		if (!pdehdl) {
 			printk(GBURST_ALERT "Error creating gburst proc file: %s\n",
 				pfsdat->pfd_file_name);
 		}
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)) 
-                else {
-			pdehdl->read_proc = pfsdat->pfd_func_read;
-			pdehdl->write_proc = pfsdat->pfd_func_write;
-			pdehdl->data = (void *) gbprv;
-		}
-#endif
 	}
 }
 
