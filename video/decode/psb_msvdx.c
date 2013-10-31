@@ -455,8 +455,8 @@ int psb__submit_cmdbuf_copy(struct drm_device *dev,
 		msvdx_priv->host_be_opp_enabled;
 	msvdx_cmd->tfile =
 		msvdx_priv->tfile;
-#ifdef CONFIG_SLICE_HEADER_PARSING
 	msvdx_cmd->msvdx_ctx = msvdx_ctx;
+#ifdef CONFIG_SLICE_HEADER_PARSING
 	msvdx_cmd->frame_boundary = msvdx_ctx->frame_boundary;
 #endif
 	spin_lock_irqsave(&msvdx_priv->msvdx_lock, irq_flags);
@@ -489,6 +489,11 @@ int psb_submit_video_cmdbuf(struct drm_device *dev,
 			msvdx_priv->fw_b0_uploaded = 1;
 		}
 #endif
+	}
+
+	if (!msvdx_ctx) {
+		PSB_DEBUG_GENERAL("MSVDX: null ctx\n");
+		return -EFAULT;
 	}
 
 	spin_lock_irqsave(&msvdx_priv->msvdx_lock, irq_flags);
