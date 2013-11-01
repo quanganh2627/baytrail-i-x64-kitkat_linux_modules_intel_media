@@ -271,6 +271,22 @@ reset_recovery:
 		}
 	}
 
+	/*
+	 * Wait for DSI PLL locked on pipe, and only need to poll status of pipe
+	 * A as both MIPI pipes share the same DSI PLL.
+	 */
+	if (dsi_config->pipe == 0) {
+		retry = 20000;
+		while (!(REG_READ(regs->pipeconf_reg) & PIPECONF_DSIPLL_LOCK) &&
+				--retry)
+			udelay(150);
+		if (!retry) {
+			DRM_ERROR("PLL failed to lock on pipe\n");
+			err = -EAGAIN;
+			goto power_on_err;
+		}
+	}
+
 	/*D-PHY parameter*/
 	REG_WRITE(regs->dphy_param_reg, ctx->dphy_param);
 

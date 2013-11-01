@@ -374,6 +374,22 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		}
 	}
 
+	/*
+	 * Wait for DSI PLL locked on pipe, and only need to poll status of pipe
+	 * A as both MIPI pipes share the same DSI PLL.
+	 */
+	if (dsi_config->pipe == 0) {
+		retry = 20000;
+		while (!(REG_READ(regs->pipeconf_reg) & PIPECONF_DSIPLL_LOCK) &&
+				--retry)
+			udelay(150);
+		if (!retry) {
+			DRM_ERROR("PLL failed to lock on pipe\n");
+			err = -EAGAIN;
+			goto power_on_err;
+		}
+	}
+
 	/*exit ULPS*/
 	if (__dbi_exit_ulps_locked(dsi_config)) {
 		DRM_ERROR("Failed to exit ULPS\n");
