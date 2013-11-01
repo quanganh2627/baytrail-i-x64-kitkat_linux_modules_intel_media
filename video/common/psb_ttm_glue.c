@@ -531,6 +531,10 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 		if (ret)
 			break;
 
+		PSB_DEBUG_GENERAL(
+			"query surface (handle 0x%08x) decode error\n",
+			handle);
+
 		if (msvdx_priv->msvdx_ec_ctx[0] == NULL) {
 			PSB_DEBUG_GENERAL(
 				"Video: ec contexts are initilized\n");
@@ -571,6 +575,9 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 				break;
 			}
 
+		if (i >= MAX_DECODE_BUFFERS)
+			PSB_DEBUG_GENERAL(
+			    "could not find handle 0x%08x in ctx\n", handle);
 
 		break;
 #endif

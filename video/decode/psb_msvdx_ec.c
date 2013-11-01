@@ -408,7 +408,9 @@ void psb_msvdx_update_frame_info(struct msvdx_private *msvdx_priv,
 
 	struct psb_msvdx_ec_ctx *ec_ctx;
 
-	PSB_DEBUG_MSVDX("update frame info for ved error concealment\n");
+	PSB_DEBUG_MSVDX(
+		"update frame info (handle 0x%08x) for error concealment\n",
+		buffer_handle);
 
 	ec_ctx = psb_msvdx_find_ec_ctx(msvdx_priv, tfile, cmd);
 
