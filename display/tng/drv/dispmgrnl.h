@@ -52,6 +52,7 @@
 #define _DISPLAY_MANAGER_NETLINK_H_
 
 #include <drm/drmP.h>
+#include "mdfld_dsi_output.h"
 
 #define SUCCESS		1
 #define FAILED		0
@@ -91,5 +92,6 @@ struct dispmgr_command_hdr {
 
 void dispmgr_start(struct drm_device *dev);
 void dispmgr_nl_send_msg(struct dispmgr_command_hdr *cmd_hdr);
+void dpstmgr_reg_restore_locked(struct drm_device *dev, struct mdfld_dsi_config *dsi_config);
 
 #endif				/* _DISPLAY_MANAGER_NETLINK_H_ */

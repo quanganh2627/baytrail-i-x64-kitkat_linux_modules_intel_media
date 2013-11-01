@@ -748,6 +748,11 @@ static int mdfld_dsi_regs_init(struct mdfld_dsi_config *dsi_config,
 	regs->mipi_data_len_reg = MIPIA_DATA_LEN_REG + reg_offset;
 	regs->mipi_cmd_addr_reg = MIPIA_CMD_ADD_REG + reg_offset;
 	regs->mipi_cmd_len_reg = MIPIA_CMD_LEN_REG + reg_offset;
+	regs->histogram_intr_ctrl_reg = HISTOGRAM_INT_CONTROL;
+	regs->histogram_logic_ctrl_reg = HISTOGRAM_LOGIC_CONTROL;
+	regs->aimg_enhance_bin_reg = HISTOGRAM_BIN_DATA;
+	//regs->lvds_port_ctrl_reg = LVDS_PORT_CTRL;
+
 	return 0;
 }
 
@@ -1006,6 +1011,10 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 	}
 
 	drm_sysfs_connector_add(connector);
+
+	/* DPST: TODO - get appropriate connector */
+	if (dev_priv->dpst_connector == 0)
+		dev_priv->dpst_connector = connector;
 
 	/*init dsr*/
 	if (mdfld_dsi_dsr_init(dsi_config))
