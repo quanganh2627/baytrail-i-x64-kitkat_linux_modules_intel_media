@@ -348,6 +348,9 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	struct psb_fbdev *fbdev = dev_priv->fbdev;
 	struct psb_gtt *pg = dev_priv->pg;
 	uint64_t size;
+	uint32_t page_offset;
+	uint32_t *cpu_addr = r->handles[0];
+	int ret;
 
 	size = r->height * r->pitches[0];
 	if (size < r->height * r->pitches[0])
@@ -370,7 +373,14 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	psbfb->tt_pages =
 	    (pg->gatt_pages <
 	     PSB_TT_PRIV0_PLIMIT) ? pg->gatt_pages : PSB_TT_PRIV0_PLIMIT;
-	psbfb->offset = 0;
+
+	/* map GTT */
+	ret = psb_gtt_map_vaddr(dev, cpu_addr, size, 0, &page_offset);
+	if (ret) {
+		DRM_ERROR("Can not map cpu address (%p) to GTT. handle \n", cpu_addr);
+		psbfb->offset = 0;
+	} else
+		psbfb->offset =  page_offset << PAGE_SHIFT;
 
 	info = framebuffer_alloc(0, &dev->pdev->dev);
 	if (!info)
