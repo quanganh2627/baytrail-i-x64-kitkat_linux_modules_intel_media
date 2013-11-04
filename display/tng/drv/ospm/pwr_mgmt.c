@@ -677,6 +677,7 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 
 		mutex_unlock(&g_ospm_data->ospm_lock);
 
+		power_island_put(OSPM_VIDEO_DEC_ISLAND);
 		return;
 	}
 
