@@ -177,10 +177,8 @@ int mdfld_dsi_dsr_update_panel_fb(struct mdfld_dsi_config *dsi_config)
 	dsr = dsi_config->dsr;
 
 	/*if no dsr attached, return 0*/
-	if (!dsr) {
-		DRM_ERROR("%s: no dsr attached\n", __func__);
-		return -EINVAL;
-	}
+	if (!dsr)
+		return 0;
 
 	PSB_DEBUG_ENTRY("\n");
 

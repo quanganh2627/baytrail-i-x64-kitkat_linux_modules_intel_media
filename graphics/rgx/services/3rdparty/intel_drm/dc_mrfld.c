@@ -1285,6 +1285,22 @@ static PVRSRV_ERROR DC_MRFLD_exit(void)
 	return PVRSRV_OK;
 }
 
+void DCLockMutex()
+{
+	if (!gpsDevice)
+		return;
+
+	mutex_lock(&gpsDevice->sFlipQueueLock);
+}
+
+void DCUnLockMutex()
+{
+	if (!gpsDevice)
+		return;
+
+	mutex_unlock(&gpsDevice->sFlipQueueLock);
+}
+
 void DCAttachPipe(uint32_t iPipe)
 {
 	if (!gpsDevice)
@@ -1295,10 +1311,7 @@ void DCAttachPipe(uint32_t iPipe)
 	if (iPipe != DC_PIPE_A && iPipe != DC_PIPE_B)
 		return;
 
-	/* acquire flip queue mutex */
-	mutex_lock(&gpsDevice->sFlipQueueLock);
 	gpsDevice->bFlipEnabled[iPipe] = IMG_TRUE;
-	mutex_unlock(&gpsDevice->sFlipQueueLock);
 }
 
 void DCUnAttachPipe(uint32_t iPipe)
@@ -1313,9 +1326,6 @@ void DCUnAttachPipe(uint32_t iPipe)
 
 	if (iPipe != DC_PIPE_A && iPipe != DC_PIPE_B)
 		return;
-
-	/* acquire flip queue mutex */
-	mutex_lock(&gpsDevice->sFlipQueueLock);
 
 	psFlipQueue = &gpsDevice->sFlipQueues[iPipe];
 	/* complete the flips*/
@@ -1342,8 +1352,6 @@ void DCUnAttachPipe(uint32_t iPipe)
 		INIT_LIST_HEAD(&gpsDevice->sFlipQueues[iPipe]);
 
 	gpsDevice->bFlipEnabled[iPipe] = IMG_FALSE;
-
-	mutex_unlock(&gpsDevice->sFlipQueueLock);
 }
 
 int DC_MRFLD_Enable_Plane(int type, int index, u32 ctx)

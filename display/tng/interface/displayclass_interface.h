@@ -145,6 +145,7 @@ void DCAttachPipe(uint32_t uiPipe);
 void DCUnAttachPipe(uint32_t uiPipe);
 int DC_MRFLD_Enable_Plane(int type, int index, uint32_t ctx);
 int DC_MRFLD_Disable_Plane(int type, int index, uint32_t ctx);
-
+void DCLockMutex();
+void DCUnLockMutex();
 
 #endif				/* __DC_INTERFACE_H__ */

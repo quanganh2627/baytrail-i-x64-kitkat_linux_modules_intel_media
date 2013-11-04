@@ -231,6 +231,7 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 	u32 temp;
 	bool enabled;
 	u32 power_island = 0;
+	struct android_hdmi_priv *hdmi_priv = dev_priv->hdmi_priv;
 
 	PSB_DEBUG_ENTRY("mode = %d, pipe = %d\n", mode, pipe);
 
@@ -291,6 +292,8 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 	case DRM_MODE_DPMS_ON:
 	case DRM_MODE_DPMS_STANDBY:
 	case DRM_MODE_DPMS_SUSPEND:
+		DCLockMutex();
+
 		/* Enable the DPLL */
 		temp = REG_READ(dpll_reg);
 
@@ -391,7 +394,13 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 		psb_intel_crtc_load_lut(crtc);
 
+		if ((pipe == 1) && hdmi_priv)
+			hdmi_priv->hdmi_suspended = false;
+
+		psb_enable_vblank(dev, pipe);
+
 		DCAttachPipe(pipe);
+		DCUnLockMutex();
 
 		/* Give the overlay scaler a chance to enable
 		   if it's on this pipe */
@@ -399,6 +408,8 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 		break;
 	case DRM_MODE_DPMS_OFF:
+		DCLockMutex();
+
 		/* Give the overlay scaler a chance to disable
 		 * if it's on this pipe */
 		/* psb_intel_crtc_dpms_video(crtc, FALSE); TODO */
@@ -460,8 +471,12 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 		/* Turn off vsync interrupt. */
 		drm_vblank_off(dev, pipe);
 
+		if ((pipe == 1) && hdmi_priv)
+			hdmi_priv->hdmi_suspended = true;
+
 		/* Make the pending flip request as completed. */
 		DCUnAttachPipe(pipe);
+		DCUnLockMutex();
 		break;
 	}
 

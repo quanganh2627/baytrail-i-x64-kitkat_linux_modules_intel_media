@@ -2919,6 +2919,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 	u32 vbl_count = 0;
 	s64 nsecs = 0;
 	int ret = 0;
+	struct android_hdmi_priv *hdmi_priv = dev_priv->hdmi_priv;
 
 	if (arg->vsync_operation_mask) {
 		pipe = arg->vsync.pipe;
@@ -2943,8 +2944,14 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			dsi_config = dev_priv->dsi_configs[1];
 
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
-			/* TODO: find a clean way to protect vblank_enabled */
-			if (dev->vblank_enabled[pipe]) {
+			mutex_lock(&dev->mode_config.mutex);
+
+			if (((pipe == 1) && (dev->vblank_enabled[pipe]) &&
+						hdmi_priv &&
+						 !hdmi_priv->hdmi_suspended) ||
+					((dev->vblank_enabled[pipe]) &&
+					 dsi_config &&
+					 dsi_config->dsi_hw_context.panel_on)) {
 				vblwait.request.type =
 					(_DRM_VBLANK_RELATIVE |
 					 _DRM_VBLANK_NEXTONMISS);
@@ -2961,12 +2968,15 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				if (ret) {
 					DRM_ERROR("%s: fail to get pipe %d vsync\n",
 							__func__, pipe);
-					if (pipe != 1)
+					if ((pipe != 1) && (is_panel_vid_or_cmd(dev) ==
+								MDFLD_DSI_ENCODER_DBI))
 						schedule_work(&dev_priv->reset_panel_work);
 				}
 
 				mdfld_dsi_dsr_allow(dsi_config);
 			}
+
+			mutex_unlock(&dev->mode_config.mutex);
 
 			getrawmonotonic(&now);
 			nsecs = timespec_to_ns(&now);
@@ -2977,9 +2987,11 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
+			mutex_lock(&dev->mode_config.mutex);
 			if (dev_priv->vsync_enabled[pipe]) {
 				DRM_ERROR("%s: vsync has been enabled on pipe %d",
 					__func__, pipe);
+				mutex_unlock(&dev->mode_config.mutex);
 				return 0;
 			}
 			mdfld_dsi_dsr_forbid(dsi_config);
@@ -2990,17 +3002,21 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				mdfld_dsi_dsr_allow(dsi_config);
 			} else
 				dev_priv->vsync_enabled[pipe] = true;
+			mutex_unlock(&dev->mode_config.mutex);
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
+			mutex_lock(&dev->mode_config.mutex);
 			if (!dev_priv->vsync_enabled[pipe]) {
 				DRM_ERROR("%s: vsync has been disabled on pipe %d",
 					__func__, pipe);
+				mutex_unlock(&dev->mode_config.mutex);
 				return 0;
 			}
 			dev_priv->vsync_enabled[pipe] = false;
 			drm_vblank_put(dev, pipe);
 			mdfld_dsi_dsr_allow(dsi_config);
+			mutex_unlock(&dev->mode_config.mutex);
 		}
 	}
 
