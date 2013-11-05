@@ -377,12 +377,12 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 
 	if (pipe_stat_val & PIPE_VBLANK_STATUS) {
 		dev_priv->vsync_pipe = pipe;
-		schedule_work(&dev_priv->vsync_event_work);
+		queue_work(dev_priv->vsync_wq, &dev_priv->vsync_event_work);
 	}
 
 	if (pipe_stat_val & PIPE_TE_STATUS) {
 		dev_priv->te_pipe = pipe;
-		schedule_work(&dev_priv->te_work);
+		queue_work(dev_priv->vsync_wq, &dev_priv->te_work);
 	}
 
 	if (pipe == 0) { /* only for pipe A */

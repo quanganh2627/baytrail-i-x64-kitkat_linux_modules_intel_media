@@ -1447,6 +1447,8 @@ static int psb_driver_unload(struct drm_device *dev)
 	if (drm_psb_no_fb == 0)
 		psb_modeset_cleanup(dev);
 
+	destroy_workqueue(dev_priv->vsync_wq);
+
 	if (dev_priv) {
 		/* psb_watchdog_takedown(dev_priv); */
 		psb_do_takedown(dev);
@@ -1885,8 +1887,14 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 		INIT_WORK(&dev_priv->reset_panel_work,
 				mdfld_reset_panel_handler_work);
 	}
-
 	INIT_WORK(&dev_priv->vsync_event_work, mdfld_vsync_event_work);
+
+	dev_priv->vsync_wq = alloc_workqueue("vsync_wq", WQ_UNBOUND, 1);
+	if (!dev_priv->vsync_wq) {
+		DRM_ERROR("failed to create vsync workqueue\n");
+		ret = -ENOMEM;
+		goto out_err;
+	}
 
 	if (drm_psb_no_fb == 0) {
 		psb_modeset_init(dev);
