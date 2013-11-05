@@ -111,7 +111,7 @@ int drm_psb_te_timer_delay = (DRM_HZ / 40);
 char HDMI_EDID[HDMI_MONITOR_NAME_LENGTH];
 int hdmi_state;
 u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
-int drm_psb_msvdx_tiling = 0;
+int drm_psb_msvdx_tiling = 1;
 int drm_msvdx_bottom_half;
 int drm_hdmi_hpd_auto;
 int drm_vsp_burst = 1;
