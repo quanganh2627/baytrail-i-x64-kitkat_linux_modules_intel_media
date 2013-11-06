@@ -119,14 +119,6 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		__func__, __LINE__);
 		goto ic_init_err;
 	}
-	err = mdfld_dsi_send_gen_short_hs(sender,
-		access_protect, 3, 2,
-		MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Manufacture command protect off\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
 	msleep(20);
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 			set_tear_on, 0x00, 1,
