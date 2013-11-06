@@ -207,10 +207,8 @@ inline int had_get_hwstate(struct snd_intelhad *intelhaddata)
 	}
 
 	/* Check for device presence -HW state */
-	if (!ospm_power_using_hw_begin(OSPM_DISPLAY_ISLAND,
-				OSPM_UHB_ONLY_IF_ON)) {
+	if (!ospm_power_is_hw_on(OSPM_DISPLAY_ISLAND)) {
 		pr_err("%s:Device not connected\n", __func__);
-		dump_stack();
 		/* HOT_UNPLUG event can be sent to
 		 * maintain correct state within HAD
 		 * had_event_handler(HAD_EVENT_HOT_UNPLUG, intelhaddata);
@@ -219,7 +217,6 @@ inline int had_get_hwstate(struct snd_intelhad *intelhaddata)
 		return -ENODEV;
 	}
 
-	ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
 	return 0;
 }
 
