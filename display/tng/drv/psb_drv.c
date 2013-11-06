@@ -3082,6 +3082,12 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				PSB_WVDC32(arg->overlay.OGAMC0, ov_ogamc0_reg);
 			}
 
+			if (arg->overlay_write_mask & OV_REGRWBITS_OVADD) {
+				PSB_WVDC32(arg->overlay.OVADD, OV_OVADD);
+				if (arg->overlay.b_wms){
+					mdfld_dsi_dsr_update_panel_fb(dsi_config);
+				}
+			}
 			/*allow entering dsr*/
 			mdfld_dsi_dsr_allow(dsi_config);
 
