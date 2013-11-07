@@ -430,12 +430,17 @@ static IMG_VOID _SCPDumpCommand(SCP_COMMAND *psCommand)
 	{
 		for (i = 0; i < psCommand->ui32SyncCount; i++)
 		{
+			if (!psCommand->pasSCPSyncData)
+				continue;
+
 			SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
 		   
 			/*
 				Only dump this sync if there is a fence operation on it
 			*/
-			if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE)
+			if (psSCPSyncData &&
+					(psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE) &&
+					(psSCPSyncData->psSync))
 			{
 				PVR_LOG(("\t\tFenced on 0x%08x = 0x%08x (?= 0x%08x)",
 						ServerSyncGetFWAddr(psSCPSyncData->psSync),
@@ -829,6 +834,9 @@ IMG_VOID SCPCommandComplete(SCP_CONTEXT *psContext)
 IMG_EXPORT
 IMG_VOID IMG_CALLCONV SCPDumpStatus(SCP_CONTEXT *psContext)
 {
+	if (psContext == IMG_NULL)
+		return;
+
 	/*
 		Acquire the lock to ensure that the SCP isn't run while
 		while we're dumping info
