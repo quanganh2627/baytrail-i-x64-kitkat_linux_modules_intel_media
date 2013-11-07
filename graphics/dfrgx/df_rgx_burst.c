@@ -45,7 +45,7 @@ struct gpu_profiling_record aProfilingInformation[NUMBER_OF_LEVELS_B0];
 /**
  * gpu_profiling_records_init() - Initializes profiling array.
  */
-static void gpu_profiling_records_init()
+static void gpu_profiling_records_init(void)
 {
 	gpu_profiling_records_restart();
 }
@@ -53,7 +53,7 @@ static void gpu_profiling_records_init()
 /**
  * gpu_profiling_records_restart() - Memset to 0, profiling stats array.
  */
-void gpu_profiling_records_restart()
+void gpu_profiling_records_restart(void)
 {
 	memset(aProfilingInformation, 0, sizeof(aProfilingInformation));
 }
@@ -67,11 +67,10 @@ void gpu_profiling_records_restart()
 static void gpu_profiling_records_update_entry( int util_index , int is_current_entry)
 {
 	long long time_diff_ms;
+	ktime_t time_now = ktime_get();
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: index %d, current %d \n",
 		__func__, util_index, is_current_entry);
-
-	ktime_t time_now = ktime_get();
 	
 	if(is_current_entry)
 	{

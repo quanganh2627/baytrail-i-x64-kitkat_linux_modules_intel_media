@@ -40,6 +40,8 @@ ifeq ($(THERMAL_DEBUG),1)
 ccflags-y += -DTHERMAL_DEBUG
 endif
 
+ccflags-y += -Werror
+
 # This makefile written for dir: drivers/staging/intel_media/graphics/dfrgx
 
 ifneq ($(MY_DEBUG),)
@@ -66,7 +68,7 @@ include ../modules/intel_media/graphics/dfrgx/dependencies/Makefile
 my_warning_flags :=
 my_warning_flags += -Wall -fmessage-length=0 -Wunused-parameter
 
-my_warning_flags += -Wextra -Wno-sign-compare -Wformat-nonliteral -Wformat-security -fdiagnostics-show-option -Wdeclaration-after-statement -Wmissing-format-attribute -Wpointer-arith -Wshadow -Wlogical-op -Wbad-function-cast -Wmissing-prototypes -Wwrite-strings
+my_warning_flags += -Wextra -Wno-sign-compare -Wformat-nonliteral -Wformat-security -fdiagnostics-show-option -Wdeclaration-after-statement -Wmissing-format-attribute -Wpointer-arith -Wlogical-op -Wbad-function-cast -Wmissing-prototypes
 
 # Turn off things that too many kernel headers cause.
 my_warning_flags += -Wno-unused-parameter -Wno-pointer-arith -Wno-bad-function-cast

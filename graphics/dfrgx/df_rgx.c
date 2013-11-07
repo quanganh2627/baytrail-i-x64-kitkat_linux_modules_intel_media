@@ -174,6 +174,7 @@ MODULE_LICENSE("GPL");
  *
  * Example invocation:
  *     MODULE_VERSION("0.1");
+ */
 
 /**
  * df_rgx_bus_target - Request setting of a new frequency.
@@ -189,9 +190,9 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 	struct devfreq       	*df;
 	unsigned long desired_freq = 0;
 	int ret = 0;
-	(void) flags;
 	int adjust_curfreq = 0;
 	int set_freq = 0;
+	(void) flags;
 
 	pdev = container_of(dev, struct platform_device, dev);
 	bfdata = platform_get_drvdata(pdev);
@@ -468,11 +469,10 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 static int tcd_get_available_states(struct thermal_cooling_device *tcd,
 	char *buf)
 {
-	struct busfreq_data *bfdata = (struct busfreq_data *) tcd->devdata;
 	int ret = 0;
 
 	if(is_tng_b0){
-	ret = sprintf(buf, "%d %d %d %d %d %d %d %d\n", aAvailableStateFreq[0].freq,
+	ret = sprintf(buf, "%lu %lu %lu %lu %lu %lu %lu %lu\n", aAvailableStateFreq[0].freq,
 			 aAvailableStateFreq[1].freq,
 			 aAvailableStateFreq[2].freq,
 			 aAvailableStateFreq[3].freq,
@@ -482,7 +482,7 @@ static int tcd_get_available_states(struct thermal_cooling_device *tcd,
 			 aAvailableStateFreq[7].freq);
 	}
 	else{
-	ret = sprintf(buf, "%d %d %d %d\n", aAvailableStateFreq[0].freq,
+	ret = sprintf(buf, "%lu %lu %lu %lu\n", aAvailableStateFreq[0].freq,
 			 aAvailableStateFreq[1].freq,
 			 aAvailableStateFreq[2].freq,
 			 aAvailableStateFreq[3].freq);
@@ -506,7 +506,7 @@ static int tcd_get_force_state_override(struct thermal_cooling_device *tcd,
 {
 	struct busfreq_data *bfdata = (struct busfreq_data *) tcd->devdata;
 
-	return sprintf(buf, "%d %d %d %d\n", bfdata->gpudata[0].freq_limit,
+	return sprintf(buf, "%lu %lu %lu %lu\n", bfdata->gpudata[0].freq_limit,
 			 bfdata->gpudata[1].freq_limit,
 			 bfdata->gpudata[2].freq_limit,
 			 bfdata->gpudata[3].freq_limit);
@@ -532,12 +532,12 @@ static int tcd_set_force_state_override(struct thermal_cooling_device *tcd,
 	if(is_tng_b0)
 		prev_freq = DFRGX_FREQ_533_MHZ;
 
-	sscanf(buf, "%u %u %u %u\n", &freqs[0],
+	sscanf(buf, "%lu %lu %lu %lu\n", &freqs[0],
 			 &freqs[1],
 			 &freqs[2],
 			 &freqs[3]);
 
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s values: %u %u %u %u\n", __func__,
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s values: %lu %lu %lu %lu\n", __func__,
 			freqs[0],
 			freqs[1],
 			freqs[2],

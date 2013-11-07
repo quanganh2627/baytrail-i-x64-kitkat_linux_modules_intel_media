@@ -66,7 +66,7 @@ void dfrgx_burst_set_enable(struct df_rgx_data_s *g_dfrgx, int enable);
 void dfrgx_profiling_set_enable(struct df_rgx_data_s *g_dfrgx, int enable);
 int dfrgx_burst_is_enabled(struct df_rgx_data_s *g_dfrgx);
 int dfrgx_profiling_is_enabled(struct df_rgx_data_s *g_dfrgx);
-void gpu_profiling_records_restart();
+void gpu_profiling_records_restart(void);
 int gpu_profiling_records_show(char *buf);
 
 #endif /*DFRGX_BURST*/
