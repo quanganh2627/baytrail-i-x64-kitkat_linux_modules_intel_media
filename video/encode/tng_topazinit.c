@@ -605,8 +605,7 @@ static void tng_topaz_mmu_configure(struct drm_device *dev)
 #endif
 
 void tng_topaz_mmu_enable_tiling(
-	struct drm_psb_private *dev_priv,
-	uint32_t pipe_id)
+	struct drm_psb_private *dev_priv)
 {
 	uint32_t reg_val;
 	uint32_t min_addr = dev_priv->bdev.man[TTM_PL_TT].gpu_offset;
@@ -617,11 +616,11 @@ void tng_topaz_mmu_enable_tiling(
 			min_addr, max_addr);
 
 	reg_val = F_ENCODE(1, TOPAZHP_TOP_CR_TILE_ENABLE) | /* Enable tiling */
-		F_ENCODE(0, TOPAZHP_TOP_CR_TILE_STRIDE) | /* Set stride */
+		F_ENCODE(2, TOPAZHP_TOP_CR_TILE_STRIDE) | /* Set stride to 2048 as tiling is only used for 1080p */
 		F_ENCODE((max_addr>>20), TOPAZHP_TOP_CR_TILE_MAX_ADDR) | /* Set max address */
 		F_ENCODE((min_addr>>20), TOPAZHP_TOP_CR_TILE_MIN_ADDR); /* Set min address */
 
-	TOPAZCORE_WRITE32(pipe_id, TOPAZHP_TOP_CR_MMU_TILE_0, reg_val);
+	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MMU_TILE_0, reg_val);
 
 }
 
@@ -1941,7 +1940,7 @@ void tng_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv)
 	if (drm_psb_msvdx_tiling && dev_priv->have_mem_mmu_tiling &&
 		((topaz_priv->frame_w>PSB_TOPAZ_TILING_THRESHOLD) ||
 		(topaz_priv->frame_h>PSB_TOPAZ_TILING_THRESHOLD))) {
-		tng_topaz_mmu_enable_tiling(dev_priv, 0);
+		tng_topaz_mmu_enable_tiling(dev_priv);
 	}
 
 	/* now enable MMU access for all requestors */
