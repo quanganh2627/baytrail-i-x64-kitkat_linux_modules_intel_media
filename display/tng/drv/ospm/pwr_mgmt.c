@@ -42,6 +42,7 @@
 #include "dc_ospm.h"
 #include "video_ospm.h"
 #include "early_suspend.h"
+#include "early_suspend_sysfs.h"
 
 
 struct _ospm_data_ *g_ospm_data;
@@ -540,6 +541,7 @@ void ospm_power_init(struct drm_device *dev)
 	/* register early_suspend runtime pm */
 	intel_media_early_suspend_init(dev);
 #endif
+	intel_media_early_suspend_sysfs_init(dev);
 
 	rtpm_init(dev);
 out_err:
@@ -562,6 +564,8 @@ void ospm_power_uninit(void)
 	/* un-init early suspend */
 	intel_media_early_suspend_uninit();
 #endif
+	intel_media_early_suspend_sysfs_uninit(gpDrmDevice);
+
 	/* Do we need to turn off all islands? */
 	power_island_put(OSPM_ALL_ISLANDS);
 

@@ -116,7 +116,8 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/ospm/gfx_rtpm.o \
 	$(DISPLAYDIR)/ospm/dc_ospm.o \
 	$(DISPLAYDIR)/ospm/video_ospm.o \
-	$(DISPLAYDIR)/ospm/early_suspend.o
+	$(DISPLAYDIR)/ospm/early_suspend.o \
+	$(DISPLAYDIR)/ospm/early_suspend_sysfs.o
 
 ifeq ($(CONFIG_MOOREFIELD),y)
 $(DRIVER_NAME)-objs += \
