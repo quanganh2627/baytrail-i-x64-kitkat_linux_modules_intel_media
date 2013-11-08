@@ -1169,7 +1169,10 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 
 	vsp_priv->ctrl->entry_kind = vsp_exit;
 
+	/* in case of power mode 0, HW always active,
+	 * * set state to idle here for check idle func */
 	if (vsp_priv->fw_loaded_by_punit) {
+		vsp_priv->vsp_state = VSP_STATE_IDLE;
 		ospm_apm_power_down_vsp(dev);
 	} else {
 		ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
