@@ -688,9 +688,9 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_GET_HDCP_STATUS, psb_get_hdcp_status_ioctl,
 		      DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_ENABLE_HDCP, psb_enable_hdcp_ioctl,
-		      DRM_AUTH),
+		      DRM_AUTH | DRM_UNLOCKED),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_DISABLE_HDCP, psb_disable_hdcp_ioctl,
-		      DRM_AUTH),
+		      DRM_AUTH | DRM_UNLOCKED),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_GET_HDCP_LINK_STATUS,
 			psb_get_hdcp_link_status_ioctl, DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_HDCP_DISPLAY_IED_OFF,
@@ -2320,6 +2320,7 @@ static int psb_get_hdcp_link_status_ioctl(struct drm_device *dev, void *data,
 
 	return 0;
 }
+
 
 #endif /* ifdef CONFIG_SUPPORT_HDMI */
 
