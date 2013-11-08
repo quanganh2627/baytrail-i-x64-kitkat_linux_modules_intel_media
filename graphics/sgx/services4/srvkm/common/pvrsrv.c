@@ -156,7 +156,37 @@ PVRSRV_ERROR FreeDeviceID(SYS_DATA *psSysData, IMG_UINT32 ui32DevID)
 
 	return PVRSRV_ERROR_INVALID_DEVICEID;
 }
+/*!
+******************************************************************************
 
+ @Function		PVRSRVCompatCheckKM
+
+ @Description   	UM/KM ddk branch Compatibility check function
+
+ @input 		psUserModeDDKDetails: User mode DDK version
+ 
+ @output		In case of incompatibility, returns PVRSRV_ERROR_DDK_VERSION_MISMATCH
+
+ @Return   		PVRSRV_ERROR
+
+******************************************************************************/
+IMG_VOID IMG_CALLCONV PVRSRVCompatCheckKM(PVRSRV_BRIDGE_IN_COMPAT_CHECK *psUserModeDDKDetails, PVRSRV_BRIDGE_RETURN *psRetOUT)
+{
+
+	if(psUserModeDDKDetails->ui32DDKVersion != ((PVRVERSION_MAJ << 16) | (PVRVERSION_MIN << 8))
+		|| (psUserModeDDKDetails->ui32DDKBuild != PVRVERSION_BUILD))
+	{
+		psRetOUT->eError = PVRSRV_ERROR_DDK_VERSION_MISMATCH;
+		PVR_DPF((PVR_DBG_ERROR, "(FAIL) UM-KM DDK Mismatch UM-(%d) KM-(%d).",
+						psUserModeDDKDetails->ui32DDKBuild, PVRVERSION_BUILD));
+	}
+	else
+	{
+		psRetOUT->eError = PVRSRV_OK;
+		PVR_DPF((PVR_DBG_MESSAGE, "UM DDK-(%d) and KM DDK-(%d) match. [ OK ]",
+						psUserModeDDKDetails->ui32DDKBuild ,PVRVERSION_BUILD));
+	}
+}
 
 /*!
 ******************************************************************************

@@ -112,11 +112,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		#define SGX_CORE_REV	SGX_CORE_REV_HEAD
 	#endif
 
-	#if SGX_CORE_REV == 101
-		#define FIX_HW_BRN_26620/* Workaround in services (srvkm) */
-		#define FIX_HW_BRN_28011/* Workaround in services (srvkm) */
-		#define FIX_HW_BRN_34028/* Workaround in services (srvkm) */
-	#else
 	#if SGX_CORE_REV == 110
 		#define FIX_HW_BRN_34028/* Workaround in services (srvkm) */
 	#else
@@ -124,7 +119,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		/* RTL head - no BRNs to apply */
 	#else
 		#error "sgxerrata.h: SGX531 Core Revision unspecified"
-	#endif
 	#endif
 	#endif
 	/* signal that the Core Version has a valid definition */
@@ -167,12 +161,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		#define SGX_CORE_REV	SGX_CORE_REV_HEAD
 	#endif
 
-	#if SGX_CORE_REV == 110
-		#define FIX_HW_BRN_25503/* Workaround in code (services) */
-		#define FIX_HW_BRN_26620/* Workaround in services (srvkm) */
-		#define FIX_HW_BRN_28011/* Workaround in services (srvkm) */
-		#define FIX_HW_BRN_34028/* Workaround in services (srvkm) */
-	#else
 	#if SGX_CORE_REV == 120
 		#define FIX_HW_BRN_26620/* Workaround in services (srvkm) */
 		#define FIX_HW_BRN_28011/* Workaround in services (srvkm) */
@@ -189,7 +177,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		/* RTL head - no BRNs to apply */
 	#else
 		#error "sgxerrata.h: SGX540 Core Revision unspecified"
-	#endif
 	#endif
 	#endif
 	#endif
@@ -366,7 +353,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 		#if defined(SUPPORT_SGX_LOW_LATENCY_SCHEDULING) && defined(SGX_FEATURE_MP)
 			#define FIX_HW_BRN_33657/* workaround in ukernel */
 		#endif
-		#define FIX_HW_BRN_33809/* workaround in kernel (enable burst combiner) */
 		#define FIX_HW_BRN_36513 /* workaround in uKernel and Services */
 	#else
 	#if SGX_CORE_REV == 117
