@@ -164,7 +164,6 @@ PVRSRVBridgeAllocSyncPrimitiveBlock(IMG_UINT32 ui32BridgeID,
 	hSyncHandleInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_SYNC_PRIMITIVE_BLOCK,
 												psSyncHandleInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVFreeSyncPrimitiveBlockKM);
 	if (hSyncHandleInt2 == IMG_NULL)
 	{
@@ -409,7 +408,6 @@ PVRSRVBridgeServerSyncAlloc(IMG_UINT32 ui32BridgeID,
 	hSyncHandleInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_SERVER_SYNC_PRIMITIVE,
 												psSyncHandleInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVServerSyncFreeKM);
 	if (hSyncHandleInt2 == IMG_NULL)
 	{
@@ -922,7 +920,6 @@ PVRSRVBridgeSyncPrimOpCreate(IMG_UINT32 ui32BridgeID,
 	hServerCookieInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_SERVER_OP_COOKIE,
 												psServerCookieInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVSyncPrimOpDestroyKM);
 	if (hServerCookieInt2 == IMG_NULL)
 	{

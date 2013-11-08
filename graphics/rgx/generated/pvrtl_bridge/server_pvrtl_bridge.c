@@ -191,7 +191,6 @@ PVRSRVBridgeTLOpenStream(IMG_UINT32 ui32BridgeID,
 	hSDInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_TL_STREAM_DESC,
 												psSDInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&TLServerCloseStreamKM);
 	if (hSDInt2 == IMG_NULL)
 	{

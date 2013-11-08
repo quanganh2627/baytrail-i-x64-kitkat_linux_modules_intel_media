@@ -547,6 +547,45 @@ int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 	return 0;
 }
 
+int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
+			int index, int enabled)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_context *dsi_ctx;
+	u32 dspcntr, dspsurf;
+
+	if (index < 0 || index > 2) {
+		DRM_ERROR("Invalid primary index %d\n", index);
+		return -EINVAL;
+	}
+
+	if (index == 0) {
+		dsi_config = dev_priv->dsi_configs[0];
+		dspcntr = DSPACNTR;
+		dspsurf = DSPASURF;
+	} else if (index == 1) {
+		dspcntr = DSPBCNTR;
+		dspsurf = DSPBSURF;
+	} else if (index == 2) {
+		dsi_config = dev_priv->dsi_configs[1];
+		dspcntr = DSPCCNTR;
+		dspsurf = DSPCSURF;
+	}
+
+	if (dsi_config)
+		dsi_ctx = &dsi_config->dsi_hw_context;
+
+	if (dsi_ctx)
+		dsi_ctx->dspcntr &= ~DISPLAY_PLANE_ENABLE;
+
+	PSB_WVDC32((PSB_RVDC32(dspcntr) & ~DISPLAY_PLANE_ENABLE),
+			dspcntr);
+	PSB_WVDC32((PSB_RVDC32(dspsurf)), dspsurf);
+
+	return 0;
+}
+
 int DCCBUpdateDbiPanel(struct drm_device *dev, int pipe)
 {
 	struct drm_psb_private *dev_priv =

@@ -224,8 +224,6 @@ PVRSRV_ERROR PDumpOSVSprintf(IMG_CHAR *pszComment, IMG_UINT32 ui32ScriptSizeMax,
 IMG_VOID PDumpOSDebugPrintf(IMG_CHAR* pszFormat, ...)
 {
 	PVR_UNREFERENCED_PARAMETER(pszFormat);
-
-	/* FIXME: Implement using services PVR_DBG or otherwise with kprintf */
 }
 
 /*!

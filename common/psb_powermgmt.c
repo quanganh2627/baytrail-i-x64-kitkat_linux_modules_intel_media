@@ -112,6 +112,7 @@ static int ospm_runtime_pm_msvdx_suspend(struct drm_device *dev)
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	struct psb_video_ctx *pos, *n;
 	int decode_ctx = 0, decode_running = 0;
+	unsigned long irq_flags;
 
 	PSB_DEBUG_PM("MSVDX: %s: enter in runtime pm.\n", __func__);
 
@@ -133,7 +134,7 @@ static int ospm_runtime_pm_msvdx_suspend(struct drm_device *dev)
 		goto out;
 	}
 
-	mutex_lock(&dev_priv->video_ctx_mutex);
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
 		int entrypoint = pos->ctx_type & 0xff;
 		if (entrypoint == VAEntrypointVLD ||
@@ -145,7 +146,7 @@ static int ospm_runtime_pm_msvdx_suspend(struct drm_device *dev)
 			break;
 		}
 	}
-	mutex_unlock(&dev_priv->video_ctx_mutex);
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 
 	/* have decode context, but not started, or is just closed */
 	if (decode_ctx && msvdx_priv->msvdx_ctx)
@@ -177,6 +178,7 @@ static int ospm_runtime_pm_topaz_suspend(struct drm_device *dev)
 	struct pnw_topaz_private *pnw_topaz_priv = dev_priv->topaz_private;
 	struct psb_video_ctx *pos, *n;
 	int encode_ctx = 0, encode_running = 0;
+	unsigned long irq_flags;
 
 	if (!ospm_power_is_hw_on(OSPM_VIDEO_ENC_ISLAND))
 		goto out;
@@ -193,7 +195,7 @@ static int ospm_runtime_pm_topaz_suspend(struct drm_device *dev)
 		}
 	}
 
-	mutex_lock(&dev_priv->video_ctx_mutex);
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
 		int entrypoint = pos->ctx_type & 0xff;
 		if (entrypoint == VAEntrypointEncSlice ||
@@ -202,7 +204,7 @@ static int ospm_runtime_pm_topaz_suspend(struct drm_device *dev)
 			break;
 		}
 	}
-	mutex_unlock(&dev_priv->video_ctx_mutex);
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 
 	/* have encode context, but not started, or is just closed */
 	if (encode_ctx && dev_priv->topaz_ctx)
@@ -282,10 +284,10 @@ static int ospm_runtime_pm_topaz_resume(struct drm_device *dev)
 	struct pnw_topaz_private *pnw_topaz_priv = dev_priv->topaz_private;
 	struct psb_video_ctx *pos, *n;
 	int encode_ctx = 0, encode_running = 0;
+	unsigned long irq_flags;
 
 	/*printk(KERN_ALERT "ospm_runtime_pm_topaz_resume\n");*/
-
-	mutex_lock(&dev_priv->video_ctx_mutex);
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
 		int entrypoint = pos->ctx_type & 0xff;
 		if (entrypoint == VAEntrypointEncSlice ||
@@ -294,7 +296,7 @@ static int ospm_runtime_pm_topaz_resume(struct drm_device *dev)
 			break;
 		}
 	}
-	mutex_unlock(&dev_priv->video_ctx_mutex);
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 
 	/* have encode context, but not started, or is just closed */
 	if (encode_ctx && dev_priv->topaz_ctx)

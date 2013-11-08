@@ -143,7 +143,6 @@ PVRSRVBridgePMRSecureExportPMR(IMG_UINT32 ui32BridgeID,
 	hPMROutInt2 = ResManRegisterRes(psSecureConnection->hResManContext,
 												RESMAN_TYPE_PMR,
 												psPMROutInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PMRSecureUnexportPMR);
 	if (hPMROutInt2 == IMG_NULL)
 	{
@@ -250,7 +249,6 @@ PVRSRVBridgePMRSecureImportPMR(IMG_UINT32 ui32BridgeID,
 	hPMRInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_PMR,
 												psPMRInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PMRUnrefPMR);
 	if (hPMRInt2 == IMG_NULL)
 	{

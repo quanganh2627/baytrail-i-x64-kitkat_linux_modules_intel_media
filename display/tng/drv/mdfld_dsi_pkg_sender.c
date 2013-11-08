@@ -129,7 +129,6 @@ static inline int wait_for_gen_fifo_empty(struct mdfld_dsi_pkg_sender *sender,
 
 	DRM_ERROR("fifo is NOT empty 0x%08x\n", REG_READ(gen_fifo_stat_reg));
 	debug_dbi_hang(sender);
-	panic("Timeout waiting for fifo(s) to be empty - mask is 0x%08x\n", mask);
 	sender->status = MDFLD_DSI_CONTROL_ABNORMAL;
 	return -EIO;
 }
@@ -1368,7 +1367,6 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 			DRM_ERROR("DBI FIFO timeout, drop frame\n");
 			spin_unlock(&sender->lock);
 			debug_dbi_hang(sender);
-	    panic("DBI FIFO timeout, drop frame\n");
 			return 0;
 		}
 

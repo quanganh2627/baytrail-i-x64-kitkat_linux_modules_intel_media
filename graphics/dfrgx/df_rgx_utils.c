@@ -29,6 +29,11 @@
 
 extern int is_tng_b0;
 
+struct gpu_freq_thresholds aGovernorProfile[] = {
+							{25, 45},	/* low, high thresholds for Performance governor */
+							{80, 95},	/* low, high thresholds for Power Save governor*/
+							{50, 100}	/* low, high Custom thresholds */
+						};
 /**
  * df_rgx_is_valid_freq() - Determines if We are about to use
  * a valid frequency.
@@ -92,8 +97,7 @@ int df_rgx_get_util_record_index_by_freq(unsigned long freq)
 /**
  * df_rgx_request_burst() - Decides if dfrgx needs to BURST, UNBURST
  * or keep the current frequency level.
- * @p_freq_table_index: pointer to index of the next frequency
- * to be applied.
+ * @pdfrgx_data: Dynamic turbo information
  * @util_percentage: percentage of utilization in active state.
  * Function return value: DFRGX_NO_BURST_REQ, DFRGX_BURST_REQ,
  * DFRGX_UNBURST_REQ.
@@ -115,14 +119,13 @@ unsigned int df_rgx_request_burst(struct df_rgx_data_s *pdfrgx_data, int util_pe
 		goto out;
 
 	/* Decide unbusrt/burst based on utilization*/
-
-	if(util_percentage > aAvailableStateFreq[current_index].util_th_high && new_index < pdfrgx_data->g_max_freq_index)
+	if(util_percentage > aGovernorProfile[pdfrgx_data->g_profile_index].util_th_high && new_index < pdfrgx_data->g_max_freq_index)
 	{
 		/* Provide recommended burst*/
 		pdfrgx_data->gpu_utilization_record_index = new_index+1;
 		burst = DFRGX_BURST_REQ;
 	}
-	else if(util_percentage <  aAvailableStateFreq[current_index].util_th_low && new_index > pdfrgx_data->g_min_freq_index)
+	else if(util_percentage < aGovernorProfile[pdfrgx_data->g_profile_index].util_th_low && new_index > pdfrgx_data->g_min_freq_index)
 	{
 		/* Provide recommended unburst*/
 		pdfrgx_data->gpu_utilization_record_index = new_index-1;
@@ -131,5 +134,36 @@ unsigned int df_rgx_request_burst(struct df_rgx_data_s *pdfrgx_data, int util_pe
 
 out:
 	return burst;
+}
+
+/**
+ * df_rgx_set_governor_profile() -Updates the thresholds based on the governor.
+ * @governor_name: governor id
+ * @g_dfrgx_data: Dynamic turbo information
+ * Function return value: 1 if changed, 0 otherwise.
+ */
+int df_rgx_set_governor_profile(const char *governor_name, struct df_rgx_data_s *g_dfrgx)
+{
+	int ret = 0;
+
+	if(!strncmp(governor_name, "performance", DEVFREQ_NAME_LEN))
+	{
+		g_dfrgx->g_profile_index = DFRGX_TURBO_PROFILE_PERFORMANCE;
+	}
+	else if (!strncmp(governor_name, "powersave", DEVFREQ_NAME_LEN))
+	{
+		g_dfrgx->g_profile_index = DFRGX_TURBO_PROFILE_POWERSAVE;
+	}
+	else if (!strncmp(governor_name, "simple_ondemand", DEVFREQ_NAME_LEN))
+	{
+		g_dfrgx->g_profile_index = DFRGX_TURBO_PROFILE_SIMPLE_ON_DEMAND;
+		ret = 1;
+	}
+	else if (!strncmp(governor_name, "userspace", DEVFREQ_NAME_LEN))
+	{
+		g_dfrgx->g_profile_index = DFRGX_TURBO_PROFILE_USERSPACE;
+	}
+
+	return ret;
 }
 

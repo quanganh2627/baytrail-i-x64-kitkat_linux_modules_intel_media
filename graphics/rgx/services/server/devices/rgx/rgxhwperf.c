@@ -216,9 +216,9 @@ e0:
 static INLINE IMG_UINT32 RGXHWPerfAdvanceRIdx(
 		const IMG_UINT32 ui32BufSize,
 		const IMG_UINT32 ui32Pos,
-		const IMG_UINT16 ui16Size)
+		const IMG_UINT32 ui32Size)
 {
-	return (  ui32Pos + ui16Size < ui32BufSize ? ui32Pos + ui16Size : 0 );
+	return (  ui32Pos + ui32Size < ui32BufSize ? ui32Pos + ui32Size : 0 );
 }
 
 
@@ -387,6 +387,7 @@ static PVRSRV_ERROR RGXHWPerfTLCB(IMG_HANDLE hStream,
 	PVRSRV_ERROR eError = PVRSRV_OK;
 	PVRSRV_RGXDEV_INFO* psRgxDevInfo = (PVRSRV_RGXDEV_INFO*)pvUser;
 
+	PVR_UNREFERENCED_PARAMETER(hStream);
 	PVR_UNREFERENCED_PARAMETER(ui32Resp);
 
 	PVR_ASSERT(psRgxDevInfo);
@@ -768,6 +769,19 @@ static IMG_VOID RGXHWPerfFTraceGPUEnable(void)
 {
 	PVRSRV_ERROR eError;
 
+	PVR_DPF_ENTERED;
+
+	/* In the case where the AppHint has not been set we need to
+	 * initialise the host driver HWPerf resources here. Allocated on
+	 * demand to reduce RAM foot print on systems not needing HWPerf.
+	 */
+	if (gpsRgxDevInfo->hHWPerfStream == IMG_NULL)
+	{
+		eError = RGXHWPerfInit(IMG_NULL, IMG_TRUE);
+		PVR_LOGG_IF_ERROR(eError, "RGXHWPerfInit", err_out);
+	}
+
+	/* Connect to the TL Stream for HWPerf data consumption */
 	eError = TLClientConnect(&gpsRgxDevInfo->hGPUTraceTLConnection);
 	PVR_LOGG_IF_ERROR(eError, "TLClientConnect", err_out);
 
@@ -787,7 +801,7 @@ static IMG_VOID RGXHWPerfFTraceGPUEnable(void)
 	PVR_LOGG_IF_ERROR(eError, "PVRSRVRegisterCmdCompleteNotify", err_close_stream);
 
 err_out:
-	return;
+	PVR_DPF_RETURN;
 
 err_close_stream:
 	TLClientCloseStream(gpsRgxDevInfo->hGPUTraceTLConnection,
@@ -801,33 +815,51 @@ static IMG_VOID RGXHWPerfFTraceGPUDisable(void)
 {
 	PVRSRV_ERROR eError;
 
+	PVR_DPF_ENTERED;
+
 	OSLockAcquire(hFTraceLock);
 
-	/* Tracing is being turned off. Unregister the notifier. */
-	eError = PVRSRVUnregisterCmdCompleteNotify(
-		gpsRgxDevInfo->hGPUTraceCmdCompleteHandle);
-	PVR_LOG_IF_ERROR(eError, "PVRSRVUnregisterCmdCompleteNotify");
+	if (gpsRgxDevInfo->hGPUTraceCmdCompleteHandle)
+	{
+		/* Tracing is being turned off. Unregister the notifier. */
+		eError = PVRSRVUnregisterCmdCompleteNotify(
+				gpsRgxDevInfo->hGPUTraceCmdCompleteHandle);
+		PVR_LOG_IF_ERROR(eError, "PVRSRVUnregisterCmdCompleteNotify");
+		gpsRgxDevInfo->hGPUTraceCmdCompleteHandle = IMG_NULL;
+	}
 
-	eError = TLClientCloseStream(gpsRgxDevInfo->hGPUTraceTLConnection,
-								 gpsRgxDevInfo->hGPUTraceTLStream);
-	PVR_LOG_IF_ERROR(eError, "TLClientCloseStream");
+	if (gpsRgxDevInfo->hGPUTraceTLStream)
+	{
+		eError = TLClientCloseStream(gpsRgxDevInfo->hGPUTraceTLConnection,
+			gpsRgxDevInfo->hGPUTraceTLStream);
+		PVR_LOG_IF_ERROR(eError, "TLClientCloseStream");
+		gpsRgxDevInfo->hGPUTraceTLStream = IMG_NULL;
+	}
 
-	eError = TLClientDisconnect(gpsRgxDevInfo->hGPUTraceTLConnection);
-	PVR_LOG_IF_ERROR(eError, "TLClientDisconnect");
+	if (gpsRgxDevInfo->hGPUTraceTLConnection)
+	{
+		eError = TLClientDisconnect(gpsRgxDevInfo->hGPUTraceTLConnection);
+		PVR_LOG_IF_ERROR(eError, "TLClientDisconnect");
+		gpsRgxDevInfo->hGPUTraceTLConnection = IMG_NULL;
+	}
 
 	OSLockRelease(hFTraceLock);
+
+	PVR_DPF_RETURN;
 }
 
 IMG_VOID RGXHWPerfFTraceGPUEventsEnabledSet(IMG_BOOL bNewValue)
 {
 	IMG_BOOL bOldValue;
 
+	PVR_DPF_ENTERED;
+
 	if (!gpsRgxDevInfo)
 	{
 		/* RGXHWPerfFTraceGPUInit hasn't been called yet -- it's too early
 		 * to enable tracing.
 		 */
-		return;
+		PVR_DPF_RETURN;
 	}
 
 	bOldValue = gpsRgxDevInfo->bFTraceGPUEventsEnabled;
@@ -840,6 +872,8 @@ IMG_VOID RGXHWPerfFTraceGPUEventsEnabledSet(IMG_BOOL bNewValue)
 		else
 			RGXHWPerfFTraceGPUDisable();
 	}
+
+	PVR_DPF_RETURN;
 }
 
 IMG_VOID PVRGpuTraceEnabledSet(IMG_BOOL bNewValue)
@@ -863,11 +897,15 @@ IMG_VOID RGXHWPerfFTraceGPUEnqueueEvent(PVRSRV_RGXDEV_INFO *psDevInfo,
 {
 	IMG_UINT32   ui32PID = OSGetCurrentProcessIDKM();
 
+	PVR_DPF_ENTERED;
+
 	PVR_ASSERT(pszJobType);
 
 	PVR_DPF((PVR_DBG_VERBOSE, "RGXHWPerfFTraceGPUEngueueEvent: PID %u, frame %u, RTDATA %x", ui32PID, ui32FrameNum, ui32RTData));
 
 	PVRGpuTraceClientWork(ui32PID, ui32FrameNum, ui32RTData, pszJobType);
+
+	PVR_DPF_RETURN;
 }
 
 
@@ -878,8 +916,10 @@ static IMG_VOID RGXHWPerfFTraceGPUSwitchEvent(PVRSRV_RGXDEV_INFO *psDevInfo,
 	IMG_UINT64   ui64Timestamp;
 	RGX_HWPERF_HW_DATA_FIELDS* psHWPerfPktData;
 	IMG_UINT32 ui32DVFSClock;
-	IMG_UINT64 ui64CRTimerStamp = OSReadHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_TIMER);
+	IMG_UINT64 ui64CRTimerStamp = (OSReadHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_TIMER) & ~RGX_CR_TIMER_VALUE_CLRMSK) >> RGX_CR_TIMER_VALUE_SHIFT;
 	IMG_UINT64 ui64OSTimeStamp = OSClockus64();
+
+	PVR_DPF_ENTERED;
 
 	PVR_ASSERT(psHWPerfPkt);
 	PVR_ASSERT(pszWorkName);
@@ -890,7 +930,7 @@ static IMG_VOID RGXHWPerfFTraceGPUSwitchEvent(PVRSRV_RGXDEV_INFO *psDevInfo,
 	 * filtered by ValidFTraceEvent() */
 	if (psHWPerfPktData->ui32RenderTarget == 0)
 	{
-		return;
+		PVR_DPF_RETURN;
 	}
 
 	/* Calculate the OS timestamp given an RGX timestamp in the HWPerf event */
@@ -917,6 +957,8 @@ static IMG_VOID RGXHWPerfFTraceGPUSwitchEvent(PVRSRV_RGXDEV_INFO *psDevInfo,
 	PVRGpuTraceWorkSwitch(ui64Timestamp, psHWPerfPktData->ui32PID,
 			psHWPerfPktData->ui32FrameNum, psHWPerfPktData->ui32RenderTarget,
 			pszWorkName, eSwType);
+
+	PVR_DPF_RETURN;
 }
 
 
@@ -977,6 +1019,8 @@ static IMG_VOID RGXHWPerfFTraceGPUThreadProcessPackets(PVRSRV_RGXDEV_INFO *psDev
 	PVRSRVTL_PPACKETHDR psHDRptr;
 	PVRSRVTL_PACKETTYPE ui16TlType;
 
+	PVR_DPF_ENTERED;
+
 	PVR_ASSERT(psDevInfo);
 	PVR_ASSERT(pBuffer);
 	PVR_ASSERT(ui32ReadLen);
@@ -1035,6 +1079,8 @@ static IMG_VOID RGXHWPerfFTraceGPUThreadProcessPackets(PVRSRV_RGXDEV_INFO *psDev
 	PVR_DPF((PVR_DBG_VERBOSE, "RGXHWPerfFTraceGPUThreadProcessPackets: TL "
 	 		"Packets processed %03d, HWPerf packets %03d, sent %03d",
 	 		ui32TlPackets, ui32HWPerfPackets, ui32HWPerfPacketsSent));
+
+	PVR_DPF_RETURN;
 }
 
 
@@ -1050,11 +1096,15 @@ IMG_VOID RGXHWPerfFTraceCmdCompleteNotify(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle)
 	IMG_PBYTE           pBuffer;
 	IMG_UINT32          ui32ReadLen;
 
+	PVR_DPF_ENTERED;
+
 	/* Command-complete notifiers can run concurrently. If this is
 	 * happening, just bail out and let the previous call finish.
 	 */
 	if (OSLockIsLocked(hFTraceLock))
-		return;
+	{
+		PVR_DPF_RETURN;
+	}
 
 	OSLockAcquire(hFTraceLock);
 
@@ -1098,6 +1148,8 @@ IMG_VOID RGXHWPerfFTraceCmdCompleteNotify(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle)
 
 out_unlock:
 	OSLockRelease(hFTraceLock);
+
+	PVR_DPF_RETURN;
 }
 
 
@@ -1105,26 +1157,31 @@ PVRSRV_ERROR RGXHWPerfFTraceGPUInit(PVRSRV_RGXDEV_INFO *psDevInfo)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;
 
-	PVR_DPF((PVR_DBG_MESSAGE, "RGXHWPerfFTraceGPUInit: psDevInfo %p", psDevInfo));
+	PVR_DPF_ENTERED;
 
-	/* Remember the RGX device info object for use later in interface calls
-	 * from the ENV layer handling debugfs entries.
-	 */
-	PVR_ASSERT(gpsRgxDevInfo == IMG_NULL);	/* Only support one device */
-	gpsRgxDevInfo = psDevInfo;
+    /* Must be setup already by the general HWPerf module initialisation.
+	 * DevInfo object needed by FTrace event generation code */
+	PVR_ASSERT(gpsRgxDevInfo);
 	gpsRgxDevInfo->bFTraceGPUEventsEnabled = IMG_FALSE;
 
 	eError = OSLockCreate(&hFTraceLock, LOCK_TYPE_DISPATCH);
 
-	return eError;
+	PVR_DPF_RETURN_RC(eError);
 }
 
 
 IMG_VOID RGXHWPerfFTraceGPUDeInit(PVRSRV_RGXDEV_INFO *psDevInfo)
 {
-	RGXHWPerfFTraceGPUDisable();
+	PVR_DPF_ENTERED;
+
+	if (gpsRgxDevInfo->bFTraceGPUEventsEnabled)
+	{
+		RGXHWPerfFTraceGPUDisable();
+	}
+
 	OSLockDestroy(hFTraceLock);
 
+	PVR_DPF_RETURN;
 }
 
 

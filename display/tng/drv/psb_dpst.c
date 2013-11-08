@@ -187,7 +187,7 @@ void psb_dpst_dev_change_wq(struct work_struct *work)
 	if (wq_data->dev_name_write_wrap == 1) {
 		wq_data->dev_name_read_write_wrap_ack = 1;
 		wq_data->dev_name_write_wrap = 0;
-		while (wq_data->dev_name_read != DRM_DPST_RING_DEPTH_MAX) {
+		while (wq_data->dev_name_read != DRM_DPST_RING_DEPTH) {
 			if (wq_data->dev_name_arry_rw_status
 			    [wq_data->dev_name_read] ==
 			    DRM_DPST_READY_TO_READ) {
@@ -220,16 +220,11 @@ void psb_dpst_dev_change_wq(struct work_struct *work)
 				curr_event_index = wq_data->dpst_events
 				    [wq_data->dev_name_read];
 				// SH DPST psb_umevent_notify_change_gfxsock
-			 if(curr_event_index < DRM_DPST_MAX_NUM_EVENTS) {
 				dpst_process_event
 				    (list_entry((wq_data->dev_umevent_arry
 						 [curr_event_index]),
 						struct umevent_obj, head),
 				     DRM_DPST_SOCKET_GROUP_ID);
-				} else {
-                                        DRM_ERROR("Work queue event index out of bounds.\n");
-                                }
-
 			}
 			wq_data->dev_name_read++;
 		}
@@ -244,16 +239,11 @@ void psb_dpst_dev_change_wq(struct work_struct *work)
 				curr_event_index = wq_data->dpst_events
 				    [wq_data->dev_name_read];
 				// SH DPST psb_umevent_notify_change_gfxsock
-			 if(curr_event_index < DRM_DPST_MAX_NUM_EVENTS) {
 				dpst_process_event
 				    (list_entry((wq_data->dev_umevent_arry
 						 [curr_event_index]),
 						struct umevent_obj, head),
 				     DRM_DPST_SOCKET_GROUP_ID);
-			        } else {
-                                        DRM_ERROR("Work queue event index out of bounds.\n");
-                                }
-
 			}
 			wq_data->dev_name_read++;
 		}

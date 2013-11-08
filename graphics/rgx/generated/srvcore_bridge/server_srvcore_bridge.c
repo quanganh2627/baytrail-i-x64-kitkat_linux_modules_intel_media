@@ -328,7 +328,6 @@ PVRSRVBridgeAcquireGlobalEventObject(IMG_UINT32 ui32BridgeID,
 	hGlobalEventObjectInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_SHARED_EVENT_OBJECT,
 												hGlobalEventObjectInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&ReleaseGlobalEventObjectServer);
 	if (hGlobalEventObjectInt2 == IMG_NULL)
 	{
@@ -466,7 +465,6 @@ PVRSRVBridgeEventObjectOpen(IMG_UINT32 ui32BridgeID,
 	hOSEventInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_EVENT_OBJECT,
 												hOSEventInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&OSEventObjectClose);
 	if (hOSEventInt2 == IMG_NULL)
 	{

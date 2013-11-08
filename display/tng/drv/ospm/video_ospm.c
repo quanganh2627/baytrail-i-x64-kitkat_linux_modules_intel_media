@@ -33,9 +33,6 @@
 #include "tng_wa.h"
 #include <asm/intel-mid.h>
 #include "pmu_tng.h"
-#ifdef CONFIG_GFX_RTPM
-#include <linux/pm_runtime.h>
-#endif
 
 static int pm_cmd_freq_get(u32 reg_freq);
 static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd);
@@ -357,28 +354,6 @@ void ospm_vec_init(struct drm_device *dev,
 	p_island->p_funcs->power_down = vec_power_down;
 	p_island->p_dependency = get_island_ptr(NC_PM_SSS_GFX_SLC);
 }
-
-#ifdef CONFIG_GFX_RTPM
-void psb_ospm_post_power_down()
-{
-	int ret;
-
-	if (likely(!gpDrmDevice->pdev->dev.power.runtime_auto))
-		return;
-
-	PSB_DEBUG_PM("request runtime idle\n");
-	ret = pm_request_idle(&gpDrmDevice->pdev->dev);
-
-	if (ret) {
-		PSB_DEBUG_PM("pm_request_idle fail, ret %d\n", ret);
-		ret = pm_runtime_barrier(&gpDrmDevice->pdev->dev);
-		if (!ret) {
-			ret = pm_request_idle(&gpDrmDevice->pdev->dev);
-			 PSB_DEBUG_PM("pm_request_idle again, ret %d\n", ret);
-		}
-	}
-}
-#endif
 
 static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd)
 {

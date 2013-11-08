@@ -31,6 +31,7 @@
 #include <linux/device.h>
 #include <linux/notifier.h>
 #include <linux/hrtimer.h>
+#include <linux/devfreq.h>
 
 /**
  * THERMAL_COOLING_DEVICE_MAX_STATE - The maximum cooling state that this
@@ -63,6 +64,16 @@ typedef enum _DFRGX_FREQ_
 	DFRGX_FREQ_533_MHZ = 533000,
 } DFRGX_FREQ;
 
+typedef enum _DFRGX_TURBO_PROFILE_
+{
+	DFRGX_TURBO_PROFILE_SIMPLE_ON_DEMAND	= 	0,
+	DFRGX_TURBO_PROFILE_POWERSAVE		= 	1,
+	DFRGX_TURBO_PROFILE_CUSTOM		= 	2,
+	DFRGX_TURBO_PROFILE_USERSPACE		= 	3,
+	DFRGX_TURBO_PROFILE_PERFORMANCE 	= 	4,
+	DFRGX_TURBO_PROFILE_MAX			= 	5,
+} DFRGX_TURBO_PROFILE;
+
 typedef enum _DFRGX_BURST_MODE_
 {
 	DFRGX_NO_BURST_REQ	= 0, /* No need to perform burst/unburst*/
@@ -88,6 +99,9 @@ struct gpu_profiling_record{
 struct gpu_utilization_record {
 	unsigned long		freq;
 	int			code;
+};
+
+struct gpu_freq_thresholds {
 	int			util_th_low;	/*lower limit utilization percentage, unburst it!*/
 	int			util_th_high;	/*upper limit utilization percentage, burst it!*/
 };
@@ -126,6 +140,7 @@ struct df_rgx_data_s {
 	int 				gpu_utilization_record_index;
 	int				g_min_freq_index;
 	int				g_max_freq_index;
+	int				g_profile_index;
 };
 
 
@@ -137,6 +152,9 @@ struct busfreq_data {
 	struct mutex          lock;
 	bool                  disabled;
 	unsigned long int     bf_freq_mhz_rlzd;
+	unsigned long int     bf_prev_freq_rlzd;
+	unsigned long int     bf_desired_freq;
+	char		      prev_governor[DEVFREQ_NAME_LEN + 1];
 
 	struct thermal_cooling_device *gbp_cooldv_hdl;
 	int                   gbp_cooldv_state_cur;
@@ -146,23 +164,32 @@ struct busfreq_data {
 	struct gpu_data	      gpudata[THERMAL_COOLING_DEVICE_MAX_STATE];
 };
 
+/**
+ * struct userspace_gov_data - Must the same as  userspace_data
+ */
+struct userspace_gov_data {
+	unsigned long user_frequency;
+	bool valid;
+};
+
+
 /*Available states - freq mapping table*/
 const static struct gpu_utilization_record aAvailableStateFreq[] = {
-									{DFRGX_FREQ_200_MHZ, 0xF, 0, 95},
-									{DFRGX_FREQ_213_MHZ, 0xE, 85, 95}, /*Need a proper value for this freq*/
-									{DFRGX_FREQ_266_MHZ, 0xB, 80, 95},
-									{DFRGX_FREQ_320_MHZ, 0x9, 83, 95},
-									{DFRGX_FREQ_355_MHZ, 0x8, 90, 95},
-									{DFRGX_FREQ_400_MHZ, 0x7, 88, 95},
-									{DFRGX_FREQ_457_MHZ, 0x6, 87, 95},
-									{DFRGX_FREQ_533_MHZ, 0x5, 85, 95}
+									{DFRGX_FREQ_200_MHZ, 0xF},
+									{DFRGX_FREQ_213_MHZ, 0xE}, /*Need a proper value for this freq*/
+									{DFRGX_FREQ_266_MHZ, 0xB},
+									{DFRGX_FREQ_320_MHZ, 0x9},
+									{DFRGX_FREQ_355_MHZ, 0x8},
+									{DFRGX_FREQ_400_MHZ, 0x7},
+									{DFRGX_FREQ_457_MHZ, 0x6},
+									{DFRGX_FREQ_533_MHZ, 0x5}
 									};
-
 
 unsigned int df_rgx_is_valid_freq(unsigned long int freq);
 unsigned int df_rgx_request_burst(struct df_rgx_data_s *pdfrgx_data, int util_percentage);
 int df_rgx_get_util_record_index_by_freq(unsigned long freq);
-long set_desired_frequency_khz(struct busfreq_data *bfdata,
+long df_rgx_set_freq_khz(struct busfreq_data *bfdata,
 	unsigned long freq_khz);
+int df_rgx_set_governor_profile(const char *governor_name, struct df_rgx_data_s *g_dfrgx);
 
 #endif /*DF_RGX_DEFS_H*/

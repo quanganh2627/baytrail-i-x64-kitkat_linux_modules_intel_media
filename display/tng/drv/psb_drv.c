@@ -42,9 +42,6 @@
 #include <linux/cpu.h>
 #include <linux/notifier.h>
 #include <linux/spinlock.h>
-#ifdef CONFIG_GFX_RTPM
-#include <linux/pm_runtime.h>
-#endif
 
 #include <asm/intel_scu_ipc.h>
 #include <asm/intel-mid.h>
@@ -114,7 +111,7 @@ int drm_psb_te_timer_delay = (DRM_HZ / 40);
 char HDMI_EDID[HDMI_MONITOR_NAME_LENGTH];
 int hdmi_state;
 u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
-int drm_psb_msvdx_tiling = 0;
+int drm_psb_msvdx_tiling = 1;
 int drm_msvdx_bottom_half;
 int drm_hdmi_hpd_auto;
 int drm_vsp_burst = 1;
@@ -1582,7 +1579,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	if (dev_priv == NULL)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&dev_priv->video_ctx);
-	mutex_init(&dev_priv->video_ctx_mutex);
+	spin_lock_init(&dev_priv->video_ctx_lock);
 	if (IS_FLDS(dev))
 		dev_priv->num_pipe = 3;
 	else
@@ -3884,21 +3881,12 @@ static void psb_debugfs_cleanup(struct drm_minor *minor)
 	mdfld_debugfs_cleanup(minor);
 }
 #endif
-static int psb_suspend_noirq(struct device *dev)
-{
-	struct pci_dev * pci_dev = to_pci_dev(dev);
-	
-	pci_dev->state_saved = true;
-
-	printk("HACK pci config \n");
-
-	return 0;
-}
 static const struct dev_pm_ops psb_pm_ops = {
 	.runtime_suspend = rtpm_suspend,
 	.runtime_resume = rtpm_resume,
 	.runtime_idle = rtpm_idle,
-	.suspend_noirq = psb_suspend_noirq,
+	.suspend_noirq = rtpm_suspend,
+	.resume_noirq = rtpm_resume,
 };
 
 static struct vm_operations_struct psb_ttm_vm_ops;
@@ -3975,6 +3963,9 @@ int psb_release(struct inode *inode, struct file *filp)
 	file_priv = (struct drm_file *)filp->private_data;
 	psb_fp = BCVideoGetPriv(file_priv);
 	dev_priv = psb_priv(file_priv->minor->dev);
+	struct ttm_object_file *tfile = psb_fpriv(file_priv)->tfile;
+	int i;
+	struct psb_msvdx_ec_ctx *ec_ctx;
 	msvdx_priv = (struct msvdx_private *)dev_priv->msvdx_private;
 
 #if 0
@@ -3991,6 +3982,21 @@ int psb_release(struct inode *inode, struct file *filp)
 	tng_topaz_handle_sigint(file_priv->minor->dev, filp);
 
 	BCVideoDestroyBuffers(psb_fp->bcd_index);
+
+	if (msvdx_priv->msvdx_ec_ctx[0] != NULL) {
+		for (i = 0; i < PSB_MAX_EC_INSTANCE; i++) {
+			if (msvdx_priv->msvdx_ec_ctx[i]->tfile == tfile)
+				break;
+		}
+
+		if (i < PSB_MAX_EC_INSTANCE) {
+			ec_ctx = msvdx_priv->msvdx_ec_ctx[i];
+			printk(KERN_DEBUG "remove ec ctx with tfile 0x%08x\n",
+			       ec_ctx->tfile);
+			ec_ctx->tfile = NULL;
+			ec_ctx->fence = PSB_MSVDX_INVALID_FENCE;
+		}
+	}
 
 	ttm_object_file_release(&psb_fp->tfile);
 	kfree(psb_fp);

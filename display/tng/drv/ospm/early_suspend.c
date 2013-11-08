@@ -29,9 +29,6 @@
 
 #include <linux/earlysuspend.h>
 #include <linux/mutex.h>
-#ifdef COFNIG_GFX_RTPM
-#include <linux/pm_runtime.h>
-#endif
 #include "psb_drv.h"
 #include "early_suspend.h"
 #include "android_hdmi.h"
@@ -79,10 +76,6 @@ static void gfx_early_suspend(struct early_suspend *h)
 	dev_priv->early_suspended = true;
 
 	mutex_unlock(&dev->mode_config.mutex);
-
-#ifdef CONFIG_GFX_RTPM
-	rtpm_allow(dev);
-#endif
 }
 
 static void gfx_late_resume(struct early_suspend *h)
@@ -123,10 +116,6 @@ static void gfx_late_resume(struct early_suspend *h)
 	}
 
 	mutex_unlock(&dev->mode_config.mutex);
-
-#ifdef CONFIG_GFX_RTPM
-	rtpm_forbid(dev);
-#endif
 }
 
 static struct early_suspend intel_media_early_suspend = {

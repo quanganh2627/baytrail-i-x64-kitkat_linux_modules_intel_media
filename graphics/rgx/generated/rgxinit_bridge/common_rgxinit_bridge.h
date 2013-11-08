@@ -52,7 +52,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgx_fwif.h"
 
 
-/* FIXME: need to create pvrbridge_common.h" */
 #include "pvr_bridge.h"
 
 #define PVRSRV_BRIDGE_RGXINIT_CMD_FIRST			(PVRSRV_BRIDGE_RGXINIT_START)
@@ -88,6 +87,7 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXINITALLOCFWIMGMEM_TAG
 	IMG_DEV_VIRTADDR sFWCorememDevVAddrBase;
 	RGXFWIF_DEV_VIRTADDR sFWCorememMetaVAddrBase;
 	PVRSRV_ERROR eError;
+
 } PVRSRV_BRIDGE_OUT_RGXINITALLOCFWIMGMEM;
 
 /*******************************************
@@ -109,7 +109,7 @@ typedef struct PVRSRV_BRIDGE_IN_RGXINITFIRMWARE_TAG
 	IMG_UINT32 ui32FilterFlags;
 	RGXFWIF_COMPCHECKS_BVNC sClientBVNC;
 	IMG_UINT32 ui32APMLatency;
-	IMG_UINT32 ui32CoreClockSpeed;
+        IMG_UINT32 ui32CoreClockSpeed;
 } PVRSRV_BRIDGE_IN_RGXINITFIRMWARE;
 
 

@@ -142,7 +142,6 @@ PVRSRVBridgeSyncPrimServerSecureExport(IMG_UINT32 ui32BridgeID,
 	hExportInt2 = ResManRegisterRes(psSecureConnection->hResManContext,
 												RESMAN_TYPE_SERVER_SYNC_EXPORT,
 												psExportInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVSyncPrimServerSecureUnexportKM);
 	if (hExportInt2 == IMG_NULL)
 	{
@@ -248,7 +247,6 @@ PVRSRVBridgeSyncPrimServerSecureImport(IMG_UINT32 ui32BridgeID,
 	hSyncHandleInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_SERVER_SYNC_PRIMITIVE,
 												psSyncHandleInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVServerSyncFreeKM);
 	if (hSyncHandleInt2 == IMG_NULL)
 	{

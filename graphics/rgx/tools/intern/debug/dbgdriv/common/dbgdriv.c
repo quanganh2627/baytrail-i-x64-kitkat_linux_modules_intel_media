@@ -1479,7 +1479,6 @@ IMG_VOID * IMG_CALLCONV DBGDrivFindStream(IMG_CHAR * pszName, IMG_BOOL bResetStr
 
 		{
 			/* mark init stream to prevent further reading by pdump client */
-			/* FIXME: Check for possible race condition */
 			psStream->psInitStream->ui32InitPhaseWOff = psStream->psInitStream->ui32WPtr;
 			PVR_DPF((PVR_DBGDRIV_MESSAGE, "Set %s client marker bo %x, total bw %x",
 					psStream->szName,

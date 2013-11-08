@@ -85,7 +85,10 @@ int psb_fence_emit_sequence(struct ttm_fence_device *fdev,
 	}
 
 	*sequence = seq;
-	*timeout_jiffies = jiffies + DRM_HZ * 3;
+	if (fence_class == PSB_ENGINE_DECODE)
+		*timeout_jiffies = jiffies + DRM_HZ;
+	else
+		*timeout_jiffies = jiffies + DRM_HZ * 3;
 
 	return 0;
 }

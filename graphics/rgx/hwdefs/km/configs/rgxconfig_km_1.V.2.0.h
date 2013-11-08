@@ -1,9 +1,6 @@
 /*************************************************************************/ /*!
-@File
-@Title          Common bridge header for pdumpcmm
+@Title          RGX Config BVNC 1.V.2.0
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    Declares common defines and structures that are used by both
-                the client and sever side of the bridge for pdumpcmm
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -42,46 +39,24 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef COMMON_PDUMPCMM_BRIDGE_H
-#define COMMON_PDUMPCMM_BRIDGE_H
+#ifndef _RGXCONFIG_KM_1_V_2_0_H_
+#define _RGXCONFIG_KM_1_V_2_0_H_
 
-#include "devicemem_typedefs.h"
-#include "pdumpdefs.h"
+/***** Automatically generated file (8/20/2013 10:28:38 AM): Do not edit manually ********************/
+/***** Timestamp:  (8/20/2013 10:28:38 AM)************************************************************/
 
+#define RGX_BNC_KM_B 1
+#define RGX_BNC_KM_N 2
+#define RGX_BNC_KM_C 0
 
-#include "pvr_bridge.h"
-
-#define PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST			(PVRSRV_BRIDGE_PDUMPCMM_START)
-#define PVRSRV_BRIDGE_PDUMPCMM_DEVMEMPDUMPBITMAP			PVRSRV_IOWR(PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST+0)
-#define PVRSRV_BRIDGE_PDUMPCMM_CMD_LAST			(PVRSRV_BRIDGE_PDUMPCMM_CMD_FIRST+0)
-
-
-/*******************************************
-            DevmemPDumpBitmap          
- *******************************************/
-
-/* Bridge in structure for DevmemPDumpBitmap */
-typedef struct PVRSRV_BRIDGE_IN_DEVMEMPDUMPBITMAP_TAG
-{
-	IMG_HANDLE hDeviceNode;
-	IMG_CHAR * puiFileName;
-	IMG_UINT32 ui32FileOffset;
-	IMG_UINT32 ui32Width;
-	IMG_UINT32 ui32Height;
-	IMG_UINT32 ui32StrideInBytes;
-	IMG_DEV_VIRTADDR sDevBaseAddr;
-	IMG_HANDLE hDevmemCtx;
-	IMG_UINT32 ui32Size;
-	PDUMP_PIXEL_FORMAT ePixelFormat;
-	IMG_UINT32 ui32AddrMode;
-	IMG_UINT32 ui32PDumpFlags;
-} PVRSRV_BRIDGE_IN_DEVMEMPDUMPBITMAP;
+/******************************************************************************
+ * DDK Defines
+ *****************************************************************************/
+#define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
+#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
+#define RGX_FEATURE_AXI_ACELITE 
+#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
+#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
 
 
-/* Bridge out structure for DevmemPDumpBitmap */
-typedef struct PVRSRV_BRIDGE_OUT_DEVMEMPDUMPBITMAP_TAG
-{
-	PVRSRV_ERROR eError;
-} PVRSRV_BRIDGE_OUT_DEVMEMPDUMPBITMAP;
-
-#endif /* COMMON_PDUMPCMM_BRIDGE_H */
+#endif /* _RGXCONFIG_1_V_2_0_H_ */

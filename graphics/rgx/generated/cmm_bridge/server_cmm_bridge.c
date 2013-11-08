@@ -168,7 +168,6 @@ PVRSRVBridgePMRWritePMPageList(IMG_UINT32 ui32BridgeID,
 	hPageListInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_PMR_PAGELIST,
 												psPageListInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PMRUnwritePMPageList);
 	if (hPageListInt2 == IMG_NULL)
 	{

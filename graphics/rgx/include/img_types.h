@@ -149,9 +149,11 @@ typedef size_t			IMG_SIZE_T;
 #define IMG_SIZE_T_MAX ((IMG_SIZE_T) -1)
 
 #if defined(_MSC_VER)
-#define IMG_SIZE_FMTSPEC "%Iu"
+#define IMG_SIZE_FMTSPEC  "%Iu"
+#define IMG_SIZE_FMTSPECX "%Ix"
 #else
-#define IMG_SIZE_FMTSPEC "%zu"
+#define IMG_SIZE_FMTSPEC  "%zu"
+#define IMG_SIZE_FMTSPECX "%zx"
 #endif
 
 typedef IMG_PVOID       IMG_HANDLE;

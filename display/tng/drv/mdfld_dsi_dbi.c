@@ -33,6 +33,7 @@
 #include "mdfld_dsi_dbi_dsr.h"
 #include "mrfld_clock.h"
 #include "psb_drv.h"
+#include "dispmgrnl.h"
 
 /**
  * Enter DSR
@@ -293,6 +294,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	u32 power_island = 0;
 	u32 sprite_reg_offset = 0;
 	uint32_t pll_select = 0, ctrl_reg5 = 0;
+	int i = 0;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -374,6 +376,22 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		}
 	}
 
+	/*
+	 * Wait for DSI PLL locked on pipe, and only need to poll status of pipe
+	 * A as both MIPI pipes share the same DSI PLL.
+	 */
+	if (dsi_config->pipe == 0) {
+		retry = 20000;
+		while (!(REG_READ(regs->pipeconf_reg) & PIPECONF_DSIPLL_LOCK) &&
+				--retry)
+			udelay(150);
+		if (!retry) {
+			DRM_ERROR("PLL failed to lock on pipe\n");
+			err = -EAGAIN;
+			goto power_on_err;
+		}
+	}
+
 	/*exit ULPS*/
 	if (__dbi_exit_ulps_locked(dsi_config)) {
 		DRM_ERROR("Failed to exit ULPS\n");
@@ -428,6 +446,21 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(regs->pipesrc_reg, ctx->pipesrc);
 	REG_WRITE(regs->dsppos_reg, ctx->dsppos);
 	REG_WRITE(regs->dspstride_reg, ctx->dspstride);
+
+	/*restore color_coef (chrome) */
+	for (i = 0; i < 6; i++)
+		REG_WRITE(regs->color_coef_reg + (i<<2), ctx->color_coef[i]);
+
+
+	/* restore palette (gamma) */
+	for (i = 0; i < 256; i++)
+		REG_WRITE(regs->palette_reg + (i<<2), ctx->palette[i]);
+
+	/* restore dpst setting */
+	if (dev_priv->psb_dpst_state) {
+		dpstmgr_reg_restore_locked(dev, dsi_config);
+		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
+	}
 
 	/*Setup plane*/
 	REG_WRITE(regs->dspsize_reg, ctx->dspsize);

@@ -204,6 +204,17 @@ struct fw_padding_msg {
 	} header;
 };
 
+struct fw_msg_header {
+	union {
+		struct {
+			uint32_t msg_size:8;
+			uint32_t msg_type:8;
+			uint32_t msg_fence:16;
+		} bits;
+		uint32_t value;
+	} header;
+};
+
 struct fw_completed_msg {
 	union {
 		struct {

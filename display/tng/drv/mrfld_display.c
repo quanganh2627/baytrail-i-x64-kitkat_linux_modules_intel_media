@@ -254,20 +254,6 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 	if (!power_island_get(power_island))
 		return;
-#if 0
-	/* Ignore if system is already in DSR and in suspended state. */
-	if (gbgfxsuspended && gbdispstatus == false && mode == 3) {
-		if (dev_priv->rpm_enabled && pipe == 1) {
-			//          dev_priv->is_mipi_on = false;
-			pm_request_idle(&gpDrmDevice->pdev->dev);
-		}
-		return;
-	} else if (mode == 0) {
-		//do not need to set gbdispstatus=true in crtc.
-		//this will be set in encoder such as mdfld_dsi_dbi_dpms
-		//gbdispstatus = true;
-	}
-#endif
 
 	switch (pipe) {
 	case 0:
@@ -468,6 +454,8 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 #endif
 			}
 		}
+
+		drm_handle_vblank(dev, pipe);
 
 		/* Turn off vsync interrupt. */
 		drm_vblank_off(dev, pipe);

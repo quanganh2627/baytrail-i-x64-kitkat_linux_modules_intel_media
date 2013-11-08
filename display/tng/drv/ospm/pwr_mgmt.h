@@ -154,8 +154,5 @@ void ospm_apm_power_down_topaz(struct drm_device *dev);
 void ospm_apm_power_down_vsp(struct drm_device *dev);
 int ospm_runtime_pm_allow(struct drm_device *dev);
 void ospm_runtime_pm_forbid(struct drm_device *dev);
-#ifdef CONFIG_GFX_RTPM
-void psb_ospm_post_power_down(void);
-#endif
 
 #endif		/* __INTEL_MEDIA_ISLAND_MANAGEMENT_H__ */

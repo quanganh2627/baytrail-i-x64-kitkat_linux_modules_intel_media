@@ -460,7 +460,7 @@ struct drm_psb_private {
 
 	/* IMG video context */
 	struct list_head video_ctx;
-	struct mutex video_ctx_mutex;
+	spinlock_t video_ctx_lock;
 	/* Current video context */
 	struct psb_video_ctx *topaz_ctx;
 	/* previous vieo context */
@@ -723,9 +723,6 @@ struct drm_psb_private {
 	/* wait queue for write_mem_status complete (EOF interrupt) */
 	wait_queue_head_t eof_wait;
 
-	/*runtime PM state */
-	int rpm_enabled;
-
 	/*
 	 *Register state
 	 */
@@ -903,7 +900,7 @@ struct drm_psb_private {
 	uint32_t saveHISTOGRAM_INT_CONTROL_REG;
 	uint32_t saveHISTOGRAM_LOGIC_CONTROL_REG;
 	// SH START DPST
-	struct drm_connector *dpst_lvds_connector;
+	struct drm_connector *dpst_connector;
 	// SH END DPST
 	uint32_t savePWM_CONTROL_LOGIC;
 
@@ -1204,6 +1201,7 @@ struct backlight_device *psb_get_backlight_device(void);
 #define VSP_D_PERF   (1 << 12)
 #define PSB_D_WARN    (1 << 13)
 #define PSB_D_MIPI    (1 << 14)
+#define PSB_D_BL    (1 << 15)
 
 #ifndef DRM_DEBUG_CODE
 /* To enable debug printout, set drm_psb_debug in psb_drv.c
@@ -1248,6 +1246,8 @@ extern int drm_topaz_sbuswa;
 	PSB_DEBUG(PSB_D_WARN, _fmt, ##_arg)
 #define PSB_DEBUG_MIPI(_fmt, _arg...) \
 	PSB_DEBUG(PSB_D_MIPI, _fmt, ##_arg)
+#define PSB_DEBUG_BL(_fmt, _arg...) \
+        PSB_DEBUG(PSB_D_BL, _fmt, ##_arg)
 
 #if DRM_DEBUG_CODE
 #define PSB_DEBUG(_flag, _fmt, _arg...)					\

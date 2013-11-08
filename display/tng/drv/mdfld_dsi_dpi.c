@@ -31,7 +31,7 @@
 #include "psb_drv.h"
 #include "mdfld_csc.h"
 #include "psb_irq.h"
-
+#include "dispmgrnl.h"
 #include "mrfld_clock.h"
 
 #define KEEP_UNUSED_CODE 0
@@ -271,6 +271,22 @@ reset_recovery:
 		}
 	}
 
+	/*
+	 * Wait for DSI PLL locked on pipe, and only need to poll status of pipe
+	 * A as both MIPI pipes share the same DSI PLL.
+	 */
+	if (dsi_config->pipe == 0) {
+		retry = 20000;
+		while (!(REG_READ(regs->pipeconf_reg) & PIPECONF_DSIPLL_LOCK) &&
+				--retry)
+			udelay(150);
+		if (!retry) {
+			DRM_ERROR("PLL failed to lock on pipe\n");
+			err = -EAGAIN;
+			goto power_on_err;
+		}
+	}
+
 	/*D-PHY parameter*/
 	REG_WRITE(regs->dphy_param_reg, ctx->dphy_param);
 
@@ -328,6 +344,12 @@ reset_recovery:
 	/* restore palette (gamma) */
 	for (i = 0; i < 256; i++)
 		REG_WRITE(regs->palette_reg + (i<<2), ctx->palette[i]);
+
+	/* restore dpst setting */
+	if (dev_priv->psb_dpst_state) {
+		dpstmgr_reg_restore_locked(dev, dsi_config);
+		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
+	}
 
 	/*exit ULPS state*/
 	__dpi_exit_ulps_locked(dsi_config);

@@ -233,7 +233,6 @@ IMG_VOID HostMemCopy(IMG_VOID *pvDst, IMG_VOID *pvSrc, IMG_UINT32 ui32Size)
 
 IMG_UINT32 HostReadRegistryDWORDFromString(char *pcKey, char *pcValueName, IMG_UINT32 *pui32Data)
 {
-    /* FIXME: Not yet implemented */
 	return 0;
 }
 
@@ -259,18 +258,15 @@ IMG_VOID HostNonPageablePageFree(IMG_VOID * pvBase)
 
 IMG_VOID * HostMapKrnBufIntoUser(IMG_VOID * pvKrnAddr, IMG_UINT32 ui32Size, IMG_VOID **ppvMdl)
 {
-    /* XXX Not yet implemented */
 	return IMG_NULL;
 }
 
 IMG_VOID HostUnMapKrnBufFromUser(IMG_VOID * pvUserAddr, IMG_VOID * pvMdl, IMG_VOID * pvProcess)
 {
-    /* XXX Not yet implemented */
 }
 
 IMG_VOID HostCreateRegDeclStreams(IMG_VOID)
 {
-    /* XXX Not yet implemented */
 }
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37))
 typedef	struct mutex		MUTEX;

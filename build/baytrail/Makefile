@@ -20,7 +20,7 @@ include_dirs := \
 	-I$(VIDEOCOMINC) \
 	-I$(VIDEODECINC)
 
-ccflags-y += $(include_dirs)
+ccflags-y += $(include_dirs) -DCONFIG_VIDEO_MRFLD_EC
 
 $(DRIVER_NAME)-objs += \
 	$(BAYTRAILDIR)/vxd_drv.o \
@@ -34,4 +34,5 @@ $(DRIVER_NAME)-objs += \
 	$(VIDEOCOMDIR)/psb_ttm_placement_user.o \
 	$(VIDEODECDIR)/psb_msvdx.o \
 	$(VIDEODECDIR)/psb_msvdxinit.o \
-	$(VIDEODECDIR)/psb_msvdx_fw.o
+	$(VIDEODECDIR)/psb_msvdx_fw.o \
+	$(VIDEODECDIR)/psb_msvdx_ec.o

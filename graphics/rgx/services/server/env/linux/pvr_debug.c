@@ -1171,7 +1171,6 @@ static IMG_INT DebugLevelSet(const char __user *pcBuffer,
 		return -EINVAL;
 	}
 
-	/* FIXME: debug_level shouldn't be misused to set the services state */
 	if (((acDataBuffer[0] == 'k') || ((acDataBuffer[0] == 'K'))) && uiCount == 2)
 	{
 		PVRSRV_DATA *psPVRSRVData = PVRSRVGetPVRSRVData();

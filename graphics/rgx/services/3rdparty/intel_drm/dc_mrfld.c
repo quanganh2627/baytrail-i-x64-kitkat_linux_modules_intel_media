@@ -152,6 +152,12 @@ static void _Flip_Primary(DC_MRFLD_DEVICE *psDevice,
 			DC_MRFLD_PRIMARY_CONTEXT *psContext,
 			IMG_INT iPipe)
 {
+	int index = psContext->index;
+
+	/* don't flip if plane is inactive */
+	if (!((1 << index) & psDevice->ui32ActivePrimarys))
+		return;
+
 	if ((iPipe && psContext->pipe) || (!iPipe && !psContext->pipe))
 		DCCBFlipPrimary(psDevice->psDrmDevice, psContext);
 }
@@ -161,6 +167,17 @@ static void _Setup_ZOrder(DC_MRFLD_DEVICE *psDevice,
 			IMG_INT iPipe)
 {
 	DCCBSetupZorder(psDevice->psDrmDevice, psZorder, iPipe);
+}
+
+static void _Disable_Unused_Primarys(DC_MRFLD_DEVICE *psDevice)
+{
+	int i;
+
+	for (i = 0; i < MRFLD_PRIMARY_COUNT; i++) {
+		if (psDevice->ui32ActivePrimarys & (1 << i))
+			continue;
+		DCCBPrimaryEnable(gpsDevice->psDrmDevice, 0, i, 0);
+	}
 }
 
 static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
@@ -203,6 +220,9 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	/* start update display controller hardware */
 	bUpdated = IMG_FALSE;
 
+	if (iPipe != DC_PIPE_B)
+		DCCBDsrForbid(gpsDevice->psDrmDevice, iPipe);
+
 	/*
 	 * make sure vsync interrupt of this pipe is active before kicking
 	 * off flip
@@ -212,9 +232,6 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 				__func__, iPipe);
 		goto err_out;
 	}
-
-	if (iPipe != DC_PIPE_B)
-		DCCBDsrForbid(gpsDevice->psDrmDevice, iPipe);
 
 	for (i = 0; i < uiNumBuffers; i++) {
 		if (pasBuffers[i].eFlipOp == DC_MRFLD_FLIP_SURFACE) {
@@ -270,6 +287,9 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	if (psSurfCustom)
 		_Setup_ZOrder(gpsDevice, &psSurfCustom->zorder, iPipe);
 
+	/*disable unused primary planes*/
+	_Disable_Unused_Primarys(gpsDevice);
+
 	/* Issue "write_mem_start" for command mode panel. */
 	if (iPipe != DC_PIPE_B)
 		DCCBUpdateDbiPanel(gpsDevice->psDrmDevice, iPipe);
@@ -278,9 +298,6 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 
 	bUpdated = IMG_TRUE;
 err_out:
-	if (iPipe != DC_PIPE_B)
-		DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
-
 	power_island_put(psFlip->uiPowerIslands);
 	return bUpdated;
 }
@@ -508,6 +525,9 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 		if (eFlipState == DC_MRFLD_FLIP_DISPLAYED) {
 			/* done with this flip item, disable vsync now*/
 			DCCBDisableVSyncInterrupt(psDrmDev, iPipe);
+
+			if (iPipe != DC_PIPE_B)
+				DCCBDsrAllow(psDrmDev, iPipe);
 
 			/*remove this entry from flip queue, decrease refCount*/
 			list_del(&psFlip->sFlips[iPipe]);
@@ -1303,6 +1323,9 @@ void DCUnAttachPipe(uint32_t iPipe)
 		/* Put pipe's vsync which has been enabled. */
 		DCCBDisableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe);
 
+		if (iPipe != DC_PIPE_B)
+			DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
+
 		/*remove this entry from flip queue, decrease refCount*/
 		list_del(&psFlip->sFlips[iPipe]);
 
@@ -1335,6 +1358,9 @@ int DC_MRFLD_Enable_Plane(int type, int index, u32 ctx)
 	case DC_SPRITE_PLANE:
 		ui32ActivePlanes = &gpsDevice->ui32ActiveSprites;
 		break;
+	case DC_PRIMARY_PLANE:
+		ui32ActivePlanes = &gpsDevice->ui32ActivePrimarys;
+		break;
 	case DC_OVERLAY_PLANE:
 		ui32ActivePlanes = &gpsDevice->ui32ActiveOverlays;
 		break;
@@ -1353,7 +1379,7 @@ int DC_MRFLD_Enable_Plane(int type, int index, u32 ctx)
 
 int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 {
-	int err;
+	int err = 0;
 	IMG_INT32 *ui32ActivePlanes;
 
 	/*acquire lock*/
@@ -1363,6 +1389,9 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 	case DC_SPRITE_PLANE:
 		err = DCCBSpriteEnable(gpsDevice->psDrmDevice, ctx, index, 0);
 		ui32ActivePlanes = &gpsDevice->ui32ActiveSprites;
+		break;
+	case DC_PRIMARY_PLANE:
+		ui32ActivePlanes = &gpsDevice->ui32ActivePrimarys;
 		break;
 	case DC_OVERLAY_PLANE:
 		err = DCCBOverlayEnable(gpsDevice->psDrmDevice, ctx, index, 0);

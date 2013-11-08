@@ -140,7 +140,6 @@ PVRSRVBridgeSyncPrimServerExport(IMG_UINT32 ui32BridgeID,
 	hExportInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_SERVER_SYNC_EXPORT,
 												psExportInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVSyncPrimServerUnexportKM);
 	if (hExportInt2 == IMG_NULL)
 	{
@@ -148,7 +147,6 @@ PVRSRVBridgeSyncPrimServerExport(IMG_UINT32 ui32BridgeID,
 		goto SyncPrimServerExport_exit;
 	}
 	/* see if it's already exported */
-	/* FIXME: This code should go when we implement serverImport, serverUnimport */
 	psSyncPrimServerExportOUT->eError =
 		PVRSRVFindHandle(KERNEL_HANDLE_BASE,
 							&psSyncPrimServerExportOUT->hExport,
@@ -300,7 +298,6 @@ PVRSRVBridgeSyncPrimServerImport(IMG_UINT32 ui32BridgeID,
 	hSyncHandleInt2 = ResManRegisterRes(psConnection->hResManContext,
 												RESMAN_TYPE_SERVER_SYNC_PRIMITIVE,
 												psSyncHandleInt,
-												/* FIXME: how can we avoid this cast? */
 												(RESMAN_FREE_FN)&PVRSRVServerSyncFreeKM);
 	if (hSyncHandleInt2 == IMG_NULL)
 	{

@@ -510,14 +510,13 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 		data = WRAPPER_REG_READ(reg);
 		data |= 0x100; /*Bypass SLC for VEC*/
 		WRAPPER_REG_WRITE(reg, data);
-#if 0
+
 		/* soc.gfx_wrapper.gclip_control.aes_bypass_disable = 1*/
 		reg = 0x160020 - GFX_WRAPPER_OFFSET;
 		data = WRAPPER_REG_READ(reg);
 
 		data |= 0x80;
 		WRAPPER_REG_WRITE(reg, data);
-#endif
 	}
 
 	return !ret;

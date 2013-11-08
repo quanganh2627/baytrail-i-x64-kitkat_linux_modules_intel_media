@@ -99,7 +99,7 @@ PVRSRV_ERROR OSSecureExport(CONNECTION_DATA *psConnection,
 #endif
 
 	/*
-		FIXME: Release the "master" lock as the open below will trigger the 
+		Release the "master" lock as the open below will trigger the 
 		lock to be taken again.
 	*/
 	LinuxUnLockMutex(&gPVRSRVLock);

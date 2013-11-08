@@ -805,7 +805,7 @@ PVRSyncIOCTLCreateFence(struct PVR_SYNC_TIMELINE *psPVRTl, void __user *pvData)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to find unused fd (%d)",
 								__func__, iFd));
-		goto err_put_fd;
+		goto err_out;
 	}
 
 	if (!access_ok(VERIFY_READ, pvData, sizeof(sData)))
@@ -1286,7 +1286,7 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 
 			/* If this is an request for CHECK and the sync point is already
 			 * signalled, don't return it to the caller. The operation is
-			 * already fullfiled in this case and needs no waiting on. */
+			 * already fulfilled in this case and needs no waiting on. */
 			if (   !bUpdate
 				&&  psPVRPt->bSignaled)
 				continue;
