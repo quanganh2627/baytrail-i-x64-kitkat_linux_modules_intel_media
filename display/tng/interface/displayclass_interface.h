@@ -60,6 +60,7 @@ struct psb_framebuffer {
 	uint32_t depth;
 	uint32_t size;
 	uint32_t offset;
+	uint32_t user_virtual_addr;  /* user space address */
 };
 
 #endif /*__KERNEL__*/

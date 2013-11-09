@@ -97,5 +97,6 @@ extern int psb_gtt_mm_init(struct psb_gtt *pg);
 extern void psb_gtt_mm_takedown(void);
 extern int psb_gtt_map_vaddr(struct drm_device *dev, uint32_t vaddr, uint32_t size,
 			uint32_t page_align, uint32_t *offset);
+extern int psb_gtt_unmap_vaddr(struct drm_device *dev, uint32_t vaddr, uint32_t size);
 
 #endif

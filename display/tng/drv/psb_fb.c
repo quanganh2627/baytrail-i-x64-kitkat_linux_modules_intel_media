@@ -349,7 +349,7 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	struct psb_gtt *pg = dev_priv->pg;
 	uint64_t size;
 	uint32_t page_offset;
-	uint32_t *cpu_addr = r->handles[0];
+	uint32_t user_virtual_addr = (uint32_t) r->handles[0];
 	int ret;
 
 	size = r->height * r->pitches[0];
@@ -368,6 +368,7 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	psbfb = to_psb_fb(fb);
 	psbfb->size = size;
 	psbfb->hKernelMemInfo = 0;
+	psbfb->user_virtual_addr = user_virtual_addr;
 	psbfb->stolen_base = pg->stolen_base;
 	psbfb->vram_addr = pg->vram_addr;
 	psbfb->tt_pages =
@@ -375,9 +376,9 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	     PSB_TT_PRIV0_PLIMIT) ? pg->gatt_pages : PSB_TT_PRIV0_PLIMIT;
 
 	/* map GTT */
-	ret = psb_gtt_map_vaddr(dev, cpu_addr, size, 0, &page_offset);
+	ret = psb_gtt_map_vaddr(dev, user_virtual_addr, size, 0, &page_offset);
 	if (ret) {
-		DRM_ERROR("Can not map cpu address (%p) to GTT. handle \n", cpu_addr);
+		DRM_ERROR("Can not map cpu address (%p) to GTT handle \n", user_virtual_addr);
 		psbfb->offset = 0;
 	} else
 		psbfb->offset =  page_offset << PAGE_SHIFT;
@@ -696,7 +697,7 @@ static void psb_user_framebuffer_destroy(struct drm_framebuffer *fb)
 	struct psb_framebuffer *psbfb = to_psb_fb(fb);
 
 	/*ummap gtt pages */
-	psb_gtt_unmap_meminfo(dev, psbfb->hKernelMemInfo);
+	psb_gtt_unmap_vaddr(dev, psbfb->user_virtual_addr, psbfb->size);
 	if (psbfb->fbdev)
 		psbfb_remove(dev, fb);
 

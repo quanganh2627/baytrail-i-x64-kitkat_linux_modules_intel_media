@@ -1319,7 +1319,7 @@ failed_pages_alloc:
 	return ret;
 }
 
-static int psb_gtt_unmap_vaddr(struct drm_device *dev,
+int psb_gtt_unmap_vaddr(struct drm_device *dev,
 			uint32_t vaddr,
 			uint32_t size)
 {
