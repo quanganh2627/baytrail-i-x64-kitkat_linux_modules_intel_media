@@ -367,7 +367,7 @@ static ssize_t ved_freq_scaling_store(struct device *dev,
 	return size;
 }
 
-static DEVICE_ATTR(ved_freq_scaling, 0666, ved_freq_scaling_show, ved_freq_scaling_store);
+static DEVICE_ATTR(ved_freq_scaling, 0664, ved_freq_scaling_show, ved_freq_scaling_store);
 #endif
 
 static DEVICE_ATTR(msvdx_pmstate, 0444, psb_msvdx_pmstate_show, NULL);
