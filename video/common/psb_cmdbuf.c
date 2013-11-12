@@ -917,10 +917,6 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 #endif
 	} else if (arg->engine == VSP_ENGINE_VPP) {
 #ifdef SUPPORT_VSP
-		ret = mutex_lock_interruptible(&vsp_priv->vsp_mutex);
-		if (unlikely(ret != 0))
-			goto out_err0;
-
 		if (vsp_priv->fw_loaded_by_punit) {
 			if (unlikely(vsp_priv->fw_loaded == 0)) {
 				ret = vsp_init_fw(dev);
@@ -930,15 +926,6 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 					goto out_err1;
 				}
 			}
-		}
-
-		if (vsp_priv->fw_loaded_by_punit &&
-		    vsp_priv->vsp_state == VSP_STATE_IDLE)
-			ospm_apm_power_down_vsp(dev);
-
-		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
-			ret = -EBUSY;
-			goto out_err1;
 		}
 
 		context = &dev_priv->vsp_context;
@@ -1109,10 +1096,6 @@ out_err1:
 		mutex_unlock(&msvdx_priv->msvdx_mutex);
 	if (arg->engine == LNC_ENGINE_ENCODE)
 		mutex_unlock(&dev_priv->cmdbuf_mutex);
-	if (arg->engine == VSP_ENGINE_VPP)
-#ifdef SUPPORT_VSP
-		mutex_unlock(&vsp_priv->vsp_mutex);
-#endif
 out_err0:
 	ttm_read_unlock(&dev_priv->ttm_lock);
 #ifndef MERRIFIELD
@@ -1124,11 +1107,6 @@ out_err0:
 	if (arg->engine == LNC_ENGINE_ENCODE)
 		ospm_power_using_video_end(OSPM_VIDEO_ENC_ISLAND);
 #endif
-#endif
-
-#ifdef SUPPORT_VSP
-	if (arg->engine == VSP_ENGINE_VPP)
-		power_island_put(OSPM_VIDEO_VPP_ISLAND);
 #endif
 	return ret;
 }
