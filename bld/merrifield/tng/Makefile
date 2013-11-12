@@ -1,6 +1,6 @@
 DRIVER_NAME := tngdisp
 
-include ../modules/intel_media/bld/merrifield/rgx/Makefile
+include drivers/external_drivers/intel_media/bld/merrifield/rgx/Makefile
 
 obj-m += $(DRIVER_NAME).o
 
@@ -12,7 +12,7 @@ DECODE_DIR=$(MEDIADIR)/video/decode
 ENCODE_DIR=$(MEDIADIR)/video/encode
 VSP_DIR=$(MEDIADIR)/video/vsp
 
-MEDIAINC=../modules/intel_media
+MEDIAINC=drivers/external_drivers/intel_media
 GFXINC=$(MEDIAINC)/graphics/rgx
 VIDEOINC=$(MEDIAINC)/video
 DISPLAYINC=$(MEDIAINC)/display/tng
