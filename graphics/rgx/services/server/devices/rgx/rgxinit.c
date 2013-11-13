@@ -76,6 +76,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxta3d.h"
 #include "debug_request_ids.h"
 #include "pwr_mgmt.h"
+#include "power.h"
 
 static PVRSRV_ERROR RGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_UINT32 ui32ClientBuildOptions);
 static PVRSRV_ERROR RGXDevVersionString(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_CHAR **ppszVersionString);
@@ -193,6 +194,21 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 	IMG_UINT64				ui64CurrentCRTimer;
 	IMG_UINT32				ui32Remainder;
 	RGXFWIF_GPU_UTIL_STATS	sRet;
+	PVRSRV_DEV_POWER_STATE	ePowerState;
+
+	sRet.ui32GpuStatActive	= 0;
+	sRet.ui32GpuStatBlocked	= 0;
+	sRet.ui32GpuStatIdle	= 0;
+	sRet.bPoweredOn			= IMG_FALSE;
+
+	PVRSRVForcedPowerLock();
+
+	PVRSRVGetDevicePowerState(psDeviceNode->sDevId.ui32DeviceIndex, &ePowerState);
+	if (ePowerState != PVRSRV_DEV_POWER_STATE_ON)
+	{
+		PVRSRVPowerUnlock();
+		return sRet;
+	}
 
 	/* write offset is incremented after writing to FWCB, so subtract 1 */
 	ui32WOffSample = (psUtilFWCb->ui32WriteOffset - 1) & RGXFWIF_GPU_UTIL_FWCB_MASK;
@@ -275,15 +291,10 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 		sRet.ui32GpuStatActive	= OSDivide64(((IMG_UINT64)ui32StatActive * RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE), ui32StatCumulative, &ui32Remainder);
 		sRet.ui32GpuStatBlocked	= OSDivide64(((IMG_UINT64)ui32StatBlocked * RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE), ui32StatCumulative, &ui32Remainder);
 		sRet.ui32GpuStatIdle	= OSDivide64(((IMG_UINT64)ui32StatIdle * RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE), ui32StatCumulative, &ui32Remainder);
-		sRet.bValid				= IMG_TRUE;
+		sRet.bPoweredOn			= IMG_TRUE;
 	}
-	else
-	{
-		sRet.ui32GpuStatActive	= 0;
-		sRet.ui32GpuStatBlocked	= 0;
-		sRet.ui32GpuStatIdle	= 0;
-		sRet.bValid				= IMG_FALSE;
-	}
+
+	PVRSRVPowerUnlock();
 
 	return sRet;
 }

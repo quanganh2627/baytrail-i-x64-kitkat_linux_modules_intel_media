@@ -158,12 +158,12 @@ unsigned int gpu_rgx_get_util_stats(void* pvData)
 
 	utils = pDFRGX_Obj->pRGXDevInfo->pfnGetGpuUtilStats(pDFRGX_Obj->pDevNode);
 
-	pUtilStats->bValid = utils.bValid;
+	pUtilStats->bPoweredOn = utils.bPoweredOn;
 	pUtilStats->ui32GpuStatActive = utils.ui32GpuStatActive;
 	pUtilStats->ui32GpuStatBlocked = utils.ui32GpuStatBlocked;
 	pUtilStats->ui32GpuStatIdle = utils.ui32GpuStatIdle;
 
-	return pUtilStats->bValid;
+	return pUtilStats->bPoweredOn;
 	
 }
 EXPORT_SYMBOL(gpu_rgx_get_util_stats);
