@@ -55,6 +55,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxdebug.h"
 #include "rgx_meta.h"
 #include "dfrgx_interface.h"
+#include "rgxpowermon.h"
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
@@ -474,8 +475,18 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 		PVRSRV_RGXDEV_INFO	*psDevInfo = psDeviceNode->pvDevice;
 		RGXFWIF_KCCB_CMD	sPowCmd;
 		RGXFWIF_TRACEBUF	*psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
-		IMG_UINT32			ui32DM;
+		IMG_UINT32		ui32DM;
+		IMG_BOOL		bCanPowerOff = IMG_FALSE;
 
+		/* Can We power-off the device?*/
+		bCanPowerOff = rgx_powermeter_poweroff();
+		if (!bCanPowerOff) {
+			/* Abort power-off*/
+			rgx_powermeter_poweron();
+			/* PUnit is using RGX or We timed out, either case don't go to D0i3*/
+			eError = PVRSRV_ERROR_RETRY;
+			return eError;
+		}
 		/* Send the Power off request to the FW */
 		sPowCmd.eCmdType = RGXFWIF_KCCB_CMD_POW;
 		sPowCmd.uCmdData.sPowData.ePowType = RGXFWIF_POW_OFF_REQ;
@@ -611,6 +622,8 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 
 			/*Report dfrgx We have the device back ON*/
 			dfrgx_interface_power_state_set(1);
+			/*Report Punit that We have exited D0i3*/
+			rgx_powermeter_poweron();
 
 		}
 	}

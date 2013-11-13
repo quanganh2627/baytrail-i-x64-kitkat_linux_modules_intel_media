@@ -254,6 +254,10 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/devices/rgx/dfrgx_utilstats.o \
 	$(RGXDIR)/services/server/devices/rgx/dfrgx_interface.o
 
+# For Power Monitor
+$(DRIVER_NAME)-y += \
+	$(RGXDIR)/services/server/devices/rgx/rgxpowermon.o
+
 $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/cmm_bridge/server_cmm_bridge.o \
 	$(RGXDIR)/generated/dc_bridge/server_dc_bridge.o \
