@@ -27,6 +27,7 @@ include_dirs := \
 	-I$(MEDIAINC)/video/encode \
 	-I$(MEDIAINC)/video/common \
 	-I$(MEDIAINC)/common \
+	-I$(MEDIAINC)/interface \
 	-Iinclude/linux \
 	-Iinclude/drm \
 	-Idrivers/staging/android

@@ -16,6 +16,7 @@ include_dirs := \
 	-Iinclude/drm \
 	-Iinclude/drm/ttm \
 	-Idrivers/gpu/drm/i915 \
+        -I$(MEDIAINC)/interface \
 	-I$(BAYTRAILINC) \
 	-I$(VIDEOCOMINC) \
 	-I$(VIDEODECINC)

@@ -16,6 +16,7 @@ RGXINC=$(MEDIAINC)/graphics/rgx
 DISPINC=$(MEDIAINC)/display/tng
 
 ccflags-y += \
+        -I$(MEDIAINC)/interface \
 	-I$(RGXINC)/include \
 	-I$(RGXINC)/generated/rgxcmp_bridge \
 	-I$(RGXINC)/generated/dmm_bridge \

@@ -10,6 +10,7 @@ OTM_HDMI_INC=$(MEDIAINC)/otm_hdmi
 
 include_dirs := \
 	-I$(MEDIAINC)/common \
+	-I$(MEDIAINC)/interface \
 	-I$(OTM_HDMI_INC)/os/android/include \
 	-I$(OTM_HDMI_INC)/pil/include \
 	-I$(TNGDISPLAYINC)/ospm

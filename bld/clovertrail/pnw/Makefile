@@ -28,6 +28,7 @@ include_dirs := \
 	-I$(MEDIAINC)/video/encode \
 	-I$(MEDIAINC)/video/common \
 	-I$(MEDIAINC)/common \
+	-I$(MEDIAINC)/interface \
 	-I$(OTM_HDMI_INC)/os/android/include \
 	-I$(OTM_HDMI_INC)/pil/include \
 	-I$(OTM_HDMI_INC)/pil/common \

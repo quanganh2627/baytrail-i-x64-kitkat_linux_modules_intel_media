@@ -19,6 +19,7 @@ DISPLAYINC=$(MEDIAINC)/display/tng
 OTM_HDMI_INC=$(MEDIAINC)/otm_hdmi
 
 ccflags-y += \
+	-I$(MEDIAINC)/interface \
 	-I$(DISPLAYINC)/bc_video \
 	-I$(DISPLAYINC)/interface \
 	-I$(DISPLAYINC)/drv \
