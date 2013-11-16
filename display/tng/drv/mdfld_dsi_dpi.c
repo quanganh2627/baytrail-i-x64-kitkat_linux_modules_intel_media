@@ -421,6 +421,7 @@ reset_recovery:
 		DRM_ERROR("Failed to set panel brightness\n");
 	}
 
+	psb_enable_vblank(dev, dsi_config->pipe);
 	return err;
 
 power_on_err:
@@ -742,10 +743,24 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	PSB_DEBUG_ENTRY("%s\n", (mode == DRM_MODE_DPMS_ON ? "on" : "off"));
 
 	mutex_lock(&dev_priv->dpms_mutex);
-	if (mode == DRM_MODE_DPMS_ON)
+	DCLockMutex();
+
+	if (mode == DRM_MODE_DPMS_ON) {
 		mdfld_dsi_dpi_set_power(encoder, true);
-	else
+		DCAttachPipe(dsi_config->pipe);
+	} else {
 		mdfld_dsi_dpi_set_power(encoder, false);
+
+		drm_handle_vblank(dev, dsi_config->pipe);
+
+		/* Turn off TE interrupt. */
+		drm_vblank_off(dev, dsi_config->pipe);
+
+		/* Make the pending flip request as completed. */
+		DCUnAttachPipe(dsi_config->pipe);
+	}
+
+	DCUnLockMutex();
 	mutex_unlock(&dev_priv->dpms_mutex);
 }
 
@@ -896,13 +911,17 @@ void mdfld_dsi_dpi_save(struct drm_encoder *encoder)
 	dev = dsi_config->dev;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
+	DCLockMutex();
 	__mdfld_dsi_dpi_set_power(encoder, false);
+
+	drm_handle_vblank(dev, pipe);
 
 	/* Turn off vsync interrupt. */
 	drm_vblank_off(dev, pipe);
 
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
+	DCUnLockMutex();
 }
 
 static
@@ -923,9 +942,11 @@ void mdfld_dsi_dpi_restore(struct drm_encoder *encoder)
 	dev = dsi_config->dev;
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
+	DCLockMutex();
 	__mdfld_dsi_dpi_set_power(encoder, true);
 
 	DCAttachPipe(pipe);
+	DCUnLockMutex();
 }
 
 static const

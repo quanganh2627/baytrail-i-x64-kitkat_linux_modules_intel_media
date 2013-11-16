@@ -691,7 +691,7 @@ static int psb_msvdx_send(struct drm_device *dev, void *cmd,
 {
 	int ret = 0;
 	struct drm_psb_private *dev_priv = psb_priv(dev);
-	uint32_t cur_sequence;
+	uint32_t cur_sequence = 0xffffffff;
 
 	while (cmd_size > 0) {
 		uint32_t cur_cmd_size = MEMIO_READ_FIELD(cmd, MTX_GENMSG_SIZE);
@@ -721,7 +721,9 @@ static int psb_msvdx_send(struct drm_device *dev, void *cmd,
 				(sizeof(struct fw_deblock_msg) - cur_cmd_size);
 		}
 	}
-	msvdx_ctx->cur_sequence = cur_sequence;
+	if (cur_sequence != 0xffffffff) {
+		msvdx_ctx->cur_sequence = cur_sequence;
+	}
 out:
 	PSB_DEBUG_GENERAL("MSVDX: ret:%d\n", ret);
 	return ret;
@@ -1730,9 +1732,14 @@ static void psb_msvdx_fw_error_detected(struct drm_device *dev, uint32_t fence, 
 		msvdx_ec_ctx->cur_frame_info->fence == (fence & (~0xf))) {
 		frame_info = msvdx_ec_ctx->cur_frame_info;
 	} else {
-		PSB_DEBUG_MSVDX(
-		"cur_frame_info's fence(%x) doesn't match fence (%x)\n",
-			msvdx_ec_ctx->cur_frame_info->fence, fence);
+		if (msvdx_ec_ctx->cur_frame_info) {
+			PSB_DEBUG_MSVDX(
+			"cur_frame_info's fence(%x) doesn't match fence (%x)\n",
+				msvdx_ec_ctx->cur_frame_info->fence, fence);
+		} else	{
+			PSB_DEBUG_MSVDX(
+			"The pointer msvdx_ec_ctx->cur_frame_info is null\n");
+		}
 		return;
 	}
 

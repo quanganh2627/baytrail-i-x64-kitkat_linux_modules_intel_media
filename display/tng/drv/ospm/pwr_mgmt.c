@@ -618,6 +618,7 @@ bool ospm_power_is_hw_on(u32 hw_island)
 {
 	return is_island_on(hw_island);
 }
+EXPORT_SYMBOL(ospm_power_is_hw_on);
 
 void ospm_power_using_hw_end(int hw_island)
 {
@@ -677,6 +678,7 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 
 		mutex_unlock(&g_ospm_data->ospm_lock);
 
+		power_island_put(OSPM_VIDEO_DEC_ISLAND);
 		return;
 	}
 
@@ -786,6 +788,12 @@ void ospm_apm_power_down_vsp(struct drm_device *dev)
 	if (ret) {
 		p_island->island_state = OSPM_POWER_OFF;
 		atomic_set(&p_island->ref_count, 0);
+	}
+
+	/* handle the dependency */
+	if (p_island->p_dependency) {
+		/* Power down dependent island */
+		power_down_island(p_island->p_dependency);
 	}
 
 	PSB_DEBUG_PM("Power down VPP done\n");

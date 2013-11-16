@@ -927,7 +927,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 				if (ret != 0) {
 					DRM_ERROR("VSP: failed to init"
 						  "firmware\n");
-					goto out_err0;
+					goto out_err1;
 				}
 			}
 		}
@@ -938,7 +938,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 
 		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
 			ret = -EBUSY;
-			goto out_err0;
+			goto out_err1;
 		}
 
 		context = &dev_priv->vsp_context;

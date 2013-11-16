@@ -1089,11 +1089,7 @@ int mid_irq_enable_hdmi_audio(struct drm_device *dev)
 	unsigned long irqflags;
 	u32 reg_val = 0, mask = 0;
 
-	if (power_island_get(OSPM_DISPLAY_B)) {
-		reg_val = REG_READ(PIPEBCONF);
-		power_island_put(OSPM_DISPLAY_B);
-	}
-
+	reg_val = REG_READ(PIPEBCONF);
 	if (!(reg_val & PIPEACONF_ENABLE))
 		return -EINVAL;
 

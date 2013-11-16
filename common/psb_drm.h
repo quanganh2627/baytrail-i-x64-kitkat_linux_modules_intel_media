@@ -785,6 +785,7 @@ struct drm_psb_register_rw_arg {
 		uint32_t IEP_ENABLED;
 		uint32_t IEP_BLE_MINMAX;
 		uint32_t IEP_BSSCC_CONTROL;
+		uint32_t index;
 		uint32_t b_wait_vblank;
 		uint32_t b_wms;
 		uint32_t buffer_handle;
@@ -824,6 +825,15 @@ struct drm_psb_register_rw_arg {
 	} cursor;
 	uint32_t cursor_enable_mask;
 	uint32_t cursor_disable_mask;
+
+	uint32_t plane_enable_mask;
+	uint32_t plane_disable_mask;
+
+	struct {
+		uint32_t type;
+		uint32_t index;
+		uint32_t ctx;
+	} plane;
 };
 
 enum {

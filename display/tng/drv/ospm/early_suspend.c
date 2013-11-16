@@ -58,12 +58,15 @@ static void gfx_early_suspend(struct early_suspend *h)
 			enc_funcs->save(encoder);
 
 		if (encoder->encoder_type == DRM_MODE_ENCODER_TMDS) {
+			DCLockMutex();
+			drm_handle_vblank(dev, 1);
 
 			/* Turn off vsync interrupt. */
 			drm_vblank_off(dev, 1);
 
 			/* Make the pending flip request as completed. */
 			DCUnAttachPipe(1);
+			DCUnLockMutex();
 		}
 	}
 

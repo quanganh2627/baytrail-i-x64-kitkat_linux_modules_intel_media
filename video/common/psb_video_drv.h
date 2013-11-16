@@ -62,10 +62,25 @@ struct drm_psb_private;
 #define PSB_TT_PRIV0_PLIMIT	 (PSB_TT_PRIV0_LIMIT >> PAGE_SHIFT)
 #define PSB_NUM_VALIDATE_BUFFERS 2048
 
+#ifdef MERRIFIELD
+/*
+ * For Merrifield, the VSP memory must be in 1GB.
+ *	MMU size is 448M
+ *	IMR size is 64M
+ *	TT size is 256M
+ *	TILING size is 256M
+ */
+#define PSB_MEM_MMU_START		0x00000000
+#define PSB_MEM_IMR_START		0x1C000000
+#define PSB_MEM_TT_START		0x20000000
+#define PSB_MEM_MMU_TILING_START	0x30000000
+#else
 #define PSB_MEM_MMU_START		0x00000000
 #define PSB_MEM_TT_START		0x30000000
 #define PSB_MEM_IMR_START		0x2C000000
 #define PSB_MEM_MMU_TILING_START	0x50000000
+
+#endif
 
 #define PSB_MAX_RELOC_PAGES 1024
 

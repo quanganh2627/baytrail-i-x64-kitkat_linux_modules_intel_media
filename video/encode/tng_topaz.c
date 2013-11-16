@@ -2488,11 +2488,9 @@ static int tng_setup_new_context(
 		video_ctx->bias_reg = NULL;
 	}
 
-	/*
 	topaz_priv->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
 	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
 				& 0xffff0000)  >> 16) ;
-	*/
 	
 	if (Is_Mrfld_B0()) {
 		ret = tng_topaz_power_up(dev, codec);

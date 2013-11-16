@@ -423,22 +423,34 @@ static void vsp_set_max_frequency(struct drm_device *dev)
 {
 	unsigned int pci_device = dev->pci_device & 0xffff;
 	u32 freq_code_rlzd;
-	u32 freq_code;
+	u32 freq_code, max_freq_code;
+	u32 freq, max_freq;
 	int ret;
 
+	freq_code = 0;
+	max_freq_code = 0;
 	if (pci_device == 0x1180) {
-		freq_code = IP_FREQ_457_14;
+		max_freq_code = IP_FREQ_457_14;
 		PSB_DEBUG_PM("vsp maximum freq is 457\n");
 	} else if (pci_device == 0x1181) {
-		freq_code = IP_FREQ_400_00;
+		max_freq_code = IP_FREQ_400_00;
 		PSB_DEBUG_PM("vsp maximum freq is 400\n");
 	} else {
 		DRM_ERROR("invalid pci device id %x\n", pci_device);
 		return;
 	}
 
+	// according to the latest scheme, set VSP max frequency to 400MHZ
+	freq_code = IP_FREQ_400_00;
+
 	if (drm_vsp_force_up_freq)
 		freq_code = drm_vsp_force_up_freq;
+
+	freq = 1600 * 2 / (freq_code + 1);
+	max_freq = 1600 * 2 / (max_freq_code + 1);
+	VSP_DEBUG("try to set %dMHZ, max freq is %dMHZ\n", freq, max_freq);
+	if (freq > max_freq)
+		freq_code = max_freq_code;
 
 	ret = pm_cmd_freq_set(VSP_SS_PM1, freq_code, &freq_code_rlzd);
 	if (ret < 0) {
