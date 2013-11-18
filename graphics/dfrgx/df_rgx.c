@@ -417,31 +417,62 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 		if(!bfdata->g_dfrgx_data.g_enable)
 		{
 
-			if(!df_rgx_is_active())
+			if(!df_rgx_is_active()) {
+				mutex_unlock(&bfdata->lock);
 				return -EBUSY;
+			}
 
 			/* If thermal state is specified explicitely then suspend burst/unburst thread
 			* because the user needs the GPU to run at specific frequency/thermal state level
 			*/
 
 			ret = df_rgx_set_freq_khz(bfdata, bfdata->gpudata[cs].freq_limit);
-			if (ret <= 0)
+			if (ret <= 0) {
+				mutex_unlock(&bfdata->lock);
 				return ret;
+			}
 		}
 		/* In this case we want to limit the max_freq to the thermal state limit*/
-		else{
+		else {
+			int b_update_freq = 0;
 			df = bfdata->devfreq;
-			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
-			df->max_freq = bfdata->gpudata[cs].freq_limit;
 
-			new_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
+			if (!cs) {
+				/* We are back in normal operation so set initial values*/
+				df->max_freq = bfdata->gbp_cooldv_init_freq_max;
+				df->min_freq = bfdata->gbp_cooldv_init_freq_min;
+				b_update_freq = 1;
+			}
+			else {
+				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
+				df->max_freq = bfdata->gpudata[cs].freq_limit;
 
-			if(new_index > -1){
-				bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
-				bfdata->g_dfrgx_data.g_max_freq_index = new_index;
+				if (bfdata->gpudata[cs].freq_limit < df->min_freq) {
+					df->min_freq = bfdata->gpudata[cs].freq_limit;
+					new_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
+
+					if (new_index > -1) {
+						bfdata->g_dfrgx_data.g_freq_mhz_min = df->min_freq;
+						bfdata->g_dfrgx_data.g_min_freq_index = new_index;
+					}
+					b_update_freq = 1;
+				}
+
+				new_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
+
+				if(new_index > -1){
+					bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
+					bfdata->g_dfrgx_data.g_max_freq_index = new_index;
+				}
+
+				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 1);
 			}
 
-			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 1);
+			if (b_update_freq) {
+				/* Pick the min freq this time*/
+				bfdata->bf_desired_freq = df->min_freq;
+			}
+
 		}
 
 		bfdata->gbp_cooldv_state_prev = bfdata->gbp_cooldv_state_cur;
@@ -634,7 +665,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	struct devfreq *df;
 	int error = 0;
 	int sts = 0;
-	int i = 0, j = 0, start = 0;
+	int start = 0;
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
@@ -686,13 +717,11 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	}
 	bfdata->gbp_cooldv_state_override = -1;
 
-	j = 0;
-	/*Initial states*/
-	for ( i = start - 1; j < THERMAL_COOLING_DEVICE_MAX_STATE; i-- )
-	{
-		bfdata->gpudata[j].freq_limit = aAvailableStateFreq[i].freq;
-		j++;
-	}
+	/* Thermal freq-state mapping after characterization */
+	bfdata->gpudata[0].freq_limit = DFRGX_FREQ_533_MHZ;
+	bfdata->gpudata[1].freq_limit = DFRGX_FREQ_400_MHZ;
+	bfdata->gpudata[2].freq_limit = DFRGX_FREQ_320_MHZ;
+	bfdata->gpudata[3].freq_limit = DFRGX_FREQ_200_MHZ;
 
 	{
 		static const char *tcd_type = "gpu_burst";
@@ -765,6 +794,8 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	bfdata->g_dfrgx_data.g_freq_mhz_min = df->min_freq;
 	bfdata->g_dfrgx_data.g_max_freq_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
 	bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
+	bfdata->gbp_cooldv_init_freq_min = df->min_freq;
+	bfdata->gbp_cooldv_init_freq_max = df->max_freq;
 
 	df_rgx_set_governor_profile(df->governor->name, &bfdata->g_dfrgx_data);
 
