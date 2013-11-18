@@ -670,15 +670,17 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 
 	bfdata->devfreq = df;
 
-	df->min_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 	df->previous_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 	bfdata->bf_prev_freq_rlzd = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 
 	if(is_tng_b0){
+		/*On TNG_B0 We will use 457KHZ and 533KHZ as turbo*/
+		df->min_freq = DFRGX_FREQ_457_MHZ;
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX;
 		start = sizeof(aAvailableStateFreq)/sizeof(aAvailableStateFreq[0]);
 	}
 	else{
+		df->min_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX_INITIAL;
 		start = THERMAL_COOLING_DEVICE_MAX_STATE;
 	}
@@ -739,9 +741,26 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		goto err_002;
 	}
 
+	/*Set the initial frequency at 457MHZ in B0/ 200MHZ otherwise*/
+	{
+		int ret = 0;
+		if (!df_rgx_is_active()) {
+				/*Change the freq once it is active*/
+				bfdata->bf_desired_freq = df->min_freq;
+			}
+			else {
+				ret = df_rgx_set_freq_khz(bfdata, df->min_freq);
+				if (ret < 0) {
+					DFRGX_DPF(DFRGX_DEBUG_HIGH,
+						"%s: could not initialize freq: %0x error\n",
+						__func__, ret);
+				}
+			}
+	}
+
 	bfdata->g_dfrgx_data.bus_freq_data = bfdata;
 	bfdata->g_dfrgx_data.g_enable = mprm_enable;
-	bfdata->g_dfrgx_data.gpu_utilization_record_index = 3; /*Index for 320 MHZ, initial freq*/
+	bfdata->g_dfrgx_data.gpu_utilization_record_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
 	bfdata->g_dfrgx_data.g_min_freq_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
 	bfdata->g_dfrgx_data.g_freq_mhz_min = df->min_freq;
 	bfdata->g_dfrgx_data.g_max_freq_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
