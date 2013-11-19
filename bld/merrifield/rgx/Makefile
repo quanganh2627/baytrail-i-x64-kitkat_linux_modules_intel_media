@@ -75,8 +75,8 @@ ccflags-y += \
 	-DPVR_LDM_DRIVER_REGISTRATION_NAME="\"pvrsrvkm\"" \
 	-DSUPPORT_RGX=1 \
 	-DPVR_SECURE_HANDLES \
-	-DRGX_BVNC_CORE_KM_HEADER="\"cores/rgxcore_km_1.76.4.6.h\"" \
-	-DRGX_BNC_CONFIG_KM_HEADER="\"configs/rgxconfig_km_1.V.4.6.h\"" \
+	-DRGX_BVNC_CORE_KM_HEADER="\"cores/rgxcore_km_1.14.4.4.h\"" \
+	-DRGX_BNC_CONFIG_KM_HEADER="\"configs/rgxconfig_km_1.V.4.4.h\"" \
 	-DDISPLAY_CONTROLLER=pvrlfb \
 	-DSUPPORT_RENDER_TARGET_ARRAYS \
 	-DSUPPORT_LINUX_X86_WRITECOMBINE \
