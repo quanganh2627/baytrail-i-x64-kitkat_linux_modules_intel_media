@@ -112,13 +112,8 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			DRM_ERROR("error response:%.8x %.8x %.8x %.8x %.8x\n",
 				  msg->context, msg->type, msg->buffer,
 				  msg->size, msg->vss_cc);
-			if (vsp_priv->fw_type == VSP_FW_TYPE_VPP) {
-				handle_error_response(msg->buffer & 0xFFFF0000,
-						msg->buffer & 0xFFFF);
-			} else {
-				handle_error_response(msg->buffer & 0xFFFF,
-						msg->buffer >> 16);
-			}
+			handle_error_response(msg->buffer & 0xFFFF,
+					msg->buffer >> 16);
 			ret = false;
 			break;
 
@@ -1241,8 +1236,8 @@ int psb_check_vsp_idle(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	int i;
 	int cmd_rd, cmd_wr;
+	unsigned int reg, mode;
 
 	if (vsp_priv->fw_loaded == 0 || vsp_priv->vsp_state == VSP_STATE_DOWN)
 		return 0;
@@ -1261,23 +1256,36 @@ int psb_check_vsp_idle(struct drm_device *dev)
 	 */
 	if (!vsp_is_idle(dev_priv, vsp_sp0)) {
 		PSB_DEBUG_PM("VSP: sp0 return busy!\n");
-		return -EBUSY;
+		goto out;
 	}
 	if (!vsp_is_idle(dev_priv, vsp_sp1)) {
 		PSB_DEBUG_PM("VSP: sp1 return busy!\n");
-		return -EBUSY;
+		goto out;
 	}
 
 	if (!vsp_is_idle(dev_priv, vsp_vp0)) {
 		PSB_DEBUG_PM("VSP: vp0 return busy!\n");
-		return -EBUSY;
+		goto out;
 	}
 	if (!vsp_is_idle(dev_priv, vsp_vp1)) {
 		PSB_DEBUG_PM("VSP: vp1 return busy!\n");
-		return -EBUSY;
+		goto out;
 	}
 
 	return 0;
+out:
+	/* For suspend_and_hw_idle power-mode, sometimes hw couldn't handle
+	 * the hw_idle signal correctly. So driver still need power off
+	 * the VSP with error log to trace this situation.
+	 */
+	CONFIG_REG_READ32(1, &reg);
+	mode = vsp_priv->ctrl->power_saving_mode;
+	if (reg == 1 &&
+	    mode == vsp_suspend_and_hw_idle_on_empty_queue) {
+		PSB_DEBUG_PM("VSP core is active, but config_reg_d1 is 1\n");
+		return 0;
+	} else
+		return -EBUSY;
 }
 
 /* The tasklet function to power down VSP */
