@@ -211,14 +211,6 @@ PVR_ANDROID_HAS_HAL_PIXEL_FORMAT_BLOB := 1
 endif
 
 ##############################################################################
-# In JB MR2 we can use a native helper library for the unittest wrapper.
-# In earlier versions, we must use a less ideal approach.
-#
-#ifeq ($(is_at_least_jellybean_mr2),0)
-PVR_ANDROID_SURFACE_FIELD_NAME := \"mNativeSurface\"
-#endif
-
-##############################################################################
 # JB MR2 introduces two new camera HAL formats (Y8, Y16)
 #
 ifeq ($(is_at_least_jellybean_mr2),1)

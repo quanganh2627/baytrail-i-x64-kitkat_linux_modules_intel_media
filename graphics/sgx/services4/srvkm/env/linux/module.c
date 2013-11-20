@@ -693,10 +693,10 @@ void ProcSeqShowPowerLevel(struct seq_file *sfile,void* el)
 
  @Description
 
- Open the PVR services node - called when the relevant device node is open()ed.
+ Release access the PVR services node - called when a file is closed, whether
+ at exit or using close(2) system call.
 
  @input pInode - the inode for the file being openeded
- @input dev    - the DRM device corresponding to this driver.
 
  @input pFile - the file handle data for the actual file being opened
 

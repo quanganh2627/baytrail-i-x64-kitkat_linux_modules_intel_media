@@ -589,8 +589,6 @@ PVRSRV_ERROR SGXPostClockSpeedChange(IMG_HANDLE				hDevHandle,
 
 IMG_VOID SGXPanic(PVRSRV_SGXDEV_INFO	*psDevInfo);
 
-IMG_VOID RunSGXREGDebugScripts(PVRSRV_SGXDEV_INFO	*psDevInfo);
-
 IMG_VOID SGXDumpDebugInfo (PVRSRV_SGXDEV_INFO	*psDevInfo,
 						   IMG_BOOL				bDumpSGXRegs);
 

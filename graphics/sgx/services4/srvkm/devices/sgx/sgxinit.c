@@ -363,7 +363,7 @@ EXPORT_SYMBOL(SGXScheduleCCBCommandKM);
 
 static PVRSRV_ERROR SGXRunScript(PVRSRV_SGXDEV_INFO *psDevInfo, SGX_INIT_COMMAND *psScript, IMG_UINT32 ui32NumInitCommands)
 {
-	IMG_UINT32 ui32PC;
+	IMG_UINT32 ui32PC, ui32RegVal;
 	SGX_INIT_COMMAND *psComm;
 
 	for (ui32PC = 0, psComm = psScript;
@@ -381,7 +381,7 @@ static PVRSRV_ERROR SGXRunScript(PVRSRV_SGXDEV_INFO *psDevInfo, SGX_INIT_COMMAND
 			}
 			case SGX_INIT_OP_READ_HW_REG:
 			{
-				psComm->sReadHWReg.ui32Value = OSReadHWReg(psDevInfo->pvRegsBaseKM, psComm->sReadHWReg.ui32Offset);
+				OSReadHWReg(psDevInfo->pvRegsBaseKM, psComm->sReadHWReg.ui32Offset);
 #if defined(PDUMP)
 				PDUMPCOMMENT("SGXRunScript: Read HW reg operation");
 				PDumpRegRead(SGX_PDUMPREG_NAME, psComm->sReadHWReg.ui32Offset, PDUMP_FLAGS_CONTINUOUS);
@@ -390,8 +390,8 @@ static PVRSRV_ERROR SGXRunScript(PVRSRV_SGXDEV_INFO *psDevInfo, SGX_INIT_COMMAND
 			}
 			case SGX_INIT_OP_PRINT_HW_REG:
 			{
-				psComm->sReadHWReg.ui32Value = OSReadHWReg(psDevInfo->pvRegsBaseKM, psComm->sReadHWReg.ui32Offset);
-				PVR_LOG(("\t(SGXREG) 0x%08X : 0x%08X", psComm->sReadHWReg.ui32Offset, psComm->sReadHWReg.ui32Value));
+				ui32RegVal = OSReadHWReg(psDevInfo->pvRegsBaseKM, psComm->sReadHWReg.ui32Offset);
+				PVR_LOG(("  (SGXREG) 0x%08X : 0x%08X", psComm->sReadHWReg.ui32Offset, ui32RegVal));
 
 				break;
 			}
@@ -413,68 +413,6 @@ static PVRSRV_ERROR SGXRunScript(PVRSRV_SGXDEV_INFO *psDevInfo, SGX_INIT_COMMAND
 			default:
 			{
 				PVR_DPF((PVR_DBG_ERROR,"SGXRunScript: PC %d: Illegal command: %d", ui32PC, psComm->eOp));
-				return PVRSRV_ERROR_UNKNOWN_SCRIPT_OPERATION;
-			}
-		}
-
-	}
-
-	return PVRSRV_ERROR_UNKNOWN_SCRIPT_OPERATION;
-}
-
-/* Run scripts on given core */
-static PVRSRV_ERROR SGXRunScriptOnCore(PVRSRV_SGXDEV_INFO *psDevInfo, SGX_INIT_COMMAND *psScript, IMG_UINT32 ui32NumInitCommands, IMG_UINT32 ui32CoreNum)
-{
-	IMG_UINT32 ui32PC;
-	SGX_INIT_COMMAND *psComm;
-
-	for (ui32PC = 0, psComm = psScript;
-		ui32PC < ui32NumInitCommands;
-		ui32PC++, psComm++)
-	{
-		switch (psComm->eOp)
-		{
-			case SGX_INIT_OP_WRITE_HW_REG:
-			{
-				OSWriteHWReg(psDevInfo->pvRegsBaseKM, SGX_MP_CORE_SELECT(psComm->sWriteHWReg.ui32Offset,ui32CoreNum), psComm->sWriteHWReg.ui32Value);
-				PDUMPCOMMENT("SGXRunScriptOnCore: Write HW reg operation");
-				PDUMPREG(SGX_PDUMPREG_NAME, SGX_MP_CORE_SELECT(psComm->sWriteHWReg.ui32Offset,ui32CoreNum), psComm->sWriteHWReg.ui32Value);
-				break;
-			}
-			case SGX_INIT_OP_READ_HW_REG:
-			{
-				psComm->sReadHWReg.ui32Value = OSReadHWReg(psDevInfo->pvRegsBaseKM, SGX_MP_CORE_SELECT(psComm->sReadHWReg.ui32Offset, ui32CoreNum));
-#if defined(PDUMP)
-				PDUMPCOMMENT("SGXRunScriptOnCore: Read HW reg operation");
-				PDumpRegRead(SGX_PDUMPREG_NAME, SGX_MP_CORE_SELECT(psComm->sReadHWReg.ui32Offset,ui32CoreNum), PDUMP_FLAGS_CONTINUOUS);
-#endif
-				break;
-			}
-			case SGX_INIT_OP_PRINT_HW_REG:
-			{
-				psComm->sReadHWReg.ui32Value = OSReadHWReg(psDevInfo->pvRegsBaseKM, SGX_MP_CORE_SELECT(psComm->sReadHWReg.ui32Offset,ui32CoreNum));
-				PVR_LOG(("\t(SGXREG) 0x%08X : 0x%08X", SGX_MP_CORE_SELECT(psComm->sReadHWReg.ui32Offset, ui32CoreNum), psComm->sReadHWReg.ui32Value));
-
-				break;
-			}
-
-#if defined(PDUMP)
-			case SGX_INIT_OP_PDUMP_HW_REG:
-			{
-				PDUMPCOMMENT("SGXRunScriptOnCore: Dump HW reg operation");
-				PDUMPREG(SGX_PDUMPREG_NAME, SGX_MP_CORE_SELECT(psComm->sPDumpHWReg.ui32Offset, ui32CoreNum), psComm->sPDumpHWReg.ui32Value);
-				break;
-			}
-#endif
-			case SGX_INIT_OP_HALT:
-			{
-				return PVRSRV_OK;
-			}
-			case SGX_INIT_OP_ILLEGAL:
-			/* FALLTHROUGH */
-			default:
-			{
-				PVR_DPF((PVR_DBG_ERROR,"SGXRunScriptOnCore: PC %d: Illegal command: %d", ui32PC, psComm->eOp));
 				return PVRSRV_ERROR_UNKNOWN_SCRIPT_OPERATION;
 			}
 		}
@@ -1167,6 +1105,7 @@ static PVRSRV_ERROR DevDeInitSGX (IMG_VOID *pvDeviceNode)
 	PVRSRV_SGXDEV_INFO			*psDevInfo = (PVRSRV_SGXDEV_INFO*)psDeviceNode->pvDevice;
 	PVRSRV_ERROR				eError;
 	IMG_UINT32					ui32Heap;
+	IMG_UINT32					ui32Count;
 	DEVICE_MEMORY_HEAP_INFO		*psDeviceMemoryHeap;
 	SGX_DEVICE_MAP				*psSGXDeviceMap;
 
@@ -1276,6 +1215,18 @@ static PVRSRV_ERROR DevDeInitSGX (IMG_VOID *pvDeviceNode)
 	}
 #endif /* #ifdef SGX_FEATURE_HOST_PORT */
 	
+	/* Deallocate KM mem allocated for debug script commands */
+	for (ui32Count = 0; ui32Count < SGX_FEATURE_MP_CORE_COUNT_3D; ui32Count++) 
+	{
+		if(psDevInfo->sScripts.apsSGXREGDebugCommandsPart2[ui32Count])
+		{
+			OSFreeMem(PVRSRV_OS_PAGEABLE_HEAP,
+					SGX_MAX_PRINT_COMMANDS * sizeof(SGX_INIT_COMMAND),
+					psDevInfo->sScripts.apsSGXREGDebugCommandsPart2[ui32Count],
+					0);
+		}
+	}
+	
 	/* DeAllocate devinfo */
 	OSFreeMem(PVRSRV_OS_NON_PAGEABLE_HEAP,
 				sizeof(PVRSRV_SGXDEV_INFO),
@@ -1339,45 +1290,6 @@ static INLINE IMG_UINT32 GetDirListBaseReg(IMG_UINT32 ui32Index)
 #endif
 
 /*!
- * **************************************************************************
- * @Function	RunSGXREGDebugScripts
- * @Description	Runs the SGXREG debug scripts
- *
- * @Input	PVRSRV_SGXDEV_INFO
- * @Output
- * @Return	IMG_VOID
- * **************************************************************************/
-
-IMG_VOID RunSGXREGDebugScripts (PVRSRV_SGXDEV_INFO	*psDevInfo)
-{
-	IMG_UINT32	ui32Core;
-	PVRSRV_ERROR		eError;
-
-	/* Run SGXREGDebug scripts */
-#if defined(SGX_FEATURE_MP)
-	PVR_LOG(("(HYD)"));
-	eError = SGXRunScript(psDevInfo, psDevInfo->sScripts.asSGXREGDebugCommandsMaster, SGX_MAX_PRINT_COMMANDS);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"RunSGXREGDebugScripts: SGXREGDebugCommandsMaster SGXRunScript failed (%d)", eError));
-	}
-#endif
-
-	/* Run on each core */
-	for (ui32Core = 0; ui32Core < SGX_FEATURE_MP_CORE_COUNT_3D; ui32Core++) 
-	{
-		PVR_LOG(("(P%u)",ui32Core));
-		eError = SGXRunScriptOnCore(psDevInfo, psDevInfo->sScripts.asSGXREGDebugCommandsSlave, SGX_MAX_PRINT_COMMANDS, ui32Core);
-		if (eError != PVRSRV_OK)
-		{
-			PVR_DPF((PVR_DBG_ERROR,"RunSGXREGDebugScripts: SGXREGDebugCommandsSlave SGXRunScript failed (%d)", eError));
-		}
-	}
-	/* Scripts end */
-}
-
-
-/*!
 *******************************************************************************
 
  @Function	SGXDumpDebugInfo
@@ -1405,14 +1317,8 @@ IMG_VOID SGXDumpDebugInfo (PVRSRV_SGXDEV_INFO	*psDevInfo,
 		PVR_DPF((PVR_DBG_ERROR,"SGX Register Base Address (Linear):   0x%p", psDevInfo->pvRegsBaseKM));
 		PVR_DPF((PVR_DBG_ERROR,"SGX Register Base Address (Physical): 0x" SYSPADDR_FMT, psDevInfo->sRegsPhysBase.uiAddr));
 
-		/* Run SGXREGDebug Scripts */
-		PVR_LOG(("Running SGXREG Debug Scripts:"));
-		RunSGXREGDebugScripts(psDevInfo);
-
-		PVR_LOG(("SGX Register Dump:"));
 		SGXDumpDebugReg(psDevInfo, 0, "EUR_CR_CORE_ID:          ", EUR_CR_CORE_ID);
 		SGXDumpDebugReg(psDevInfo, 0, "EUR_CR_CORE_REVISION:    ", EUR_CR_CORE_REVISION);
-		
 		for (ui32CoreNum = 0; ui32CoreNum < SGX_FEATURE_MP_CORE_COUNT_3D; ui32CoreNum++)
 		{
 			/* Dump HW event status */
@@ -1789,6 +1695,7 @@ IMG_VOID HWRecoveryResetSGX (PVRSRV_DEVICE_NODE *psDeviceNode,
 							 IMG_UINT32			ui32CallerID)
 {
 	PVRSRV_ERROR		eError;
+	IMG_UINT32			ui32Count;
 	PVRSRV_SGXDEV_INFO	*psDevInfo = (PVRSRV_SGXDEV_INFO*)psDeviceNode->pvDevice;
 	SGXMKIF_HOST_CTL	*psSGXHostCtl = (SGXMKIF_HOST_CTL *)psDevInfo->psSGXHostCtl;
 	
@@ -1830,6 +1737,27 @@ IMG_VOID HWRecoveryResetSGX (PVRSRV_DEVICE_NODE *psDeviceNode,
 
 	PVR_LOG(("HWRecoveryResetSGX: SGX Hardware Recovery triggered"));
 
+	/* Run SGXREGDebug scripts */
+#if defined(SGX_FEATURE_MP)
+	PVR_LOG(("(HYD)"));
+	eError = SGXRunScript(psDevInfo, psDevInfo->sScripts.asSGXREGDebugCommandsPart1, SGX_MAX_PRINT_COMMANDS);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"HWRecoveryResetSGX: SGXREGDebugCommandsPart1 SGXRunScript failed (%d)", eError));
+	}
+#endif
+
+	for (ui32Count = 0; ui32Count < SGX_FEATURE_MP_CORE_COUNT_3D; ui32Count++) 
+	{
+		PVR_LOG(("(P%u)",ui32Count));
+		eError = SGXRunScript(psDevInfo, psDevInfo->sScripts.apsSGXREGDebugCommandsPart2[ui32Count], SGX_MAX_PRINT_COMMANDS);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR,"HWRecoveryResetSGX: SGXREGDebugCommandsPart2 SGXRunScript failed (%d)", eError));
+		}
+	}
+	/* Scripts end */
+	
 #if defined(SUPPORT_HWRECOVERY_TRACE_LIMIT)	
 /*
  * 		The following defines are system specific and should be defined in
@@ -2776,7 +2704,8 @@ PVRSRV_ERROR SGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode)
 
 	/*
 	 *  1. Check kernel-side and client-side build options
-	 *  2. Check ukernel build options against kernel-side build options
+	 * 	2. Ensure ukernel DDK version and driver DDK version are compatible
+	 * 	3. Check ukernel build options against kernel-side build options
 	 */
 
 	/*
@@ -2817,12 +2746,31 @@ PVRSRV_ERROR SGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode)
 	psSGXMiscInfoInt->ui32MiscInfoFlags |= PVRSRV_USSE_MISCINFO_GET_STRUCT_SIZES;
 	eError = SGXGetMiscInfoUkernel(psDevInfo, psDeviceNode, IMG_NULL);
 
+	/*
+	 * Validate DDK version
+	 */
 	if(eError != PVRSRV_OK)
 	{
-		PVR_LOG(("(FAIL) SGXInit: Unable to validate hardware core revision"));
+		PVR_LOG(("(FAIL) SGXInit: Unable to validate device DDK version"));
 		goto chk_exit;
 	}
 	psSGXFeatures = &((PVRSRV_SGX_MISCINFO_INFO*)(psMemInfo->pvLinAddrKM))->sSGXFeatures;
+	if( (psSGXFeatures->ui32DDKVersion !=
+		((PVRVERSION_MAJ << 16) |
+		 (PVRVERSION_MIN << 8))) ||
+		(psSGXFeatures->ui32DDKBuild != PVRVERSION_BUILD) )
+	{
+		PVR_LOG(("(FAIL) SGXInit: Incompatible driver DDK revision (%d)/device DDK revision (%d).",
+				PVRVERSION_BUILD, psSGXFeatures->ui32DDKBuild));
+		eError = PVRSRV_ERROR_DDK_VERSION_MISMATCH;
+		goto chk_exit;
+	}
+	else
+	{
+		PVR_DPF((PVR_DBG_MESSAGE, "SGXInit: driver DDK (%d) and device DDK (%d) match. [ OK ]",
+				PVRVERSION_BUILD, psSGXFeatures->ui32DDKBuild));
+	}
+
 	/*
 	 * 	Check hardware core revision is compatible with the one in software
 	 */

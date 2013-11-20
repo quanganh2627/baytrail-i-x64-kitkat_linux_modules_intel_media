@@ -48,9 +48,6 @@ SYS_CFLAGS += -march=armv7-a
 SYS_EXE_CRTBEGIN := $(TOOLCHAIN)/lib/crtbegin_dynamic.o
 SYS_EXE_CRTEND := $(TOOLCHAIN)/lib/crtend_android.o
 
-SYS_LIB_CRTBEGIN := $(TOOLCHAIN)/lib/crtbegin_so.o
-SYS_LIB_CRTEND := $(TOOLCHAIN)/lib/crtend_so.o
-
 # Handle the removal of the armelf.x and armelf.xsc linker scripts.
 ifeq ($(strip $(wildcard $(ANDROID_ROOT)/build/core/armelf.x)),)
 # The linker scripts have been removed. We need to use these options
