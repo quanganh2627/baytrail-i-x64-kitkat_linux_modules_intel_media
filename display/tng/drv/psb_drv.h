@@ -355,6 +355,7 @@ enum {
 #define IS_TNG_B0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && (intel_mid_soc_stepping() == 1))
 #endif
 
+#define IS_ANN_A0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE) && (intel_mid_soc_stepping() == 0))
 
 #define IS_MID(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))
 #define IS_FLDS(dev) (IS_MDFLD(dev) || IS_MRFLD(dev))

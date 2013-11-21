@@ -188,16 +188,22 @@ static int mrfl_pwr_cmd_gfx(u32 gfx_mask, int new_state)
 			return ret;
 		}
 
-#if A0_WORKAROUNDS
 		/**
 		 * If turning some power on, and the power to be on includes SLC,
 		 * and SLC was not previously on, then setup some registers.
-	 */
+		 */
 		if ((new_state == OSPM_ISLAND_UP)
 			&& (pwrtab[j] == GFX_SLC_SHIFT)
 			&& ((pwr_state_prev >> GFX_SLC_SHIFT) != TNG_SSC_I0))
-			apply_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
-#endif
+		{
+			/* TNG A0 workarounds */
+			if (IS_TNG_A0(dev))
+				apply_TNG_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
+
+			/* ANN A0 workarounds */
+			if (IS_ANN_A0(dev))
+				apply_ANN_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
+		}
 
 		if ((gfx_mask & ~done_mask) == 0)
 			break;
@@ -493,8 +499,10 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 		* If turning some power on, and the power to be on includes SLC,
 		* and SLC was not previously on, then setup some registers.
 		*/
-		apply_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
+		apply_TNG_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
 	}
+	if (!ret && IS_ANN_A0(dev))
+		apply_ANN_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
 
 	if (!ret)
 		ret = GFX_POWER_UP(PMU_SDKCK);
