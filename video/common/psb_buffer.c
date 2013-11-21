@@ -604,7 +604,10 @@ static void psb_evict_mask(struct ttm_buffer_object *bo, struct ttm_placement *p
 }
 
 static int psb_move(struct ttm_buffer_object *bo,
-		    bool evict, bool interruptible, bool no_wait_reserve,
+		    bool evict, bool interruptible,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+		    bool no_wait_reserve,
+#endif
 		    bool no_wait, struct ttm_mem_reg *new_mem)
 {
 	struct ttm_mem_reg *old_mem = &bo->mem;
