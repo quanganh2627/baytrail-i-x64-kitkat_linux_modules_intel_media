@@ -251,6 +251,7 @@ static struct file_operations pvrsrv_fops =
 PVRSRV_LINUX_MUTEX gPVRSRVLock;
 
 static IMG_BOOL bCalledSysInit = IMG_FALSE;
+static IMG_BOOL	bDriverProbeSucceeded = IMG_FALSE;
 
 #if defined(DEBUG) && defined(PVR_MANUAL_POWER_CONTROL)
 static IMG_UINT32 gPVRPowerLevel;
@@ -826,6 +827,8 @@ CONNECTION_DATA *LinuxConnectionFromFile(struct file *pFile)
 
 struct file *LinuxFileFromEnvConnection(ENV_CONNECTION_DATA *psEnvConnection)
 {
+	PVR_ASSERT(psEnvConnection != NULL);
+	
 #if defined(SUPPORT_DRM)
 	return psEnvConnection->psFile->filp;
 #else

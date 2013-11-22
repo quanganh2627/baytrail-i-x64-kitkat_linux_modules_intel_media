@@ -55,10 +55,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/version.h>
 #include <linux/file.h>
 #include <linux/seq_file.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
 #include <linux/sw_sync.h>
 #else
-#include <sw_sync.h>
+#include <../drivers/staging/android/sw_sync.h>
 #endif
 static PVRSRV_ERROR AllocReleaseFence(struct sw_sync_timeline *psTimeline, const char *szName, IMG_UINT32 ui32FenceVal, int *piFenceFd)
 {
@@ -310,12 +311,17 @@ PVRSRV_ERROR _SCPCommandReady(SCP_COMMAND *psCommand)
 
 	for (i = 0; i < psCommand->ui32SyncCount; i++)
 	{
+		if (!psCommand->pasSCPSyncData)
+				continue;
+
 		SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
 
 		/*
 			If the same sync is used in concurrent command we can skip the check
 		*/
-		if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE)
+		if (psSCPSyncData &&
+					(psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE) &&
+					(psSCPSyncData->psSync))
 		{
 			if (!ServerSyncFenceIsMeet(psSCPSyncData->psSync, psSCPSyncData->ui32Fence))
 			{

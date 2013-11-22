@@ -238,28 +238,29 @@ static IMG_UINT32 DBGDIOCDrivReadString(IMG_VOID * pvInBuffer, IMG_VOID * pvOutB
 	PDBG_IN_READSTRING	psParams;
 	PDBG_STREAM  psStream;
 	IMG_CHAR	*pcReadBuffer;
-#ifdef UNDER_WDDM
-	IMG_CHAR	*pcClientBuffer;
-#endif
 
 	psParams = (PDBG_IN_READSTRING) pvInBuffer;
 	pui32OutLen = (IMG_UINT32 *) pvOutBuffer;
-
-#ifdef UNDER_WDDM
-	/* WDDM DbgDriv operates at DISPATCH level so it cannot write directly
-	 * to pdump.exe's userspace buffer
-	 */
-
-	pcReadBuffer = HostNonPageablePageAlloc(
-			(psParams->ui32StringLen + HOST_PAGESIZE - 1) / HOST_PAGESIZE);
-	pcClientBuffer = psParams->u.pszString;
-#else
 	pcReadBuffer = psParams->u.pszString;
-#endif
 
 	psStream = SID2PStream(psParams->hStream);
 	if (psStream != (PDBG_STREAM)IMG_NULL)
 	{
+#ifdef UNDER_WDDM
+		IMG_CHAR	*pcClientBuffer;
+		/* WDDM DbgDriv operates at DISPATCH level so it cannot write directly
+		 * to pdump.exe's userspace buffer
+		 */
+
+		pcReadBuffer = HostNonPageablePageAlloc(
+				(psParams->ui32StringLen + HOST_PAGESIZE - 1) / HOST_PAGESIZE);
+		if (!pcReadBuffer)
+		{
+			return(IMG_FALSE);
+		}
+		pcClientBuffer = psParams->u.pszString;
+#endif
+
 		*pui32OutLen = ExtDBGDrivReadString(psStream,
 											pcReadBuffer, psParams->ui32StringLen);
 #ifdef UNDER_WDDM
@@ -401,30 +402,29 @@ static IMG_UINT32 DBGDIOCDrivRead(IMG_VOID * pvInBuffer, IMG_VOID * pvOutBuffer)
 	PDBG_IN_READ	psInParams;
 	PDBG_STREAM		psStream;
 	IMG_UINT8	*pui8ReadBuffer;
-#ifdef UNDER_WDDM
-	IMG_UINT8	*pui8ClientBuffer;
-#endif
 
 	psInParams = (PDBG_IN_READ) pvInBuffer;
 	pui32BytesCopied = (IMG_UINT32 *) pvOutBuffer;
-
-#ifdef UNDER_WDDM
-	/* WDDM DbgDriv operates at DISPATCH level so it cannot write directly
-	 * to pdump.exe's userspace buffer
-	 */
-
-	pui8ReadBuffer = HostNonPageablePageAlloc(
-			(psInParams->ui32OutBufferSize + HOST_PAGESIZE - 1) / HOST_PAGESIZE);
-
-	pui8ClientBuffer = psInParams->u.pui8OutBuffer;
-#else
 	pui8ReadBuffer = psInParams->u.pui8OutBuffer;
-#endif
 
 	psStream = SID2PStream(psInParams->hStream);
 
 	if (psStream != (PDBG_STREAM)IMG_NULL)
 	{
+#ifdef UNDER_WDDM
+		IMG_UINT8	*pui8ClientBuffer;
+		/* WDDM DbgDriv operates at DISPATCH level so it cannot write directly
+		 * to pdump.exe's userspace buffer
+		 */
+
+		pui8ReadBuffer = HostNonPageablePageAlloc(
+			(psInParams->ui32OutBufferSize + HOST_PAGESIZE - 1) / HOST_PAGESIZE);
+		if (!pui8ReadBuffer)
+		{
+			return(IMG_FALSE);
+		}
+		pui8ClientBuffer = psInParams->u.pui8OutBuffer;
+#endif
 		*pui32BytesCopied = ExtDBGDrivRead(psStream,
 									   psInParams->bReadInitBuffer,
 									   psInParams->ui32OutBufferSize,
@@ -824,29 +824,28 @@ static IMG_UINT32 DBGDIOCDrivReadLF(IMG_VOID * pvInBuffer, IMG_VOID * pvOutBuffe
 	PDBG_IN_READ	psInParams;
 	PDBG_STREAM		psStream;
 	IMG_UINT8	*pui8ReadBuffer;
-#ifdef UNDER_WDDM
-	IMG_UINT8	*pui8ClientBuffer;
-#endif
 
 	psInParams = (PDBG_IN_READ) pvInBuffer;
 	pui32BytesCopied = (IMG_UINT32 *) pvOutBuffer;
-
-#ifdef UNDER_WDDM
-	/* WDDM DbgDriv operates at DISPATCH level so it cannot write directly
-	 * to pdump.exe's userspace buffer
-	 */
-
-	pui8ReadBuffer = HostNonPageablePageAlloc(
-			(psInParams->ui32OutBufferSize + HOST_PAGESIZE - 1) / HOST_PAGESIZE);
-
-	pui8ClientBuffer = psInParams->u.pui8OutBuffer;
-#else
 	pui8ReadBuffer = psInParams->u.pui8OutBuffer;
-#endif
 
 	psStream = SID2PStream(psInParams->hStream);
 	if (psStream != (PDBG_STREAM)IMG_NULL)
 	{
+#ifdef UNDER_WDDM
+		IMG_UINT8	*pui8ClientBuffer;
+		/* WDDM DbgDriv operates at DISPATCH level so it cannot write directly
+		 * to pdump.exe's userspace buffer
+		 */
+
+		pui8ReadBuffer = HostNonPageablePageAlloc(
+				(psInParams->ui32OutBufferSize + HOST_PAGESIZE - 1) / HOST_PAGESIZE);
+		if (!pui8ReadBuffer)
+		{
+			return(IMG_FALSE);
+		}
+		pui8ClientBuffer = psInParams->u.pui8OutBuffer;
+#endif
 		*pui32BytesCopied = ExtDBGDrivReadLF(psStream,
 										 psInParams->ui32OutBufferSize,
 										 pui8ReadBuffer);
@@ -891,8 +890,9 @@ static IMG_UINT32 DBGDIOCDrivWaitForEvent(IMG_VOID * pvInBuffer, IMG_VOID * pvOu
 
 /*
 	ioctl interface jump table.
+	Accessed from the UM debug driver client and from WDDM KMD server
 */
-IMG_UINT32 (*g_DBGDrivProc[25])(IMG_VOID *, IMG_VOID *) =
+IMG_UINT32 (*g_DBGDrivProc[])(IMG_VOID *, IMG_VOID *) =
 {
 	DBGDIOCDrivCreateStream,
 	DBGDIOCDrivDestroyStream,
@@ -906,18 +906,18 @@ IMG_UINT32 (*g_DBGDrivProc[25])(IMG_VOID *, IMG_VOID *) =
 	DBGDIOCDrivSetDebugLevel,
 	DBGDIOCDrivSetFrame,
 	DBGDIOCDrivGetFrame,
-	DBGDIOCDrivOverrideMode,
-	DBGDIOCDrivDefaultMode,
-	DBGDIOCDrivGetServiceTable,
-	DBGDIOCDrivWrite2,
-	DBGDIOCDrivWriteStringCM,
-	DBGDIOCDrivWriteCM,
+	DBGDIOCDrivOverrideMode,    /* Not used by umdbgdrvlnx */
+	DBGDIOCDrivDefaultMode,     /* Not used by umdbgdrvlnx */
+	DBGDIOCDrivGetServiceTable, /* WDDM only for KMD to retrieve address from DBGDRV, Not used by umdbgdrvlnx */
+	DBGDIOCDrivWrite2,          /* Not used by umdbgdrvlnx */
+	DBGDIOCDrivWriteStringCM,   /* Not used by umdbgdrvlnx */
+	DBGDIOCDrivWriteCM,         /* Not used by umdbgdrvlnx */
 	DBGDIOCDrivSetMarker,
 	DBGDIOCDrivGetMarker,
-	DBGDIOCDrivIsCaptureFrame,
-	DBGDIOCDrivWriteLF,
+	DBGDIOCDrivIsCaptureFrame,  /* Not used by umdbgdrvlnx */
+	DBGDIOCDrivWriteLF,         /* Not used by umdbgdrvlnx */
 	DBGDIOCDrivReadLF,
-	DBGDIOCDrivWaitForEvent,
+	DBGDIOCDrivWaitForEvent
 };
 
 /*****************************************************************************

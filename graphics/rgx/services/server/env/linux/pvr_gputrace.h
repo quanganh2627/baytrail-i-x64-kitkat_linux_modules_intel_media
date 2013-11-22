@@ -51,9 +51,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ******************************************************************************/
 
 /*
-  The higher layers of the driver define these two APIs to allow this module
-  to set and retrieve the feature's on/off state. These symbols resolve at
-  link time for the driver.
+  The device layer of the KM driver defines these two APIs to allow a
+  platform module to set and retrieve the feature's on/off state.
 */
 extern IMG_VOID PVRGpuTraceEnabledSet(IMG_BOOL bNewValue);
 extern IMG_BOOL PVRGpuTraceEnabled(IMG_VOID);

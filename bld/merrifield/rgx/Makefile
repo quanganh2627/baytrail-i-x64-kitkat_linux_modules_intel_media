@@ -24,6 +24,7 @@ ccflags-y += \
 	-I$(RGXINC)/generated/dc_bridge \
 	-I$(RGXINC)/generated/cachegeneric_bridge \
 	-I$(RGXINC)/generated/dpvrtl_bridge \
+	-I$(RGXINC)/generated/dri_bridge \
 	-I$(RGXINC)/generated/hostportio_bridge \
 	-I$(RGXINC)/generated/rgxtq_bridge \
 	-I$(RGXINC)/generated/mm_bridge \
@@ -43,6 +44,8 @@ ccflags-y += \
 	-I$(RGXINC)/generated/breakpoint_bridge \
 	-I$(RGXINC)/generated/pvrtl_bridge \
 	-I$(RGXINC)/generated/rgxhwperf_bridge \
+	-I$(RGXINC)/generated/regconfig_bridge \
+	-I$(RGXINC)/generated/ri_bridge \
 	-I$(RGXINC)/tools/intern/debug/include \
 	-I$(RGXINC)/tools/intern/debug/dbgdriv/common \
 	-I$(RGXINC)/hwdefs \
@@ -97,6 +100,8 @@ ccflags-y += \
 	-DMAX_POOL_PAGES=10240 \
 	-DSUPPORT_GPUTRACE_EVENTS \
 	-DLMA \
+	-DPVR_LINUX_PYSMEM_MAX_POOL_PAGES=10240 \
+	-DPVR_MMAP_USE_VM_INSERT \
 	$(NULL)
 
 #	-DPVRSRV_ENABLE_FW_TRACE_DEBUGFS \
@@ -131,6 +136,9 @@ ccflags-y += \
 	-DPVR_LINUX_MISR_USING_PRIVATE_WORKQUEUE \
 	-DPVR_LINUX_TIMERS_USING_WORKQUEUES
 endif
+
+ccflags-y += \
+	-DSUPPORT_POWMON_WO_GPIO_PIN 
 
 # for PDUMP
 ccflags-$(CONFIG_PDUMP) += -DPDUMP -DSUPPORT_DBGDRV_EVENT_OBJECTS
@@ -182,6 +190,7 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/mm.o \
 	$(RGXDIR)/services/server/env/linux/physmem_osmem_linux.o \
 	$(RGXDIR)/services/server/env/linux/physmem_tdmetacode_linux.o \
+	$(RGXDIR)/services/server/env/linux/physmem_tdsecbuf_linux.o \
 	$(RGXDIR)/services/server/env/linux/osfunc_x86.o \
 	$(RGXDIR)/services/server/env/linux/mutils.o \
 	$(RGXDIR)/services/server/env/linux/mutex.o \
@@ -198,6 +207,7 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/pdump.o \
 	$(RGXDIR)/services/server/env/linux/pvr_debugfs.o \
 	$(RGXDIR)/services/server/env/linux/pvr_gputrace.o \
+	$(RGXDIR)/services/server/env/linux/trace_events.o \
 	$(RGXDIR)/services/shared/common/dllist.o \
 	$(RGXDIR)/services/shared/common/devicemem.o \
 	$(RGXDIR)/services/shared/common/hash.o \
@@ -207,7 +217,7 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/shared/devices/rgx/rgx_compat_bvnc.o \
 	$(RGXDIR)/services/server/common/tlintern.o \
 	$(RGXDIR)/services/server/common/tlstream.o \
-	$(RGXDIR)/services/server/common/tlutils.o \
+	$(RGXDIR)/services/server/common/tutils.o \
 	$(RGXDIR)/services/server/common/tlserver.o \
 	$(RGXDIR)/services/shared/common/tlclient.o
 
@@ -216,6 +226,9 @@ $(DRIVER_NAME)-y += \
 # WINDOW_HAS_SYNC
 $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/pvr_sync.o
+
+$(DRIVER_NAME)-$(CONFIG_RI_DEBUG) += \
+	$(RGXDIR)/services/server/common/ri_server.o
 
 # for PDUMP
 $(DRIVER_NAME)-$(CONFIG_PDUMP) += \
@@ -240,6 +253,7 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/devices/rgx/rgxcompute.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxutils.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxpower.o \
+	$(RGXDIR)/services/server/devices/rgx/rgxregconfig.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxta3d.o \
 	$(RGXDIR)/services/server/devices/rgx/debugmisc_server.o \
 	$(RGXDIR)/services/server/devices/rgx/rgxmem.o \
@@ -279,7 +293,12 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/pdumpcmm_bridge/server_pdumpcmm_bridge.o \
 	$(RGXDIR)/generated/rgxpdump_bridge/server_rgxpdump_bridge.o \
 	$(RGXDIR)/generated/pvrtl_bridge/server_pvrtl_bridge.o \
-	$(RGXDIR)/generated/rgxhwperf_bridge/server_rgxhwperf_bridge.o
+	$(RGXDIR)/generated/rgxhwperf_bridge/server_rgxhwperf_bridge.o \
+	$(RGXDIR)/generated/regconfig_bridge/server_regconfig_bridge.o \
+
+$(DRIVER_NAME)-$(CONFIG_RI_DEBUG) += \
+	$(RGXDIR)/generated/dri_bridge/client_ri_bridge.o \
+	$(RGXDIR)/generated/ri_bridge/server_ri_bridge.o \
 
 # for SUPPORT_SECURE_EXPORT
 $(DRIVER_NAME)-y += \

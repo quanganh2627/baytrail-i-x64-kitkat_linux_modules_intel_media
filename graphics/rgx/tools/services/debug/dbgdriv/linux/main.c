@@ -203,11 +203,7 @@ int init_module(void)
 		goto ErrUnregisterCharDev;
 	}
 
-	psDev = device_create(psDbgDrvClass, NULL, MKDEV(AssignedMajorNumber, 0),
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,6,26))
-						  NULL,
-#endif
-						  DRVNAME);
+	psDev = device_create(psDbgDrvClass, NULL, MKDEV(AssignedMajorNumber, 0), NULL, DRVNAME);
 	if (IS_ERR(psDev))
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: unable to create device (%ld)",
@@ -244,14 +240,14 @@ long dbgdrv_ioctl(struct file *file, unsigned int ioctlCmd, unsigned long arg)
 	char *buffer, *in, *out;
 	unsigned int cmd;
 
-	if((pIP->ui32InBufferSize > (PAGE_SIZE >> 1) ) || (pIP->ui32OutBufferSize > (PAGE_SIZE >> 1)))
+	if ((pIP->ui32InBufferSize > (PAGE_SIZE >> 1) ) || (pIP->ui32OutBufferSize > (PAGE_SIZE >> 1)))
 	{
 		PVR_DPF((PVR_DBG_ERROR,"Sizes of the buffers are too large, cannot do ioctl\n"));
 		return -1;
 	}
 
 	buffer = (char *) HostPageablePageAlloc(1);
-	if(!buffer)
+	if (!buffer)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"Failed to allocate buffer, cannot do ioctl\n"));
 		return -EFAULT;
@@ -260,7 +256,7 @@ long dbgdrv_ioctl(struct file *file, unsigned int ioctlCmd, unsigned long arg)
 	in = buffer;
 	out = buffer + (PAGE_SIZE >>1);
 
-	if(pvr_copy_from_user(in, pIP->pInBuffer, pIP->ui32InBufferSize) != 0)
+	if (pvr_copy_from_user(in, pIP->pInBuffer, pIP->ui32InBufferSize) != 0)
 	{
 		goto init_failed;
 	}
@@ -268,23 +264,24 @@ long dbgdrv_ioctl(struct file *file, unsigned int ioctlCmd, unsigned long arg)
 	/* Extra -1 because ioctls start at DEBUG_SERVICE_IOCTL_BASE + 1 */
 	cmd = MAKEIOCTLINDEX(pIP->ui32Cmd) - DEBUG_SERVICE_IOCTL_BASE - 1;
 
-	if(pIP->ui32Cmd == DEBUG_SERVICE_READ)
+	if (pIP->ui32Cmd == DEBUG_SERVICE_READ)
 	{
 		IMG_UINT32 *pui32BytesCopied = (IMG_UINT32 *)out;
 		DBG_IN_READ *psReadInParams = (DBG_IN_READ *)in;
-		DBG_STREAM *psStream;
+		PDBG_STREAM psStream;
 		IMG_CHAR *ui8Tmp;
 
 		ui8Tmp = vmalloc(psReadInParams->ui32OutBufferSize);
 
-		if(!ui8Tmp)
+		if (!ui8Tmp)
 		{
 			goto init_failed;
 		}
 
 		psStream = SID2PStream(psReadInParams->hStream);
-		if(!psStream)
+		if (!psStream)
 		{
+			vfree(ui8Tmp);
 			goto init_failed;
 		}
 
@@ -293,7 +290,7 @@ long dbgdrv_ioctl(struct file *file, unsigned int ioctlCmd, unsigned long arg)
 										   psReadInParams->ui32OutBufferSize,
 										   ui8Tmp);
 
-		if(pvr_copy_to_user(psReadInParams->u.pui8OutBuffer,
+		if (pvr_copy_to_user(psReadInParams->u.pui8OutBuffer,
 						ui8Tmp,
 						*pui32BytesCopied) != 0)
 		{
@@ -308,7 +305,7 @@ long dbgdrv_ioctl(struct file *file, unsigned int ioctlCmd, unsigned long arg)
 		(g_DBGDrivProc[cmd])(in, out);
 	}
 
-	if(copy_to_user(pIP->pOutBuffer, out, pIP->ui32OutBufferSize) != 0)
+	if (copy_to_user(pIP->pOutBuffer, out, pIP->ui32OutBufferSize) != 0)
 	{
 		goto init_failed;
 	}

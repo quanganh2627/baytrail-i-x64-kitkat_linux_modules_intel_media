@@ -264,6 +264,18 @@ _SubAllocImportAlloc(RA_PERARENA_HANDLE hArena,
 		goto failAlloc;
 	}
 
+#if defined(PVR_RI_DEBUG)
+	{
+		eError = BridgeRIWritePMREntry (psImport->hBridge,
+										psImport->hPMR,
+										"PMR sub-allocated",
+										psImport->uiSize);
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIWritePMREntry failed (eError=%d)", __func__, eError));
+		}
+	}
+#endif
 	/*
 		Suballocations always get mapped into the device was we need to
 		key the RA off something and as we can't export suballocations
@@ -959,7 +971,7 @@ DevmemAllocate(DEVMEM_HEAP *psHeap,
                IMG_DEVMEM_SIZE_T uiSize,
                IMG_DEVMEM_ALIGN_T uiAlign,
                DEVMEM_FLAGS_T uiFlags,
-               IMG_PCHAR pszText,
+               const IMG_PCHAR pszText,
 			   DEVMEM_MEMDESC **ppsMemDescPtr)
 {
     IMG_BOOL bStatus; /* eError for RA */
@@ -1057,19 +1069,19 @@ DevmemAllocate(DEVMEM_HEAP *psHeap,
 
 #if defined(PVR_RI_DEBUG)
 	{
-		IMG_HANDLE hHandle = IMG_NULL;
-
 		/* Attach RI information */
 		eError = BridgeRIWriteMEMDESCEntry (psMemDesc->psImport->hBridge,
 											psMemDesc->psImport->hPMR,
 											pszText,
-											uiAllocatedAddr,
 											psMemDesc->uiOffset,
 											uiAllocatedSize,
 											IMG_FALSE,
-											&hHandle);
-		psMemDesc->hRIHandle = hHandle;
-
+											IMG_FALSE,
+											&(psMemDesc->hRIHandle));
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIWriteMEMDESCEntry failed (eError=%d)", __func__, eError));
+		}
 	}
 #else  /* if defined(PVR_RI_DEBUG) */
 	PVR_UNREFERENCED_PARAMETER (pszText);
@@ -1102,7 +1114,7 @@ DevmemAllocateExportable(IMG_HANDLE hBridge,
 						 IMG_DEVMEM_SIZE_T uiSize,
 						 IMG_DEVMEM_ALIGN_T uiAlign,
 						 DEVMEM_FLAGS_T uiFlags,
-						 IMG_PCHAR pszText,
+						 const IMG_PCHAR pszText,
 						 DEVMEM_MEMDESC **ppsMemDescPtr)
 {
     PVRSRV_ERROR eError;
@@ -1159,19 +1171,28 @@ DevmemAllocateExportable(IMG_HANDLE hBridge,
 
 #if defined(PVR_RI_DEBUG)
 	{
-		IMG_HANDLE hHandle = IMG_NULL;
+		eError = BridgeRIWritePMREntry (psImport->hBridge,
+										psImport->hPMR,
+										(IMG_CHAR *)pszText,
+										psImport->uiSize);
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIWritePMREntry failed (eError=%d)", __func__, eError));
+		}
 
-		/* Attach RI information */
-		eError = BridgeRIWriteMEMDESCEntry (psMemDesc->psImport->hBridge,
-											psMemDesc->psImport->hPMR,
-											pszText,
-											psMemDesc->uiOffset,
+		 /* Attach RI information */
+		eError = BridgeRIWriteMEMDESCEntry (psImport->hBridge,
+											psImport->hPMR,
+											"^",
 											psMemDesc->uiOffset,
 											uiSize,
 											IMG_FALSE,
-											&hHandle);
-		psMemDesc->hRIHandle = hHandle;
-
+											IMG_TRUE,
+											&psMemDesc->hRIHandle);
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIWriteMEMDESCEntry failed (eError=%d)", __func__, eError));
+		}
 	}
 #else  /* if defined(PVR_RI_DEBUG) */
 	PVR_UNREFERENCED_PARAMETER (pszText);
@@ -1202,7 +1223,7 @@ DevmemAllocateSparse(IMG_HANDLE hBridge,
 					 IMG_BOOL *pabMappingTable,
 					 IMG_DEVMEM_ALIGN_T uiAlign,
 					 DEVMEM_FLAGS_T uiFlags,
-					 IMG_PCHAR pszText,
+					 const IMG_PCHAR pszText,
 					 DEVMEM_MEMDESC **ppsMemDescPtr)
 {
     PVRSRV_ERROR eError;
@@ -1256,19 +1277,28 @@ DevmemAllocateSparse(IMG_HANDLE hBridge,
 
 #if defined(PVR_RI_DEBUG)
 	{
-		IMG_HANDLE hHandle = IMG_NULL;
+		eError = BridgeRIWritePMREntry (psImport->hBridge,
+										psImport->hPMR,
+										(IMG_CHAR *)pszText,
+										psImport->uiSize);
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIWritePMREntry failed (eError=%d)", __func__, eError));
+		}
 
 		/* Attach RI information */
-		eError = BridgeRIWriteMEMDESCEntry (psMemDesc->psImport->hBridge,
+    	eError = BridgeRIWriteMEMDESCEntry (psMemDesc->psImport->hBridge,
 											psMemDesc->psImport->hPMR,
-											pszText,
-											psMemDesc->uiOffset,
+											"^",
 											psMemDesc->uiOffset,
 											uiSize,
 											IMG_FALSE,
-											&hHandle);
-		psMemDesc->hRIHandle = hHandle;
-
+											IMG_TRUE,
+											&psMemDesc->hRIHandle);
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIWriteMEMDESCEntry failed (eError=%d)", __func__, eError));
+		}
 	}
 #else  /* if defined(PVR_RI_DEBUG) */
 	PVR_UNREFERENCED_PARAMETER (pszText);
@@ -1396,7 +1426,6 @@ IMG_INTERNAL PVRSRV_ERROR
 DevmemImport(IMG_HANDLE hBridge,
 			 DEVMEM_EXPORTCOOKIE *psCookie,
 			 DEVMEM_FLAGS_T uiFlags,
-			 IMG_CHAR *pszText,
 			 DEVMEM_MEMDESC **ppsMemDescPtr)
 {
     DEVMEM_MEMDESC *psMemDesc = IMG_NULL;
@@ -1404,7 +1433,7 @@ DevmemImport(IMG_HANDLE hBridge,
     IMG_HANDLE hPMR;
     PVRSRV_ERROR eError;
 
-    if (ppsMemDescPtr == IMG_NULL)
+	if (ppsMemDescPtr == IMG_NULL)
     {
         eError = PVRSRV_ERROR_INVALID_PARAMS;
         goto failParams;
@@ -1452,22 +1481,20 @@ DevmemImport(IMG_HANDLE hBridge,
 
 #if defined(PVR_RI_DEBUG)
 	{
-		IMG_HANDLE hHandle = IMG_NULL;
-
 		/* Attach RI information */
 		eError = BridgeRIWriteMEMDESCEntry (psMemDesc->psImport->hBridge,
 											psMemDesc->psImport->hPMR,
-											pszText,
-											psMemDesc->uiOffset,
+											"^",
 											psMemDesc->uiOffset,
 											psMemDesc->psImport->uiSize,
 											IMG_TRUE,
-											&hHandle);
-		psMemDesc->hRIHandle = hHandle;
-
+											IMG_FALSE,
+											&psMemDesc->hRIHandle);
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIWriteMEMDESCEntry failed (eError=%d)", __func__, eError));
+		}
 	}
-#else  /* if defined(PVR_RI_DEBUG) */
-	PVR_UNREFERENCED_PARAMETER (pszText);
 #endif /* if defined(PVR_RI_DEBUG) */
 
 	return PVRSRV_OK;
@@ -1500,8 +1527,14 @@ DevmemFree(DEVMEM_MEMDESC *psMemDesc)
 #if defined(PVR_RI_DEBUG)
 	if (psMemDesc->hRIHandle)
 	{
-		BridgeRIDeleteMEMDESCEntry(psMemDesc->psImport->hBridge,
+	    PVRSRV_ERROR eError;
+
+	    eError = BridgeRIDeleteMEMDESCEntry(psMemDesc->psImport->hBridge,
 					   	   	   	   psMemDesc->hRIHandle);
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIDeleteMEMDESCEntry failed (eError=%d)", __func__, eError));
+		}
 	}
 #endif  /* if defined(PVR_RI_DEBUG) */
 	_DevmemMemDescRelease(psMemDesc);
@@ -1560,7 +1593,21 @@ DevmemMapToDevice(DEVMEM_MEMDESC *psMemDesc,
 	psMemDesc->sDeviceMemDesc.ui32RefCount++;
 
     *psDevVirtAddr = psMemDesc->sDeviceMemDesc.sDevVAddr;
-	OSLockRelease(psMemDesc->sDeviceMemDesc.hLock);
+
+    OSLockRelease(psMemDesc->sDeviceMemDesc.hLock);
+
+#if defined(PVR_RI_DEBUG)
+	if (psMemDesc->hRIHandle)
+    {
+		 eError = BridgeRIUpdateMEMDESCAddr(psImport->hBridge,
+    									   psMemDesc->hRIHandle,
+    									   psImport->sDeviceImport.sDevVAddr);
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIUpdateMEMDESCAddr failed (eError=%d)", __func__, eError));
+		}
+	}
+#endif
 
     return PVRSRV_OK;
 
@@ -1668,14 +1715,6 @@ DevmemAcquireCpuVirtAddr(DEVMEM_MEMDESC *psMemDesc,
 
     OSLockRelease(psMemDesc->sCPUMemDesc.hLock);
 
-#if defined(PVR_RI_DEBUG)
-    if( psMemDesc->hRIHandle )
-    {
-		BridgeRIUpdateMEMDESCAddr (psMemDesc->psImport->hBridge,
-								   psMemDesc->hRIHandle,
-							  	   (IMG_SIZE_T)(psMemDesc->sCPUMemDesc.pvCPUVAddr));
-    }
-#endif
     return PVRSRV_OK;
 
 failMap:
@@ -1819,6 +1858,23 @@ DevmemLocalImport(IMG_HANDLE hBridge,
 	if (puiSizePtr)
 		*puiSizePtr = uiSize;
 
+#if defined(PVR_RI_DEBUG)
+	{
+		/* Attach RI information */
+		eError = BridgeRIWriteMEMDESCEntry (psMemDesc->psImport->hBridge,
+											psMemDesc->psImport->hPMR,
+											"^",
+											psMemDesc->uiOffset,
+											psMemDesc->psImport->uiSize,
+											IMG_TRUE,
+											IMG_FALSE,
+											&(psMemDesc->hRIHandle));
+		if( eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: call to BridgeRIWriteMEMDESCEntry failed (eError=%d)", __func__, eError));
+		}
+	}
+#endif /* if defined(PVR_RI_DEBUG) */
 	return PVRSRV_OK;
 
 failImport:

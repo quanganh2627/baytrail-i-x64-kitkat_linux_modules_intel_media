@@ -47,7 +47,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "img_defs.h"
 
 #include "tlserver.h"
-#include "tltestdefs.h"
 
 
 #include "common_pvrtl_bridge.h"

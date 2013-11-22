@@ -56,9 +56,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgx_meta.h"
 #include "dfrgx_interface.h"
 #include "rgxpowermon.h"
+#include "devicemem_pdump.h"
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
+#if ! defined(FIX_HW_BRN_37453)
 /*!
 *******************************************************************************
 
@@ -75,6 +77,7 @@ static IMG_VOID RGXEnableClocks(PVRSRV_RGXDEV_INFO	*psDevInfo)
 {
 	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGX clock: use default (automatic clock gating)");
 }
+#endif
 
 
 /*!
@@ -89,6 +92,10 @@ static IMG_VOID RGXEnableClocks(PVRSRV_RGXDEV_INFO	*psDevInfo)
  @Return   IMG_VOID
 
 ******************************************************************************/
+#if !defined(RGX_FEATURE_S7_CACHE_HIERARCHY)
+
+#define RGX_INIT_SLC RGXInitSLC
+
 static IMG_VOID RGXInitSLC(PVRSRV_RGXDEV_INFO	*psDevInfo)
 {
 	IMG_UINT32	ui32Reg;
@@ -159,7 +166,60 @@ static IMG_VOID RGXInitSLC(PVRSRV_RGXDEV_INFO	*psDevInfo)
 #endif
 	OSWriteHWReg32(psDevInfo->pvRegsBaseKM, ui32Reg, ui32RegVal);
 	PDUMPREG32(RGX_PDUMPREG_NAME, ui32Reg, ui32RegVal, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
+
 }
+#endif /* RGX_FEATURE_S7_CACHE_HIERARCHY */
+
+
+/*!
+*******************************************************************************
+
+ @Function	RGXInitSLC3
+
+ @Description Initialise RGX SLC3
+
+ @Input psDevInfo - device info structure
+
+ @Return   IMG_VOID
+
+******************************************************************************/
+#if defined(RGX_FEATURE_S7_CACHE_HIERARCHY)
+
+#define RGX_INIT_SLC RGXInitSLC3
+
+static IMG_VOID RGXInitSLC3(PVRSRV_RGXDEV_INFO	*psDevInfo)
+{
+#if (RGX_FEATURE_SLC_BANKS == 4) && (RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS == 512)
+	IMG_UINT32	ui32Reg;
+	IMG_UINT32	ui32RegVal;
+	IMG_UINT64	ui64RegVal;
+
+    /*
+     * SLC control
+     */
+    ui32Reg = RGX_CR_SLC3_CTRL_MISC;
+    ui32RegVal = RGX_CR_SLC3_CTRL_MISC_ADDR_DECODE_MODE_SCRAMBLE_PVR_HASH;
+	OSWriteHWReg32(psDevInfo->pvRegsBaseKM, ui32Reg, ui32RegVal);
+	PDUMPREG32(RGX_PDUMPREG_NAME, ui32Reg, ui32RegVal, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
+
+	/*
+	 * SLC scramble bits
+	 */
+	ui32Reg = RGX_CR_SLC3_SCRAMBLE;
+	ui64RegVal = IMG_UINT64_C(0xB42DD24B4BD22DB4);
+	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, ui32Reg, ui64RegVal);
+	PDUMPREG64(RGX_PDUMPREG_NAME, ui32Reg, ui64RegVal, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
+
+	ui32Reg = RGX_CR_SLC3_SCRAMBLE2;
+	ui64RegVal = IMG_UINT64_C(0xB42DD24B4BD22DB4);
+	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, ui32Reg, ui64RegVal);
+	PDUMPREG64(RGX_PDUMPREG_NAME, ui32Reg, ui64RegVal, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
+#else	
+	PVR_UNREFERENCED_PARAMETER(psDevInfo);
+#endif	
+
+}
+#endif
 
 
 /*!
@@ -319,6 +379,13 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 	PVRSRV_ERROR	eError = PVRSRV_OK;
 	RGXFWIF_INIT	*psRGXFWInit;
 
+#if defined(FIX_HW_BRN_37453)
+	/* Force all clocks on*/
+	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXStart: force all clocks on");
+	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_CLK_CTRL, RGX_CR_CLK_CTRL_ALL_ON);
+	PDUMPREG64(RGX_PDUMPREG_NAME, RGX_CR_CLK_CTRL, RGX_CR_CLK_CTRL_ALL_ON, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
+#endif
+
 	/* Set RGX in soft-reset */
 	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXStart: soft reset everything");
 	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_SOFT_RESET, RGX_CR_SOFT_RESET_MASKFULL & (~RGX_CR_SOFT_RESET_SLC_EN));
@@ -338,15 +405,17 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_SOFT_RESET, RGX_CR_SOFT_RESET_GARTEN_EN);
 	PDUMPREG64(RGX_PDUMPREG_NAME, RGX_CR_SOFT_RESET, RGX_CR_SOFT_RESET_GARTEN_EN, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
 
+#if ! defined(FIX_HW_BRN_37453)
 	/*
 	 * Enable clocks.
 	 */
 	RGXEnableClocks(psDevInfo);
+#endif
 
 	/*
 	 * Initialise SLC.
 	 */
-	/* RGXInitSLC(psDevInfo); */
+	RGX_INIT_SLC(psDevInfo);
 
 #if !defined(SUPPORT_META_SLAVE_BOOT)
 	/* Configure META to Master boot */
@@ -390,6 +459,14 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 	/* ... and afterwards */
 	PVRSRVSystemWaitCycles(psDevConfig, 32);
 	PDUMPIDLWITHFLAGS(32, PDUMP_FLAGS_POWERTRANS);
+#if defined(FIX_HW_BRN_37453)
+	/* we rely on the 32 clk sleep from above */
+
+	/* switch clocks back to auto */
+	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXStart: set clocks back to auto");
+	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_CLK_CTRL, RGX_CR_CLK_CTRL_ALL_AUTO);
+	PDUMPREG64(RGX_PDUMPREG_NAME, RGX_CR_CLK_CTRL, RGX_CR_CLK_CTRL_ALL_AUTO, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
+#endif
 
 	/*
 	 * Start the firmware.
@@ -421,7 +498,22 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 		return eError;
 	}
 
-	/* This place should contain PDUMP POL for bFirmwareStarted, once objanal supports it */
+#if defined(PDUMP)
+	PDUMPCOMMENT("Wait for the Firmware to start.");
+	eError = DevmemPDumpDevmemPol32(psDevInfo->psRGXFWIfInitMemDesc,
+											offsetof(RGXFWIF_INIT, bFirmwareStarted),
+											IMG_TRUE,
+											0xFFFFFFFFU,
+											PDUMP_POLL_OPERATOR_EQUAL,
+											PDUMP_FLAGS_POWERTRANS|PDUMP_FLAGS_CONTINUOUS);
+	
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "RGXStart: problem pdumping POL for psRGXFWIfInitMemDesc (%d)", eError));
+		DevmemReleaseCpuVirtAddr(psDevInfo->psRGXFWIfInitMemDesc);
+		return eError;
+	}
+#endif
 
 	DevmemReleaseCpuVirtAddr(psDevInfo->psRGXFWIfInitMemDesc);
 
@@ -447,7 +539,7 @@ static PVRSRV_ERROR RGXStop(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	PVRSRV_ERROR		eError; 
 
 
-	eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDeinitCommands, RGX_MAX_DEINIT_COMMANDS, PDUMP_FLAGS_LASTFRAME | PDUMP_FLAGS_POWERTRANS, IMG_NULL);
+	eError = RGXRunScript(psDevInfo, psDevInfo->psScripts->asDeinitCommands, RGX_MAX_DEINIT_COMMANDS, PDUMP_FLAGS_POWERTRANS, IMG_NULL);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXStop: RGXRunScript failed (%d)", eError));
@@ -534,7 +626,6 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 				}
 				else
 				{
-
 					eError = RGXStop(psDevInfo);
 					if (eError != PVRSRV_OK)
 					{
@@ -590,11 +681,6 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 
 		if (eCurrentPowerState == PVRSRV_DEV_POWER_STATE_OFF)
 		{
-			/*
-				Coming up from off, re-initialise RGX.
-			*/
-
-
 			/* Reset DVFS history */
 			psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId = 0;
 			psDevInfo->psGpuDVFSHistory->aui32DVFSClockCB[0] = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
@@ -611,13 +697,14 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 			/*
 				Run the RGX init script.
 			*/
-
 			eError = RGXStart(psDevInfo, psDevConfig);
 			if (eError != PVRSRV_OK)
 			{
 				PVR_DPF((PVR_DBG_ERROR,"RGXPostPowerState: RGXStart failed"));
 				return eError;
 			}
+
+			/* Coming up from off, re-allow RGX interrupts.  */
 			psDevInfo->bIgnoreFurtherIRQs = IMG_FALSE;
 
 			/*Report dfrgx We have the device back ON*/
@@ -838,8 +925,10 @@ PVRSRV_ERROR RGXDustCountChange(IMG_HANDLE				hDevHandle,
 	PVRSRV_DEVICE_NODE	*psDeviceNode = hDevHandle;
 	PVRSRV_ERROR		eError;
 	RGXFWIF_KCCB_CMD 	sDustCountChange;
-	IMG_UINT32			ui32MaxAvailableDusts = RGX_BVNC_KM_N / 2;
+	IMG_UINT32			ui32MaxAvailableDusts = RGX_FEATURE_NUM_CLUSTERS / 2;
 
+	PVR_ASSERT(ui32MaxAvailableDusts > 1);
+	
 	if ((ui32NumberOfDusts == 0) || (ui32NumberOfDusts > ui32MaxAvailableDusts))
 	{
 		eError = PVRSRV_ERROR_INVALID_PARAMS;

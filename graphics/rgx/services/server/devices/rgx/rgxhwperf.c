@@ -637,6 +637,7 @@ PVRSRV_ERROR PVRSRVRGXConfigEnableHWPerfCountersKM(
 									  PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE | 
 									  PVRSRV_MEMALLOCFLAG_UNCACHED |
 									  PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC,
+			"HWPerfCountersConfigBlock",
 			&psFwBlkConfigsMemDesc);
 	if (eError != PVRSRV_OK)
 		PVR_LOGR_IF_ERROR(eError, "DevmemFwAllocate");
@@ -714,6 +715,7 @@ PVRSRV_ERROR PVRSRVRGXCtrlHWPerfCountersKM(
 
 	PVR_ASSERT(psDeviceNode);
 	PVR_ASSERT(ui32ArrayLen>0);
+	PVR_ASSERT(ui32ArrayLen<32);
 	PVR_ASSERT(psBlockIDs);
 
 	/* Fill in the command structure with the parameters needed
@@ -1519,7 +1521,7 @@ PVRSRV_ERROR RGXHWPerfDisconnect(
 		{
 			PVR_DPF((PVR_DBG_ERROR, "RGXHWPerfDisconnect: Failed to release data (%d)", eError));
 		}
-		/* RGXHWPerfReleaseData call abouve will null out the buffer 
+		/* RGXHWPerfReleaseData call above will null out the buffer 
 		 * fields and length */
 	}
 

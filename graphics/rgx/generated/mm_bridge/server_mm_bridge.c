@@ -683,7 +683,7 @@ PVRSRVBridgeDevmemIntCtxCreate(IMG_UINT32 ui32BridgeID,
 							&psDevmemIntCtxCreateOUT->hPrivData,
 							(IMG_HANDLE) hPrivDataInt,
 							PVRSRV_HANDLE_TYPE_DEV_PRIV_DATA,
-							PVRSRV_HANDLE_ALLOC_FLAG_NONE
+							PVRSRV_HANDLE_ALLOC_FLAG_MULTI
 							,psDevmemIntCtxCreateOUT->hDevMemServerContext);
 	if (psDevmemIntCtxCreateOUT->eError != PVRSRV_OK)
 	{

@@ -229,8 +229,8 @@ PVRSRVBridgeRGXInitFirmware(IMG_UINT32 ui32BridgeID,
 					psRGXInitFirmwareIN->ui32LogType,
 					psRGXInitFirmwareIN->ui32FilterFlags,
 					&psRGXInitFirmwareIN->sClientBVNC,
-                                        psRGXInitFirmwareIN->ui32APMLatency,
-                                        psRGXInitFirmwareIN->ui32CoreClockSpeed);
+					psRGXInitFirmwareIN->ui32APMLatency,
+					psRGXInitFirmwareIN->ui32CoreClockSpeed);
 
 
 
@@ -349,6 +349,9 @@ PVRSRVBridgeRGXInitDevPart2(IMG_UINT32 ui32BridgeID,
 	RGX_INIT_COMMAND *psDbgScriptInt = IMG_NULL;
 	RGX_INIT_COMMAND *psDbgBusScriptInt = IMG_NULL;
 	RGX_INIT_COMMAND *psDeinitScriptInt = IMG_NULL;
+	DEVMEM_EXPORTCOOKIE * psFWCodeAllocServerExportCookieInt = IMG_NULL;
+	DEVMEM_EXPORTCOOKIE * psFWDataAllocServerExportCookieInt = IMG_NULL;
+	DEVMEM_EXPORTCOOKIE * psFWCorememAllocServerExportCookieInt = IMG_NULL;
 
 	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXINIT_RGXINITDEVPART2);
 
@@ -450,6 +453,48 @@ PVRSRVBridgeRGXInitDevPart2(IMG_UINT32 ui32BridgeID,
 
 				}
 
+				{
+					/* Look up the address from the handle */
+					psRGXInitDevPart2OUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &psFWCodeAllocServerExportCookieInt,
+											psRGXInitDevPart2IN->hFWCodeAllocServerExportCookie,
+											PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE);
+					if(psRGXInitDevPart2OUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitDevPart2_exit;
+					}
+
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXInitDevPart2OUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &psFWDataAllocServerExportCookieInt,
+											psRGXInitDevPart2IN->hFWDataAllocServerExportCookie,
+											PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE);
+					if(psRGXInitDevPart2OUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitDevPart2_exit;
+					}
+
+				}
+
+				{
+					/* Look up the address from the handle */
+					psRGXInitDevPart2OUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &psFWCorememAllocServerExportCookieInt,
+											psRGXInitDevPart2IN->hFWCorememAllocServerExportCookie,
+											PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE);
+					if(psRGXInitDevPart2OUT->eError != PVRSRV_OK)
+					{
+						goto RGXInitDevPart2_exit;
+					}
+
+				}
+
 	psRGXInitDevPart2OUT->eError =
 		PVRSRVRGXInitDevPart2KM(
 					hDevNodeInt,
@@ -459,14 +504,34 @@ PVRSRVBridgeRGXInitDevPart2(IMG_UINT32 ui32BridgeID,
 					psDeinitScriptInt,
 					psRGXInitDevPart2IN->ui32ui32KernelCatBaseIdReg,
 					psRGXInitDevPart2IN->ui32KernelCatBaseId,
-					psRGXInitDevPart2IN->ui32ui32KernelCatBaseReg,
-					psRGXInitDevPart2IN->ui32ui32KernelCatBaseWordSize,
-					psRGXInitDevPart2IN->ui32ui32KernelCatBaseAlignShift,
-					psRGXInitDevPart2IN->ui32ui32KernelCatBaseShift,
-					psRGXInitDevPart2IN->ui64ui64KernelCatBaseMask,
+					psRGXInitDevPart2IN->ui32KernelCatBaseReg,
+					psRGXInitDevPart2IN->ui32KernelCatBaseWordSize,
+					psRGXInitDevPart2IN->ui32KernelCatBaseAlignShift,
+					psRGXInitDevPart2IN->ui32KernelCatBaseShift,
+					psRGXInitDevPart2IN->ui64KernelCatBaseMask,
 					psRGXInitDevPart2IN->ui32DeviceFlags,
-					psRGXInitDevPart2IN->ui32RGXActivePMConf);
+					psRGXInitDevPart2IN->ui32RGXActivePMConf,
+					psFWCodeAllocServerExportCookieInt,
+					psFWDataAllocServerExportCookieInt,
+					psFWCorememAllocServerExportCookieInt);
+	/* Exit early if bridged call fails */
+	if(psRGXInitDevPart2OUT->eError != PVRSRV_OK)
+	{
+		goto RGXInitDevPart2_exit;
+	}
 
+	psRGXInitDevPart2OUT->eError =
+		PVRSRVReleaseHandle(psConnection->psHandleBase,
+					(IMG_HANDLE) psRGXInitDevPart2IN->hFWCodeAllocServerExportCookie,
+					PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE);
+	psRGXInitDevPart2OUT->eError =
+		PVRSRVReleaseHandle(psConnection->psHandleBase,
+					(IMG_HANDLE) psRGXInitDevPart2IN->hFWDataAllocServerExportCookie,
+					PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE);
+	psRGXInitDevPart2OUT->eError =
+		PVRSRVReleaseHandle(psConnection->psHandleBase,
+					(IMG_HANDLE) psRGXInitDevPart2IN->hFWCorememAllocServerExportCookie,
+					PVRSRV_HANDLE_TYPE_SERVER_EXPORTCOOKIE);
 
 
 RGXInitDevPart2_exit:

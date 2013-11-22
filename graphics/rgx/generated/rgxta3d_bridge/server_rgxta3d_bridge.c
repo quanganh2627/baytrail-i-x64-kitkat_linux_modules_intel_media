@@ -1829,7 +1829,11 @@ PVRSRVBridgeRGXKickTA3D(IMG_UINT32 ui32BridgeID,
 					psRGXKickTA3DIN->bbPDumpContinuous,
 					psRTDataCleanupInt,
 					psZBufferInt,
-					psSBufferInt);
+					psSBufferInt,
+					psRGXKickTA3DIN->bbCommitRefCountsTA,
+					psRGXKickTA3DIN->bbCommitRefCounts3D,
+					&psRGXKickTA3DOUT->bbCommittedRefCountsTA,
+					&psRGXKickTA3DOUT->bbCommittedRefCounts3D);
 
 
 
@@ -1922,6 +1926,54 @@ RGXSetRenderContextPriority_exit:
 	return 0;
 }
 
+static IMG_INT
+PVRSRVBridgeRGXGetLastRenderContextResetReason(IMG_UINT32 ui32BridgeID,
+					 PVRSRV_BRIDGE_IN_RGXGETLASTRENDERCONTEXTRESETREASON *psRGXGetLastRenderContextResetReasonIN,
+					 PVRSRV_BRIDGE_OUT_RGXGETLASTRENDERCONTEXTRESETREASON *psRGXGetLastRenderContextResetReasonOUT,
+					 CONNECTION_DATA *psConnection)
+{
+	RGX_SERVER_RENDER_CONTEXT * psRenderContextInt = IMG_NULL;
+	IMG_HANDLE hRenderContextInt2 = IMG_NULL;
+
+	PVRSRV_BRIDGE_ASSERT_CMD(ui32BridgeID, PVRSRV_BRIDGE_RGXTA3D_RGXGETLASTRENDERCONTEXTRESETREASON);
+
+
+
+
+
+				{
+					/* Look up the address from the handle */
+					psRGXGetLastRenderContextResetReasonOUT->eError =
+						PVRSRVLookupHandle(psConnection->psHandleBase,
+											(IMG_HANDLE *) &hRenderContextInt2,
+											psRGXGetLastRenderContextResetReasonIN->hRenderContext,
+											PVRSRV_HANDLE_TYPE_RGX_SERVER_RENDER_CONTEXT);
+					if(psRGXGetLastRenderContextResetReasonOUT->eError != PVRSRV_OK)
+					{
+						goto RGXGetLastRenderContextResetReason_exit;
+					}
+
+					/* Look up the data from the resman address */
+					psRGXGetLastRenderContextResetReasonOUT->eError = ResManFindPrivateDataByPtr(hRenderContextInt2, (IMG_VOID **) &psRenderContextInt);
+
+					if(psRGXGetLastRenderContextResetReasonOUT->eError != PVRSRV_OK)
+					{
+						goto RGXGetLastRenderContextResetReason_exit;
+					}
+				}
+
+	psRGXGetLastRenderContextResetReasonOUT->eError =
+		PVRSRVRGXGetLastRenderContextResetReasonKM(
+					psRenderContextInt,
+					&psRGXGetLastRenderContextResetReasonOUT->ui32LastResetReason);
+
+
+
+RGXGetLastRenderContextResetReason_exit:
+
+	return 0;
+}
+
 
 
 /* *************************************************************************** 
@@ -1952,6 +2004,7 @@ PVRSRV_ERROR RegisterRGXTA3DFunctions(IMG_VOID)
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D_RGXDESTROYRENDERCONTEXT, PVRSRVBridgeRGXDestroyRenderContext);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D_RGXKICKTA3D, PVRSRVBridgeRGXKickTA3D);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D_RGXSETRENDERCONTEXTPRIORITY, PVRSRVBridgeRGXSetRenderContextPriority);
+	SetDispatchTableEntry(PVRSRV_BRIDGE_RGXTA3D_RGXGETLASTRENDERCONTEXTRESETREASON, PVRSRVBridgeRGXGetLastRenderContextResetReason);
 
 	return PVRSRV_OK;
 }

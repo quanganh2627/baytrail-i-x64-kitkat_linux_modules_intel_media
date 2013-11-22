@@ -72,6 +72,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "debug_request_ids.h"
 #include "pvrsrv.h"
 
+#if defined(PVR_RI_DEBUG)
+#include "ri_server.h"
+#endif
+
 /*! Wait 100ms before retrying deferred clean-up again */
 #define CLEANUP_THREAD_WAIT_RETRY_TIMEOUT 0x00000064
 
@@ -534,13 +538,17 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVInit(IMG_VOID)
 		goto Error;
 	}
 
-    eError = PMRInit();
+#if defined(PVR_RI_DEBUG)
+	RIInitKM();
+#endif
+
+	eError = PMRInit();
 	if (eError != PVRSRV_OK)
 	{
 		goto Error;
 	}
 
-#if !defined(UNDER_WDDM)
+#if !defined(UNDER_WDDM) && defined(SUPPORT_DISPLAY_CLASS)
 	eError = DCInit();
 	if (eError != PVRSRV_OK)
 	{
@@ -840,7 +848,7 @@ IMG_VOID IMG_CALLCONV PVRSRVDeInit(IMG_VOID)
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVDeInit: PVRSRVHandleDeInit failed"));
 	}
 
-#if !defined(UNDER_WDDM)
+#if !defined(UNDER_WDDM) && defined(SUPPORT_DISPLAY_CLASS)
 	eError = DCDeInit();
 	if (eError != PVRSRV_OK)
 	{
@@ -854,6 +862,10 @@ IMG_VOID IMG_CALLCONV PVRSRVDeInit(IMG_VOID)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVDeInit: PMRDeInit() failed"));
 	}
+
+#if defined(PVR_RI_DEBUG)
+	RIDeInitKM();
+#endif
 
 	eError = PVRSRVConnectionDeInit();
 	if (eError != PVRSRV_OK)
@@ -873,7 +885,7 @@ IMG_VOID IMG_CALLCONV PVRSRVDeInit(IMG_VOID)
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVDeInit: PhysHeapDeinit() failed"));
 	}
 
-#if defined(PVR_TRANSPORTLAYER_TESTING)
+#if defined(PVR_TESTING_UTILS)
 	TLDeInitialiseCleanupTestThread();
 #endif
 
@@ -1475,6 +1487,20 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVAcquireDeviceDataKM (IMG_UINT32			ui32DevIndex,
 	return PVRSRV_OK;
 }
 
+IMG_EXPORT
+PVRSRV_ERROR IMG_CALLCONV PVRSRVReleaseDeviceDataKM (IMG_HANDLE hDevCookie)
+{
+	PVR_UNREFERENCED_PARAMETER(hDevCookie);
+
+	/* 
+	  Empty release body as the lifetime of this resource accessed by 
+	  PVRSRVAcquireDeviceDataKM is linked to driver lifetime, not API allocation.
+	  This is one reason why this type crosses the bridge with a shared handle.
+	  Thus no server release action is required, just bridge action to ensure
+	  associated handle is freed.
+    */ 
+	return PVRSRV_OK;
+}
 
 /*!
 ******************************************************************************
@@ -1943,7 +1969,7 @@ static IMG_VOID _SysDebugRequestNotify(PVRSRV_DBGREQ_HANDLE hDebugRequestHandle,
 		return;
 	}
 
-	PVR_LOG(("DDK info: %s", PVRVERSION_STRING));
+	PVR_LOG(("DDK info: %s (%s) %s", PVRVERSION_STRING, PVR_BUILD_TYPE, PVR_BUILD_DIR));
 
 	/* Services state */
 	switch (psPVRSRVData->eServicesState)
@@ -2211,6 +2237,21 @@ PVRSRV_ERROR GetNumBifTilingHeapConfigs(IMG_UINT32 *puiNumHeaps)
 {
 	*puiNumHeaps = gpsSysConfig->ui32BIFTilingHeapCount;
 	return PVRSRV_OK;
+}
+
+/*
+	PVRSRVResetHWRLogsKM
+*/
+PVRSRV_ERROR PVRSRVResetHWRLogsKM(PVRSRV_DEVICE_NODE *psDeviceNode)
+{
+	PVR_LOG(("User requested HWR logs reset"));
+
+	if(psDeviceNode && psDeviceNode->pfnResetHWRLogs)
+	{
+		return psDeviceNode->pfnResetHWRLogs(psDeviceNode);
+	}
+
+	return PVRSRV_ERROR_NO_DEVICENODE_FOUND;
 }
 
 /*****************************************************************************

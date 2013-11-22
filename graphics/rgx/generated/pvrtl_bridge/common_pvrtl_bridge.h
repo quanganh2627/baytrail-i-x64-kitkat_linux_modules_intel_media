@@ -47,6 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "devicemem_typedefs.h"
 #include "pvr_tl.h"
+#include "tltestdefs.h"
 
 
 #include "pvr_bridge.h"
