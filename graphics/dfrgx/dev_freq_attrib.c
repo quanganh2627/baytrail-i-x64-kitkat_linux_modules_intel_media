@@ -105,7 +105,7 @@ static ssize_t show_profiling_state (struct device *dev, struct device_attribute
  * @count: 
  */
 static ssize_t store_profiling_state (struct device *dev, struct device_attribute *attr,
-			char *buf, size_t count)
+			const char *buf, size_t count)
 {
 	struct busfreq_data *bfdata = dev_get_drvdata(dev);
 	int profiling_state;
@@ -135,7 +135,6 @@ out:
 static ssize_t show_profiling_stats (struct device *dev, struct device_attribute *attr,
 			char *buf)
 {
-	struct busfreq_data *bfdata = dev_get_drvdata(dev);
 	int ret = 0;
 	DFRGX_DPF( DFRGX_DEBUG_HIGH,"%s: \n",
 				__func__);
@@ -155,7 +154,6 @@ static ssize_t show_profiling_stats (struct device *dev, struct device_attribute
 static ssize_t reset_profiling_stats (struct device *dev, struct device_attribute *attr,
 			char *buf)
 {
-	struct busfreq_data *bfdata = dev_get_drvdata(dev);
 
 	DFRGX_DPF( DFRGX_DEBUG_HIGH,"%s: \n",
 				__func__);
@@ -174,8 +172,6 @@ static ssize_t reset_profiling_stats (struct device *dev, struct device_attribut
 static ssize_t show_turbo_profile (struct device *dev, struct device_attribute *attr,
 			char *buf)
 {
-	struct busfreq_data *bfdata = dev_get_drvdata(dev);
-
 	DFRGX_DPF( DFRGX_DEBUG_HIGH,"%s: \n",
 				__func__);
 
@@ -191,10 +187,9 @@ static ssize_t show_turbo_profile (struct device *dev, struct device_attribute *
  * @buf: Buffer to write to.
  */
 static ssize_t store_turbo_profile (struct device *dev, struct device_attribute *attr,
-			char *buf, size_t count)
+			const char *buf, size_t count)
 {
 	struct busfreq_data *bfdata = dev_get_drvdata(dev);
-	int profiling_state;
 	int ret = -EINVAL;
 	int low_th = 0, high_th = 0;
 
@@ -276,12 +271,12 @@ void dev_freq_remove_attributes_on_sysfs(struct device *device)
 {
 	int i = 0;	
 
-	if(!device)
-		return -1;
+	if(device){
 	
-	for ( i =0; devfreq_attrs[i].attr.mode!= 0; i++)
-	{
-		device_remove_file(device, &devfreq_attrs[i]);
+		for ( i =0; devfreq_attrs[i].attr.mode!= 0; i++)
+		{
+			device_remove_file(device, &devfreq_attrs[i]);
 		
+		}
 	}
 }

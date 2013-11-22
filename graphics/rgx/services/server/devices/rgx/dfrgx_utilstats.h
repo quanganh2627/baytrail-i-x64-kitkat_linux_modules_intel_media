@@ -49,9 +49,9 @@ typedef enum _DFRGX_HWPERF_ERROR_
 /******************************************************************************
  * RGX  Profiling Server API(s)
  *****************************************************************************/
-unsigned int gpu_rgx_utilstats_init_obj();
+unsigned int gpu_rgx_utilstats_init_obj(void);
 
-unsigned int gpu_rgx_utilstats_deinit_obj();
+unsigned int gpu_rgx_utilstats_deinit_obj(void);
 
 unsigned int gpu_rgx_get_util_stats(void* pvData);
 

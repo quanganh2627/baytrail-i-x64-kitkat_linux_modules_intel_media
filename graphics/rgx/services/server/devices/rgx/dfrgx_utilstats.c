@@ -71,7 +71,7 @@ static DFRGX_HWPERF_OBJ *pDFRGX_Obj = NULL;
  * Helper Functions(s)
  *****************************************************************************/
 
-static unsigned int gpu_rgx_acquire_device(){
+static unsigned int gpu_rgx_acquire_device(void){
 
 	PVRSRV_DEVICE_IDENTIFIER *pDeviceList = IMG_NULL;
 	IMG_HANDLE hDevCookie = IMG_NULL;
@@ -168,7 +168,7 @@ unsigned int gpu_rgx_get_util_stats(void* pvData)
 }
 EXPORT_SYMBOL(gpu_rgx_get_util_stats);
 
-unsigned int gpu_rgx_utilstats_init_obj(){
+unsigned int gpu_rgx_utilstats_init_obj(void){
 
 	unsigned int error = DFRGX_HWPERF_OK;
 	
@@ -200,7 +200,7 @@ go_free_obj:
 }
 EXPORT_SYMBOL(gpu_rgx_utilstats_init_obj);
 
-unsigned int gpu_rgx_utilstats_deinit_obj(){
+unsigned int gpu_rgx_utilstats_deinit_obj(void){
 
 	if(!pDFRGX_Obj){	
 		return 0;

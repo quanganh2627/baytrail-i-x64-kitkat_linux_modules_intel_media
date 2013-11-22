@@ -504,7 +504,7 @@ static int psbfb_create(struct psb_fbdev *fbdev,
 	info->fix.smem_len = size;
 	info->screen_base = (char *)pg->vram_addr;
 	info->screen_size = size;
-	memset(info->screen_base, 0, size);
+	//memset(info->screen_base, 0xf0, size);
 
 	drm_fb_helper_fill_fix(info, fb->pitches[0], fb->depth);
 
@@ -635,6 +635,7 @@ int psb_fbdev_init(struct drm_device *dev)
 
 	drm_fb_helper_single_add_all_connectors(&fbdev->psb_fb_helper);
 	drm_fb_helper_initial_config(&fbdev->psb_fb_helper, 32);
+	drm_fb_helper_set_par(fbdev->psb_fb_helper.fbdev);
 	return 0;
 }
 

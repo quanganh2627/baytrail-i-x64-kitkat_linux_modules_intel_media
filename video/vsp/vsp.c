@@ -385,6 +385,19 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	unsigned long irq_flags;
 	struct file *filp = priv->filp;
 
+	ret = mutex_lock_interruptible(&vsp_priv->vsp_mutex);
+	if (unlikely(ret != 0))
+		return -EFAULT;
+
+	if (vsp_priv->fw_loaded_by_punit &&
+	    vsp_priv->vsp_state == VSP_STATE_IDLE)
+		ospm_apm_power_down_vsp(dev);
+
+	if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
+		ret = -EBUSY;
+		goto out_err;
+	}
+
 	/* check if mmu should be invalidated */
 	invalid_mmu = atomic_cmpxchg(&dev_priv->vsp_mmu_invaldc, 1, 0);
 	if (invalid_mmu && psb_check_vsp_idle(dev) == 0)
@@ -402,7 +415,8 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 			  arg->cmdbuf_offset, arg->cmdbuf_size,
 			  cmd_buffer->acc_size);
 		vsp_priv->vsp_cmd_num = 0;
-		return -EFAULT;
+		ret = -EFAULT;
+		goto out_err1;
 	}
 
 	VSP_DEBUG("map command first\n");
@@ -411,7 +425,7 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	if (ret) {
 		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
 		vsp_priv->vsp_cmd_num = 0;
-		return ret;
+		goto out_err1;
 	}
 
 	cmd_start = (unsigned char *) ttm_kmap_obj_virtual(&cmd_kmap,
@@ -438,6 +452,11 @@ out:
 	spin_unlock(&cmd_buffer->bdev->fence_lock);
 
 	vsp_priv->vsp_cmd_num = 0;
+out_err1:
+	power_island_put(OSPM_VIDEO_VPP_ISLAND);
+out_err:
+	mutex_unlock(&vsp_priv->vsp_mutex);
+
 	return ret;
 }
 

@@ -1,6 +1,6 @@
 DRIVER_NAME := tngdisp
 
-include ../modules/intel_media/build/merrifield/rgx/Makefile
+include ../modules/intel_media/bld/merrifield/rgx/Makefile
 
 obj-m += $(DRIVER_NAME).o
 

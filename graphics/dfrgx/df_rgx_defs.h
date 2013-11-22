@@ -174,7 +174,7 @@ struct userspace_gov_data {
 
 
 /*Available states - freq mapping table*/
-const static struct gpu_utilization_record aAvailableStateFreq[] = {
+static const struct gpu_utilization_record aAvailableStateFreq[] = {
 									{DFRGX_FREQ_200_MHZ, 0xF},
 									{DFRGX_FREQ_213_MHZ, 0xE}, /*Need a proper value for this freq*/
 									{DFRGX_FREQ_266_MHZ, 0xB},
