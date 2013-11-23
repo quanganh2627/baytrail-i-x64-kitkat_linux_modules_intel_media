@@ -2957,14 +2957,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			dsi_config = dev_priv->dsi_configs[1];
 
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
-			mutex_lock(&dev->mode_config.mutex);
 
-			if (((pipe == 1) && (dev->vblank_enabled[pipe]) &&
-						hdmi_priv &&
-						 !hdmi_priv->hdmi_suspended) ||
-					((dev->vblank_enabled[pipe]) &&
-					 dsi_config &&
-					 dsi_config->dsi_hw_context.panel_on)) {
+			if (dev->vblank_enabled[pipe]) {
 				vblwait.request.type =
 					(_DRM_VBLANK_RELATIVE |
 					 _DRM_VBLANK_NEXTONMISS);
@@ -2989,8 +2983,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				mdfld_dsi_dsr_allow(dsi_config);
 			}
 
-			mutex_unlock(&dev->mode_config.mutex);
-
 			getrawmonotonic(&now);
 			nsecs = timespec_to_ns(&now);
 
@@ -3000,11 +2992,9 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
-			mutex_lock(&dev->mode_config.mutex);
 			if (dev_priv->vsync_enabled[pipe]) {
 				DRM_ERROR("%s: vsync has been enabled on pipe %d",
 					__func__, pipe);
-				mutex_unlock(&dev->mode_config.mutex);
 				return 0;
 			}
 			mdfld_dsi_dsr_forbid(dsi_config);
@@ -3015,21 +3005,17 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				mdfld_dsi_dsr_allow(dsi_config);
 			} else
 				dev_priv->vsync_enabled[pipe] = true;
-			mutex_unlock(&dev->mode_config.mutex);
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
-			mutex_lock(&dev->mode_config.mutex);
 			if (!dev_priv->vsync_enabled[pipe]) {
 				DRM_ERROR("%s: vsync has been disabled on pipe %d",
 					__func__, pipe);
-				mutex_unlock(&dev->mode_config.mutex);
 				return 0;
 			}
 			dev_priv->vsync_enabled[pipe] = false;
 			drm_vblank_put(dev, pipe);
 			mdfld_dsi_dsr_allow(dsi_config);
-			mutex_unlock(&dev->mode_config.mutex);
 		}
 	}
 

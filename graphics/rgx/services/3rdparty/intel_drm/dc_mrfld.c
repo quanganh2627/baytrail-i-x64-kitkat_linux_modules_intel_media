@@ -387,15 +387,49 @@ static DC_MRFLD_FLIP *_Next_Queued_Flip(int iPipe)
 
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
 	{
-		if ((psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_QUEUED) ||
-				(psFlip->eFlipStates[iPipe] ==
-				 DC_MRFLD_FLIP_DC_UPDATED)) {
+		if (psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_QUEUED) {
 			psQueuedFlip = psFlip;
 			break;
 		}
 	}
 
 	return psQueuedFlip;
+}
+
+static bool _Can_Flip(int iPipe)
+{
+	struct list_head *psFlipQueue;
+	DC_MRFLD_FLIP *psFlip, *psTmp;
+	bool ret = true;
+	int num_queued = 0;
+	int num_updated = 0;
+
+	if (iPipe != DC_PIPE_A && iPipe != DC_PIPE_B) {
+		DRM_ERROR("%s: Invalid pipe %d\n", __func__, iPipe);
+		return false;
+	}
+
+	psFlipQueue = &gpsDevice->sFlipQueues[iPipe];
+	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
+	{
+		if (psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_QUEUED) {
+			num_queued++;
+			ret = false;
+		}
+		if (psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_DC_UPDATED) {
+			num_updated++;
+			ret = false;
+		}
+	}
+
+	if (num_queued > 2) {
+		DRM_ERROR("num of queued buffers is %d\n", num_queued);
+	}
+
+	if (num_updated > 1) {
+		DRM_ERROR("num of updated buffers is %d\n", num_updated);
+	}
+	return ret;
 }
 
 static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
@@ -501,7 +535,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 				psFlip->uiSwapInterval;
 
 			/* if there's no pending queued flip, flip it*/
-			if (!_Next_Queued_Flip(i)) {
+			if (_Can_Flip(i)) {
 				/* don't queue it, if failed to update DC*/
 				if (!_Do_Flip(psFlip,i))
 					continue;
@@ -1429,11 +1463,14 @@ void DCUnAttachPipe(uint32_t iPipe)
 	psFlipQueue = &gpsDevice->sFlipQueues[iPipe];
 	/* complete the flips*/
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe]) {
-		/* Put pipe's vsync which has been enabled. */
-		DCCBDisableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe);
 
-		if (iPipe != DC_PIPE_B)
-			DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
+		if (psFlip->eFlipStates[iPipe] != DC_MRFLD_FLIP_QUEUED) {
+			/* Put pipe's vsync which has been enabled. */
+			DCCBDisableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe);
+
+			if (iPipe != DC_PIPE_B)
+				DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
+		}
 
 		/*remove this entry from flip queue, decrease refCount*/
 		list_del(&psFlip->sFlips[iPipe]);
