@@ -552,7 +552,7 @@ int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct mdfld_dsi_config *dsi_config = NULL;
-	struct mdfld_dsi_hw_context *dsi_ctx;
+	struct mdfld_dsi_hw_context *dsi_ctx = NULL;
 	u32 dspcntr, dspsurf;
 
 	if (index < 0 || index > 2) {
@@ -573,11 +573,11 @@ int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 		dspsurf = DSPCSURF;
 	}
 
-	if (dsi_config)
+	if (dsi_config) {
 		dsi_ctx = &dsi_config->dsi_hw_context;
-
-	if (dsi_ctx)
-		dsi_ctx->dspcntr &= ~DISPLAY_PLANE_ENABLE;
+		if (dsi_ctx)
+			dsi_ctx->dspcntr &= ~DISPLAY_PLANE_ENABLE;
+	}
 
 	PSB_WVDC32((PSB_RVDC32(dspcntr) & ~DISPLAY_PLANE_ENABLE),
 			dspcntr);

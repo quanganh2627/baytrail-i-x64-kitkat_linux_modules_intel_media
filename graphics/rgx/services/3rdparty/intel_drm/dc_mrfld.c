@@ -299,6 +299,8 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	if (DCCBEnableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe)) {
 		DRM_ERROR("%s: failed to enable vsync on pipe %d\n",
 				__func__, iPipe);
+		if (iPipe != DC_PIPE_B)
+			DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
 		goto err_out;
 	}
 
@@ -385,7 +387,9 @@ static DC_MRFLD_FLIP *_Next_Queued_Flip(int iPipe)
 
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
 	{
-		if (psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_QUEUED) {
+		if ((psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_QUEUED) ||
+				(psFlip->eFlipStates[iPipe] ==
+				 DC_MRFLD_FLIP_DC_UPDATED)) {
 			psQueuedFlip = psFlip;
 			break;
 		}

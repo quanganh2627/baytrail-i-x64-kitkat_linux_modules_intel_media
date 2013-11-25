@@ -658,7 +658,8 @@ static void psbfb_output_poll_changed(struct drm_device *dev)
 	struct drm_psb_private *dev_priv =
 	    (struct drm_psb_private *)dev->dev_private;
 	struct psb_fbdev *fbdev = (struct psb_fbdev *)dev_priv->fbdev;
-	drm_fb_helper_hotplug_event(&fbdev->psb_fb_helper);
+	if (fbdev)
+		drm_fb_helper_hotplug_event(&fbdev->psb_fb_helper);
 }
 
 int psbfb_remove(struct drm_device *dev, struct drm_framebuffer *fb)
