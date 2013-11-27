@@ -271,7 +271,11 @@ static bool mio_power_up(struct drm_device *dev,
 	} else {
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_MIO, OSPM_ISLAND_UP, MIO_SS_PM);
+	ret = pmu_nc_set_power_state(PMU_MIO, OSPM_ISLAND_DOWN, MIO_SS_PM);
+	ret = pmu_nc_set_power_state(PMU_MIO, OSPM_ISLAND_UP, MIO_SS_PM);
 #else
+	ret = pmu_set_power_state_tng(MIO_SS_PM, MIO_SSC, TNG_COMPOSITE_I0);
+	ret = pmu_set_power_state_tng(MIO_SS_PM, MIO_SSC, TNG_COMPOSITE_D3);
 	ret = pmu_set_power_state_tng(MIO_SS_PM, MIO_SSC, TNG_COMPOSITE_I0);
 #endif
 	}
