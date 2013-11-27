@@ -262,8 +262,14 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 					encoded_frame->partitions);
 			VSP_DEBUG("coded data start %p\n",
 					encoded_frame->coded_data);
-			VSP_DEBUG("surfaceId_of_ref_frame %p\n",
-					encoded_frame->surfaceId_of_ref_frame);
+			VSP_DEBUG("surfaceId_of_ref_frame[0] %x\n",
+					encoded_frame->surfaceId_of_ref_frame[0]);
+			VSP_DEBUG("surfaceId_of_ref_frame[1] %x\n",
+					encoded_frame->surfaceId_of_ref_frame[1]);
+			VSP_DEBUG("surfaceId_of_ref_frame[2] %x\n",
+					encoded_frame->surfaceId_of_ref_frame[2]);
+			VSP_DEBUG("surfaceId_of_ref_frame[3] %x\n",
+					encoded_frame->surfaceId_of_ref_frame[3]);
 
 			if (encoded_frame->partitions > PARTITIONS_MAX) {
 				VSP_DEBUG("partitions num error\n");
@@ -1127,11 +1133,11 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	VSP_DEBUG("ctx_type=%d\n", ctx_type);
 	if (VAEntrypointEncSlice == ctx_type) {
 		/* Wait all the cmd be finished */
-		while (vsp_priv->vp8_cmd_num > 0 && count++ < 20000) {
+		while (vsp_priv->vp8_cmd_num > 0 && count++ < 120) {
 			msleep(1);
 		}
 
-		if (count == 20000) {
+		if (count == 120) {
 			DRM_ERROR("Failed to handle sigint event\n");
 		}
 
@@ -1186,9 +1192,10 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	vsp_priv->ctrl->entry_kind = vsp_exit;
 
 	/* in case of power mode 0, HW always active,
-	 * * set state to idle here for check idle func */
+	 * * in case got no response from FW, vsp_state=hang but could not be powered off,
+	 * * force state to down */
+	vsp_priv->vsp_state = VSP_STATE_DOWN;
 	if (vsp_priv->fw_loaded_by_punit) {
-		vsp_priv->vsp_state = VSP_STATE_IDLE;
 		ospm_apm_power_down_vsp(dev);
 	} else {
 		ret = power_island_put(OSPM_VIDEO_VPP_ISLAND);
