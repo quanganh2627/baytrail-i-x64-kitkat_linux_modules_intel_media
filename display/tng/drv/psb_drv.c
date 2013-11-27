@@ -114,6 +114,7 @@ u32 DISP_PLANEB_STATUS = ~DISPLAY_PLANE_ENABLE;
 int drm_psb_msvdx_tiling = 1;
 int drm_msvdx_bottom_half;
 int drm_hdmi_hpd_auto;
+int default_hdmi_scaling_mode = DRM_MODE_SCALE_CENTER;
 int drm_vsp_burst = 1;
 int drm_vsp_force_up_freq = 0;
 int drm_vsp_force_down_freq = 0;
@@ -150,6 +151,7 @@ MODULE_PARM_DESC(vsp_pm, "Power on/off the VSP");
 MODULE_PARM_DESC(ved_pm, "Power on/off the Msvdx");
 MODULE_PARM_DESC(vec_pm, "Power on/off the Topaz");
 MODULE_PARM_DESC(hdmi_hpd_auto, "HDMI hot-plug auto test flag");
+MODULE_PARM_DESC(default_hdmi_scaling_mode, "Default HDMI scaling mode");
 MODULE_PARM_DESC(vsp_burst, "VSP burst mode enable");
 MODULE_PARM_DESC(vsp_force_up_freq, "force VSP running at certain freq");
 MODULE_PARM_DESC(vsp_force_down_freq, "force VSP power down at certain freq");
@@ -193,6 +195,8 @@ module_param_named(te_delay, drm_psb_te_timer_delay, int, 0600);
 module_param_named(decode_flag, drm_decode_flag, int, 0600);
 #endif
 module_param_named(hdmi_hpd_auto, drm_hdmi_hpd_auto, int, 0600);
+module_param_named(default_hdmi_scaling_mode, default_hdmi_scaling_mode,
+					int, 0600);
 module_param_named(vsp_burst, drm_vsp_burst, int, 0600);
 module_param_named(vsp_force_up_freq, drm_vsp_force_up_freq, int, 0600);
 module_param_named(vsp_force_down_freq, drm_vsp_force_down_freq, int, 0600);
