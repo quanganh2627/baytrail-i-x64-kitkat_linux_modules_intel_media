@@ -943,7 +943,7 @@ PVRSyncIOCTLAlloc(struct PVR_SYNC_TIMELINE *psTimeline, void __user *pvData)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to find unused fd (%d)",
 		                        __func__, iFd));
-		goto err_put_fd;
+		goto err_out;
 	}
 
 	if (!access_ok(VERIFY_READ, pvData, sizeof(sData)))
