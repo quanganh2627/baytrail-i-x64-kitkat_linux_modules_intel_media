@@ -374,6 +374,7 @@ bool power_island_get(u32 hw_island)
 {
 	u32 i = 0;
 	bool ret = true;
+	int pm_ret;
 	struct ospm_power_island *p_island;
 	struct drm_psb_private *dev_priv = g_ospm_data->dev->dev_private;
 
@@ -385,7 +386,14 @@ bool power_island_get(u32 hw_island)
 		 * S3 PCI suspend/resume
 		 */
 		wake_lock(&dev_priv->ospm_wake_lock);
-		pm_runtime_get_sync(&g_ospm_data->dev->pdev->dev);
+		pm_ret = pm_runtime_get_sync(&g_ospm_data->dev->pdev->dev);
+		if (pm_ret < 0) {
+			ret = false;
+			PSB_DEBUG_PM("pm_runtime_get_sync failed 0x%x.\n",
+				&g_ospm_data->dev->pdev->dev);
+			goto out_err;
+		}
+
 	}
 
 	for (i = 0; i < ARRAY_SIZE(island_list); i++) {

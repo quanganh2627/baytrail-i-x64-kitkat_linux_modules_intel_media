@@ -7,7 +7,7 @@ BAYTRAILDIR=$(MEDIADIR)/common/baytrail
 VIDEOCOMDIR=$(MEDIADIR)/video/common
 VIDEODECDIR=$(MEDIADIR)/video/decode
 
-MEDIAINC=../modules/intel_media
+MEDIAINC=drivers/external_drivers/intel_media
 BAYTRAILINC=$(MEDIAINC)/common/baytrail
 VIDEOCOMINC=$(MEDIAINC)/video/common
 VIDEODECINC=$(MEDIAINC)/video/decode
@@ -16,6 +16,7 @@ include_dirs := \
 	-Iinclude/drm \
 	-Iinclude/drm/ttm \
 	-Idrivers/gpu/drm/i915 \
+        -I$(MEDIAINC)/interface \
 	-I$(BAYTRAILINC) \
 	-I$(VIDEOCOMINC) \
 	-I$(VIDEODECINC)

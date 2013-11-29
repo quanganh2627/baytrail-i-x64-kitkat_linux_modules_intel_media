@@ -79,7 +79,8 @@ typedef struct _RGX_GPU_DVFS_HIST_
 
 typedef struct _RGXFWIF_GPU_UTIL_STATS_
 {
-	IMG_BOOL				bValid;				/* if TRUE, statistict are valid, otherwise there was not enough data to calculate the ratios */
+	IMG_BOOL				bPoweredOn;			/* if TRUE, device is powered on and statistic are valid.
+													It might be FALSE if DVFS frequency is not provided by system layer (see RGX_TIMING_INFORMATION::ui32CoreClockSpeed) */
 	IMG_UINT32				ui32GpuStatActive;	/* GPU active  ratio expressed in 0,01% units */
 	IMG_UINT32				ui32GpuStatBlocked; /* GPU blocked ratio expressed in 0,01% units */
 	IMG_UINT32				ui32GpuStatIdle;    /* GPU idle    ratio expressed in 0,01% units */

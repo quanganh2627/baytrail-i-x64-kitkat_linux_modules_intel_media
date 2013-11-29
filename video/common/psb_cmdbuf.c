@@ -20,6 +20,7 @@
  **************************************************************************/
 
 #include <drm/drmP.h>
+#include <linux/pm_runtime.h>
 #ifdef CONFIG_DRM_VXD_BYT
 #include "vxd_drv.h"
 #include "vxd_drm.h"
@@ -942,11 +943,17 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 
 #if defined(MERRIFIELD)
 	{
+		extern struct _ospm_data_ *g_ospm_data;
+		if (pm_runtime_get_sync(&g_ospm_data->dev->pdev->dev) < 0) {
+			ret = -EBUSY;
+			goto out_err1;
+		}
 		PSB_WVDC32(0x103, 0x2850);
 		PSB_WVDC32(0xffffffff, 0x2884);
 		PSB_WVDC32(0xffffffff, 0x288c);
 		PSB_WVDC32(0xffffffff, 0x2894);
 		PSB_WVDC32(0xffffffff, 0x2898);
+		pm_runtime_put(&g_ospm_data->dev->pdev->dev);
 	}
 #endif
 

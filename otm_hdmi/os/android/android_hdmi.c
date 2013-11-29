@@ -2052,7 +2052,7 @@ bool android_enable_hdmi_hdcp(struct drm_device *dev)
 		pr_debug("hdcp enabled");
 		return true;
 	} else {
-		pr_err("hdcp could not be enabled");
+		pr_debug("hdcp could not be enabled");
 		return false;
 	}
 #endif

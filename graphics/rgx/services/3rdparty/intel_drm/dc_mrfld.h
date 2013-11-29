@@ -29,7 +29,9 @@
 #include <drm/drmP.h>
 #include <imgpixfmts_km.h>
 #include "kerneldisplay.h"
+#include "psb_drm.h"
 #include "displayclass_interface.h"
+
 
 enum {
 	DC_PIPE_A,

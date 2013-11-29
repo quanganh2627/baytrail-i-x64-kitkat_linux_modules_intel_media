@@ -29,8 +29,7 @@
 #include "drm_mode.h"
 #endif
 
-#include "psb_ttm_fence_user.h"
-#include "psb_ttm_placement_user.h"
+
 
 /*
  * Menlow/MRST graphics driver package version
@@ -44,39 +43,31 @@
  * c - Hotfix Release
  * xxxx - Graphics internal build #
  */
-#define PSB_PACKAGE_VERSION "5.6.0.1202"
+#define PSB_PACKAGE_VERSION             "5.6.0.1202"
 
-#define DRM_PSB_SAREA_MAJOR 0
-#define DRM_PSB_SAREA_MINOR 2
-#define PSB_FIXED_SHIFT 16
+#define DRM_PSB_SAREA_MAJOR             0
+#define DRM_PSB_SAREA_MINOR             2
+#define PSB_FIXED_SHIFT                 16
 
-#define PSB_NUM_PIPE 3
+#define PSB_NUM_PIPE                    3
 
 /*
  * Public memory types.
  */
 
-#define DRM_PSB_MEM_MMU TTM_PL_PRIV1
-#define DRM_PSB_FLAG_MEM_MMU TTM_PL_FLAG_PRIV1
+#define DRM_PSB_MEM_MMU                 TTM_PL_PRIV1
+#define DRM_PSB_FLAG_MEM_MMU            TTM_PL_FLAG_PRIV1
 
-#define TTM_PL_IMR               TTM_PL_PRIV2
-#define TTM_PL_FLAG_IMR          TTM_PL_FLAG_PRIV2
+#define TTM_PL_CI                       TTM_PL_PRIV0
+#define TTM_PL_FLAG_CI                  TTM_PL_FLAG_PRIV0
+#define TTM_PL_RAR                      TTM_PL_PRIV2
+#define TTM_PL_FLAG_RAR                 TTM_PL_FLAG_PRIV2
+#define TTM_PL_IMR                      TTM_PL_PRIV2
+#define TTM_PL_FLAG_IMR                 TTM_PL_FLAG_PRIV2
 
-#define DRM_PSB_MEM_MMU_TILING TTM_PL_PRIV3
-#define DRM_PSB_FLAG_MEM_MMU_TILING TTM_PL_FLAG_PRIV3
+#define DRM_PSB_MEM_MMU_TILING          TTM_PL_PRIV3
+#define DRM_PSB_FLAG_MEM_MMU_TILING     TTM_PL_FLAG_PRIV3
 
-typedef int32_t psb_fixed;
-typedef uint32_t psb_ufixed;
-
-static inline int32_t psb_int_to_fixed(int a)
-{
-	return a * (1 << PSB_FIXED_SHIFT);
-}
-
-static inline uint32_t psb_unsigned_to_ufixed(unsigned int a)
-{
-	return a << PSB_FIXED_SHIFT;
-}
 
 /*Status of the command sent to the gfx device.*/
 typedef enum {
@@ -96,11 +87,10 @@ struct drm_psb_scanout {
 	/* (scaling, rot, reflect) */
 };
 
-#define DRM_PSB_SAREA_OWNERS 16
-#define DRM_PSB_SAREA_OWNER_2D 0
-#define DRM_PSB_SAREA_OWNER_3D 1
-
-#define DRM_PSB_SAREA_SCANOUTS 3
+#define DRM_PSB_SAREA_OWNERS            16
+#define DRM_PSB_SAREA_OWNER_2D          0
+#define DRM_PSB_SAREA_OWNER_3D          1
+#define DRM_PSB_SAREA_SCANOUTS          3
 
 struct drm_psb_sarea {
 	/* Track changes of this data structure */
@@ -127,15 +117,14 @@ struct drm_psb_sarea {
 	uint32_t num_active_scanouts;
 };
 
-#define PSB_RELOC_MAGIC         0x67676767
-#define PSB_RELOC_SHIFT_MASK    0x0000FFFF
-#define PSB_RELOC_SHIFT_SHIFT   0
-#define PSB_RELOC_ALSHIFT_MASK  0xFFFF0000
-#define PSB_RELOC_ALSHIFT_SHIFT 16
+#define PSB_RELOC_MAGIC                 0x67676767
+#define PSB_RELOC_SHIFT_MASK            0x0000FFFF
+#define PSB_RELOC_SHIFT_SHIFT           0
+#define PSB_RELOC_ALSHIFT_MASK          0xFFFF0000
+#define PSB_RELOC_ALSHIFT_SHIFT         16
 
-#define PSB_RELOC_OP_OFFSET     0	/* Offset of the indicated
-* buffer
-*/
+/* Offset of the indicated buffer*/
+#define PSB_RELOC_OP_OFFSET             0
 
 struct drm_psb_reloc {
 	uint32_t reloc_op;
@@ -151,29 +140,35 @@ struct drm_psb_reloc {
 };
 
 
-#define PSB_GPU_ACCESS_READ         (1ULL << 32)
-#define PSB_GPU_ACCESS_WRITE        (1ULL << 33)
-#define PSB_GPU_ACCESS_MASK         (PSB_GPU_ACCESS_READ | PSB_GPU_ACCESS_WRITE)
+#define PSB_GPU_ACCESS_READ             (1ULL << 32)
+#define PSB_GPU_ACCESS_WRITE            (1ULL << 33)
+#define PSB_GPU_ACCESS_MASK             (PSB_GPU_ACCESS_READ | PSB_GPU_ACCESS_WRITE)
 
-#define PSB_BO_FLAG_COMMAND         (1ULL << 52)
+#define PSB_BO_FLAG_COMMAND             (1ULL << 52)
 
-#define PSB_ENGINE_DECODE 0
-#define LNC_ENGINE_ENCODE 1
-#define PSB_NUM_ENGINES 2
-#define VSP_ENGINE_VPP 6
+#define PSB_ENGINE_2D                   2
+#define PSB_ENGINE_DECODE               0
+#define PSB_ENGINE_VIDEO                0
+#define LNC_ENGINE_ENCODE               1
+#ifdef MERRIFIELD
+#define PSB_NUM_ENGINES                 7
+#else
+#define PSB_NUM_ENGINES                 2
+#endif
+#define VSP_ENGINE_VPP                  6
 
 /*
  * For this fence class we have a couple of
  * fence types.
  */
 
-#define _PSB_FENCE_EXE_SHIFT           0
-#define _PSB_FENCE_FEEDBACK_SHIFT      4
+#define _PSB_FENCE_EXE_SHIFT            0
+#define _PSB_FENCE_FEEDBACK_SHIFT       4
 
-#define _PSB_FENCE_TYPE_EXE         (1 << _PSB_FENCE_EXE_SHIFT)
-#define _PSB_FENCE_TYPE_FEEDBACK    (1 << _PSB_FENCE_FEEDBACK_SHIFT)
+#define _PSB_FENCE_TYPE_EXE             (1 << _PSB_FENCE_EXE_SHIFT)
+#define _PSB_FENCE_TYPE_FEEDBACK        (1 << _PSB_FENCE_FEEDBACK_SHIFT)
 
-#define PSB_FEEDBACK_OP_VISTEST (1 << 0)
+#define PSB_FEEDBACK_OP_VISTEST         (1 << 0)
 
 struct drm_psb_extension_rep {
 	int32_t exists;
@@ -184,7 +179,7 @@ struct drm_psb_extension_rep {
 	uint32_t pl;
 };
 
-#define DRM_PSB_EXT_NAME_LEN 128
+#define DRM_PSB_EXT_NAME_LEN            128
 
 union drm_psb_extension_arg {
 	char extension[DRM_PSB_EXT_NAME_LEN];
@@ -209,7 +204,7 @@ struct psb_validate_rep {
 	uint32_t fence_type_mask;
 };
 
-#define PSB_USE_PRESUMED     (1 << 0)
+#define PSB_USE_PRESUMED                (1 << 0)
 
 struct psb_validate_arg {
 	int handled;
@@ -221,7 +216,7 @@ struct psb_validate_arg {
 };
 
 
-#define DRM_PSB_FENCE_NO_USER        (1 << 0)
+#define DRM_PSB_FENCE_NO_USER           (1 << 0)
 
 struct psb_ttm_fence_rep {
 	uint32_t handle;
@@ -472,6 +467,7 @@ struct gct_ioctl_arg {
 	uint16_t Panel_MIPI_Display_Descriptor;
 } __attribute__((packed));
 
+
 struct gct_timing_desc_block {
 	uint16_t clock;
 	uint16_t hactive:12;
@@ -581,6 +577,14 @@ struct intel_mid_vbt {
 	void *panel_descs;
 } __packed;
 
+struct mrst_vbt {
+	char Signature[4];	/*4 bytes,"$GCT" */
+	uint8_t Revision;	/*1 byte */
+	uint8_t Size;		/*1 byte */
+	uint8_t Checksum;	/*1 byte,Calculated */
+	void *mrst_gct;
+} __attribute__ ((packed));
+
 struct mrst_gct_v1 { /* expect this table to change per customer request*/
 	union { /*8 bits,Defined as follows: */
 		struct {
@@ -615,12 +619,12 @@ struct mrst_gct_v2 { /* expect this table to change per customer request*/
 	union mrst_panel_rx panelrx[4]; /* panel receivers*/
 } __attribute__((packed));
 
-#define PSB_DC_CRTC_SAVE 0x01
-#define PSB_DC_CRTC_RESTORE 0x02
-#define PSB_DC_OUTPUT_SAVE 0x04
-#define PSB_DC_OUTPUT_RESTORE 0x08
-#define PSB_DC_CRTC_MASK 0x03
-#define PSB_DC_OUTPUT_MASK 0x0C
+#define PSB_DC_CRTC_SAVE                0x01
+#define PSB_DC_CRTC_RESTORE             0x02
+#define PSB_DC_OUTPUT_SAVE              0x04
+#define PSB_DC_OUTPUT_RESTORE           0x08
+#define PSB_DC_CRTC_MASK                0x03
+#define PSB_DC_OUTPUT_MASK              0x0C
 
 struct drm_psb_dc_state_arg {
 	uint32_t flags;
@@ -640,44 +644,45 @@ struct drm_psb_stolen_memory_arg {
 };
 
 /*Display Register Bits*/
-#define REGRWBITS_PFIT_CONTROLS			(1 << 0)
-#define REGRWBITS_PFIT_AUTOSCALE_RATIOS		(1 << 1)
-#define REGRWBITS_PFIT_PROGRAMMED_SCALE_RATIOS	(1 << 2)
-#define REGRWBITS_PIPEASRC			(1 << 3)
-#define REGRWBITS_PIPEBSRC			(1 << 4)
-#define REGRWBITS_VTOTAL_A			(1 << 5)
-#define REGRWBITS_VTOTAL_B			(1 << 6)
-#define REGRWBITS_DSPACNTR			(1 << 8)
-#define REGRWBITS_DSPBCNTR	                (1 << 9)
-#define REGRWBITS_DSPCCNTR			(1 << 10)
-#define REGRWBITS_SPRITE_UPDATE			(1 << 11)
-#define REGRWBITS_PIPEASTAT			(1 << 12)
-#define REGRWBITS_INT_MASK			(1 << 13)
-#define REGRWBITS_INT_ENABLE			(1 << 14)
-#define REGRWBITS_DISPLAY_ALL			(1 << 15)
+#define REGRWBITS_PFIT_CONTROLS         (1 << 0)
+#define REGRWBITS_PFIT_AUTOSCALE_RATIOS (1 << 1)
+#define REGRWBITS_PFIT_PROGRAMMED_SCALE_RATIOS  (1 << 2)
+#define REGRWBITS_PIPEASRC              (1 << 3)
+#define REGRWBITS_PIPEBSRC              (1 << 4)
+#define REGRWBITS_VTOTAL_A              (1 << 5)
+#define REGRWBITS_VTOTAL_B              (1 << 6)
+#define REGRWBITS_DSPACNTR              (1 << 8)
+#define REGRWBITS_DSPBCNTR              (1 << 9)
+#define REGRWBITS_DSPCCNTR              (1 << 10)
+#define REGRWBITS_SPRITE_UPDATE         (1 << 11)
+#define REGRWBITS_PIPEASTAT             (1 << 12)
+#define REGRWBITS_INT_MASK              (1 << 13)
+#define REGRWBITS_INT_ENABLE            (1 << 14)
+#define REGRWBITS_DISPLAY_ALL           (1 << 15)
 /*Overlay Register Bits*/
-#define OV_REGRWBITS_OVADD			(1 << 0)
-#define OV_REGRWBITS_OGAM_ALL			(1 << 1)
+#define OV_REGRWBITS_OVADD              (1 << 0)
+#define OV_REGRWBITS_OGAM_ALL           (1 << 1)
 
-#define OVC_REGRWBITS_OVADD			(1 << 2)
-#define OVC_REGRWBITS_OGAM_ALL			(1 << 3)
+#define OVC_REGRWBITS_OVADD             (1 << 2)
+#define OVC_REGRWBITS_OGAM_ALL          (1 << 3)
 
-#define OV_REGRWBITS_WAIT_FLIP			(1 << 4)
-#define OVC_REGRWBITS_WAIT_FLIP			(1 << 5)
+#define OV_REGRWBITS_WAIT_FLIP          (1 << 4)
+#define OVC_REGRWBITS_WAIT_FLIP         (1 << 5)
+#define OVSTATUS_REGRBIT_OVR_UPDT       (1 << 6)
 
 /*sprite update fields*/
-#define SPRITE_UPDATE_SURFACE			(0x00000001UL)
-#define SPRITE_UPDATE_CONTROL			(0x00000002UL)
-#define SPRITE_UPDATE_POSITION			(0x00000004UL)
-#define SPRITE_UPDATE_SIZE			(0x00000008UL)
-#define SPRITE_UPDATE_WAIT_VBLANK		(0X00000010UL)
-#define SPRITE_UPDATE_ALL			(0x0000001fUL)
+#define SPRITE_UPDATE_SURFACE           (0x00000001UL)
+#define SPRITE_UPDATE_CONTROL           (0x00000002UL)
+#define SPRITE_UPDATE_POSITION          (0x00000004UL)
+#define SPRITE_UPDATE_SIZE              (0x00000008UL)
+#define SPRITE_UPDATE_WAIT_VBLANK       (0X00000010UL)
+#define SPRITE_UPDATE_ALL               (0x0000001fUL)
 
 /*vsync operation*/
-#define VSYNC_ENABLE				(1 << 0)
-#define VSYNC_DISABLE				(1 << 1)
-#define VSYNC_WAIT				(1 << 2)
-#define GET_VSYNC_COUNT			        (1 << 3)
+#define VSYNC_ENABLE                    (1 << 0)
+#define VSYNC_DISABLE                   (1 << 1)
+#define VSYNC_WAIT                      (1 << 2)
+#define GET_VSYNC_COUNT                 (1 << 3)
 struct intel_overlay_context {
 	uint32_t index;
 	uint32_t pipe;
@@ -704,23 +709,23 @@ struct intel_sprite_context {
 };
 
 /* dependent macros*/
-#define INTEL_SPRITE_PLANE_NUM         3
-#define INTEL_OVERLAY_PLANE_NUM                2
-#define INTEL_DISPLAY_PLANE_NUM                5
+#define INTEL_SPRITE_PLANE_NUM          3
+#define INTEL_OVERLAY_PLANE_NUM         2
+#define INTEL_DISPLAY_PLANE_NUM         5
 /* Medfield */
-#define INTEL_MDFLD_SPRITE_PLANE_NUM		3
-#define INTEL_MDFLD_OVERLAY_PLANE_NUM		2
-#define INTEL_MDFLD_CURSOR_PLANE_NUM		3
-#define INTEL_MDFLD_DISPLAY_PLANE_NUM		8
-#define INTEL_MDFLD_DISPLAY_PIPE_NUM		3
+#define INTEL_MDFLD_SPRITE_PLANE_NUM    3
+#define INTEL_MDFLD_OVERLAY_PLANE_NUM   2
+#define INTEL_MDFLD_CURSOR_PLANE_NUM    3
+#define INTEL_MDFLD_DISPLAY_PLANE_NUM   8
+#define INTEL_MDFLD_DISPLAY_PIPE_NUM    3
 /* Clovertrail+ */
-#define INTEL_CTP_SPRITE_PLANE_NUM		2
-#define INTEL_CTP_OVERLAY_PLANE_NUM		1
-#define INTEL_CTP_CURSOR_PLANE_NUM		2
-#define INTEL_CTP_DISPLAY_PLANE_NUM		5
-#define INTEL_CTP_DISPLAY_PIPE_NUM		2
+#define INTEL_CTP_SPRITE_PLANE_NUM      2
+#define INTEL_CTP_OVERLAY_PLANE_NUM     1
+#define INTEL_CTP_CURSOR_PLANE_NUM      2
+#define INTEL_CTP_DISPLAY_PLANE_NUM     5
+#define INTEL_CTP_DISPLAY_PIPE_NUM      2
 
-#define INVALID_INDEX			0xffffffff
+#define INVALID_INDEX                   0xffffffff
 
 struct mdfld_plane_contexts {
 	uint32_t active_primaries;
@@ -876,112 +881,136 @@ typedef struct drm_psb_msvdx_decode_status {
 
 /* Controlling the kernel modesetting buffers */
 
-#define DRM_PSB_KMS_OFF		0x00
-#define DRM_PSB_KMS_ON		0x01
-#define DRM_PSB_VT_LEAVE        0x02
-#define DRM_PSB_VT_ENTER        0x03
-#define DRM_PSB_EXTENSION       0x06
-#define DRM_PSB_SIZES           0x07
-#define DRM_PSB_FUSE_REG	0x08
-#define DRM_PSB_VBT		0x09
-#define DRM_PSB_DC_STATE	0x0A
-#define DRM_PSB_ADB		0x0B
-#define DRM_PSB_MODE_OPERATION	0x0C
-#define DRM_PSB_STOLEN_MEMORY	0x0D
-#define DRM_PSB_REGISTER_RW	0x0E
-#define DRM_PSB_GTT_MAP         0x0F
-#define DRM_PSB_GTT_UNMAP       0x10
-#define DRM_PSB_GETPAGEADDRS	0x11
+#define DRM_PSB_KMS_OFF                 0x00
+#define DRM_PSB_KMS_ON                  0x01
+#define DRM_PSB_VT_LEAVE                0x02
+#define DRM_PSB_VT_ENTER                0x03
+#define DRM_PSB_EXTENSION               0x06
+#define DRM_PSB_SIZES                   0x07
+#define DRM_PSB_FUSE_REG                0x08
+#define DRM_PSB_VBT                     0x09
+#define DRM_PSB_DC_STATE                0x0A
+#define DRM_PSB_ADB                     0x0B
+#define DRM_PSB_MODE_OPERATION          0x0C
+#define DRM_PSB_STOLEN_MEMORY           0x0D
+#define DRM_PSB_REGISTER_RW             0x0E
+#define DRM_PSB_GTT_MAP                 0x0F
+#define DRM_PSB_GTT_UNMAP               0x10
+#define DRM_PSB_GETPAGEADDRS            0x11
 /**
  * NOTE: Add new commands here, but increment
  * the values below and increment their
  * corresponding defines where they're
  * defined elsewhere.
  */
-#define DRM_PVR_RESERVED1	0x12
-#define DRM_PVR_RESERVED2	0x13
-#define DRM_PVR_RESERVED3	0x14
-#define DRM_PVR_RESERVED4	0x15
-#define DRM_PVR_RESERVED5	0x16
+#define DRM_PVR_RESERVED1               0x12
+#define DRM_PVR_RESERVED2               0x13
+#define DRM_PVR_RESERVED3               0x14
+#define DRM_PVR_RESERVED4               0x15
+#define DRM_PVR_RESERVED5               0x16
 
-#define DRM_PSB_HIST_ENABLE	0x17
-#define DRM_PSB_HIST_STATUS	0x18
-#define DRM_PSB_UPDATE_GUARD	0x19
-#define DRM_PSB_INIT_COMM	0x1A
-#define DRM_PSB_DPST		0x1B
-#define DRM_PSB_GAMMA		0x1C
-#define DRM_PSB_DPST_BL		0x1D
+#define DRM_PSB_HIST_ENABLE             0x17
+#define DRM_PSB_HIST_STATUS             0x18
+#define DRM_PSB_UPDATE_GUARD            0x19
+#define DRM_PSB_INIT_COMM               0x1A
+#define DRM_PSB_DPST                    0x1B
+#define DRM_PSB_GAMMA                   0x1C
+#define DRM_PSB_DPST_BL                 0x1D
 
-#define DRM_PVR_RESERVED6	0x1E
+#define DRM_PVR_RESERVED6               0x1E
 
-#define DRM_PSB_GET_PIPE_FROM_CRTC_ID 0x1F
-#define DRM_PSB_DPU_QUERY 0x20
-#define DRM_PSB_DPU_DSR_ON 0x21
-#define DRM_PSB_DPU_DSR_OFF 0x22
-#define DRM_PSB_HDMI_FB_CMD 0x23
+#define DRM_PSB_GET_PIPE_FROM_CRTC_ID   0x1F
+#define DRM_PSB_DPU_QUERY               0x20
+#define DRM_PSB_DPU_DSR_ON              0x21
+#define DRM_PSB_DPU_DSR_OFF             0x22
+#define DRM_PSB_HDMI_FB_CMD             0x23
 
 /* HDCP IOCTLs */
-#define DRM_PSB_QUERY_HDCP		0x24
-#define DRM_PSB_VALIDATE_HDCP_KSV	0x25
-#define DRM_PSB_GET_HDCP_STATUS		0x26
-#define DRM_PSB_ENABLE_HDCP		0x27
-#define DRM_PSB_DISABLE_HDCP		0x28
-#define DRM_PSB_GET_HDCP_LINK_STATUS	0x2b
-#define DRM_PSB_ENABLE_HDCP_REPEATER		0x2c
-#define DRM_PSB_DISABLE_HDCP_REPEATER		0x2d
-#define DRM_PSB_HDCP_REPEATER_PRESENT		0x2e
+#define DRM_PSB_QUERY_HDCP              0x24
+#define DRM_PSB_VALIDATE_HDCP_KSV       0x25
+#define DRM_PSB_GET_HDCP_STATUS         0x26
+#define DRM_PSB_ENABLE_HDCP             0x27
+#define DRM_PSB_DISABLE_HDCP            0x28
+#define DRM_PSB_GET_HDCP_LINK_STATUS    0x2b
+#define DRM_PSB_ENABLE_HDCP_REPEATER    0x2c
+#define DRM_PSB_DISABLE_HDCP_REPEATER   0x2d
+#define DRM_PSB_HDCP_REPEATER_PRESENT   0x2e
 
 /* CSC IOCTLS */
-#define DRM_PSB_CSC_GAMMA_SETTING 0x29
-#define DRM_PSB_SET_CSC         0x2a
+#define DRM_PSB_CSC_GAMMA_SETTING       0x29
+#define DRM_PSB_SET_CSC                 0x2a
 
 /* IED session */
-#define DRM_PSB_ENABLE_IED_SESSION  0x30
-#define DRM_PSB_DISABLE_IED_SESSION 0x31
+#define DRM_PSB_ENABLE_IED_SESSION      0x30
+#define DRM_PSB_DISABLE_IED_SESSION     0x31
 
 /* VSYNC IOCTLS */
-#define DRM_PSB_VSYNC_SET         0x32
+#define DRM_PSB_VSYNC_SET               0x32
 
 /* HDCP */
-#define DRM_PSB_HDCP_DISPLAY_IED_OFF		0x33
-#define DRM_PSB_HDCP_DISPLAY_IED_ON		0x34
-#define DRM_PSB_QUERY_HDCP_DISPLAY_IED_CAPS	0x35
+#define DRM_PSB_HDCP_DISPLAY_IED_OFF    0x33
+#define DRM_PSB_HDCP_DISPLAY_IED_ON     0x34
+#define DRM_PSB_QUERY_HDCP_DISPLAY_IED_CAPS 0x35
 
 /* DPST LEVEL */
-#define DRM_PSB_DPST_LEVEL	0x36
+#define DRM_PSB_DPST_LEVEL              0x36
 
 /* GET DC INFO IOCTLS */
-#define DRM_PSB_GET_DC_INFO         0x37
+#define DRM_PSB_GET_DC_INFO             0x37
+
+
+/****BEGIN HDMI TEST IOCTLS ****/
+#define DRM_PSB_HDMITEST                0x38
+
+/* read an hdmi test register */
+#define HT_READ                         1
+/* write an hdmi test register */
+#define HT_WRITE                        2
+/* force power island on */
+#define HT_FORCEON                      4
+
+typedef struct tagHDMITESTREGREADWRITE {
+	/* register offset */
+	unsigned int reg;
+	/* input/output value */
+	unsigned int data;
+	/* OR'ed combo of HT_xx flags */
+	int mode;
+} drm_psb_hdmireg_t, *drm_psb_hdmireg_p;
+
+/**** END HDMI TEST IOCTLS ****/
+
+
 
 /* Do not use IOCTL between 0x40 and 0x4F */
 /* These will be reserved for OEM to use */
 /* OEM IOCTLs */
-#define DRM_OEM_RESERVED_START 		0x40
-#define DRM_OEM_RESERVED_END		0x4F
+#define DRM_OEM_RESERVED_START          0x40
+#define DRM_OEM_RESERVED_END            0x4F
 
 
 /*
  * TTM execbuf extension.
  */
-#define DRM_PSB_TTM_START      0x50
-#define DRM_PSB_TTM_END        0x5F
+#define DRM_PSB_TTM_START               0x50
+#define DRM_PSB_TTM_END                 0x5F
 #if defined(PDUMP)
-	#define DRM_PSB_CMDBUF		  (PVR_DRM_DBGDRV_CMD + 1)
+#define DRM_PSB_CMDBUF                  (PVR_DRM_DBGDRV_CMD + 1)
 #else
-	#define DRM_PSB_CMDBUF		  (DRM_PSB_TTM_START)
+#define DRM_PSB_CMDBUF                  (DRM_PSB_TTM_START)
 #endif
-#define DRM_PSB_SCENE_UNREF	  (DRM_PSB_CMDBUF + 1)
-#define DRM_PSB_PLACEMENT_OFFSET   (DRM_PSB_SCENE_UNREF + 1)
+#define DRM_PSB_SCENE_UNREF             (DRM_PSB_CMDBUF + 1)
+#define DRM_PSB_PLACEMENT_OFFSET        (DRM_PSB_SCENE_UNREF + 1)
 
 
 
 
-#define DRM_PSB_DSR_ENABLE	0xfffffffe
-#define DRM_PSB_DSR_DISABLE	0xffffffff
+#define DRM_PSB_DSR_ENABLE              0xfffffffe
+#define DRM_PSB_DSR_DISABLE             0xffffffff
 
 struct drm_psb_csc_matrix {
-    int pipe;
-    int64_t matrix[9];
+	int pipe;
+	int64_t matrix[9];
 };
 
 struct psb_drm_dpu_rect {
@@ -998,9 +1027,8 @@ struct drm_psb_drv_dsr_off_arg {
 struct drm_psb_dev_info_arg {
 	uint32_t num_use_attribute_registers;
 };
-#define DRM_PSB_DEVINFO         0x01
-
-#define PSB_MODE_OPERATION_MODE_VALID	0x01
+#define DRM_PSB_DEVINFO                 0x01
+#define PSB_MODE_OPERATION_MODE_VALID   0x01
 #define PSB_MODE_OPERATION_SET_DC_BASE  0x02
 
 struct drm_psb_get_pipe_from_crtc_id_arg {
@@ -1010,13 +1038,15 @@ struct drm_psb_get_pipe_from_crtc_id_arg {
 	/** pipe of requested CRTC **/
 	uint32_t pipe;
 };
-#define DRM_PSB_DISP_INIT_HDMI_FLIP_CHAIN 1
-#define DRM_PSB_DISP_QUEUE_BUFFER 2
-#define DRM_PSB_DISP_DEQUEUE_BUFFER 3
-#define DRM_PSB_DISP_PLANEB_DISABLE  4
-#define DRM_PSB_DISP_PLANEB_ENABLE  5
-#define DRM_PSB_HDMI_OSPM_ISLAND_DOWN 6
-#define DRM_PSB_HDMI_NOTIFY_HOTPLUG_TO_AUDIO 7
+#define DRM_PSB_DISP_SAVE_HDMI_FB_HANDLE        1
+#define DRM_PSB_DISP_GET_HDMI_FB_HANDLE         2
+#define DRM_PSB_DISP_INIT_HDMI_FLIP_CHAIN       1
+#define DRM_PSB_DISP_QUEUE_BUFFER               2
+#define DRM_PSB_DISP_DEQUEUE_BUFFER             3
+#define DRM_PSB_DISP_PLANEB_DISABLE             4
+#define DRM_PSB_DISP_PLANEB_ENABLE              5
+#define DRM_PSB_HDMI_OSPM_ISLAND_DOWN           6
+#define DRM_PSB_HDMI_NOTIFY_HOTPLUG_TO_AUDIO    7
 
 /*csc gamma setting*/
 typedef enum {
@@ -1044,9 +1074,9 @@ typedef enum {
 	GAMMA_10
 } gamma_mode;
 
-#define CSC_REG_COUNT 6
-#define CHROME_COUNT 16
-#define CSC_COUNT    9
+#define CSC_REG_COUNT                   6
+#define CHROME_COUNT                    16
+#define CSC_COUNT                       9
 
 struct csc_setting {
 	uint32_t pipe;
@@ -1059,7 +1089,7 @@ struct csc_setting {
 		int64_t csc_data[CSC_COUNT];
 	} data;
 };
-#define GAMMA_10_BIT_TABLE_COUNT  129
+#define GAMMA_10_BIT_TABLE_COUNT        129
 
 struct gamma_setting {
 	uint32_t pipe;
@@ -1091,4 +1121,102 @@ struct drm_psb_disp_ctrl {
 		struct drm_psb_flip_chain_data flip_chain_data;
 	} u;
 };
+
+/* Merrifield driver specific interface */
+
+#define S3D_MIPIA_DISPLAY               0
+#define S3D_HDMI_DISPLAY                1
+#define S3D_MIPIC_DISPLAY               2
+#define S3D_WIDI_DISPLAY                0xFF
+
+struct drm_psb_s3d_query {
+	uint32_t s3d_display_type;
+	uint32_t is_s3d_supported;
+	uint32_t s3d_format;
+	uint32_t mode_resolution_x;
+	uint32_t mode_resolution_y;
+	uint32_t mode_refresh_rate;
+	uint32_t is_interleaving;
+};
+
+struct drm_psb_s3d_premodeset {
+	uint32_t s3d_buffer_format;
+};
+
+
+typedef enum intel_dc_plane_types {
+	DC_UNKNOWN_PLANE = 0,
+	DC_SPRITE_PLANE = 1,
+	DC_OVERLAY_PLANE,
+	DC_PRIMARY_PLANE,
+} DC_MRFLD_PLANE_TYPE;
+
+#define SPRITE_UPDATE_SURFACE           (0x00000001UL)
+#define SPRITE_UPDATE_CONTROL           (0x00000002UL)
+#define SPRITE_UPDATE_POSITION          (0x00000004UL)
+#define SPRITE_UPDATE_SIZE              (0x00000008UL)
+#define SPRITE_UPDATE_WAIT_VBLANK       (0X00000010UL)
+#define SPRITE_UPDATE_ALL               (0x0000001fUL)
+#define MRFLD_PRIMARY_COUNT             3
+
+typedef struct intel_dc_overlay_ctx {
+	uint32_t index;
+	uint32_t pipe;
+	uint32_t ovadd;
+} DC_MRFLD_OVERLAY_CONTEXT;
+
+typedef struct intel_dc_sprite_ctx {
+	uint32_t update_mask;
+	/* plane index 0-A, 1-B, 2-C,etc */
+	uint32_t index;
+	uint32_t pipe;
+
+	uint32_t cntr;
+	uint32_t linoff;
+	uint32_t stride;
+	uint32_t pos;
+	uint32_t size;
+	uint32_t keyminval;
+	uint32_t keymask;
+	uint32_t surf;
+	uint32_t keymaxval;
+	uint32_t tileoff;
+	uint32_t contalpa;
+} DC_MRFLD_SPRITE_CONTEXT;
+
+typedef struct intel_dc_primary_ctx {
+	uint32_t update_mask;
+	/* plane index 0-A, 1-B, 2-C,etc */
+	uint32_t index;
+	uint32_t pipe;
+	uint32_t cntr;
+	uint32_t linoff;
+	uint32_t stride;
+	uint32_t pos;
+	uint32_t size;
+	uint32_t keyminval;
+	uint32_t keymask;
+	uint32_t surf;
+	uint32_t keymaxval;
+	uint32_t tileoff;
+	uint32_t contalpa;
+} DC_MRFLD_PRIMARY_CONTEXT;
+
+typedef struct intel_dc_plane_zorder {
+	/* 3 primary planes */
+	uint32_t forceBottom[3];
+	/* 1 sprite plane */
+	uint32_t abovePrimary;
+} DC_MRFLD_DC_PLANE_ZORDER;
+
+typedef struct intel_dc_plane_ctx {
+	enum intel_dc_plane_types type;
+	struct intel_dc_plane_zorder zorder;
+	union {
+		struct intel_dc_overlay_ctx ov_ctx;
+		struct intel_dc_sprite_ctx sp_ctx;
+		struct intel_dc_primary_ctx prim_ctx;
+	} ctx;
+} DC_MRFLD_SURF_CUSTOM;
+
 #endif

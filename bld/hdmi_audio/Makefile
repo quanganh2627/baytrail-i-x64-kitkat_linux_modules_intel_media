@@ -3,13 +3,14 @@ DRIVER_NAME := hdmi_audio
 MEDIADIR=../..
 HDMI_AUDIO_SRC=$(MEDIADIR)/hdmi_audio
 
-MEDIAINC=../modules/intel_media
+MEDIAINC=drivers/external_drivers/intel_media
 PNWDISPLAYINC=$(MEDIAINC)/display/pnw/drv
 TNGDISPLAYINC=$(MEDIAINC)/display/tng/drv
 OTM_HDMI_INC=$(MEDIAINC)/otm_hdmi
 
 include_dirs := \
 	-I$(MEDIAINC)/common \
+	-I$(MEDIAINC)/interface \
 	-I$(OTM_HDMI_INC)/os/android/include \
 	-I$(OTM_HDMI_INC)/pil/include \
 	-I$(TNGDISPLAYINC)/ospm

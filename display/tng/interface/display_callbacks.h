@@ -28,6 +28,7 @@
 
 #include <drm/drmP.h>
 #include <displayclass_interface.h>
+#include "img_types.h"
 
 struct psb_framebuffer;
 

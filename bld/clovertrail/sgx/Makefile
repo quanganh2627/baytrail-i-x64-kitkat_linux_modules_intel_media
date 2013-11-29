@@ -11,12 +11,12 @@ BRIDGEDDIR=$(GFXDIR)/services4/srvkm/bridged
 SGXDIR=$(GFXDIR)/services4/srvkm/devices/sgx
 SYSCONFIGDIR=$(GFXDIR)/services4/system/intel_drm
 
-MEDIAINC=../modules/intel_media
+MEDIAINC=drivers/external_drivers/intel_media
 GFXINC=$(MEDIAINC)/graphics/sgx
 DISPLAYINC=$(MEDIAINC)/display/pnw/drv
 
 # Get definitions for PVRINCS-y and PVRDEFS-y
-include ../modules/intel_media/bld/clovertrail/pvrdefs.mk
+include drivers/external_drivers/intel_media/bld/clovertrail/pvrdefs.mk
 
 include_dirs := \
 	$(PVRINCS-y) \
@@ -27,6 +27,7 @@ include_dirs := \
 	-I$(MEDIAINC)/video/encode \
 	-I$(MEDIAINC)/video/common \
 	-I$(MEDIAINC)/common \
+	-I$(MEDIAINC)/interface \
 	-Iinclude/linux \
 	-Iinclude/drm \
 	-Idrivers/staging/android

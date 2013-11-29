@@ -11,11 +11,12 @@ MEDIADIR=../../..
 RGXDIR=$(MEDIADIR)/graphics/rgx
 DISPLAYDIR=$(MEDIADIR)/display/tng/drv
 
-MEDIAINC=../modules/intel_media
+MEDIAINC=drivers/external_drivers/intel_media
 RGXINC=$(MEDIAINC)/graphics/rgx
 DISPINC=$(MEDIAINC)/display/tng
 
 ccflags-y += \
+        -I$(MEDIAINC)/interface \
 	-I$(RGXINC)/include \
 	-I$(RGXINC)/generated/rgxcmp_bridge \
 	-I$(RGXINC)/generated/dmm_bridge \

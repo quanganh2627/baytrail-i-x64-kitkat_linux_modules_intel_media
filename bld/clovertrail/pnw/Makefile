@@ -10,13 +10,13 @@ DECODE_DIR=$(MEDIADIR)/video/decode
 ENCODE_DIR=$(MEDIADIR)/video/encode
 MEDIA_COMMON_DIR=$(MEDIADIR)/common
 
-MEDIAINC=../modules/intel_media
+MEDIAINC=drivers/external_drivers/intel_media
 GFXINC=$(MEDIAINC)/graphics/sgx
 DISPLAYINC=$(MEDIAINC)/display/pnw/drv
 OTM_HDMI_INC=$(MEDIAINC)/otm_hdmi
 
 # Get definitions for PVRINCS-y and PVRDEFS-y
-include ../modules/intel_media/bld/clovertrail/pvrdefs.mk
+include drivers/external_drivers/intel_media/bld/clovertrail/pvrdefs.mk
 
 include_dirs := \
 	$(PVRINCS-y) \
@@ -28,6 +28,7 @@ include_dirs := \
 	-I$(MEDIAINC)/video/encode \
 	-I$(MEDIAINC)/video/common \
 	-I$(MEDIAINC)/common \
+	-I$(MEDIAINC)/interface \
 	-I$(OTM_HDMI_INC)/os/android/include \
 	-I$(OTM_HDMI_INC)/pil/include \
 	-I$(OTM_HDMI_INC)/pil/common \
