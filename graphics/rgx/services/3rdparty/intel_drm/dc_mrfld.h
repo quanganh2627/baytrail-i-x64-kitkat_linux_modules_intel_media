@@ -54,6 +54,9 @@ typedef enum {
 /* max count of plane contexts which share the same buffer*/
 #define MAX_CONTEXT_COUNT   3
 
+/* max index of a plane */
+#define MAX_PLANE_INDEX     3
+
 typedef struct {
 	IMG_HANDLE hDisplayContext;
 	IMG_PIXFMT ePixFormat;
@@ -94,11 +97,19 @@ typedef struct {
 	IMG_UINT32 ui32ActiveSprites;
 	IMG_UINT32 ui32ActivePrimarys;
 
+	IMG_UINT32 ui32ActivePlanes[DC_PLANE_MAX];
+
 	/*mutex lock for flip queue*/
 	struct mutex sFlipQueueLock;
 	/*context configure queue*/
 	struct list_head sFlipQueues[MAX_PIPE_NUM];
 	IMG_BOOL bFlipEnabled[MAX_PIPE_NUM];
+
+	/* lock for plane pipe mapping */
+	struct mutex sMappingLock;
+	/* plane - pipe mapping */
+	IMG_UINT32 ui32PlanePipeMapping[DC_PLANE_MAX][MAX_PLANE_INDEX];
+	IMG_UINT32 ui32ExtraPowerIslandsStatus;
 } DC_MRFLD_DEVICE;
 
 typedef struct {

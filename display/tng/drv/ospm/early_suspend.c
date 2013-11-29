@@ -66,6 +66,7 @@ static void gfx_early_suspend(struct early_suspend *h)
 
 			/* Make the pending flip request as completed. */
 			DCUnAttachPipe(1);
+			DC_MRFLD_onPowerOff(1);
 			DCUnLockMutex();
 		}
 	}
@@ -115,6 +116,7 @@ static void gfx_late_resume(struct early_suspend *h)
 	 */
 	if (android_hdmi_is_connected(dev)) {
 		DCAttachPipe(1);
+		DC_MRFLD_onPowerOn(1);
 		mid_hdmi_audio_resume(dev);
 	}
 
