@@ -378,7 +378,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 	drm_psb_msvdx_frame_info_t *current_frame = NULL;
 	uint32_t handle, i;
 	uint32_t device_info = 0;
-	uint32_t ctx_type = 0;
+	uint64_t ctx_type = 0;
 	struct psb_video_ctx *video_ctx = NULL;
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	uint32_t imr_info[2], ci_info[2];
