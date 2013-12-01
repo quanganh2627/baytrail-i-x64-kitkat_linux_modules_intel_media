@@ -851,12 +851,26 @@ static u32 read_and_process_PWRGT_STS(struct gburst_pvt_s *gbprv)
 		if (!gbprv->gbp_suspended &&
 			((uval ^ valprv) & PWRGT_STS_BURST_REALIZED_M)
 			&& (freq_mhz != 0)) {
+#if GBURST_UPDATE_GPU_TIMING
+			PVRSRV_ERROR eError;
+			eError = PVRSRVPowerLock(KERNEL_ID, IMG_FALSE);
+			if (eError == PVRSRV_OK) {
+				/**
+				 * Tell graphics subsystem the updated frequency,
+				 * including both pvr km and utilization computations
+				 * (which may or may not use the information).
+				 */
+				gburst_stats_gpu_freq_mhz_info(freq_mhz);
+				PVRSRVPowerUnlock(KERNEL_ID);
+			}
+#else
 			/**
 			 * Tell graphics subsystem the updated frequency,
 			 * including both pvr km and utilization computations
 			 * (which may or may not use the information).
 			 */
 			gburst_stats_gpu_freq_mhz_info(freq_mhz);
+#endif
 		}
 
 		if (mprm_verbosity >= 2) {
