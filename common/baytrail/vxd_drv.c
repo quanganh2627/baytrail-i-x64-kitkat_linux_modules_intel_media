@@ -34,7 +34,6 @@
 #include <linux/console.h>
 #include <linux/module.h>
 #include <asm/uaccess.h>
-#include <linux/intel_mid_pm.h>
 
 extern int drm_psb_trap_pagefaults;
 
@@ -706,15 +705,8 @@ static bool vxd_power_down(struct drm_device *dev)
 			udelay(10);
 			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
 		}
-		return true;
 	}
-	else {
-		if (pmu_nc_set_power_state(VEDSSC, OSPM_ISLAND_DOWN, VEDSSPM0)) {
-			PSB_DEBUG_PM("VED: pmu_nc_set_power_state DOWN failed!\n");
-			return false;
-		}
-		return true;
-	}
+	return true;
 }
 
 static bool vxd_power_on(struct drm_device *dev)
@@ -748,15 +740,8 @@ static bool vxd_power_on(struct drm_device *dev)
 			udelay(10);
 			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
 		}
-		return true;
 	}
-	else {
-		if (pmu_nc_set_power_state(VEDSSC, OSPM_ISLAND_UP, VEDSSPM0)) {
-			PSB_DEBUG_PM("VED: pmu_nc_set_power_state ON failed!\n");
-			return false;
-		}
-		return true;
-	}
+	return true;
 }
 
 static void vxd_power_init(struct drm_device *dev)
@@ -794,8 +779,6 @@ bool is_vxd_on()
 	uint32_t pwr_sts;
 	if (drm_psb_priv_pmu_func)
 		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-	else
-		pwr_sts = pmu_nc_get_power_state(VEDSSC, VEDSSPM0);
 
 	if (pwr_sts == VXD_APM_STS_D0)
 		return true;
