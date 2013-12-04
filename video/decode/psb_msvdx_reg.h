@@ -87,7 +87,7 @@ static inline uint32_t PSB_RMSVDX32(uint32_t _offs)
 #define MTX_PC		MTX_INTERNAL_REG(0, 5)
 
 #define MEMIO_READ_FIELD(vpMem, field)						\
-	((uint32_t)(((*((field##_TYPE*)(((uint32_t)vpMem) + field##_OFFSET))) \
+	((uint64_t)(((*((field##_TYPE*)(((uint64_t)vpMem) + field##_OFFSET))) \
 			& field##_MASK) >> field##_SHIFT))			\
 
 #define MEMIO_WRITE_FIELD(vpMem, field, value)					\
