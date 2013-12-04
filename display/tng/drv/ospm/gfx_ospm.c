@@ -502,6 +502,33 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 	PSB_DEBUG_PM("Post-power-up status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
+	/* SLC flush and invalidate */
+	if (!ret)
+	{
+		uint32_t reg, data, count;
+
+		reg = 0x100100 - RGX_OFFSET;
+		data = RGX_REG_READ(reg);
+		RGX_REG_WRITE(reg, data | (1 << 27));
+		RGX_REG_WRITE(reg, data);
+
+		/* write 1 to RGX_CR_SLC_CTRL_FLUSH_INVAL */
+		reg = 0x103818 - RGX_OFFSET;
+		data = 1;
+		RGX_REG_WRITE(reg, data);
+
+		count = 0;
+		/* Poll RGX_CR_SLC_STATUS0 */
+		reg = 0x103820 - RGX_OFFSET;
+		do {
+			udelay(500);
+			data = RGX_REG_READ(reg);
+		} while ((data & 0x2) && (count++ < 10000));
+
+		if (unlikely(count >= 10000))
+			PSB_DEBUG_PM("SLC: flush and invalide timeout\n" );
+	}
+
 	if (!ret && IS_TNG_B0(dev)) {
 		uint32_t reg, data;
 
@@ -517,6 +544,15 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 
 		data |= 0x80;
 		WRAPPER_REG_WRITE(reg, data);
+	}
+
+	/* SLC hash set */
+	if (!ret)
+	{
+		uint32_t reg, data;
+		reg = 0x103800 - RGX_OFFSET;
+		data = 0x200001;
+		RGX_REG_WRITE(reg, data);
 	}
 
 	return !ret;
