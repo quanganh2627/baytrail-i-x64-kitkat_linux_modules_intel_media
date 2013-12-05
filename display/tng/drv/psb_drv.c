@@ -1213,10 +1213,10 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 	dev_priv->panel_id = PanelID;
 	dev_priv->mipi_encoder_type = is_panel_vid_or_cmd(dev_priv->dev);
 
-	if (IS_TNG_B0(dev)) {
+	if (IS_TNG_B0(dev) || IS_ANN_A0(dev)) {
 		if (dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DBI) {
-			dev_priv->bRereadZero = false;
 			dev_priv->bUseHFPLL = true;
+			dev_priv->bRereadZero = false;
 			enable_HFPLL(dev_priv->dev);
 		} else {
 			dev_priv->bUseHFPLL = false;
