@@ -1124,9 +1124,6 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		return;
 	}
 
-	if (vsp_priv->ctrl == NULL)
-		return;
-
 	VSP_DEBUG("ctx_type=%d\n", ctx_type);
 	if (VAEntrypointEncSlice == ctx_type) {
 		/* Wait all the cmd be finished */
@@ -1178,6 +1175,11 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	vsp_priv->context_num--;
 
 	if (vsp_priv->context_num >= 1) {
+		return;
+	}
+
+	if (vsp_priv->ctrl == NULL)
+	{
 		return;
 	}
 
