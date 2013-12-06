@@ -664,10 +664,16 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	pipe2_enabled = (REG_READ(PIPECCONF) & BIT31) ? 1 : 0;
 
 	if (!pipe0_enabled && !pipe2_enabled) {
+		u32 val;
+
 		/* Disable PLL*/
 		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-				_DSI_LDO_EN);
+
+		val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		val &= ~DPLL_VCO_ENABLE;
+		val |= _DSI_LDO_EN;
+		val &= ~_CLK_EN_MASK;
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
 	}
 	/*enter ulps*/
 	if (__dbi_enter_ulps_locked(dsi_config)) {
