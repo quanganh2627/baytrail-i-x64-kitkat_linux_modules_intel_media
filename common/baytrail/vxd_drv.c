@@ -41,8 +41,12 @@ extern int drm_psb_trap_pagefaults;
 
 int drm_psb_cpurelax;
 int drm_psb_udelaydivider = 1;
+#ifdef CONFIG_ENABLE_S3
+int drm_psb_priv_pmu_func = 1;
+#else
 int drm_psb_priv_pmu_func = 0;
 
+#endif
 static struct pci_dev *pci_root;
 
 int drm_psb_trap_pagefaults;
