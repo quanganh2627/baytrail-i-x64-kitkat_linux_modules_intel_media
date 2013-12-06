@@ -835,7 +835,7 @@ static void __mdfld_dsi_dpi_set_timing(struct mdfld_dsi_config *config,
 	mutex_lock(&config->context_lock);
 
 	/*dpi resolution*/
-	if (get_panel_type(dev, 0) == SHARP25x16_VID)
+	if (get_panel_type(dev, 0) == SHARP_25x16_VID)
 		ctx->dpi_resolution = (mode->vdisplay << 16 | (mode->hdisplay / 2));
 	else
 		ctx->dpi_resolution = (mode->vdisplay << 16 | mode->hdisplay);

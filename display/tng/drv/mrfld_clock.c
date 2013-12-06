@@ -334,11 +334,11 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 	 */
 	if (pipe != 1) {
 		if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
-			if (get_panel_type(dev, pipe) == JDI_CMD) {
+			if (get_panel_type(dev, pipe) == JDI_7x12_CMD) {
 				clock.p1 = 4;
 				clk_n = 1;
 				clock.m = 142;
-			} else if (get_panel_type(dev, pipe) == SHARP1080_CMD) {
+			} else if (get_panel_type(dev, pipe) == SHARP_10x19_CMD) {
 				clock.p1 = 3;
 				clk_n = 1;
 				clock.m = 137;
@@ -347,7 +347,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 				clk_n = 1;
 				clock.m = 120;
 			}
-		} else if (get_panel_type(dev, pipe) == SHARP25x16_VID) {
+		} else if (get_panel_type(dev, pipe) == SHARP_25x16_VID) {
 			clock.p1 = 2;
 			clk_n = 1;
 			clock.m = 104;

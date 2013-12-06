@@ -1229,7 +1229,7 @@ void mdfld_reset_panel_handler_work(struct work_struct *work)
 			mutex_unlock(&dsi_config->context_lock);
 			return;
 		}
-		if (get_panel_type(dev, 0) == JDI_CMD)
+		if (get_panel_type(dev, 0) == JDI_7x12_CMD)
 			if (p_funcs && p_funcs->reset)
 				p_funcs->reset(dsi_config);
 
