@@ -84,9 +84,14 @@ extern "C" {
 /*
  * Note *REMEMBER* to update PVRSRV_BRIDGE_LAST_CMD (below) if you add any new
  * bridge commands!
+ * The command number of PVRSRV_BRIDGE_UM_KM_COMPAT_CHECK needs to be maintained as 0 across previous ddks, for compatibility check command to execute successfully
  */
 
-#define PVRSRV_BRIDGE_CORE_CMD_FIRST			0UL
+#define PVRSRV_BRIDGE_UMKM_CMD_FIRST			0UL
+#define PVRSRV_BRIDGE_UM_KM_COMPAT_CHECK		PVRSRV_IOWR(0)
+#define PVRSRV_BRIDGE_UMKM_CMD_LAST			(0)
+
+#define PVRSRV_BRIDGE_CORE_CMD_FIRST			(PVRSRV_BRIDGE_UMKM_CMD_LAST + 1)
 #define PVRSRV_BRIDGE_ENUM_DEVICES				PVRSRV_IOWR(PVRSRV_BRIDGE_CORE_CMD_FIRST+0)	/*!< enumerate device bridge index */
 #define PVRSRV_BRIDGE_ACQUIRE_DEVICEINFO		PVRSRV_IOWR(PVRSRV_BRIDGE_CORE_CMD_FIRST+1)	/*!< acquire device data bridge index */
 #define PVRSRV_BRIDGE_RELEASE_DEVICEINFO		PVRSRV_IOWR(PVRSRV_BRIDGE_CORE_CMD_FIRST+2)	/*!< release device data bridge index */
@@ -1482,6 +1487,13 @@ typedef struct PVRSRV_BRIDGE_OUT_RELEASE_MMAP_DATA_TAG
 } PVRSRV_BRIDGE_OUT_RELEASE_MMAP_DATA;
 //#endif
 
+typedef struct PVRSRV_BRIDGE_IN_COMPAT_CHECK
+{
+	IMG_UINT32		ui32BridgeFlags; /* Must be first member of structure */
+	IMG_UINT32		ui32DDKVersion;
+	IMG_UINT32		ui32DDKBuild;
+
+} PVRSRV_BRIDGE_IN_COMPAT_CHECK;
 
 /******************************************************************************
  *	'bridge in' get misc info

@@ -90,6 +90,9 @@
 /* External state dependency */
 extern int hdmi_state;
 
+/* External default scaling mode dependency */
+extern int default_hdmi_scaling_mode;
+
 static const struct {
 	int width, height, htotal, vtotal, dclk, vrefr, vic, par;
 } vic_formats[12] = {
@@ -2683,11 +2686,11 @@ void android_hdmi_driver_init(struct drm_device *dev,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
 	drm_connector_attach_property(connector,
 					dev->mode_config.scaling_mode_property,
-					DRM_MODE_SCALE_CENTER);
+					default_hdmi_scaling_mode);
 #else
         drm_object_attach_property(&connector->base,
                                         dev->mode_config.scaling_mode_property,
-                                        DRM_MODE_SCALE_CENTER);
+					default_hdmi_scaling_mode);
 #endif
 	connector->display_info.subpixel_order = SubPixelHorizontalRGB;
 	connector->interlace_allowed = false;

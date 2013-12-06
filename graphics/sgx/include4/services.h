@@ -752,15 +752,6 @@ PVRSRV_ERROR PVRSRVChangeDeviceMemoryAttributes(IMG_CONST PVRSRV_DEV_DATA			*psD
 												IMG_UINT32				ui32Attribs);
 
 IMG_IMPORT
-PVRSRV_ERROR IMG_CALLCONV PVRSRVMapDeviceClassMemory (IMG_CONST PVRSRV_DEV_DATA *psDevData,
-										IMG_HANDLE hDevMemContext,
-										IMG_HANDLE hDeviceClassBuffer,
-										PVRSRV_CLIENT_MEM_INFO **ppsMemInfo);
-IMG_IMPORT
-PVRSRV_ERROR IMG_CALLCONV PVRSRVUnmapDeviceClassMemory (IMG_CONST PVRSRV_DEV_DATA *psDevData,
-										PVRSRV_CLIENT_MEM_INFO *psMemInfo);
-
-IMG_IMPORT
 PVRSRV_ERROR IMG_CALLCONV PVRSRVMapPhysToUserSpace(IMG_CONST PVRSRV_DEV_DATA *psDevData,
 									  IMG_SYS_PHYADDR sSysPhysAddr,
 									  IMG_UINT32 uiSizeInBytes,
@@ -848,6 +839,15 @@ IMG_IMPORT PVRSRV_SYNCVAL PVRSRVGetPendingOpSyncVal(PPVRSRV_CLIENT_MEM_INFO psMe
 	PVRSRV_SYNCVAL_MODE eMode);
 
 #if defined(SUPPORT_PVRSRV_DEVICE_CLASS)
+
+IMG_IMPORT
+PVRSRV_ERROR IMG_CALLCONV PVRSRVMapDeviceClassMemory (IMG_CONST PVRSRV_DEV_DATA *psDevData,
+										IMG_HANDLE hDevMemContext,
+										IMG_HANDLE hDeviceClassBuffer,
+										PVRSRV_CLIENT_MEM_INFO **ppsMemInfo);
+IMG_IMPORT
+PVRSRV_ERROR IMG_CALLCONV PVRSRVUnmapDeviceClassMemory (IMG_CONST PVRSRV_DEV_DATA *psDevData,
+										PVRSRV_CLIENT_MEM_INFO *psMemInfo);
 
 /******************************************************************************
  * Common Device Class Enumeration

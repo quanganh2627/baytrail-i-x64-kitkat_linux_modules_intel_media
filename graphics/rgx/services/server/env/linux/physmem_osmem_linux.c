@@ -652,6 +652,11 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 				}
 			}
 		}
+		else
+		{
+			PVR_DPF((PVR_DBG_ERROR,"physmem_osmem_linux.c: OS refused the memory allocation for the pages.  Did you ask for too much?"));
+			eError = PVRSRV_ERROR_PMR_FAILED_TO_ALLOC_PAGES;
+		}
 #endif
 #if defined (__arm__) || defined (__metag__)
 		/*
@@ -694,6 +699,12 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 			}
 			kunmap(psPage);
 		}
+		else
+		{
+			PVR_DPF((PVR_DBG_ERROR, "physmem_osmem_linux.c: OS refused the memory allocation for the pages.  Did you ask for too much?"));
+			eError = PVRSRV_ERROR_PMR_FAILED_TO_ALLOC_PAGES;
+		}
+
 #endif
 	}
 	*ppsPage = psPage;

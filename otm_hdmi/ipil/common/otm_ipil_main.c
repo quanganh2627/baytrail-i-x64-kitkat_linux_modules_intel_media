@@ -397,7 +397,7 @@ otm_hdmi_ret_t ipil_hdmi_crtc_mode_set_program_dspregs(hdmi_device_t *dev,
 				hdmi_write32(IPIL_PFIT_CONTROL,
 					     IPIL_PFIT_ENABLE |
 					     IPIL_PFIT_PIPE_SELECT_B |
-					     IPIL_PFIT_SCALING_PILLARBOX);
+					     IPIL_PFIT_SCALING_AUTO);
 			}
 		} else
 			hdmi_write32(IPIL_PFIT_CONTROL,

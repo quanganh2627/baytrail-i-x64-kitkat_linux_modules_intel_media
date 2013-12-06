@@ -90,7 +90,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 #include <linux/file.h>
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0))
 #include <linux/sync.h>
 #else
 #include <sync.h>
@@ -4732,6 +4733,7 @@ IMG_INT BridgedDispatchKM(PVRSRV_PER_PROCESS_DATA * psPerProc,
 					case PVRSRV_GET_BRIDGE_ID(PVRSRV_BRIDGE_DISCONNECT_SERVICES):
 					case PVRSRV_GET_BRIDGE_ID(PVRSRV_BRIDGE_INITSRV_CONNECT):
 					case PVRSRV_GET_BRIDGE_ID(PVRSRV_BRIDGE_INITSRV_DISCONNECT):
+					case PVRSRV_GET_BRIDGE_ID(PVRSRV_BRIDGE_UM_KM_COMPAT_CHECK):
 						break;
 					default:
 						PVR_DPF((PVR_DBG_ERROR, "%s: Driver initialisation not completed yet.",
@@ -4792,15 +4794,21 @@ IMG_INT BridgedDispatchKM(PVRSRV_PER_PROCESS_DATA * psPerProc,
 				 __FUNCTION__, ui32BridgeID));
 		goto return_fault;
 	}
-	pfBridgeHandler =
-		(BridgeWrapperFunction)g_BridgeDispatchTable[ui32BridgeID].pfFunction;
-	err = pfBridgeHandler(ui32BridgeID,
+
+	if( ui32BridgeID == PVRSRV_GET_BRIDGE_ID(PVRSRV_BRIDGE_UM_KM_COMPAT_CHECK))
+		PVRSRVCompatCheckKM(psBridgeIn, psBridgeOut);
+	else
+	{
+		pfBridgeHandler =
+			(BridgeWrapperFunction)g_BridgeDispatchTable[ui32BridgeID].pfFunction;
+		err = pfBridgeHandler(ui32BridgeID,
 						  psBridgeIn,
 						  psBridgeOut,
 						  psPerProc);
-	if(err < 0)
-	{
-		goto return_fault;
+		if(err < 0)
+		{
+			goto return_fault;
+		}
 	}
 
 #if defined(__linux__)

@@ -120,7 +120,7 @@ struct mdfld_dsi_pkg_sender {
 
 	int pipe;
 
-	spinlock_t lock;
+	struct mutex lock;
 	struct list_head pkg_list;
 	struct list_head free_list;
 

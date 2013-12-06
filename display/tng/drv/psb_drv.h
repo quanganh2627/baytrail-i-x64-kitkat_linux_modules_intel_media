@@ -402,6 +402,8 @@ struct drm_psb_private {
 #endif
 	struct mdfld_dsi_config *dsi_configs[2];
 
+	struct workqueue_struct *vsync_wq;
+
 	struct work_struct te_work;
 	int te_pipe;
 	struct work_struct reset_panel_work;

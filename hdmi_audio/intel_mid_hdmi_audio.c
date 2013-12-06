@@ -1122,6 +1122,7 @@ static int snd_intelhad_open(struct snd_pcm_substream *substream)
 	pr_debug("snd_intelhad_open called\n");
 	intelhaddata = snd_pcm_substream_chip(substream);
 	had_stream = intelhaddata->private_data;
+	runtime = substream->runtime;
 
 	pm_runtime_get(intelhaddata->dev);
 
@@ -1138,21 +1139,16 @@ static int snd_intelhad_open(struct snd_pcm_substream *substream)
 
 	if (had_get_hwstate(intelhaddata)) {
 		pr_err("%s: HDMI cable plugged-out\n", __func__);
-		ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
 		retval = -ENODEV;
-		goto exit_put_handle;
+		goto exit_ospm_handle;
 	}
-	runtime = substream->runtime;
 
 	/* Check, if device already in use */
 	if (runtime->private_data) {
 		pr_err("Device already in use\n");
-		ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
 		retval = -EBUSY;
-		goto exit_put_handle;
+		goto exit_ospm_handle;
 	}
-
-	ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
 
 	/* set the runtime hw parameter with local snd_pcm_hardware struct */
 	runtime->hw = snd_intel_hadstream;
@@ -1160,7 +1156,7 @@ static int snd_intelhad_open(struct snd_pcm_substream *substream)
 	stream = kzalloc(sizeof(*stream), GFP_KERNEL);
 	if (!stream) {
 		retval = -ENOMEM;
-		goto exit_err;
+		goto exit_ospm_handle;
 	}
 	stream->stream_status = STREAM_INIT;
 	runtime->private_data = stream;
@@ -1168,7 +1164,6 @@ static int snd_intelhad_open(struct snd_pcm_substream *substream)
 	retval = snd_pcm_hw_constraint_integer(runtime,
 			 SNDRV_PCM_HW_PARAM_PERIODS);
 	if (retval < 0) {
-		kfree(stream);
 		goto exit_err;
 	}
 
@@ -1179,15 +1174,17 @@ static int snd_intelhad_open(struct snd_pcm_substream *substream)
 			SNDRV_PCM_HW_PARAM_PERIOD_BYTES, 64);
 	if (retval < 0) {
 		pr_err("%s:step_size=64 failed,err=%d\n", __func__, retval);
-		kfree(stream);
 		goto exit_err;
 	}
 
 	return retval;
 exit_err:
-	runtime->private_data = NULL;
+	kfree(stream);
+exit_ospm_handle:
+	ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
 exit_put_handle:
 	pm_runtime_put(intelhaddata->dev);
+	runtime->private_data = NULL;
 	return retval;
 }
 
@@ -1244,8 +1241,14 @@ static int snd_intelhad_close(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime;
 
 	pr_debug("snd_intelhad_close called\n");
+
 	intelhaddata = snd_pcm_substream_chip(substream);
 	runtime = substream->runtime;
+
+	if (!runtime->private_data) {
+		pr_debug("close() might have called after failed open");
+		return 0;
+	}
 
 	intelhaddata->stream_info.buffer_rendered = 0;
 	intelhaddata->stream_info.buffer_ptr = 0;
@@ -1257,6 +1260,7 @@ static int snd_intelhad_close(struct snd_pcm_substream *substream)
 		intelhaddata->drv_status = HAD_DRV_CONNECTED;
 	kfree(runtime->private_data);
 	runtime->private_data = NULL;
+	ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
 	pm_runtime_put(intelhaddata->dev);
 	return 0;
 }
@@ -1820,13 +1824,6 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 	if (retval < 0)
 		goto err;
 
-	/* Allocate memory for flat data */
-	intelhaddata->flat_data = kzalloc((MAX_SZ_ZERO_BUF), GFP_KERNEL);
-	if (!intelhaddata->flat_data) {
-		retval = -ENOMEM;
-		goto err;
-	}
-
 	intelhaddata->dev = &devptr->dev;
 	pm_runtime_set_active(intelhaddata->dev);
 	pm_runtime_enable(intelhaddata->dev);
@@ -1893,7 +1890,6 @@ static int hdmi_audio_remove(struct platform_device *devptr)
 		had_set_caps(HAD_SET_DISABLE_AUDIO_INT, &caps);
 		had_set_caps(HAD_SET_DISABLE_AUDIO, NULL);
 	}
-	kfree(intelhaddata->flat_data);
 	snd_card_free(intelhaddata->card);
 	kfree(intelhaddata->private_data);
 	kfree(intelhaddata);

@@ -108,6 +108,7 @@ int csc_number = 6;
 int dpst_level = 3;
 #endif
 int drm_hdmi_hpd_auto;
+int default_hdmi_scaling_mode = DRM_MODE_SCALE_CENTER;
 
 int drm_psb_msvdx_tiling = 1;
 int drm_msvdx_bottom_half;
@@ -159,6 +160,7 @@ MODULE_PARM_DESC(pm_history, "whether to dump pm history when SGX HWR");
 MODULE_PARM_DESC(dpst_level, "dpst aggressive level: 0~5");
 #endif
 MODULE_PARM_DESC(hdmi_hpd_auto, "HDMI hot-plug auto test flag");
+MODULE_PARM_DESC(default_hdmi_scaling_mode, "Default HDMI scaling mode");
 
 module_param_named(debug, drm_psb_debug, int, 0600);
 module_param_named(psb_enable_cabc, drm_psb_enable_cabc, int, 0600);
@@ -192,6 +194,8 @@ module_param_array_named(csc_adjust, csc_setting, int, &csc_number, 0600);
 module_param_named(dpst_level, dpst_level, int, 0600);
 #endif
 module_param_named(hdmi_hpd_auto, drm_hdmi_hpd_auto, int, 0600);
+module_param_named(default_hdmi_scaling_mode, default_hdmi_scaling_mode,
+					int, 0600);
 
 #ifndef MODULE
 /* Make ospm configurable via cmdline firstly, and others can be enabled if needed. */
