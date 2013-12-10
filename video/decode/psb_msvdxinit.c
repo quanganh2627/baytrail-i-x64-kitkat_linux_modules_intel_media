@@ -824,7 +824,6 @@ int psb_msvdx_post_boot_init(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	uint32_t device_node_flags =
-			DSIABLE_IDLE_GPIO_SIG | DSIABLE_Auto_CLOCK_GATING |
 			RETURN_VDEB_DATA_IN_COMPLETION | NOT_ENABLE_ON_HOST_CONCEALMENT;
 
 	/* DDK set fe_wdt_clks as 0x820 and be_wdt_clks as 0x8200 */

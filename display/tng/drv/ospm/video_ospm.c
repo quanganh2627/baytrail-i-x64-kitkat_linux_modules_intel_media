@@ -162,7 +162,7 @@ static bool ved_power_up(struct drm_device *dev,
 	bool ret = true;
 	int pm_ret = 0;
 	unsigned int pci_device = dev->pci_device & 0xffff;
-	struct drm_psb_private *dev_priv = dev->dev_private;
+	/* struct drm_psb_private *dev_priv = dev->dev_private; */
 
 	PSB_DEBUG_PM("powering up ved\n");
 #ifndef USE_GFX_INTERNAL_PM_FUNC
@@ -176,7 +176,7 @@ static bool ved_power_up(struct drm_device *dev,
 		return false;
 	}
 
-	iowrite32(0xffffffff, dev_priv->ved_wrapper_reg + 0);
+	/* iowrite32(0xffffffff, dev_priv->ved_wrapper_reg + 0); */
 
 	if (need_set_ved_freq && (pci_device != 0x1182)) {
 		if (!psb_msvdx_set_ved_freq(IP_FREQ_320_00))
