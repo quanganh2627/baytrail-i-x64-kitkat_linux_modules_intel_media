@@ -151,7 +151,6 @@ static IMG_BOOL _Enable_ExtraPowerIslands(DC_MRFLD_DEVICE *psDevice,
 	}
 
 	psDevice->ui32ExtraPowerIslandsStatus |= ui32ExtraPowerIslands;
-
 	return IMG_TRUE;
 }
 
@@ -159,6 +158,9 @@ static IMG_BOOL _Disable_ExtraPowerIslands(DC_MRFLD_DEVICE *psDevice,
 					IMG_UINT32 ui32ExtraPowerIslands)
 {
 	IMG_UINT32 ui32PowerIslands = 0;
+	IMG_UINT32 ui32ActivePlanes;
+	IMG_UINT32 ui32ActiveExtraIslands = 0;
+	int i, j;
 
 	/*turn off extra power islands which were turned on*/
 	ui32PowerIslands = psDevice->ui32ExtraPowerIslandsStatus &
@@ -167,14 +169,28 @@ static IMG_BOOL _Disable_ExtraPowerIslands(DC_MRFLD_DEVICE *psDevice,
 	if (!ui32PowerIslands)
 		return IMG_TRUE;
 
-	if (!power_island_put(ui32PowerIslands)) {
-		DRM_ERROR("Failed to turn on islands %lx\n",
+	/*don't turn off extra power islands used by other planes*/
+	for (i = 1; i < DC_PLANE_MAX; i++) {
+		for (j = 0; j < MAX_PLANE_INDEX; j++) {
+			ui32ActivePlanes = gpsDevice->ui32ActivePlanes[i];
+
+			/* don't need to power it off when it's active */
+			if (ui32ActivePlanes & (1 << j)) {
+				ui32ActiveExtraIslands =
+					DC_MRFLD_ExtraPowerIslands[i][j];
+				/*remove power islands needed by this plane*/
+				ui32PowerIslands &= ~ui32ActiveExtraIslands;
+			}
+		}
+	}
+
+	if (ui32PowerIslands && !power_island_put(ui32PowerIslands)) {
+		DRM_ERROR("Failed to turn off islands %lx\n",
 				ui32PowerIslands);
 		return IMG_FALSE;
 	}
 
 	psDevice->ui32ExtraPowerIslandsStatus &= ~ui32PowerIslands;
-
 	return IMG_TRUE;
 }
 
@@ -369,6 +385,7 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 
 	bUpdated = IMG_TRUE;
 err_out:
+	power_island_put(psFlip->uiPowerIslands);
 	return bUpdated;
 }
 
@@ -655,9 +672,6 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 						psFlip->hConfigData);
 				/* free it */
 				kfree(psFlip);
-
-				/*put power island*/
-				power_island_put(psFlip->uiPowerIslands);
 			}
 		} else if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
 			psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DISPLAYED;
@@ -680,9 +694,6 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 						psNextFlip->hConfigData);
 				/* free it */
 				kfree(psNextFlip);
-
-				/*put power island*/
-				power_island_put(psFlip->uiPowerIslands);
 			}
 		}
 	}
@@ -1481,9 +1492,6 @@ void DCUnAttachPipe(uint32_t iPipe)
 					psFlip->hConfigData);
 			/* free it */
 			kfree(psFlip);
-
-			/*put power island*/
-			power_island_put(psFlip->uiPowerIslands);
 		}
 	}
 
@@ -1505,20 +1513,22 @@ void DC_MRFLD_onPowerOff(uint32_t iPipe)
 
 	mutex_lock(&gpsDevice->sMappingLock);
 
-	/* turn off extra power islands which is required on this pipe*/
 	for (i = 1; i < DC_PLANE_MAX; i++) {
+		/* turn off extra power islands*/
 		for (j = 0; j < MAX_PLANE_INDEX; j++) {
 			if (gpsDevice->ui32PlanePipeMapping[i][j] != iPipe)
 				continue;
 
-			ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[i];
+			ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[i];;
 
-			/* don't need to power it off when it's not active */
-			if (!(*ui32ActivePlanes & (1 << j)))
-				continue;
+			/*remove it from active planes*/
+			if (*ui32ActivePlanes & (1 << j)) {
+				gpsDevice->ui32SavedActivePlanes[i] |= (1 << j);
+				*ui32ActivePlanes &= ~(1 << j);
+			}
 
-			uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[i][j];
 			/*turn off the extra power island*/
+			uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[i][j];
 			_Disable_ExtraPowerIslands(gpsDevice,
 						uiExtraPowerIslands);
 		}
@@ -1540,18 +1550,22 @@ void DC_MRFLD_onPowerOn(uint32_t iPipe)
 	mutex_lock(&gpsDevice->sMappingLock);
 
 	for (i = 1; i < DC_PLANE_MAX; i++) {
+		/*restore plane status*/
+		ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[i];
+		*ui32ActivePlanes |= gpsDevice->ui32SavedActivePlanes[i];
+		gpsDevice->ui32SavedActivePlanes[i] = 0;
+
+		/*turn on extra power islands of active planes*/
 		for (j = 0; j < MAX_PLANE_INDEX; j++) {
 			if (gpsDevice->ui32PlanePipeMapping[i][j] != iPipe)
 				continue;
-
-			ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[i];
 
 			/* don't need to power it on when it's not active */
 			if (!(*ui32ActivePlanes & (1 << j)))
 				continue;
 
-			uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[i][j];
 			/*turn on the extra power island*/
+			uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[i][j];
 			_Enable_ExtraPowerIslands(gpsDevice,
 						uiExtraPowerIslands);
 		}
@@ -1614,6 +1628,16 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 
 	/*acquire lock*/
 	mutex_lock(&gpsDevice->sFlipQueueLock);
+
+	/*disable sprite & overlay plane*/
+	switch (type) {
+	case DC_SPRITE_PLANE:
+		err = DCCBSpriteEnable(gpsDevice->psDrmDevice, ctx, index, 0);
+		break;
+	case DC_OVERLAY_PLANE:
+		err = DCCBOverlayEnable(gpsDevice->psDrmDevice, ctx, index, 0);
+		break;
+	}
 
 	ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[type];
 
