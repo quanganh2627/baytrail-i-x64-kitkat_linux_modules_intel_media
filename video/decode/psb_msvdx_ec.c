@@ -452,6 +452,7 @@ void psb_msvdx_backup_cmd(struct msvdx_private *msvdx_priv,
 	struct fw_deblock_msg *deblock_msg = NULL;
 
 	struct psb_msvdx_ec_ctx *ec_ctx;
+	union msg_header *header;
 
 	PSB_DEBUG_MSVDX("backup cmd for ved error concealment\n");
 
@@ -476,10 +477,9 @@ void psb_msvdx_backup_cmd(struct msvdx_private *msvdx_priv,
 	ec_ctx->deblock_cmd_offset = deblock_cmd_offset;
 	memcpy(ec_ctx->unfenced_cmd, cmd, cmd_size);
 	ec_ctx->fence = PSB_MSVDX_INVALID_FENCE;
+	header = (union msg_header *)ec_ctx->unfenced_cmd;
 	if (cmd_size)
-		ec_ctx->fence =
-			MEMIO_READ_FIELD(ec_ctx->unfenced_cmd,
-					MTX_GENMSG_FENCE);
+		ec_ctx->fence = header->bits.msg_fence;
 	ec_ctx->fence &= (~0xf);
 	PSB_DEBUG_MSVDX("backup cmd for ved: fence 0x%08x, cmd_size %d\n",
 				ec_ctx->fence, cmd_size);
