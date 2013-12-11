@@ -1003,17 +1003,10 @@ loop: /* just for coding style check */
 
 		PSB_DEBUG_GENERAL("MSVDX: MSGID_CMD_COMPLETED:"
 			" - Fence: %08x - flags: %08x - vdebcr: %08x"
-			" - fe_begin_setup : %08x - fe_begin_decode: %08x"
-			" - fe_end_decode : %08x - be_begin_setup: %08x"
-			" - be_begin_decode : %08x - be_end_decode: %08x\n",
+			" - first_mb : %d - last_mb: %d\n",
 			completed_msg->header.bits.msg_fence,
 			completed_msg->flags, completed_msg->vdebcr,
-			completed_msg->fe_begin_setup,
-			completed_msg->fe_begin_decode,
-			completed_msg->fe_end_decode,
-			completed_msg->be_begin_setup,
-			completed_msg->be_begin_decode,
-			completed_msg->be_end_decode);
+			completed_msg->mb.bits.start_mb, completed_msg->mb.bits.last_mb);
 
 		cmd_complete = 1;
 

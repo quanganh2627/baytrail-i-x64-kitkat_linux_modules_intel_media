@@ -235,19 +235,13 @@ struct fw_completed_msg {
 	} header;
 	union {
 		struct {
-			uint32_t last_mb:16;
 			uint32_t start_mb:16;
+			uint32_t last_mb:16;
 		} bits;
 		uint32_t value;
 	} mb;
 	uint32_t flags;
 	uint32_t vdebcr;
-	uint32_t fe_begin_setup;
-	uint32_t fe_begin_decode;
-	uint32_t fe_end_decode;
-	uint32_t be_begin_setup;
-	uint32_t be_begin_decode;
-	uint32_t be_end_decode;
 };
 
 struct fw_deblock_required_msg {
