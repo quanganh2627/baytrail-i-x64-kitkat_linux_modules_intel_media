@@ -438,7 +438,6 @@ bool power_island_put(u32 hw_island)
 			if (!ret) {
 				PSB_DEBUG_PM("power down failed %x\n",
 					island_list[i].island);
-				goto out_err;
 			}
 		}
 	}
