@@ -39,8 +39,6 @@ static int exit_dsr_locked(struct mdfld_dsi_config *dsi_config)
 	dev = dsi_config->dev;
 	err =  __dbi_power_on(dsi_config);
 
-	DC_MRFLD_onPowerOn(dsi_config->pipe);
-
 	return err;
 }
 
@@ -150,8 +148,6 @@ static int enter_dsr_locked(struct mdfld_dsi_config *dsi_config, int level)
 
 	/*turn off dbi interface put in ulps*/
 	__dbi_power_off(dsi_config);
-
-	DC_MRFLD_onPowerOff(dsi_config->pipe);
 
 	PSB_DEBUG_ENTRY("entered\n");
 	return 0;

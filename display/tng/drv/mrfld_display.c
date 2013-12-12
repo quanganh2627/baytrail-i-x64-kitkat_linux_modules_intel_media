@@ -400,7 +400,6 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 		psb_enable_vblank(dev, pipe);
 
 		DCAttachPipe(pipe);
-		DC_MRFLD_onPowerOn(pipe);
 		DCUnLockMutex();
 
 		/* Give the overlay scaler a chance to enable
@@ -477,7 +476,6 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 
 		/* Make the pending flip request as completed. */
 		DCUnAttachPipe(pipe);
-		DC_MRFLD_onPowerOff(pipe);
 		DCUnLockMutex();
 		break;
 	}

@@ -308,6 +308,9 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 
 	power_island = pipe_to_island(dsi_config->pipe);
 
+	/* always power on display C island for overlay c and sprite D */
+	power_island |= OSPM_DISPLAY_C;
+
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
 
@@ -683,6 +686,8 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 power_off_err:
 
 	power_island = pipe_to_island(dsi_config->pipe);
+	/* power gate display island C for overlay C and sprite D */
+	power_island |= OSPM_DISPLAY_C;
 
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
@@ -913,7 +918,6 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 	if (mode == DRM_MODE_DPMS_ON) {
 		mdfld_generic_dsi_dbi_set_power(encoder, true);
 		DCAttachPipe(dsi_config->pipe);
-		DC_MRFLD_onPowerOn(dsi_config->pipe);
 	} else {
 		mdfld_generic_dsi_dbi_set_power(encoder, false);
 
@@ -924,7 +928,6 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 
 		/* Make the pending flip request as completed. */
 		DCUnAttachPipe(dsi_config->pipe);
-		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	}
 
 	DCUnLockMutex();
@@ -959,7 +962,6 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
-	DC_MRFLD_onPowerOff(pipe);
 	DCUnLockMutex();
 }
 
@@ -985,7 +987,6 @@ void mdfld_generic_dsi_dbi_restore(struct drm_encoder *encoder)
 	mdfld_generic_dsi_dbi_set_power(encoder, true);
 
 	DCAttachPipe(pipe);
-	DC_MRFLD_onPowerOn(pipe);
 	DCUnLockMutex();
 }
 
