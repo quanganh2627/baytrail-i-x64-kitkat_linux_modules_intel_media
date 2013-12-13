@@ -1358,11 +1358,16 @@ void mdfld_disable_te(struct drm_device *dev, int pipe)
 			(PIPE_TE_ENABLE | PIPE_DPST_EVENT_ENABLE));
 
 	if (dsi_config) {
-		/*reset te_seq, which make sure te_seq is really
-		 increased by next te enable*/
+		/*
+		 * reset te_seq, which make sure te_seq is really
+		 * increased by next te enable.
+		 * reset te_seq to 1 instead of 0 will make sure
+		 * that last_screen_update and te_seq are alwasys
+		 * unequal when exiting from DSR.
+		 */
 		sender = mdfld_dsi_get_pkg_sender(dsi_config);
 		atomic64_set(&sender->last_screen_update, 0);
-		atomic64_set(&sender->te_seq, 0);
+		atomic64_set(&sender->te_seq, 1);
 		dev_priv->vsync_te_working[pipe] = false;
 		atomic_set(&dev_priv->mipi_flip_abnormal, 0);
 	}
