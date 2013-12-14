@@ -936,8 +936,10 @@ static bool hdcp_start(void)
 {
 	bool is_repeater = false;
 
-	/* Make sure TMDS is available */
-	msleep(hdcp_context->hdcp_delay);
+	/* Make sure TMDS is available
+	 * Remove this delay since HWC already has the delay
+	 */
+	/* msleep(hdcp_context->hdcp_delay); */
 
 	pr_debug("hdcp: start\n");
 

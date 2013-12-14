@@ -1155,7 +1155,7 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	ctx->vgacntr = 0x80000000;
 
 	/*set up pipe timings */
-	if (get_panel_type(dev, 0) == SHARP25x16_VID) {
+	if (get_panel_type(dev, 0) == SHARP_25x16_VID) {
 		ctx->htotal = (mode->crtc_hdisplay / 2 - 1) |
 		    ((mode->crtc_htotal / 2 - 1) << 16);
 		ctx->hblank = (mode->crtc_hblank_start / 2 - 1) |
@@ -1178,7 +1178,7 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	    ((mode->crtc_vsync_end - 1) << 16);
 
 	/*pipe source */
-	if (get_panel_type(dev, 0) == SHARP25x16_VID)
+	if (get_panel_type(dev, 0) == SHARP_25x16_VID)
 		ctx->pipesrc = ((mode->crtc_hdisplay / 2 - 1) << 16) |
 	    (mode->crtc_vdisplay - 1);
 	else
@@ -1195,7 +1195,7 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	if (get_panel_type(dev, 0) == TMD_6X10_VID)
 		ctx->dspsize = ((mode->crtc_vdisplay - 1) << 16) |
 		    (mode->crtc_hdisplay - 200 - 1);
-	else if (get_panel_type(dev, 0) == SHARP25x16_VID)
+	else if (get_panel_type(dev, 0) == SHARP_25x16_VID)
 		ctx->dspsize = ((mode->crtc_vdisplay - 1) << 16) |
 		    (mode->crtc_hdisplay / 2 - 1);
 	else

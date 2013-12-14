@@ -335,7 +335,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
 		guit_val &= ~_DSI_LDO_EN;
 
-		ctx->dpll |= DPLL_VCO_ENABLE;
+		ctx->dpll |= DPLL_VCO_ENABLE| _DSI_CCK_PLL_SELECT;
 		ctx->dpll &= ~_DSI_LDO_EN;
 
 		intel_mid_msgbus_write32(CCK_PORT,
@@ -667,10 +667,16 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	pipe2_enabled = (REG_READ(PIPECCONF) & BIT31) ? 1 : 0;
 
 	if (!pipe0_enabled && !pipe2_enabled) {
+		u32 val;
+
 		/* Disable PLL*/
 		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-				_DSI_LDO_EN);
+
+		val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		val &= ~DPLL_VCO_ENABLE;
+		val |= _DSI_LDO_EN;
+		val &= ~_CLK_EN_MASK;
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
 	}
 	/*enter ulps*/
 	if (__dbi_enter_ulps_locked(dsi_config)) {
@@ -1230,7 +1236,7 @@ void mdfld_reset_panel_handler_work(struct work_struct *work)
 			mutex_unlock(&dsi_config->context_lock);
 			return;
 		}
-		if (get_panel_type(dev, 0) == JDI_CMD)
+		if (get_panel_type(dev, 0) == JDI_7x12_CMD)
 			if (p_funcs && p_funcs->reset)
 				p_funcs->reset(dsi_config);
 

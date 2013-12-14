@@ -1017,13 +1017,18 @@ int mdfld_enable_te(struct drm_device *dev, int pipe)
 	unsigned long irqflags;
 	uint32_t reg_val = 0;
 	uint32_t pipeconf_reg = mid_pipeconf(pipe);
+	uint32_t retry = 0;
 
-	reg_val = REG_READ(pipeconf_reg);
-
-	if (!(reg_val & PIPEACONF_ENABLE)) {
-		DRM_ERROR("%s: pipe %d is disabled\n", __func__, pipe);
-		return -EINVAL;
+	while ((REG_READ(pipeconf_reg) & PIPEACONF_ENABLE) == 0) {
+		retry++;
+		if (retry > 10) {
+			DRM_ERROR("%s: pipe %d is disabled\n", __func__, pipe);
+			return -EINVAL;
+		}
+		udelay(3);
 	}
+	if (retry != 0)
+		DRM_INFO("Take %d retries to get pipe %d config register\n", retry, pipe);
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 
