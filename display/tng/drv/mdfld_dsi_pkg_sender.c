@@ -1304,6 +1304,7 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 	u8 *dst = NULL;
 	u8 *pSendparam = NULL;
 	int err = 0;
+	int ret_wait;
 	u32 fifo_sr;
 
 	if (!sender) {
@@ -1333,9 +1334,8 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 		 * The MIPI frame done interrupt will wake up the drv.
 		 */
 		if (IS_TNG_B0(dev)) {
-			retry = wait_event_interruptible_timeout(dev_priv->eof_wait,
-			  (REG_READ(sender->mipi_gen_fifo_stat_reg) & BIT27),
-			    msecs_to_jiffies(MDFLD_DSI_DBI_FIFO_TIMEOUT));
+			ret_wait = wait_event_interruptible(dev_priv->eof_wait,
+			  (REG_READ(sender->mipi_gen_fifo_stat_reg) & BIT27));
 			mutex_lock(&sender->lock);
 		} else {
 			mutex_lock(&sender->lock);
@@ -1351,7 +1351,6 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 			DRM_ERROR("DBI FIFO timeout, drop frame\n");
 			mutex_unlock(&sender->lock);
 			debug_dbi_hang(sender);
-			panic("DBI FIFO timeout, drop frame\n");
 			return 0;
 		}
 

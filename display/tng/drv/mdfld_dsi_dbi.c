@@ -335,7 +335,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
 		guit_val &= ~_DSI_LDO_EN;
 
-		ctx->dpll |= DPLL_VCO_ENABLE| _DSI_CCK_PLL_SELECT;
+		ctx->dpll |= DPLL_VCO_ENABLE;
 		ctx->dpll &= ~_DSI_LDO_EN;
 
 		intel_mid_msgbus_write32(CCK_PORT,
