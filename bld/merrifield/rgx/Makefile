@@ -156,7 +156,8 @@ ccflags-$(CONFIG_DRM_HANDSET_DEBUG) += \
 	-DDEBUG \
 	-DPVRSRV_ENABLE_PROCESS_STATS \
 	-DDEBUG_LINUX_MEMORY_ALLOCATIONS \
-	-DRGXFW_ALIGNCHECKS
+	-DRGXFW_ALIGNCHECKS \
+	-DPVR_RI_DEBUG
 
 # The following is an option, it can be enabled for more debug information
 # Add 'DEBUG_PVR_BRIDGE=y' to AndroidRGX.mk to enable it.
@@ -228,7 +229,7 @@ $(DRIVER_NAME)-y += \
 $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/pvr_sync.o
 
-$(DRIVER_NAME)-$(CONFIG_RI_DEBUG) += \
+$(DRIVER_NAME)-$(CONFIG_DRM_HANDSET_DEBUG) += \
 	$(RGXDIR)/services/server/common/ri_server.o
 
 # for PDUMP
@@ -297,7 +298,7 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/rgxhwperf_bridge/server_rgxhwperf_bridge.o \
 	$(RGXDIR)/generated/regconfig_bridge/server_regconfig_bridge.o \
 
-$(DRIVER_NAME)-$(CONFIG_RI_DEBUG) += \
+$(DRIVER_NAME)-$(CONFIG_DRM_HANDSET_DEBUG) += \
 	$(RGXDIR)/generated/dri_bridge/client_ri_bridge.o \
 	$(RGXDIR)/generated/ri_bridge/server_ri_bridge.o \
 
