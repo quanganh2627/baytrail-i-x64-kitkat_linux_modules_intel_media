@@ -346,16 +346,15 @@ ec_done:
 		MSVDX_CMDS_END_SLICE_PICTURE_OFFSET,
 		1, cmd_space);
 
+	fault_region->num_region = 0;
+
+	preempt_enable();
 
 #ifdef CONFIG_VIDEO_MRFLD
 	power_island_put(OSPM_VIDEO_DEC_ISLAND);
 #else
 	ospm_power_using_video_end(OSPM_VIDEO_DEC_ISLAND);
 #endif
-	fault_region->num_region = 0;
-
-	preempt_enable();
-
 	printk(KERN_DEBUG "MSVDX: EC done, unlock msvdx ret %d\n",
 	       ret);
 
