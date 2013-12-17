@@ -781,17 +781,65 @@ enum MTX_eScratchRegData {
 
 /* FIXME, for not(IMG_UINT32_IS_ULONG), use "int" to replace "IMG_INT32" */
 struct IMG_WRITEBACK_MSG {
-	unsigned int ui32CmdWord;
+	uint32_t ui32CmdWord;
 	union {
 		struct {
-			unsigned int ui32Data;
-			unsigned int ui32ExtraData;
-			unsigned int ui32WritebackVal;
+			uint32_t ui32Data;
+			uint32_t ui32ExtraData;
+			uint32_t ui32WritebackVal;
 		};
-		unsigned int ui32CodedBufferConsumed;
+		uint32_t ui32CodedBufferConsumed;
 	};
 };
 
+#if 1// _TNG_64B_
+
+/*
+#define ED_TNG_WRITE32(_base, _offs, _val) \
+	do { \ 
+		iowrite32((_val), dev_priv->topaz_reg + (_base) + (_offs)); \ 
+		printk(KERN_ERR "WRW :REG_MTX:0x%x 0x%x\n", (_base)+(_offs), _val); \ 
+		printk(KERN_ERR "RRG :REG_MTX:0x%x 0x%x\n", (_base)+(_offs), \ 
+			ioread32(dev_priv->topaz_reg + (_base) + (_offs))); \ 
+		udelay(5); \ 
+	} while (0)
+*/
+
+
+#define TNG_WRITE32(_base, _offs, _val) \
+	iowrite32((_val), dev_priv->topaz_reg + (_base) + (_offs))
+
+#define TNG_READ32(_base, _offs, _pval) \
+	*(_pval) = ioread32(dev_priv->topaz_reg + (_base) + (_offs))
+
+#define MULTICORE_WRITE32(offset, value) \
+	TNG_WRITE32(REG_OFFSET_TOPAZ_MULTICORE, offset, value)
+
+#define MULTICORE_READ32(offset, pointer) \
+	TNG_READ32(REG_OFFSET_TOPAZ_MULTICORE, offset, pointer)
+
+#define DMAC_WRITE32(offset, value) \
+	TNG_WRITE32(REG_OFFSET_TOPAZ_DMAC, offset, value)
+
+#define DMAC_READ32(offset, pointer) \
+	TNG_READ32(REG_OFFSET_TOPAZ_DMAC, offset, pointer)
+
+#define MTX_WRITE32(offset, value) \
+	TNG_WRITE32(REG_OFFSET_TOPAZ_MTX, offset, value)
+
+#define MTX_READ32(offset, pointer) \
+	TNG_READ32(REG_OFFSET_TOPAZ_MTX, offset, pointer)
+
+#define TOPAZCORE_WRITE32(core, offset, value) \
+	TNG_WRITE32(core*(0x1000) + 0x1000, offset, value)
+
+#define TOPAZCORE_READ32(core, offset, pointer) \
+	TNG_READ32(core*(0x1000) + 0x1000, offset, pointer)
+
+#define VLC_WRITE32(core, offset, value) \
+	TNG_WRITE32(core*(0x1000)+0x1000+REG_OFFSET_TOPAZ_VLC, offset, value)
+
+#else
 #ifdef KPDUMP
 #define MULTICORE_WRITE32(offset, value) \
 	do { \
@@ -921,11 +969,24 @@ struct IMG_WRITEBACK_MSG {
 		REG_OFFSET_TOPAZ_VLC + offset)) = value; \
 	} while (0)
 #endif
+#endif //_TNG_64B_
+
 #define FPGA_AXI_WRITE32
 #define FPGA_AXI_READ32
 #define FPGA_OCP_WRITE32
 #define FPGA_OCP_READ32
 
+#if 1 //_TNG_64B_
+#define BIAS_MM_WRITE32(base, offset, value)  \
+	TNG_WRITE32(base, offset, value)
+
+#define MM_WRITE32(base, offset, value)  \
+	TNG_WRITE32(base, offset, value)
+
+#define MM_READ32(base, offset, pointer) \
+	TNG_READ32(base, offset, pointer)
+
+#else
 #define BIAS_MM_WRITE32(base, offset, value)  \
 do {				       \
 	*((unsigned long *)((unsigned char *)(dev_priv->topaz_reg)	\
@@ -949,6 +1010,7 @@ do {				       \
 			(unsigned char *)(dev_priv->topaz_reg) \
 		+ base + offset));      \
 	} while (0)
+#endif //_TNG_64B_
 
 #define F_MASK(basename)  (MASK_##basename)
 #define F_SHIFT(basename) (SHIFT_##basename)

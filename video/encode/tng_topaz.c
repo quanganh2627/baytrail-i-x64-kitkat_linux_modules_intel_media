@@ -2297,12 +2297,15 @@ static int32_t tng_setup_WB_mem(
 	const void *command)
 {
 	struct ttm_object_file *tfile = BCVideoGetPriv(file_priv)->tfile;
-	uint32_t i;
+	struct psb_video_ctx *video_ctx;
+	uint32_t i = 0;
+	const uint32_t len = sizeof(struct IMG_WRITEBACK_MSG);
 	int ret;
 	bool is_iomem;
 	uint32_t wb_handle;
 	uint32_t mtx_ctx_handle;
-	struct psb_video_ctx *video_ctx;
+	uint8_t *ptmp = NULL;
+	const uint8_t pas_val = (uint8_t) ~0x0;
 
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 	if (video_ctx == NULL) {
@@ -2313,7 +2316,6 @@ static int32_t tng_setup_WB_mem(
 	wb_handle = *((uint32_t *)command + 3);
 	PSB_DEBUG_TOPAZ("TOPAZ: Map write back memory from handle %08x\n",
 		wb_handle);
-
 
 	video_ctx->wb_bo = ttm_buffer_object_lookup(tfile, wb_handle);
 
@@ -2337,17 +2339,24 @@ static int32_t tng_setup_WB_mem(
 		return -1;
 	}
 
-	video_ctx->wb_addr[0] = (uint32_t)ttm_kmap_obj_virtual(
+	video_ctx->wb_addr[0] = (uint32_t *)ttm_kmap_obj_virtual(
 				&video_ctx->wb_bo_kmap, &is_iomem);
 
-	memset((void *)video_ctx->wb_addr[0], ~0x0,
-		sizeof(struct IMG_WRITEBACK_MSG));
+	PSB_DEBUG_TOPAZ("TOPAZ: memset: val=0x%08x, len=%d\n", \
+		pas_val, len);
 
-	for (i = 1; i < WB_FIFO_SIZE; i++) {
-		video_ctx->wb_addr[i] = video_ctx->wb_addr[i - 1] + 0x1000;
-		memset((void *)video_ctx->wb_addr[i], ~0x0,
-			sizeof(struct IMG_WRITEBACK_MSG));
-	}
+	PSB_DEBUG_TOPAZ("TOPAZ: memset: wb_addr=0x%016p, i=%d\n", \
+		video_ctx->wb_addr[0], i);
+
+	ptmp = (uint8_t *)(video_ctx->wb_addr[i++]);
+	memset(ptmp, pas_val, len);
+	while (i < WB_FIFO_SIZE) {
+		video_ctx->wb_addr[i] = video_ctx->wb_addr[i-1] + 0x400;
+		PSB_DEBUG_TOPAZ("TOPAZ: memset: wb_addr=0x%016p, i=%d\n", \
+			video_ctx->wb_addr[i], i);
+		ptmp = (uint8_t *)(video_ctx->wb_addr[i++]);
+		memset(ptmp, pas_val, len);
+	} ;
 
 	video_ctx->enc_ctx_param = *((uint32_t *)command + 1);
 	video_ctx->enc_ctx_addr = *((uint32_t *)command + 2);
