@@ -1842,7 +1842,9 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 		intelhaddata->audio_reg_base = 0x65800;
 		intelhaddata->ops = &had_ops_v2;
 	} else if (INTEL_MID_BOARD(1, PHONE, MRFL) ||
-		 INTEL_MID_BOARD(1, TABLET, MRFL)) {
+			INTEL_MID_BOARD(1, TABLET, MRFL) ||
+			INTEL_MID_BOARD(1, PHONE, MOFD) ||
+			INTEL_MID_BOARD(1, TABLET, MOFD)) {
 		intelhaddata->hw_silence = 1;
 		intelhaddata->audio_reg_base = 0x69000;
 		intelhaddata->ops = &had_ops_v1;
