@@ -99,7 +99,7 @@ int drm_psb_cpurelax;
 int drm_psb_udelaydivider = 1;
 int drm_topaz_pmpolicy = PSB_PMPOLICY_POWERDOWN;
 int drm_vsp_pmpolicy = PSB_PMPOLICY_SUSPEND_HWIDLE;
-int drm_topaz_cgpolicy = PSB_CGPOLICY_VECCG_DIS;
+int drm_topaz_cgpolicy = PSB_CGPOLICY_ON;
 int drm_topaz_cmdpolicy = PSB_CMDPOLICY_PARALLEL;
 int drm_topaz_sbuswa;
 int drm_psb_ospm = 1;
