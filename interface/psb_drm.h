@@ -194,7 +194,7 @@ struct psb_validate_req {
 	uint32_t buffer_handle;
 	uint32_t presumed_flags;
 	uint32_t pad64;
-	uint32_t unfence_flag;
+	uint64_t unfence_flag;
 };
 
 struct psb_validate_rep {

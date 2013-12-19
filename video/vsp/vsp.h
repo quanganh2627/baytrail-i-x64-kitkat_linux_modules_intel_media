@@ -93,14 +93,14 @@ static const unsigned int vsp_processor_base[] = {
 /* help macro */
 #define MM_WRITE32(base, offset, value)					\
 	do {								\
-		*((unsigned long *)((unsigned char *)(dev_priv->vsp_reg) \
+		*((uint32_t *)((unsigned char *)(dev_priv->vsp_reg) \
 				    + base + offset)) = value;		\
 	} while (0)
 
 #define MM_READ32(base, offset, pointer)				\
 	do {								\
 		*(pointer) =						\
-			*((unsigned long *)((unsigned char *)		\
+			*((uint32_t *)((unsigned char *)		\
 					    (dev_priv->vsp_reg)		\
 						 + base + offset));	\
 	} while (0)

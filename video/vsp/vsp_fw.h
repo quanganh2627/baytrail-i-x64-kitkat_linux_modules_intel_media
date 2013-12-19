@@ -26,6 +26,7 @@
 #ifndef _VSP_FW_H_
 #define _VSP_FW_H_
 
+#pragma pack(4)
 #define VssProcPipelineMaxNumFilters 5
 #define VSS_PROC_MAX_INPUT_PICTURES  1
 #define VSS_PROC_MAX_OUTPUT_PICTURES 4
@@ -540,5 +541,5 @@ enum VssVp8encCommandType {
 	VssVp8encInit,
 	Vss_Sys_Ref_Frame_COMMAND
 };
-
+#pragma pack()
 #endif
