@@ -1149,6 +1149,7 @@ typedef enum intel_dc_plane_types {
 	DC_SPRITE_PLANE = 1,
 	DC_OVERLAY_PLANE,
 	DC_PRIMARY_PLANE,
+	DC_PLANE_MAX,
 } DC_MRFLD_PLANE_TYPE;
 
 #define SPRITE_UPDATE_SURFACE           (0x00000001UL)

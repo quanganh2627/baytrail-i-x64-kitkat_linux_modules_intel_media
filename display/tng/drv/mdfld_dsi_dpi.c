@@ -225,12 +225,6 @@ static int __dpi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
 
-	/*
-	 * FIXME: need to dynamically power un-gate DISPLAY C island for
-	 * Overlay C & Sprite D planes.
-	 */
-	power_island |= OSPM_DISPLAY_C;
-
 	if (!power_island_get(power_island))
 		return -EAGAIN;
 
@@ -539,12 +533,6 @@ power_off_err:
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
 
-	/*
-	 * FIXME: need to dynamically power gate DISPLAY C island for
-	 * Overlay C & Sprite D planes.
-	 */
-	power_island |= OSPM_DISPLAY_C;
-
 	if (!power_island_put(power_island))
 		return -EINVAL;
 
@@ -748,6 +736,7 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	if (mode == DRM_MODE_DPMS_ON) {
 		mdfld_dsi_dpi_set_power(encoder, true);
 		DCAttachPipe(dsi_config->pipe);
+		DC_MRFLD_onPowerOn(dsi_config->pipe);
 	} else {
 		mdfld_dsi_dpi_set_power(encoder, false);
 
@@ -758,6 +747,7 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 
 		/* Make the pending flip request as completed. */
 		DCUnAttachPipe(dsi_config->pipe);
+		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	}
 
 	DCUnLockMutex();
@@ -921,6 +911,7 @@ void mdfld_dsi_dpi_save(struct drm_encoder *encoder)
 
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
+	DC_MRFLD_onPowerOff(pipe);
 	DCUnLockMutex();
 }
 
@@ -946,6 +937,7 @@ void mdfld_dsi_dpi_restore(struct drm_encoder *encoder)
 	__mdfld_dsi_dpi_set_power(encoder, true);
 
 	DCAttachPipe(pipe);
+	DC_MRFLD_onPowerOn(pipe);
 	DCUnLockMutex();
 }
 

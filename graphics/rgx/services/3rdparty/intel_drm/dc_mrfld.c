@@ -62,8 +62,15 @@ static IMG_PIXFMT DC_MRFLD_Supported_PixelFormats[] = {
 };
 
 static uint32_t DC_MRFLD_PixelFormat_Mapping[] = {
-		[IMG_PIXFMT_B5G6R5_UNORM] = (0x5 << 26),
-		[IMG_PIXFMT_B8G8R8A8_UNORM] = (0x6 << 26),
+	[IMG_PIXFMT_B5G6R5_UNORM] = (0x5 << 26),
+	[IMG_PIXFMT_B8G8R8A8_UNORM] = (0x6 << 26),
+};
+
+static uint32_t DC_MRFLD_ExtraPowerIslands[DC_PLANE_MAX][MAX_PLANE_INDEX] = {
+	{ 0,              0,              0},
+	{ OSPM_DISPLAY_C, 0,              0},
+	{ 0,              OSPM_DISPLAY_C, 0},
+	{ 0,              0,              0},
 };
 
 static inline IMG_UINT32 _Align_To(IMG_UINT32 ulValue,
@@ -110,6 +117,67 @@ static IMG_BOOL _Is_Valid_DC_Buffer(DC_BUFFER_IMPORT_INFO *psBufferInfo)
 }
 #endif /* if KEEP_UNUSED_CODE */
 
+static void _Update_PlanePipeMapping(DC_MRFLD_DEVICE *psDevice,
+					IMG_UINT32 uiType,
+					IMG_UINT32 uiIndex,
+					IMG_INT32 iPipe)
+{
+	mutex_lock(&psDevice->sMappingLock);
+
+	psDevice->ui32PlanePipeMapping[uiType][uiIndex] = iPipe;
+
+	mutex_unlock(&psDevice->sMappingLock);
+}
+
+static IMG_BOOL _Enable_ExtraPowerIslands(DC_MRFLD_DEVICE *psDevice,
+					IMG_UINT32 ui32ExtraPowerIslands)
+{
+	IMG_UINT32 ui32PowerIslands = 0;
+
+	/*turn on extra power islands which were not turned on*/
+	ui32PowerIslands = psDevice->ui32ExtraPowerIslandsStatus &
+			ui32ExtraPowerIslands;
+
+	ui32ExtraPowerIslands &= ~ui32PowerIslands;
+
+	if (!ui32ExtraPowerIslands)
+		return IMG_TRUE;
+
+	if (!power_island_get(ui32ExtraPowerIslands)) {
+		DRM_ERROR("Failed to turn on islands %lx\n",
+			ui32ExtraPowerIslands);
+		return IMG_FALSE;
+
+	}
+
+	psDevice->ui32ExtraPowerIslandsStatus |= ui32ExtraPowerIslands;
+
+	return IMG_TRUE;
+}
+
+static IMG_BOOL _Disable_ExtraPowerIslands(DC_MRFLD_DEVICE *psDevice,
+					IMG_UINT32 ui32ExtraPowerIslands)
+{
+	IMG_UINT32 ui32PowerIslands = 0;
+
+	/*turn off extra power islands which were turned on*/
+	ui32PowerIslands = psDevice->ui32ExtraPowerIslandsStatus &
+				ui32ExtraPowerIslands;
+
+	if (!ui32PowerIslands)
+		return IMG_TRUE;
+
+	if (!power_island_put(ui32PowerIslands)) {
+		DRM_ERROR("Failed to turn on islands %lx\n",
+				ui32PowerIslands);
+		return IMG_FALSE;
+	}
+
+	psDevice->ui32ExtraPowerIslandsStatus &= ~ui32PowerIslands;
+
+	return IMG_TRUE;
+}
+
 static void _Flip_To_Surface(DC_MRFLD_DEVICE *psDevice,
 				IMG_UINT32 ulSurfAddr,
 				IMG_PIXFMT eFormat,
@@ -125,7 +193,8 @@ static void _Flip_Overlay(DC_MRFLD_DEVICE *psDevice,
 			DC_MRFLD_OVERLAY_CONTEXT *psContext,
 			IMG_INT iPipe)
 {
-	if (!(psDevice->ui32ActiveOverlays & (1 << psContext->index))) {
+	if (!(psDevice->ui32ActivePlanes[DC_OVERLAY_PLANE] &
+		(1 << psContext->index))) {
 		DRM_ERROR("%s: overlay %d is disabled, pipe %d",
 			__func__, psContext->index, iPipe);
 		return;
@@ -141,7 +210,7 @@ static void _Flip_Sprite(DC_MRFLD_DEVICE *psDevice,
 	int index = psContext->index;
 
 	/* don't flip if plane is inactive */
-	if (!((1 << index) & psDevice->ui32ActiveSprites))
+	if (!((1 << index) & psDevice->ui32ActivePlanes[DC_SPRITE_PLANE]))
 		return;
 
 	if ((iPipe && psContext->pipe) || (!iPipe && !psContext->pipe))
@@ -155,7 +224,7 @@ static void _Flip_Primary(DC_MRFLD_DEVICE *psDevice,
 	int index = psContext->index;
 
 	/* don't flip if plane is inactive */
-	if (!((1 << index) & psDevice->ui32ActivePrimarys))
+	if (!((1 << index) & psDevice->ui32ActivePlanes[DC_PRIMARY_PLANE]))
 		return;
 
 	if ((iPipe && psContext->pipe) || (!iPipe && !psContext->pipe))
@@ -174,7 +243,7 @@ static void _Disable_Unused_Primarys(DC_MRFLD_DEVICE *psDevice)
 	int i;
 
 	for (i = 0; i < MRFLD_PRIMARY_COUNT; i++) {
-		if (psDevice->ui32ActivePrimarys & (1 << i))
+		if (psDevice->ui32ActivePlanes[DC_PRIMARY_PLANE] & (1 << i))
 			continue;
 		DCCBPrimaryEnable(gpsDevice->psDrmDevice, 0, i, 0);
 	}
@@ -300,7 +369,6 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 
 	bUpdated = IMG_TRUE;
 err_out:
-	power_island_put(psFlip->uiPowerIslands);
 	return bUpdated;
 }
 
@@ -369,7 +437,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom;
 	DC_MRFLD_BUFFER *pasBuffers;
 	IMG_UINT32 uiNumBuffers;
-	IMG_BOOL bUpdated;
+	int type, index, pipe;
 	int i, j;
 
 	if (!gpsDevice || !psFlip) {
@@ -384,6 +452,8 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 		DRM_ERROR("%s: Invalid buffer list\n", __func__);
 		return;
 	}
+
+	mutex_lock(&gpsDevice->sMappingLock);
 
 	for (i = 0; i < uiNumBuffers; i++) {
 		if (pasBuffers[i].eFlipOp == DC_MRFLD_FLIP_SURFACE) {
@@ -400,43 +470,52 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 
 		for (j = 0; j < pasBuffers[i].ui32ContextCount; j++) {
 			psSurfCustom = &pasBuffers[i].sContext[j];
-			switch (psSurfCustom->type) {
+
+			type = psSurfCustom->type;
+			index = -1;
+			pipe = -1;
+
+			switch (type) {
 			case DC_SPRITE_PLANE:
 				/*Flip sprite context*/
-				if (psSurfCustom->ctx.sp_ctx.pipe)
-					psFlip->bActivePipes[DC_PIPE_B] =
-						IMG_TRUE;
-				else
-					psFlip->bActivePipes[DC_PIPE_A] =
-						IMG_TRUE;
-
-				/*need turn on pipe C*/
-				psFlip->uiPowerIslands |= OSPM_DISPLAY_C;
+				index = psSurfCustom->ctx.sp_ctx.index;
+				pipe = psSurfCustom->ctx.sp_ctx.pipe;
 				break;
 			case DC_PRIMARY_PLANE:
-				if (psSurfCustom->ctx.prim_ctx.pipe)
-					psFlip->bActivePipes[DC_PIPE_B] =
-						IMG_TRUE;
-				else
-					psFlip->bActivePipes[DC_PIPE_A] =
-						IMG_TRUE;
+				index = psSurfCustom->ctx.prim_ctx.index;
+				pipe = psSurfCustom->ctx.prim_ctx.pipe;
 				break;
 			case DC_OVERLAY_PLANE:
-				if (psSurfCustom->ctx.ov_ctx.pipe)
-					psFlip->bActivePipes[DC_PIPE_B] =
-						IMG_TRUE;
-				else
-					psFlip->bActivePipes[DC_PIPE_A] =
-						IMG_TRUE;
-				/*if overlay C need turn on pipe C*/
-				psFlip->uiPowerIslands |= OSPM_DISPLAY_C;
+				index = psSurfCustom->ctx.ov_ctx.index;
+				pipe = psSurfCustom->ctx.ov_ctx.pipe;
 				break;
 			default:
 				DRM_ERROR("Unknown plane type %d\n",
 						psSurfCustom->type);
+				break;
 			}
+
+			if (index < 0 || pipe < 0) {
+				DRM_ERROR("Invalid index = %d, pipe = %d\n",
+						index, type);
+				continue;
+			}
+
+			/* update flip active pipes */
+			if (pipe)
+				psFlip->bActivePipes[DC_PIPE_B] = IMG_TRUE;
+			else
+				psFlip->bActivePipes[DC_PIPE_A] = IMG_TRUE;
+
+			/* check whether needs extra power island*/
+			psFlip->uiPowerIslands |=
+				DC_MRFLD_ExtraPowerIslands[type][index];
+
+			/* update plane - pipe mapping*/
+			gpsDevice->ui32PlanePipeMapping[type][index] = pipe;
 		}
 	}
+	mutex_unlock(&gpsDevice->sMappingLock);
 
 	mutex_lock(&gpsDevice->sFlipQueueLock);
 	/* dispatch this flip*/
@@ -446,7 +525,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 			if (!DCCBIsPipeActive(gpsDevice->psDrmDevice, i))
 				continue;
 
-			/*turn on pipe power island*/
+			/*turn on pipe power island based on active pipes*/
 			if (i == 0)
 				psFlip->uiPowerIslands |= OSPM_DISPLAY_A;
 			else
@@ -576,6 +655,9 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 						psFlip->hConfigData);
 				/* free it */
 				kfree(psFlip);
+
+				/*put power island*/
+				power_island_put(psFlip->uiPowerIslands);
 			}
 		} else if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
 			psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DISPLAYED;
@@ -598,6 +680,9 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 						psNextFlip->hConfigData);
 				/* free it */
 				kfree(psNextFlip);
+
+				/*put power island*/
+				power_island_put(psFlip->uiPowerIslands);
 			}
 		}
 	}
@@ -1237,7 +1322,7 @@ static PVRSRV_ERROR DC_MRFLD_init(struct drm_device *psDrmDev)
 {
 	PVRSRV_ERROR eRes = PVRSRV_OK;
 	DC_MRFLD_DEVICE *psDevice;
-	int i;
+	int i, j;
 
 	if (!psDrmDev)
 		return PVRSRV_ERROR_INVALID_PARAMS;
@@ -1277,6 +1362,16 @@ static PVRSRV_ERROR DC_MRFLD_init(struct drm_device *psDrmDev)
 	for (i = 0; i < MAX_PIPE_NUM; i++) {
 		INIT_LIST_HEAD(&psDevice->sFlipQueues[i]);
 		psDevice->bFlipEnabled[i] = IMG_TRUE;
+	}
+
+	/*init plane pipe mapping lock */
+	mutex_init(&psDevice->sMappingLock);
+
+	/*init plane pipe mapping */
+	for (i = 1; i < DC_PLANE_MAX; i++) {
+		for (j = 0; j < MAX_PLANE_INDEX; j++) {
+			psDevice->ui32PlanePipeMapping[i][j] = -1;
+		}
 	}
 
 	/*unblank fbdev*/
@@ -1386,6 +1481,9 @@ void DCUnAttachPipe(uint32_t iPipe)
 					psFlip->hConfigData);
 			/* free it */
 			kfree(psFlip);
+
+			/*put power island*/
+			power_island_put(psFlip->uiPowerIslands);
 		}
 	}
 
@@ -1395,31 +1493,103 @@ void DCUnAttachPipe(uint32_t iPipe)
 	gpsDevice->bFlipEnabled[iPipe] = IMG_FALSE;
 }
 
+/*TODO: merge with DCUnAttachPipe*/
+void DC_MRFLD_onPowerOff(uint32_t iPipe)
+{
+	int i, j;
+	IMG_INT32 *ui32ActivePlanes;
+	IMG_UINT32 uiExtraPowerIslands = 0;
+
+	if (!gpsDevice)
+		return;
+
+	mutex_lock(&gpsDevice->sMappingLock);
+
+	/* turn off extra power islands which is required on this pipe*/
+	for (i = 1; i < DC_PLANE_MAX; i++) {
+		for (j = 0; j < MAX_PLANE_INDEX; j++) {
+			if (gpsDevice->ui32PlanePipeMapping[i][j] != iPipe)
+				continue;
+
+			ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[i];
+
+			/* don't need to power it off when it's not active */
+			if (!(*ui32ActivePlanes & (1 << j)))
+				continue;
+
+			uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[i][j];
+			/*turn off the extra power island*/
+			_Disable_ExtraPowerIslands(gpsDevice,
+						uiExtraPowerIslands);
+		}
+	}
+
+	mutex_unlock(&gpsDevice->sMappingLock);
+}
+
+/*TODO: merge with DCAttachPipe*/
+void DC_MRFLD_onPowerOn(uint32_t iPipe)
+{
+	int i, j;
+	IMG_INT32 *ui32ActivePlanes;
+	IMG_UINT32 uiExtraPowerIslands = 0;
+
+	if (!gpsDevice)
+		return;
+
+	mutex_lock(&gpsDevice->sMappingLock);
+
+	for (i = 1; i < DC_PLANE_MAX; i++) {
+		for (j = 0; j < MAX_PLANE_INDEX; j++) {
+			if (gpsDevice->ui32PlanePipeMapping[i][j] != iPipe)
+				continue;
+
+			ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[i];
+
+			/* don't need to power it on when it's not active */
+			if (!(*ui32ActivePlanes & (1 << j)))
+				continue;
+
+			uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[i][j];
+			/*turn on the extra power island*/
+			_Enable_ExtraPowerIslands(gpsDevice,
+						uiExtraPowerIslands);
+		}
+	}
+
+	mutex_unlock(&gpsDevice->sMappingLock);
+}
+
 int DC_MRFLD_Enable_Plane(int type, int index, u32 ctx)
 {
 	int err = 0;
 	IMG_INT32 *ui32ActivePlanes;
+	IMG_UINT32 uiExtraPowerIslands = 0;
+
+	if (type <= DC_UNKNOWN_PLANE || type >= DC_PLANE_MAX) {
+		DRM_ERROR("Invalid plane type %d\n", type);
+		return -EINVAL;
+	}
+
+	if (index < 0 || index >= MAX_PLANE_INDEX) {
+		DRM_ERROR("Invalid plane index %d\n", index);
+		return -EINVAL;
+	}
 
 	/*acquire lock*/
 	mutex_lock(&gpsDevice->sFlipQueueLock);
 
-	switch (type) {
-	case DC_SPRITE_PLANE:
-		ui32ActivePlanes = &gpsDevice->ui32ActiveSprites;
-		break;
-	case DC_PRIMARY_PLANE:
-		ui32ActivePlanes = &gpsDevice->ui32ActivePrimarys;
-		break;
-	case DC_OVERLAY_PLANE:
-		ui32ActivePlanes = &gpsDevice->ui32ActiveOverlays;
-		break;
-	default:
-		mutex_unlock(&gpsDevice->sFlipQueueLock);
-		return 0;
-	}
+	ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[type];
 
 	/* add to active planes*/
-	*ui32ActivePlanes |= (1 << index);
+	if (!(*ui32ActivePlanes & (1 << index))) {
+		*ui32ActivePlanes |= (1 << index);
+
+		/* power on extra power islands if required */
+		uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[type][index];
+		_Enable_ExtraPowerIslands(gpsDevice,
+					uiExtraPowerIslands);
+	}
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
 
@@ -1430,30 +1600,34 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 {
 	int err = 0;
 	IMG_INT32 *ui32ActivePlanes;
+	IMG_UINT32 uiExtraPowerIslands = 0;
+
+	if (type <= DC_UNKNOWN_PLANE || type >= DC_PLANE_MAX) {
+		DRM_ERROR("Invalid plane type %d\n", type);
+		return -EINVAL;
+	}
+
+	if (index < 0 || index >= MAX_PLANE_INDEX) {
+		DRM_ERROR("Invalid plane index %d\n", index);
+		return -EINVAL;
+	}
 
 	/*acquire lock*/
 	mutex_lock(&gpsDevice->sFlipQueueLock);
 
-	switch (type) {
-	case DC_SPRITE_PLANE:
-		err = DCCBSpriteEnable(gpsDevice->psDrmDevice, ctx, index, 0);
-		ui32ActivePlanes = &gpsDevice->ui32ActiveSprites;
-		break;
-	case DC_PRIMARY_PLANE:
-		ui32ActivePlanes = &gpsDevice->ui32ActivePrimarys;
-		break;
-	case DC_OVERLAY_PLANE:
-		err = DCCBOverlayEnable(gpsDevice->psDrmDevice, ctx, index, 0);
-		ui32ActivePlanes = &gpsDevice->ui32ActiveOverlays;
-		break;
-	default:
-		mutex_unlock(&gpsDevice->sFlipQueueLock);
-		return 0;
-	}
+	ui32ActivePlanes = &gpsDevice->ui32ActivePlanes[type];
 
 	/* remove from active planes*/
-	if (!err)
+	if (!err && (*ui32ActivePlanes & (1 << index))) {
 		*ui32ActivePlanes &= ~(1 << index);
+
+		/* power off extra power islands if required */
+		uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[type][index];
+		_Disable_ExtraPowerIslands(gpsDevice,
+					uiExtraPowerIslands);
+		/* update plane pipe mapping */
+		_Update_PlanePipeMapping(gpsDevice, type, index, -1);
+	}
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
 
