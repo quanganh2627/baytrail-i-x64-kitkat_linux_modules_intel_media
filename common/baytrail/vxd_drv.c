@@ -40,15 +40,8 @@ extern int drm_psb_trap_pagefaults;
 
 int drm_psb_cpurelax;
 int drm_psb_udelaydivider = 1;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
 int drm_psb_priv_pmu_func = 0;
-#else
-/* Currrently on 3.10 PMU Driver is not enabled on BYT.
- * So set this to 1 to use private PMU APIs. 
- * This is a temporary workaround.
- * It will be removed as soon as PMU Driver is enabled.*/
-int drm_psb_priv_pmu_func = 1;
-#endif
+
 static struct pci_dev *pci_root;
 
 int drm_psb_trap_pagefaults;
@@ -60,6 +53,9 @@ atomic_t g_videodec_access_count;
 
 static void vxd_power_init(struct drm_device *dev);
 static void vxd_power_post_init(struct drm_device *dev);
+
+extern int pmc_nc_set_power_state(int islands, int state_type, int reg);
+extern int pmc_nc_get_power_state(int islands, int reg);
 
 module_param_named(trap_pagefaults, drm_psb_trap_pagefaults, int, 0600);
 
@@ -709,7 +705,7 @@ static bool vxd_power_down(struct drm_device *dev)
 		return true;
 	}
 	else {
-		if (pmu_nc_set_power_state(VEDSSC, OSPM_ISLAND_DOWN, VEDSSPM0)) {
+		if (pmc_nc_set_power_state(VEDSSC, OSPM_ISLAND_DOWN, VEDSSPM0)) {
 			PSB_DEBUG_PM("VED: pmu_nc_set_power_state DOWN failed!\n");
 			return false;
 		}
@@ -751,7 +747,7 @@ static bool vxd_power_on(struct drm_device *dev)
 		return true;
 	}
 	else {
-		if (pmu_nc_set_power_state(VEDSSC, OSPM_ISLAND_UP, VEDSSPM0)) {
+		if (pmc_nc_set_power_state(VEDSSC, OSPM_ISLAND_UP, VEDSSPM0)) {
 			PSB_DEBUG_PM("VED: pmu_nc_set_power_state ON failed!\n");
 			return false;
 		}
@@ -795,7 +791,7 @@ bool is_vxd_on()
 	if (drm_psb_priv_pmu_func)
 		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
 	else
-		pwr_sts = pmu_nc_get_power_state(VEDSSC, VEDSSPM0);
+		pwr_sts = pmc_nc_get_power_state(VEDSSC, VEDSSPM0);
 
 	if (pwr_sts == VXD_APM_STS_D0)
 		return true;

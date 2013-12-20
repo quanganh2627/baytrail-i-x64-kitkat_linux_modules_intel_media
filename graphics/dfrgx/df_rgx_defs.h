@@ -161,6 +161,8 @@ struct busfreq_data {
 	int                   gbp_cooldv_state_prev;
 	int                   gbp_cooldv_state_highest;
 	int                   gbp_cooldv_state_override;
+	unsigned int	      gbp_cooldv_init_freq_max;
+	unsigned int	      gbp_cooldv_init_freq_min;
 	struct gpu_data	      gpudata[THERMAL_COOLING_DEVICE_MAX_STATE];
 };
 

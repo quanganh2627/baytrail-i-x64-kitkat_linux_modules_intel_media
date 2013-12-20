@@ -39,13 +39,13 @@
 ### ###########################################################################
 
 ccflags-y += \
-	-I$(TOP)/tools/intern/debug/dbgdriv/common \
-	-I$(TOP)/tools/intern/debug/include
+	-I$(TOP)/tools/services/debug/dbgdriv/common \
+	-I$(TOP)/tools/services/debug/include
 
 dbgdrv-y += \
-	tools/intern/debug/dbgdriv/common/dbgdriv.o \
-	tools/intern/debug/dbgdriv/common/ioctl.o \
-	tools/intern/debug/dbgdriv/common/handle.o \
-	tools/intern/debug/dbgdriv/common/hotkey.o \
-	tools/intern/debug/dbgdriv/linux/main.o \
-	tools/intern/debug/dbgdriv/linux/hostfunc.o
+	tools/services/debug/dbgdriv/common/dbgdriv.o \
+	tools/services/debug/dbgdriv/common/ioctl.o \
+	tools/services/debug/dbgdriv/common/handle.o \
+	tools/services/debug/dbgdriv/common/hotkey.o \
+	tools/services/debug/dbgdriv/linux/main.o \
+	tools/services/debug/dbgdriv/linux/hostfunc.o

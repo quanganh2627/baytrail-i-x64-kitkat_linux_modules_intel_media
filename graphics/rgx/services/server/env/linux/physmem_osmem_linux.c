@@ -51,8 +51,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /* services/server/include/ */
 #include "osfunc.h"
-#include "mm.h"
-#include "mutils.h"
 #include "pdump_physmem.h"
 #include "pdump_km.h"
 #include "pmr.h"
@@ -61,6 +59,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /* ourselves */
 #include "physmem_osmem.h"
+
+// INTEL to double check if this should be commented out.
+/*
+#include <linux/version.h>
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
+#include <linux/mm.h>
+#define PHYSMEM_SUPPORTS_SHRINKER
+#endif
+*/
 
 #include <linux/slab.h>
 #include <linux/highmem.h>
@@ -123,7 +131,7 @@ struct _PMR_OSPAGEARRAY_DATA_ {
 	 The cache mode of the PMR (required at free time)
 	*/
     IMG_UINT32 ui32CPUCacheFlags;
-    IMG_BOOL bUnsetMemoryType;
+	IMG_BOOL bUnsetMemoryType;
 };
 
 /***********************************
@@ -172,6 +180,7 @@ static IMG_UINT32 g_ui32LiveAllocs = 0;
 static struct kmem_cache *g_psLinuxPagePoolCache = IMG_NULL;
 static LIST_HEAD(g_sPagePoolList);
 static DEFINE_MUTEX(g_sPagePoolMutex);
+static LIST_HEAD(g_sUncachedPagePoolList);
 
 static inline void
 _PagePoolLock(void)
@@ -191,6 +200,31 @@ _LinuxPagePoolEntryAlloc(IMG_VOID)
     return kmem_cache_zalloc(g_psLinuxPagePoolCache, GFP_KERNEL);
 }
 
+static inline IMG_BOOL _GetPoolListHead(IMG_UINT32 ui32CPUCacheFlags, struct list_head **ppsPoolHead)
+{
+	switch(ui32CPUCacheFlags)
+	{
+		case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
+/*
+	For x86 we need to keep different lists for uncached
+	and write-combined as we must always honour the PAT
+	setting which cares about this difference.
+*/
+#if defined(CONFIG_X86)
+			*ppsPoolHead = &g_sUncachedPagePoolList;
+			break;
+#else
+			/* Fall-through */
+#endif
+		case PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE:
+			*ppsPoolHead = &g_sPagePoolList;
+			break;
+		default:
+			return IMG_FALSE;
+	}
+	return IMG_TRUE;
+}
+
 static IMG_VOID
 _LinuxPagePoolEntryFree(LinuxPagePoolEntry *psPagePoolEntry)
 {
@@ -198,10 +232,17 @@ _LinuxPagePoolEntryFree(LinuxPagePoolEntry *psPagePoolEntry)
 }
 
 static inline IMG_BOOL
-_AddEntryToPool(struct page *psPage)
+_AddEntryToPool(struct page *psPage, IMG_UINT32 ui32CPUCacheFlags)
 {
-	LinuxPagePoolEntry *psEntry = _LinuxPagePoolEntryAlloc();
+	LinuxPagePoolEntry *psEntry;
+	struct list_head *psPoolHead = IMG_NULL;
 
+	if (!_GetPoolListHead(ui32CPUCacheFlags, &psPoolHead))
+	{
+		return IMG_FALSE;
+	}
+
+	psEntry = _LinuxPagePoolEntryAlloc();
 	if (psEntry == NULL)
 	{
 		return IMG_FALSE;
@@ -209,7 +250,7 @@ _AddEntryToPool(struct page *psPage)
 
 	psEntry->psPage = psPage;
 	_PagePoolLock();
-	list_add_tail(&psEntry->sPagePoolItem, &g_sPagePoolList);
+	list_add_tail(&psEntry->sPagePoolItem, psPoolHead);
 	g_ui32PagePoolEntryCount++;
 	_PagePoolUnlock();
 
@@ -224,21 +265,26 @@ _RemoveEntryFromPoolUnlocked(LinuxPagePoolEntry *psPagePoolEntry)
 }
 
 static inline struct page *
-_RemoveFirstEntryFromPool(void)
+_RemoveFirstEntryFromPool(IMG_UINT32 ui32CPUCacheFlags)
 {
 	LinuxPagePoolEntry *psPagePoolEntry;
 	struct page *psPage;
+	struct list_head *psPoolHead = IMG_NULL;
+
+	if (!_GetPoolListHead(ui32CPUCacheFlags, &psPoolHead))
+	{
+		return NULL;
+	}
 
 	_PagePoolLock();
-	if (list_empty(&g_sPagePoolList))
+	if (list_empty(psPoolHead))
 	{
-		PVR_ASSERT(g_ui32PagePoolEntryCount == 0);
 		_PagePoolUnlock();
 		return NULL;
 	}
 
 	PVR_ASSERT(g_ui32PagePoolEntryCount > 0);
-	psPagePoolEntry = list_first_entry(&g_sPagePoolList, LinuxPagePoolEntry, sPagePoolItem);
+	psPagePoolEntry = list_first_entry(psPoolHead, LinuxPagePoolEntry, sPagePoolItem);
 	_RemoveEntryFromPoolUnlocked(psPagePoolEntry);
 	psPage = psPagePoolEntry->psPage;
 	_LinuxPagePoolEntryFree(psPagePoolEntry);
@@ -250,61 +296,112 @@ _RemoveFirstEntryFromPool(void)
 #if defined(PHYSMEM_SUPPORTS_SHRINKER)
 static struct shrinker g_sShrinker;
 
-static int
-_ShrinkPagePool(struct shrinker *psShrinker, struct shrink_control *psShrinkControl)
+static unsigned long
+_CountObjectsInPagePool(struct shrinker *psShrinker, struct shrink_control *psShrinkControl)
+{
+	int remain;
+
+	PVR_ASSERT(psShrinker == &g_sShrinker);
+	(void)psShrinker;
+	(void)psShrinkControl;
+
+	_PagePoolLock();
+	remain = g_ui32PagePoolEntryCount;
+	_PagePoolUnlock();
+
+	return remain;
+}
+
+static unsigned long
+_ScanObjectsInPagePool(struct shrinker *psShrinker, struct shrink_control *psShrinkControl)
 {
 	unsigned long uNumToScan = psShrinkControl->nr_to_scan;
+	LinuxPagePoolEntry *psPagePoolEntry, *psTempPoolEntry;
 	int remain;
 
 	PVR_ASSERT(psShrinker == &g_sShrinker);
 	(void)psShrinker;
 
-	if (uNumToScan != 0)
+	_PagePoolLock();
+	list_for_each_entry_safe(psPagePoolEntry, psTempPoolEntry, &g_sPagePoolList, sPagePoolItem)
 	{
-		LinuxPagePoolEntry *psPagePoolEntry, *psTempPoolEntry;
+		_RemoveEntryFromPoolUnlocked(psPagePoolEntry);
 
-		_PagePoolLock();
-		list_for_each_entry_safe(psPagePoolEntry, psTempPoolEntry, &g_sPagePoolList, sPagePoolItem)
+		/*
+		  We don't want to save the cache type and is we need to unset the
+		  memory type as it would double the page pool structure and the
+		  values are always going to be the same anyway which is why the
+		  page is in the pool (well the page could be UNCACHED or
+		  WRITE_COMBINE but we don't even need the cache type for freeing
+		  back to the OS).
+		*/
+		_FreeOSPage(PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE,
+			    0,
+			    IMG_TRUE,
+			    IMG_TRUE,
+			    psPagePoolEntry->psPage);
+		_LinuxPagePoolEntryFree(psPagePoolEntry);
+
+		if (--uNumToScan == 0)
 		{
-			_RemoveEntryFromPoolUnlocked(psPagePoolEntry);
-
-			/*
-				We don't want to save the cache type and is we need to unset the
-				memory type as it would double the page pool structure and the
-				values are always going to be the same anyway which is why the
-				page is in the pool (well the page could be UNCACHED or
-				WRITE_COMBINE but we don't even need the cache type for freeing
-				back to the OS).
-			*/
-			_FreeOSPage(PVRSRV_MEMALLOCFLAG_CPU_UNCACHED,
-						0,
-						IMG_TRUE,
-						IMG_TRUE,
-						psPagePoolEntry->psPage);
-			_LinuxPagePoolEntryFree(psPagePoolEntry);
-
-			if (--uNumToScan == 0)
-			{
-				break;
-			}
+			break;
 		}
+	}
 
-		if (list_empty(&g_sPagePoolList))
+	/*
+	  Note:
+	  For anything other then x86 this list will be empty but we want to
+	  keep differences between compiled code to a minumium and so
+	  this isn't wrapped in #if defined(CONFIG_X86)
+	*/
+	list_for_each_entry_safe(psPagePoolEntry, psTempPoolEntry, &g_sUncachedPagePoolList, sPagePoolItem)
+	{
+		_RemoveEntryFromPoolUnlocked(psPagePoolEntry);
+
+		/*
+		  We don't want to save the cache type and is we need to unset the
+		  memory type as it would double the page pool structure and the
+		  values are always going to be the same anyway which is why the
+		  page is in the pool (well the page could be UNCACHED or
+		  WRITE_COMBINE but we don't even need the cache type for freeing
+		  back to the OS).
+		*/
+		_FreeOSPage(PVRSRV_MEMALLOCFLAG_CPU_UNCACHED,
+			    0,
+			    IMG_TRUE,
+			    IMG_TRUE,
+			    psPagePoolEntry->psPage);
+		_LinuxPagePoolEntryFree(psPagePoolEntry);
+
+		if (--uNumToScan == 0)
 		{
-			PVR_ASSERT(g_ui32PagePoolEntryCount == 0);
+			break;
 		}
-		remain = g_ui32PagePoolEntryCount;
-		_PagePoolUnlock();
+	}
+
+	if (list_empty(&g_sPagePoolList) && list_empty(&g_sUncachedPagePoolList))
+	{
+		PVR_ASSERT(g_ui32PagePoolEntryCount == 0);
+	}
+	remain = g_ui32PagePoolEntryCount;
+	_PagePoolUnlock();
+
+	return remain;
+}
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0))
+static int
+_ShrinkPagePool(struct shrinker *psShrinker, struct shrink_control *psShrinkControl)
+{
+	if (psShrinkControl->nr_to_scan != 0)
+	{
+		return _ScanObjectsInPagePool(psShrinker, psShrinkControl);
 	}
 	else
 	{
-		/* No pages are being relaimed so just return the page count */
-		_PagePoolLock();
-		remain = g_ui32PagePoolEntryCount;
-		_PagePoolUnlock();
+		/* No pages are being reclaimed so just return the page count */
+		return _CountObjectsInPagePool(psShrinker, psShrinkControl);
 	}
-
-	return remain;
 }
 
 static struct shrinker g_sShrinker =
@@ -312,7 +409,15 @@ static struct shrinker g_sShrinker =
 	.shrink = _ShrinkPagePool,
 	.seeks = DEFAULT_SEEKS
 };
+#else
+static struct shrinker g_sShrinker =
+{
+	.count_objects = _CountObjectsInPagePool,
+	.scan_objects = _ScanObjectsInPagePool,
+	.seeks = DEFAULT_SEEKS
+};
 #endif
+#endif /* defined(PHYSMEM_SUPPORTS_SHRINKER) */
 
 static void DisableOOMKiller(void)
 {
@@ -364,6 +469,32 @@ static IMG_VOID _DeinitPagePool(IMG_VOID)
 			WRITE_COMBINE but we don't even need the cache type for freeing
 			back to the OS).
 		*/
+		_FreeOSPage(PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE,
+					0,
+					IMG_TRUE,
+					IMG_TRUE,
+					psPagePoolEntry->psPage);
+		_LinuxPagePoolEntryFree(psPagePoolEntry);
+	}
+	
+	/*
+		Note:
+		For anything other then x86 this will be a no-op but we want to
+		keep differences between compiled code to a minumium and so
+		this isn't wrapped in #if defined(CONFIG_X86)
+	*/
+	list_for_each_entry_safe(psPagePoolEntry, psTempPoolEntry, &g_sUncachedPagePoolList, sPagePoolItem)
+	{
+		_RemoveEntryFromPoolUnlocked(psPagePoolEntry);
+
+		/*
+			We don't want to save the cache type and is we need to unset the
+			memory type as it would double the page pool structure and the
+			values are always going to be the same anyway which is why the
+			page is in the pool (well the page could be UNCACHED or
+			WRITE_COMBINE but we don't even need the cache type for freeing
+			back to the OS).
+		*/
 		_FreeOSPage(PVRSRV_MEMALLOCFLAG_CPU_UNCACHED,
 					0,
 					IMG_TRUE,
@@ -371,6 +502,8 @@ static IMG_VOID _DeinitPagePool(IMG_VOID)
 					psPagePoolEntry->psPage);
 		_LinuxPagePoolEntryFree(psPagePoolEntry);
 	}
+
+	PVR_ASSERT(g_ui32PagePoolEntryCount == 0);
 
 	/* Free the page cache */
 	kmem_cache_destroy(g_psLinuxPagePoolCache);
@@ -577,24 +710,10 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 
 	if (uiOrder == 0)
 	{
-		/*
-		 * Only uncached allocations can come from the page pool.
-		 * The page pool is currently used to reduce the cost of
-		 * invalidating the CPU cache when uncached memory is allocated.
-		 */
-		switch (ui32CPUCacheFlags)
+		psPage = _RemoveFirstEntryFromPool(ui32CPUCacheFlags);
+		if (psPage != IMG_NULL)
 		{
-			case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
-				/* Fall through */
-			case PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE:
-				psPage = _RemoveFirstEntryFromPool();
-				if (psPage != IMG_NULL)
-				{
-					bFromPagePool = IMG_TRUE;
-				}
-				break;
-			default:
-				break;
+			bFromPagePool = IMG_TRUE;
 		}
 	}
 
@@ -707,7 +826,9 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 
 #endif
 	}
-	*ppsPage = psPage;
+	if(IMG_NULL == (*ppsPage = psPage)){
+		return PVRSRV_ERROR_OUT_OF_MEMORY; 
+	}
 	return eError;
 }
 
@@ -726,31 +847,16 @@ _FreeOSPage(IMG_UINT32 ui32CPUCacheFlags,
 	/* Only zero order pages can be managed in the pool */
 	if ((uiOrder == 0) && (!bFreeToOS))
 	{
-		switch (ui32CPUCacheFlags)
-		{
-			case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
-				/* Fall through */
-			case PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE:
-				{
-					/*
-						We have a uncached page which we should try and
-						add to the pool
-					*/
-					_PagePoolLock();
-					bAddedToPool = g_ui32PagePoolEntryCount < g_ui32PagePoolMaxEntries;
-					_PagePoolUnlock();
+		_PagePoolLock();
+		bAddedToPool = g_ui32PagePoolEntryCount < g_ui32PagePoolMaxEntries;
+		_PagePoolUnlock();
 
-					if (bAddedToPool)
-					{
-						if (!_AddEntryToPool(psPage))
-						{
-							bAddedToPool = IMG_FALSE;
-						}
-					}
-				}
-				break;
-			default:
-				break;
+		if (bAddedToPool)
+		{
+			if (!_AddEntryToPool(psPage, ui32CPUCacheFlags))
+			{
+				bAddedToPool = IMG_FALSE;
+			}
 		}
 	}
 
@@ -934,7 +1040,7 @@ _FreeOSPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData)
 
     psPageArrayData->bHasOSPages = IMG_FALSE;
 
-	/* Destory the page pool if required */
+	/* Destroy the page pool if required */
 	if ((g_ui32PagePoolMaxEntries > 0) && (g_psLinuxPagePoolCache != NULL) && (g_ui32LiveAllocs == 0))
 	{
 		_DeinitPagePool();

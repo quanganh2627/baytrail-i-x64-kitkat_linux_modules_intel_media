@@ -366,6 +366,13 @@ _SetDispatchTableEntry(IMG_UINT32 ui32Index,
 #endif
 	}
 
+	if (ui32Index >= BRIDGE_DISPATCH_TABLE_ENTRY_COUNT)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Index %u (%s) out of range",
+				 __FUNCTION__, (IMG_UINT)ui32Index, pszIOCName));
+		OSPanic();
+	}
+
 	g_BridgeDispatchTable[ui32Index].pfFunction = pfFunction;
 #if defined(DEBUG_BRIDGE_KM)
 	g_BridgeDispatchTable[ui32Index].pszIOCName = pszIOCName;

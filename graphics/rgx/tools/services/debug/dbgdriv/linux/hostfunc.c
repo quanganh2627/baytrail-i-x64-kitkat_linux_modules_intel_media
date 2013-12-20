@@ -71,7 +71,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "dbgdriv.h"
 
 #if defined(DEBUG) && !defined(SUPPORT_DRM)
-IMG_UINT32	gPVRDebugLevel = (DBGPRIV_FATAL | DBGPRIV_ERROR | DBGPRIV_WARNING);
+/* Added Call trace level to ensure  debug driver state messages appear */
+IMG_UINT32	gPVRDebugLevel = (DBGPRIV_FATAL | DBGPRIV_ERROR | DBGPRIV_WARNING | DBGPRIV_CALLTRACE);
 
 #define PVR_STRING_TERMINATOR		'\0'
 #define PVR_IS_FILE_SEPARATOR(character) ( ((character) == '\\') || ((character) == '/') )
@@ -172,7 +173,7 @@ void PVRSRVDebugPrintf	(
 			sprintf (&szBuffer[strlen(szBuffer)], " [%d, %s]", (int)ui32Line, pszFileName);
 		}
 
-		printk(KERN_INFO "%s\r\n", szBuffer);
+		printk(KERN_INFO "%s\n", szBuffer);
 
 		va_end (vaArgs);
 	}
@@ -233,6 +234,7 @@ IMG_VOID HostMemCopy(IMG_VOID *pvDst, IMG_VOID *pvSrc, IMG_UINT32 ui32Size)
 
 IMG_UINT32 HostReadRegistryDWORDFromString(char *pcKey, char *pcValueName, IMG_UINT32 *pui32Data)
 {
+    /* XXX Not yet implemented */
 	return 0;
 }
 
@@ -258,15 +260,18 @@ IMG_VOID HostNonPageablePageFree(IMG_VOID * pvBase)
 
 IMG_VOID * HostMapKrnBufIntoUser(IMG_VOID * pvKrnAddr, IMG_UINT32 ui32Size, IMG_VOID **ppvMdl)
 {
+    /* XXX Not yet implemented */
 	return IMG_NULL;
 }
 
 IMG_VOID HostUnMapKrnBufFromUser(IMG_VOID * pvUserAddr, IMG_VOID * pvMdl, IMG_VOID * pvProcess)
 {
+    /* XXX Not yet implemented */
 }
 
 IMG_VOID HostCreateRegDeclStreams(IMG_VOID)
 {
+    /* XXX Not yet implemented */
 }
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37))
 typedef	struct mutex		MUTEX;

@@ -87,7 +87,6 @@ typedef struct PVRSRV_BRIDGE_OUT_RGXINITALLOCFWIMGMEM_TAG
 	IMG_DEV_VIRTADDR sFWCorememDevVAddrBase;
 	RGXFWIF_DEV_VIRTADDR sFWCorememMetaVAddrBase;
 	PVRSRV_ERROR eError;
-
 } PVRSRV_BRIDGE_OUT_RGXINITALLOCFWIMGMEM;
 
 /*******************************************
@@ -155,13 +154,16 @@ typedef struct PVRSRV_BRIDGE_IN_RGXINITDEVPART2_TAG
 	RGX_INIT_COMMAND * psDeinitScript;
 	IMG_UINT32 ui32ui32KernelCatBaseIdReg;
 	IMG_UINT32 ui32KernelCatBaseId;
-	IMG_UINT32 ui32ui32KernelCatBaseReg;
-	IMG_UINT32 ui32ui32KernelCatBaseWordSize;
-	IMG_UINT32 ui32ui32KernelCatBaseAlignShift;
-	IMG_UINT32 ui32ui32KernelCatBaseShift;
-	IMG_UINT64 ui64ui64KernelCatBaseMask;
+	IMG_UINT32 ui32KernelCatBaseReg;
+	IMG_UINT32 ui32KernelCatBaseWordSize;
+	IMG_UINT32 ui32KernelCatBaseAlignShift;
+	IMG_UINT32 ui32KernelCatBaseShift;
+	IMG_UINT64 ui64KernelCatBaseMask;
 	IMG_UINT32 ui32DeviceFlags;
 	IMG_UINT32 ui32RGXActivePMConf;
+	DEVMEM_SERVER_EXPORTCOOKIE hFWCodeAllocServerExportCookie;
+	DEVMEM_SERVER_EXPORTCOOKIE hFWDataAllocServerExportCookie;
+	DEVMEM_SERVER_EXPORTCOOKIE hFWCorememAllocServerExportCookie;
 } PVRSRV_BRIDGE_IN_RGXINITDEVPART2;
 
 

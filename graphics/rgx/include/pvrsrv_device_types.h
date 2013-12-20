@@ -43,6 +43,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #if !defined(__PVRSRV_DEVICE_TYPES_H__)
 #define __PVRSRV_DEVICE_TYPES_H__
 
+#include "img_types.h"
+
 #define PVRSRV_MAX_DEVICES		16	/*!< Largest supported number of devices on the system */
 
 /*!

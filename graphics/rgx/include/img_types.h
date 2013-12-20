@@ -94,7 +94,7 @@ typedef __int64			IMG_INT64,  *IMG_PINT64;
 #endif
 
 #else
-	#if defined(LINUX) || defined(__METAG)
+	#if defined(LINUX) || defined(__METAG) || defined(__QNXNTO__)
 		typedef unsigned long long		IMG_UINT64,	*IMG_PUINT64;
 		typedef long long 				IMG_INT64,	*IMG_PINT64;
 		#define IMG_INT64_C(c)	c ## LL
@@ -138,7 +138,10 @@ typedef IMG_VOID const* IMG_PCVOID;
    <stddef.h>. */
 #include <stdint.h>
 #endif
-#if defined(__KERNEL__)
+#if defined(__QNXNTO__)
+#include <stdint.h>
+#endif
+#if defined(LINUX) && defined (__KERNEL__)
 #include <linux/types.h>
 #endif
 #include <stddef.h>
@@ -161,7 +164,7 @@ typedef IMG_PVOID       IMG_HANDLE;
 #define IMG_NULL        NULL
 
 /* services/stream ID */
-typedef IMG_UINT32      IMG_SID;
+typedef IMG_UINT64      IMG_SID;
 
 /* Process IDs */
 typedef IMG_UINT32      IMG_PID;

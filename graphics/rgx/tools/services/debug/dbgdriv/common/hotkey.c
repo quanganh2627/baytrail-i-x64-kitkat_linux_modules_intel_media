@@ -50,7 +50,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <windows.h>
 #include <ceddk.h>
 #else
-#if !defined(LINUX) && !defined(__SYMBIAN32__)
+#if !defined(LINUX) && !defined(__SYMBIAN32__) && !defined(__QNXNTO__)
 #include <ntddk.h>
 #include <windef.h>
 #endif
@@ -146,7 +146,7 @@ IMG_VOID RegisterKeyPressed(IMG_UINT32 dwui32ScanCode, PHOTKEYINFO pInfo)
 			/*
 				Capture the next frame.
 			*/
-			g_ui32HotKeyFrame = psStream->psCtrl->ui32Current + 2;
+			g_ui32HotKeyFrame = DBGDrivGetFrame(psStream) + 2;
 
 			/*
 				Do the flag.

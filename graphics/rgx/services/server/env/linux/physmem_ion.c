@@ -62,6 +62,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "connection_server.h"
 #include "env_connection.h"
 
+#if defined(PVR_RI_DEBUG)
+#include "ri_server.h"
+#endif
+
 #include <linux/err.h>
 #include <linux/slab.h>
 #include <linux/ion.h>
@@ -587,6 +591,14 @@ PhysmemImportIon(CONNECTION_DATA *psConnection,
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to create PMR", __func__));
 		goto fail_pmrcreate;
 	}
+
+#if defined(PVR_RI_DEBUG)
+	{
+		eError = RIWritePMREntryKM (psPMR,
+									"ION",
+									psPrivData->uiSize);
+	}
+#endif
 
 	psPrivData->hPDumpAllocInfo = hPDumpAllocInfo;
 	psPrivData->bPDumpMalloced = IMG_TRUE;

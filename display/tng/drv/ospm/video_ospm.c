@@ -66,7 +66,7 @@ static bool vsp_power_up(struct drm_device *dev,
 	 */
 	if (IS_TNG_A0(dev))
 	{
-		apply_A0_workarounds(OSPM_VIDEO_VPP_ISLAND, 1);
+		apply_TNG_A0_workarounds(OSPM_VIDEO_VPP_ISLAND, 1);
 	}
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC

@@ -155,11 +155,13 @@ static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 
 #define VENDOR_ID_MERRIFIELD        0x8086
 #define DEVICE_ID_MERRIFIELD        0x1180
+#define DEVICE_ID_MOOREFIELD        0x1480
 
 #define RGX_REG_OFFSET              0x100000
 #define RGX_REG_SIZE                0x10000
 
-#define IS_MRFLD(dev) (((dev)->pci_device & 0xFFF8) == DEVICE_ID_MERRIFIELD)
+#define IS_MRFLD(dev) ((((dev)->pci_device & 0xFFF8) == DEVICE_ID_MERRIFIELD) || \
+			(((dev)->pci_device & 0xFFF8) == DEVICE_ID_MOOREFIELD))
 
 /*****************************************************************************
  * system specific data structures

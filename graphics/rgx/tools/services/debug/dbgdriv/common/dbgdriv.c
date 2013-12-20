@@ -62,13 +62,16 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/string.h>
 #endif
 
+#if defined (__QNXNTO__)
+#include <string.h>
+#endif
+
 #include "img_types.h"
 #include "pvr_debug.h"
 #include "dbgdrvif.h"
 #include "dbgdriv.h"
 #include "hotkey.h"
 #include "hostfunc.h"
-#include "pvr_debug.h"
 
 #ifdef _WIN32
 #pragma  warning(default:4214)
@@ -84,6 +87,45 @@ typedef struct _DBG_LASTFRAME_BUFFER_
 	IMG_UINT32		ui32BufLen;
 	struct _DBG_LASTFRAME_BUFFER_	*psNext;
 } *PDBG_LASTFRAME_BUFFER;
+
+/*
+	Common control structure (don't duplicate control in main stream
+	and init phase stream).
+*/
+typedef struct _DBG_STREAM_CONTROL_
+{
+	IMG_BOOL   bInitPhaseComplete;		/*!< init phase has finished */
+	IMG_UINT32 ui32Flags;			/*!< flags (see DEBUG_FLAGS above) */
+
+	IMG_UINT32 ui32CapMode;			/*!< capturing mode framed/hot key */
+	IMG_UINT32 ui32OutMode;			/*!< output mode, e.g. files */
+	IMG_UINT32 ui32DebugLevel;
+	IMG_UINT32 ui32DefaultMode;
+	IMG_UINT32 ui32Start;			/*!< first capture frame */
+	IMG_UINT32 ui32End;				/*!< last frame */
+	IMG_UINT32 ui32Current;			/*!< current frame */
+	IMG_UINT32 ui32SampleRate;		/*!< capture frequency */
+	IMG_UINT32 ui32Reserved;
+} DBG_STREAM_CONTROL;
+/*
+	Per-buffer control structure.
+*/
+typedef struct _DBG_STREAM_
+{
+	struct _DBG_STREAM_ *psNext;
+	struct _DBG_STREAM_ *psInitStream;
+	DBG_STREAM_CONTROL *psCtrl;
+	IMG_BOOL   bCircularAllowed;
+	IMG_PVOID  pvBase;
+	IMG_UINT32 ui32Size;
+	IMG_UINT32 ui32RPtr;
+	IMG_UINT32 ui32WPtr;
+	IMG_UINT32 ui32DataWritten;
+	IMG_UINT32 ui32Marker;			/*!< marker for file splitting */
+	IMG_UINT32 ui32InitPhaseWOff;	/*!< snapshot offset for init phase end for follow-on pdump */
+	IMG_CHAR szName[30];		/* Give this a size, some compilers don't like [] */
+} DBG_STREAM;
+
 
 /******************************************************************************
  Global vars
@@ -105,8 +147,6 @@ IMG_VOID *				g_pvAPIMutex=IMG_NULL;
 extern IMG_UINT32		g_ui32HotKeyFrame;
 extern IMG_BOOL			g_bHotKeyPressed;
 extern IMG_BOOL			g_bHotKeyRegistered;
-
-IMG_BOOL				gbDumpThisFrame = IMG_FALSE;
 
 
 IMG_UINT32 SpaceInStream(PDBG_STREAM psStream);
@@ -150,8 +190,45 @@ DBGKM_SERVICE_TABLE g_sDBGKMServices =
 	ExtDBGDrivWaitForEvent,
 	ExtDBGDrivSetConnectNotifier,
 	ExtDBGDrivWritePersist,
+	ExtDBGDrivGetCtrlState
 };
 
+/* Forward declarations */
+
+IMG_VOID * IMG_CALLCONV DBGDrivCreateStream(IMG_CHAR *pszName, IMG_UINT32 ii32CapMode, IMG_UINT32 ui32OutMode, IMG_UINT32 ui32Flags, IMG_UINT32 ui32Pages);
+IMG_VOID   IMG_CALLCONV DBGDrivDestroyStream(PDBG_STREAM psStream);
+IMG_VOID * IMG_CALLCONV DBGDrivFindStream(IMG_CHAR * pszName, IMG_BOOL bResetStream);
+IMG_UINT32 IMG_CALLCONV DBGDrivWriteString(PDBG_STREAM psStream,IMG_CHAR * pszString,IMG_UINT32 ui32Level);
+IMG_UINT32 IMG_CALLCONV DBGDrivReadString(PDBG_STREAM psStream,IMG_CHAR * pszString,IMG_UINT32 ui32Limit);
+IMG_UINT32 IMG_CALLCONV DBGDrivWrite(PDBG_STREAM psStream,IMG_UINT8 *pui8InBuf,IMG_UINT32 ui32InBuffSize,IMG_UINT32 ui32Level);
+IMG_UINT32 IMG_CALLCONV DBGDrivRead(PDBG_STREAM psStream, IMG_BOOL bReadInitBuffer, IMG_UINT32 ui32OutBufferSize,IMG_UINT8 *pui8OutBuf);
+IMG_VOID   IMG_CALLCONV DBGDrivSetCaptureMode(PDBG_STREAM psStream,IMG_UINT32 ui32Mode,IMG_UINT32 ui32Start,IMG_UINT32 ui32Stop,IMG_UINT32 ui32SampleRate);
+IMG_VOID   IMG_CALLCONV DBGDrivSetOutputMode(PDBG_STREAM psStream,IMG_UINT32 ui32OutMode);
+IMG_VOID   IMG_CALLCONV DBGDrivSetDebugLevel(PDBG_STREAM psStream,IMG_UINT32 ui32DebugLevel);
+IMG_VOID   IMG_CALLCONV DBGDrivSetFrame(PDBG_STREAM psStream,IMG_UINT32 ui32Frame);
+IMG_UINT32 IMG_CALLCONV DBGDrivGetFrame(PDBG_STREAM psStream);
+IMG_VOID   IMG_CALLCONV DBGDrivOverrideMode(PDBG_STREAM psStream,IMG_UINT32 ui32Mode);
+IMG_VOID   IMG_CALLCONV DBGDrivDefaultMode(PDBG_STREAM psStream);
+IMG_UINT32 IMG_CALLCONV DBGDrivWrite2(PDBG_STREAM psStream,IMG_UINT8 *pui8InBuf,IMG_UINT32 ui32InBuffSize,IMG_UINT32 ui32Level);
+IMG_UINT32 IMG_CALLCONV DBGDrivWriteStringCM(PDBG_STREAM psStream,IMG_CHAR * pszString,IMG_UINT32 ui32Level);
+IMG_UINT32 IMG_CALLCONV DBGDrivWriteCM(PDBG_STREAM psStream,IMG_UINT8 *pui8InBuf,IMG_UINT32 ui32InBuffSize,IMG_UINT32 ui32Level);
+IMG_VOID   IMG_CALLCONV DBGDrivSetMarker(PDBG_STREAM psStream, IMG_UINT32 ui32Marker);
+IMG_UINT32 IMG_CALLCONV DBGDrivGetMarker(PDBG_STREAM psStream);
+IMG_VOID   IMG_CALLCONV DBGDrivStartInitPhase(PDBG_STREAM psStream);
+IMG_VOID   IMG_CALLCONV DBGDrivStopInitPhase(PDBG_STREAM psStream);
+IMG_BOOL   IMG_CALLCONV DBGDrivIsInitPhase(PDBG_STREAM psStream);IMG_BOOL   IMG_CALLCONV DBGDrivIsLastCaptureFrame(PDBG_STREAM psStream);
+IMG_UINT32 IMG_CALLCONV DBGDrivWriteLF(PDBG_STREAM psStream, IMG_UINT8 *pui8InBuf, IMG_UINT32 ui32InBuffSize, IMG_UINT32 ui32Level, IMG_UINT32 ui32Flags);
+IMG_UINT32 IMG_CALLCONV DBGDrivReadLF(PDBG_STREAM psStream, IMG_UINT32 ui32OutBuffSize, IMG_UINT8 *pui8OutBuf);
+IMG_UINT32 IMG_CALLCONV DBGDrivGetStreamOffset(PDBG_STREAM psStream);
+IMG_VOID   IMG_CALLCONV DBGDrivSetStreamOffset(PDBG_STREAM psStream, IMG_UINT32 ui32StreamOffset);
+IMG_BOOL   IMG_CALLCONV DBGDrivIsCaptureFrame(PDBG_STREAM psStream, IMG_BOOL bCheckPreviousFrame);
+IMG_VOID   IMG_CALLCONV DBGDrivWaitForEvent(DBG_EVENT eEvent);
+//ExtDBGDrivWaitForEvent
+//ExtDBGDrivSetConnectNotifier
+//ExtDBGDrivWritePersist
+IMG_UINT32 IMG_CALLCONV DBGDrivGetCtrlState(PDBG_STREAM psStream, IMG_UINT32 ui32StateID);
+
+IMG_VOID DestroyAllStreams(IMG_VOID);
 
 /* Static function declarations */
 static IMG_UINT32 DBGDrivWritePersist(PDBG_STREAM psMainStream,IMG_UINT8 * pui8InBuf,IMG_UINT32 ui32InBuffSize,IMG_UINT32 ui32Level);
@@ -221,14 +298,22 @@ IMG_VOID * IMG_CALLCONV ExtDBGDrivFindStream(IMG_CHAR * pszName, IMG_BOOL bReset
 	HostAquireMutex(g_pvAPIMutex);
 
 	pvRet=DBGDrivFindStream(pszName, bResetStream);
-	if(g_fnDBGKMNotifier.pfnConnectNotifier)
+	if (pvRet != IMG_NULL)
 	{
-		g_fnDBGKMNotifier.pfnConnectNotifier();
+		if(g_fnDBGKMNotifier.pfnConnectNotifier)
+		{
+			g_fnDBGKMNotifier.pfnConnectNotifier(pszName);
+		}
+		else
+		{
+			PVR_DPF((PVR_DBG_ERROR, "ExtDBGDrivFindStream: pfnConnectNotifier not initialised"));
+		}
 	}
 	else
 	{
-		PVR_DPF((PVR_DBG_ERROR, "pfnConnectNotifier not initialised.\n"));
-	}		
+		PVR_DPF((PVR_DBG_ERROR, "ExtDBGDrivFindStream: Stream not found"));
+	}
+
 
 	/* Release API Mutex */
 	HostReleaseMutex(g_pvAPIMutex);
@@ -624,15 +709,15 @@ IMG_VOID IMG_CALLCONV ExtDBGDrivStartInitPhase(PDBG_STREAM psStream)
 /*!
  @name	ExtDBGDrivStopInitPhase
  */
-IMG_VOID IMG_CALLCONV ExtDBGDrivStopInitPhase(PDBG_STREAM psStream)
+IMG_VOID IMG_CALLCONV ExtDBGDrivStopInitPhase(PDBG_STREAM psStream, IMG_BOOL bTakeMutex)
 {
-	/* Aquire API Mutex */
-	HostAquireMutex(g_pvAPIMutex);
+	/* Aquire API Mutex, not for WDDM which has a workaround for multi-app support */
+	if (bTakeMutex) HostAquireMutex(g_pvAPIMutex);
 
 	DBGDrivStopInitPhase(psStream);
 
 	/* Release API Mutex */
-	HostReleaseMutex(g_pvAPIMutex);
+	if (bTakeMutex) HostReleaseMutex(g_pvAPIMutex);
 
 	return;
 }
@@ -698,6 +783,27 @@ IMG_VOID IMG_CALLCONV ExtDBGDrivWaitForEvent(DBG_EVENT eEvent)
 	PVR_UNREFERENCED_PARAMETER(eEvent);				/* PRQA S 3358 */
 #endif	/* defined(SUPPORT_DBGDRV_EVENT_OBJECTS) */
 }
+
+
+/*!
+ @name	ExtDBGDrivGetCtrlState
+ */
+IMG_UINT32 IMG_CALLCONV ExtDBGDrivGetCtrlState(PDBG_STREAM psStream, IMG_UINT32 ui32StateID)
+{
+	IMG_UINT32 ui32State = 0;
+
+	/* Aquire API Mutex */
+	HostAquireMutex(g_pvAPIMutex);
+
+	ui32State = DBGDrivGetCtrlState(psStream, ui32StateID);
+
+	/* Release API Mutex */
+	HostReleaseMutex(g_pvAPIMutex);
+
+	return ui32State;
+}
+
+
 
 /*!****************************************************************************
  @name		AtoI
@@ -938,9 +1044,9 @@ void MonoOut(IMG_CHAR * pszString,IMG_BOOL bNewLine)
 	{
 		g_ui32Line = g_ui32MonoLines - 1;
 
-		HostMemCopy((IMG_VOID *)DBGDRIV_MONOBASE,(IMG_VOID *)(DBGDRIV_MONOBASE + 160),160 * (g_ui32MonoLines - 1));
+		HostMemCopy((IMG_VOID *)(IMG_UINTPTR_T)DBGDRIV_MONOBASE,(IMG_VOID *)(IMG_UINTPTR_T)(DBGDRIV_MONOBASE + 160),160 * (g_ui32MonoLines - 1));
 
-		HostMemSet((IMG_VOID *)(DBGDRIV_MONOBASE + (160 * (g_ui32MonoLines - 1))),0,160);
+		HostMemSet((IMG_VOID *)(IMG_UINTPTR_T)(DBGDRIV_MONOBASE + (160 * (g_ui32MonoLines - 1))),0,160);
 	}
 #endif	
 }
@@ -1272,6 +1378,7 @@ void IMG_CALLCONV DBGDrivDestroyStream(PDBG_STREAM psStream)
 	PDBG_STREAM	psStreamThis;
 	PDBG_STREAM	psStreamPrev;
 	PDBG_LASTFRAME_BUFFER	psLFBuffer;
+	PDBG_LASTFRAME_BUFFER	psLFDeinitBuffer;
 	PDBG_LASTFRAME_BUFFER	psLFThis;
 	PDBG_LASTFRAME_BUFFER	psLFPrev;
 
@@ -1347,13 +1454,13 @@ void IMG_CALLCONV DBGDrivDestroyStream(PDBG_STREAM psStream)
 	/*
 		Remove LF deinit from linked list.
 	*/
-	psLFBuffer = FindLFBufFromList(psStream, g_psLFDeinitBufferList);
+	psLFDeinitBuffer = FindLFBufFromList(psStream, g_psLFDeinitBufferList);
 	psLFThis = g_psLFDeinitBufferList;
 	psLFPrev = 0;
 
 	while (psLFThis)
 	{
-		if (psLFThis == psLFBuffer)
+		if (psLFThis == psLFDeinitBuffer)
 		{
 			if (psLFPrev)
 			{
@@ -1396,10 +1503,11 @@ void IMG_CALLCONV DBGDrivDestroyStream(PDBG_STREAM psStream)
 		HostPageablePageFree(psStream->pvBase);
 		HostPageablePageFree(psStream->psInitStream->pvBase);
 	}
-	
+
 	HostNonPageablePageFree(psStream->psInitStream);
 	HostNonPageablePageFree(psStream);
 	HostNonPageablePageFree(psLFBuffer);
+	HostNonPageablePageFree(psLFDeinitBuffer);
 
 	if (g_psStreamList == 0)
 	{
@@ -1479,6 +1587,7 @@ IMG_VOID * IMG_CALLCONV DBGDrivFindStream(IMG_CHAR * pszName, IMG_BOOL bResetStr
 
 		{
 			/* mark init stream to prevent further reading by pdump client */
+			/* Check for possible race condition */
 			psStream->psInitStream->ui32InitPhaseWOff = psStream->psInitStream->ui32WPtr;
 			PVR_DPF((PVR_DBGDRIV_MESSAGE, "Set %s client marker bo %x, total bw %x",
 					psStream->szName,
@@ -2495,26 +2604,6 @@ void IMG_CALLCONV DBGDrivDefaultMode(PDBG_STREAM psStream)
 }
 
 /*!****************************************************************************
- @name	 	DBGDrivSetClientMarker
- @brief 	Sets the marker to prevent reading initphase beyond data on behalf of previous app
- @param		psStream - stream
- @param		ui32Marker - byte offset in init buffer
- @return	nothing
-*****************************************************************************/
-IMG_VOID IMG_CALLCONV DBGDrivSetClientMarker(PDBG_STREAM psStream, IMG_UINT32 ui32Marker)
-{
-	/*
-		Validate buffer
-	*/
-	if (!StreamValid(psStream))
-	{
-		return;
-	}
-
-	psStream->ui32InitPhaseWOff = ui32Marker;
-}
-
-/*!****************************************************************************
  @name		DBGDrivSetMarker
  @brief		Sets the marker in the stream to split output files
  @param		psStream, ui32Marker
@@ -2642,6 +2731,8 @@ IMG_UINT32 IMG_CALLCONV DBGDrivWriteLF(PDBG_STREAM psStream, IMG_UINT8 * pui8InB
 	PDBG_LASTFRAME_BUFFER	psLFBuffer;
 	PDBG_LASTFRAME_BUFFER	psLFBufferList;
 
+	PVR_UNREFERENCED_PARAMETER(ui32Flags);
+
 	/*
 		Validate buffer.
 	*/
@@ -2683,6 +2774,7 @@ IMG_UINT32 IMG_CALLCONV DBGDrivWriteLF(PDBG_STREAM psStream, IMG_UINT8 * pui8InB
 	if (psStream->psCtrl->bInitPhaseComplete)
 	{
 		psLFBufferList = g_psLFBufferList;
+		PVR_DPF((PVR_DBG_ERROR, "DBGDrivWriteLF: writing to LF buffer %d bytes", ui32InBuffSize));
 	}
 	else
 	{
@@ -2691,34 +2783,22 @@ IMG_UINT32 IMG_CALLCONV DBGDrivWriteLF(PDBG_STREAM psStream, IMG_UINT8 * pui8InB
 
 	psLFBuffer = FindLFBufFromList(psStream, psLFBufferList);
 
-	if (ui32Flags & WRITELF_FLAGS_RESETBUF)
+	/*
+		Append the data to the end of the buffer
+	*/
+	ui32InBuffSize = ((psLFBuffer->ui32BufLen + ui32InBuffSize) > LAST_FRAME_BUF_SIZE) ? (LAST_FRAME_BUF_SIZE - psLFBuffer->ui32BufLen) : ui32InBuffSize;
+
+	/*
+		No room in the buffer?
+	 */
+	if(ui32InBuffSize == 0)
 	{
-		/*
-			Copy the data into the buffer
-		*/
-		ui32InBuffSize = (ui32InBuffSize > LAST_FRAME_BUF_SIZE) ? LAST_FRAME_BUF_SIZE : ui32InBuffSize;
-		HostMemCopy((IMG_VOID *)psLFBuffer->ui8Buffer, (IMG_VOID *)pui8InBuf, ui32InBuffSize);
-		psLFBuffer->ui32BufLen = ui32InBuffSize;
+		PVR_DPF((PVR_DBG_ERROR, "DBGDrivWriteLF: No more space available in the LF buffer."));
+		return(0xFFFFFFFFUL);
 	}
-	else
-	{
-		/*
-			Append the data to the end of the buffer
-		*/
-		ui32InBuffSize = ((psLFBuffer->ui32BufLen + ui32InBuffSize) > LAST_FRAME_BUF_SIZE) ? (LAST_FRAME_BUF_SIZE - psLFBuffer->ui32BufLen) : ui32InBuffSize;
-		
-		/*
-		 	No room in the buffer?
-		 */
-		if(ui32InBuffSize == 0)
-		{
-			PVR_DPF((PVR_DBG_ERROR, "DBGDrivWriteLF: No more space available in the LF buffer."));
-			return(0xFFFFFFFFUL);
-		}
-		
-		HostMemCopy((IMG_VOID *)(&psLFBuffer->ui8Buffer[psLFBuffer->ui32BufLen]), (IMG_VOID *)pui8InBuf, ui32InBuffSize);
-		psLFBuffer->ui32BufLen += ui32InBuffSize;
-	}
+
+	HostMemCopy((IMG_VOID *)(&psLFBuffer->ui8Buffer[psLFBuffer->ui32BufLen]), (IMG_VOID *)pui8InBuf, ui32InBuffSize);
+	psLFBuffer->ui32BufLen += ui32InBuffSize;
 
 	return(ui32InBuffSize);
 }
@@ -2813,6 +2893,139 @@ IMG_VOID IMG_CALLCONV DBGDrivWaitForEvent(DBG_EVENT eEvent)
 	HostWaitForEvent(eEvent);
 }
 #endif
+
+/*	Use PVR_DPF() to avoid state messages in release build */
+#if defined(PVR_DISABLE_LOGGING) || !defined(DEBUG)
+#define PVR_LOG(...)
+#else
+
+extern void PVRSRVDebugPrintf(IMG_UINT32	ui32DebugLevel,
+						const IMG_CHAR*	pszFileName,
+						IMG_UINT32	ui32Line,
+						const IMG_CHAR*	pszFormat,
+						...	);
+/* Reproduce the PVR_LOG macro here but direct it to DPF */
+#define PVR_LOG(...)	PVRSRVDebugPrintf( DBGPRIV_CALLTRACE, __FILE__, __LINE__ , __VA_ARGS__);
+
+#endif
+
+
+/*!****************************************************************************
+ @name		DBGDrivGetCtrlState
+ @brief		Gets a state value from the debug driver or stream
+ @param		psStream - stream
+ @param		ui32StateID - state ID
+ @return	Nothing
+*****************************************************************************/
+IMG_UINT32 IMG_CALLCONV DBGDrivGetCtrlState(PDBG_STREAM psStream, IMG_UINT32 ui32StateID)
+{
+	/* Validate buffer */
+	if (!StreamValid(psStream))
+	{
+		return (0xFFFFFFFF);
+	}
+
+	/* Retrieve the state asked for */
+	switch (ui32StateID)
+	{
+	case DBG_GET_STATE_CURRENT_PAST_END:
+		return (psStream->psCtrl->ui32Current > psStream->psCtrl->ui32End);
+		break;
+	case DBG_GET_STATE_INIT_PHASE_COMPLETE:
+		return (psStream->psCtrl->bInitPhaseComplete);
+		break;
+	case DBG_GET_STATE_FLAG_IS_READONLY:
+		return ((psStream->psCtrl->ui32Flags & DEBUG_FLAGS_READONLY) != 0);
+		break;
+	case DBG_GET_STATE_THROW_DATA_AWAY:
+		return (((psStream->psCtrl->ui32CapMode & DEBUG_CAPMODE_FRAMED) != 0) &&
+				(psStream->psCtrl->ui32Start == 0xFFFFFFFFU) &&
+				(psStream->psCtrl->ui32End == 0xFFFFFFFFU) &&
+				psStream->psCtrl->bInitPhaseComplete);
+        break;
+
+	case 0xFE: /* Dump the current stream state */
+		PVR_LOG("------ PDUMP DBGDriv: psStream( %p ) ( %s )",
+				psStream, psStream->szName);
+		PVR_LOG("------ PDUMP DBGDriv: psStream->pvBase( %p ) psStream->ui32Size( %u ) psStream->bCircularAllowed( %d )",
+				psStream->pvBase, psStream->ui32Size, psStream->bCircularAllowed);
+		PVR_LOG("------ PDUMP DBGDriv: psStream->ui32RPtr( %u ) psStream->ui32WPtr( %u )",
+				psStream->ui32RPtr, psStream->ui32WPtr);
+		PVR_LOG("------ PDUMP DBGDriv: psStream->ui32DataWritten( %u ) psStream->ui32Marker( %u ) psStream->ui32InitPhaseWOff( %u )",
+				psStream->ui32DataWritten, psStream->ui32Marker, psStream->ui32InitPhaseWOff);
+
+		if (psStream->psCtrl)
+		{
+			PVR_LOG("------ PDUMP DBGDriv: psStream->psCtrl( %p ) psStream->psCtrl->bInitPhaseComplete( %d ) psStream->psCtrl->ui32Flags( %x )",
+					psStream->psCtrl, psStream->psCtrl->bInitPhaseComplete, psStream->psCtrl->ui32Flags);
+			PVR_LOG("------ PDUMP DBGDriv: psStream->psCtrl->ui32CapMode( %u ) psStream->psCtrl->ui32OutMode( %u ) psStream->psCtrl->ui32DebugLevel( %u ) psStream->psCtrl->ui32DefaultMode( %u )",
+					psStream->psCtrl->ui32CapMode, psStream->psCtrl->ui32OutMode, psStream->psCtrl->ui32DebugLevel, psStream->psCtrl->ui32DefaultMode);
+			PVR_LOG("------ PDUMP DBGDriv: psStream->psCtrl->ui32Start( %u ) psStream->psCtrl->ui32End( %u ) psStream->psCtrl->ui32Current( %u ) psStream->psCtrl->ui32SampleRate( %u )",
+					psStream->psCtrl->ui32Start, psStream->psCtrl->ui32End, psStream->psCtrl->ui32Current, psStream->psCtrl->ui32SampleRate);
+		}
+
+		if (psStream->psInitStream)
+		{
+			PVR_LOG("------ PDUMP DBGDriv: psInitStream( %p ) ( %s )",
+					psStream->psInitStream, psStream->psInitStream->szName);
+			PVR_LOG("------ PDUMP DBGDriv: psInitStream->pvBase( %p ) psInitStream->ui32Size( %u ) psInitStream->bCircularAllowed( %d )",
+					psStream->psInitStream->pvBase, psStream->psInitStream->ui32Size, psStream->psInitStream->bCircularAllowed);
+			PVR_LOG("------ PDUMP DBGDriv: psInitStream->ui32RPtr( %u ) psInitStream->ui32WPtr( %u )",
+					psStream->psInitStream->ui32RPtr, psStream->psInitStream->ui32WPtr);
+			PVR_LOG("------ PDUMP DBGDriv: psInitStream->ui32DataWritten( %u ) psInitStream->ui32Marker( %u ) psInitStream->ui32InitPhaseWOff( %u ) ",
+					psStream->psInitStream->ui32DataWritten, psStream->psInitStream->ui32Marker, psStream->psInitStream->ui32InitPhaseWOff);
+		}
+
+		if (psStream->psInitStream && psStream->psInitStream->psCtrl)
+		{
+			PVR_LOG("------ PDUMP DBGDriv: psInitStream->psCtrl( %p ) psInitStream->psCtrl->bInitPhaseComplete( %d ) psInitStream->psCtrl->ui32Flags( %x )",
+					psStream->psInitStream->psCtrl, psStream->psInitStream->psCtrl->bInitPhaseComplete, psStream->psInitStream->psCtrl->ui32Flags);
+			PVR_LOG("------ PDUMP DBGDriv: psInitStream->psCtrl->ui32CapMode( %u ) psInitStream->psCtrl->ui32OutMode( %u ) psInitStream->psCtrl->ui32DebugLevel( %u ) psInitStream->psCtrl->ui32DefaultMode( %u )",
+					psStream->psInitStream->psCtrl->ui32CapMode, psStream->psInitStream->psCtrl->ui32OutMode, psStream->psInitStream->psCtrl->ui32DebugLevel, psStream->psInitStream->psCtrl->ui32DefaultMode);
+			PVR_LOG("------ PDUMP DBGDriv: psInitStream->psCtrl->ui32Start( %u ) psInitStream->psCtrl->ui32End( %u ) psInitStream->psCtrl->ui32Current( %u ) psInitStream->psCtrl->ui32SampleRate( %u )",
+					psStream->psInitStream->psCtrl->ui32Start, psStream->psInitStream->psCtrl->ui32End, psStream->psInitStream->psCtrl->ui32Current, psStream->psInitStream->psCtrl->ui32SampleRate);
+		}
+		break;
+
+	case 0xFF: /* Dump driver state not in a stream */
+		{
+			PDBG_LASTFRAME_BUFFER psLF;
+
+			PVR_LOG("------ PDUMP DBGDriv: g_psStreamList( head %p ) g_pvAPIMutex( %p )", g_psStreamList, g_pvAPIMutex);
+			PVR_LOG("------ PDUMP DBGDriv LF: g_psLFBufferList( head %p ), g_psLFDeinitBufferList( head %p )", g_psLFBufferList, g_psLFDeinitBufferList);
+			psLF = g_psLFBufferList;
+			while (psLF)
+			{
+				PVR_LOG("------ PDUMP DBGDriv LF: psLF( %p ) psLF->psStream( %p )",
+						psLF, psLF->psStream);
+				PVR_LOG("------ PDUMP DBGDriv LF: psLF->ui32BufLen( %u ) psLF->psNext( %p )",
+						psLF->ui32BufLen, psLF->psNext);
+				psLF = psLF->psNext;
+			}
+
+			psLF = g_psLFDeinitBufferList;
+			while (psLF)
+			{
+				PVR_LOG("------ PDUMP DBGDriv LF Deinit: psLF( %p ) psLF->psStream( %p )",
+						psLF, psLF->psStream);
+				PVR_LOG("------ PDUMP DBGDriv LF Deinit: psLF->ui32BufLen( %u ) psLF->psNext( %p )",
+						psLF->ui32BufLen, psLF->psNext);
+				psLF = psLF->psNext;
+			}
+
+			PVR_LOG("------ PDUMP DBGDriv: g_ui32LOff( %u ) g_ui32Line( %u ) g_ui32MonoLines( %u )", g_ui32LOff, g_ui32Line, g_ui32MonoLines);
+			PVR_LOG("------ PDUMP DBGDriv: g_bHotkeyMiddump( %d ) g_ui32HotkeyMiddumpStart( %u ) g_ui32HotkeyMiddumpEnd( %u )", g_bHotkeyMiddump, g_ui32HotkeyMiddumpStart, g_ui32HotkeyMiddumpEnd);
+			PVR_LOG("------ PDUMP DBGDriv: g_ui32HotKeyFrame( %u ) g_bHotKeyPressed( %d ) g_bHotKeyRegistered( %d )", g_ui32HotKeyFrame, g_bHotKeyPressed, g_bHotKeyRegistered);
+			PVR_LOG("------ PDUMP DBGDriv: g_fnDBGKMNotifier.pfnConnectNotifier( %p )", g_fnDBGKMNotifier.pfnConnectNotifier);
+		}
+		break;
+
+	default:
+		PVR_ASSERT(0);
+	}
+
+	return (0xFFFFFFFF);
+}
 
 /*!****************************************************************************
  @name		ExpandStreamBuffer

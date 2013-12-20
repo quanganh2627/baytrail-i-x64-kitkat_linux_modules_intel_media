@@ -53,7 +53,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/uaccess.h>
 #include <linux/version.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,10,0))
 #include <linux/sync.h>
 #else
 #include <../drivers/staging/android/sync.h>
@@ -951,7 +951,7 @@ PVRSyncWorkQueueFunction(struct work_struct *data)
 	PVRSRV_ERROR eError;
 
 	/* A completed SW operation may un-block the GPU */
-	PVRSRVCheckStatus(gsPVRSync.hDevCookie);
+	PVRSRVCheckStatus(IMG_NULL);
 
 	/* We can't call PVRSRVServerSyncFreeKM directly in this loop because
 	 * that will take the mmap mutex. We can't take mutexes while we have
@@ -1015,6 +1015,9 @@ static const struct file_operations gsPVRSyncFOps =
 	.open           = PVRSyncOpen,
 	.release        = PVRSyncRelease,
 	.unlocked_ioctl = PVRSyncIOCTL,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = PVRSyncIOCTL,
+#endif
 };
 
 static struct miscdevice sPVRSyncDev =
@@ -1277,12 +1280,20 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 				*pui32NumSyncs,
 				_debugInfoPt(psPt));
 
+#if 0
+			/* Actually the following can happen. E.g. when the CCB is full
+			 * (happens with PDUMP=1) a KickTA3D could return RETRY even when
+			 * PVRFDSyncQueryFenceKM was called already before. In this case
+			 * the sync prim wasn't put onto the FW for update, so its allowed
+			 * to be here again. I keep this for now, so we can turn on this
+			 * check for debugging other scenarios. */
 			if (   bUpdate
 				&& psPVRPt->bUpdated)
 			{
 				PVR_DPF((PVR_DBG_ERROR, "%s: sync point used for update more than once!",
 						 __func__));
 			}
+#endif
 
 			/* If this is an request for CHECK and the sync point is already
 			 * signalled, don't return it to the caller. The operation is

@@ -98,6 +98,7 @@ typedef struct {
 	IMG_UINT32 ui32ActivePrimarys;
 
 	IMG_UINT32 ui32ActivePlanes[DC_PLANE_MAX];
+	IMG_UINT32 ui32SavedActivePlanes[DC_PLANE_MAX];
 
 	/*mutex lock for flip queue*/
 	struct mutex sFlipQueueLock;
@@ -110,6 +111,7 @@ typedef struct {
 	/* plane - pipe mapping */
 	IMG_UINT32 ui32PlanePipeMapping[DC_PLANE_MAX][MAX_PLANE_INDEX];
 	IMG_UINT32 ui32ExtraPowerIslandsStatus;
+
 } DC_MRFLD_DEVICE;
 
 typedef struct {

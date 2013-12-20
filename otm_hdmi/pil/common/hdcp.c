@@ -230,8 +230,12 @@ static bool hdcp_enable_condition_ready(void)
 	    hdcp_context->display_power_on == true)
 		return true;
 
-	pr_err("hdcp: condition not ready, required %d, hpd %d\n",
-		hdcp_context->is_required, hdcp_context->hpd);
+	if (hdcp_context == NULL) {
+		pr_err("hdcp: hdcp_context is NULL\n");
+	} else {
+		pr_err("hdcp: condition not ready, required %d, hpd %d\n",
+			hdcp_context->is_required, hdcp_context->hpd);
+	}
 
 	return false;
 }
