@@ -74,6 +74,18 @@ static bool vsp_power_up(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VSP_SS_PM0, VSP_SSC, TNG_COMPOSITE_I0);
 #endif
+
+	u32 pm_mask = 0x0;
+	int pm_reg = 0x0;
+
+	pm_mask = 0x0;
+	pm_reg = 0x37; //VSP
+	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
+	udelay(500);
+
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - PR: After PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state ON failed!\n");
 		return false;
@@ -121,6 +133,16 @@ static bool vsp_power_down(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VSP_SS_PM0, VSP_SSC, TNG_COMPOSITE_D3);
 #endif
+	u32 pm_mask = 0x0;
+	int pm_reg = 0x0;
+	pm_mask = 0x3;
+	pm_reg = 0x37; //VSP
+	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
+	udelay(500);
+
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - PR: After PWR OFF - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state OFF failed!\n");
 		return false;
@@ -166,6 +188,19 @@ static bool ved_power_up(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VED_SS_PM0, VED_SSC, TNG_COMPOSITE_I0);
 #endif
+	u32 pm_mask = 0x0;
+	int pm_reg = 0x0;
+
+	pm_mask = 0x0;
+	pm_reg = 0x32; //VED
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - PR: Before PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	pm_mask = 0x0;
+	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
+	udelay(500);
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - PR: After PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+
 	if (pm_ret) {
 		PSB_DEBUG_PM("power up ved failed\n");
 		return false;
@@ -213,6 +248,17 @@ static bool ved_power_down(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VED_SS_PM0, VED_SSC, TNG_COMPOSITE_D3);
 #endif
+	u32 pm_mask = 0x0;
+	int pm_reg = 0x0;
+	pm_mask = 0x3;
+	pm_reg = 0x32; //VED
+	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
+	udelay(500);
+
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - PR: After PWR OFF - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+
+
 	if (pm_ret) {
 		PSB_DEBUG_PM("power down ved failed\n");
 		return false;
@@ -256,6 +302,19 @@ static bool vec_power_up(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VEC_SS_PM0, VEC_SSC, TNG_COMPOSITE_I0);
 #endif
+	u32 pm_mask = 0x0;
+	int pm_reg = 0x0;
+
+	pm_reg = 0x34; //VEC
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - PR: Before PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	pm_mask &= ~((u32)0x3);
+	printk ("\nHACK - PR: Before PWR ON - pwr_mask writing is: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
+	udelay(500);
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - PR: After PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+
 	if (pm_ret) {
 		PSB_DEBUG_PM("power up vec failed\n");
 		return false;
@@ -330,6 +389,18 @@ static bool vec_power_down(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VEC_SS_PM0, VEC_SSC, TNG_COMPOSITE_D3);
 #endif
+
+	u32 pm_mask = 0x0;
+	int pm_reg = 0x0;
+	pm_mask = 0x3;
+	pm_reg = 0x34; //VEC
+	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
+	udelay(1000);
+
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - PR: After PWR OFF - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+
+
 	if (pm_ret) {
 		DRM_ERROR("Power down ved failed\n");
 		return false;

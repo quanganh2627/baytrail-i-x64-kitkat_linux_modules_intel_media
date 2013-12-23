@@ -745,12 +745,9 @@ static int msvdx_startup_init(struct drm_device *dev)
 	msvdx_priv->msvdx_needs_reset = 1;
 	msvdx_priv->fw_b0_uploaded = 0;
 
-	if (IS_MRFLD(dev)) {
-		if (IS_TNG_B0(dev))
+	if (IS_MRFLD(dev))
 			msvdx_priv->fw_loaded_by_punit = 1;
-		else
-			msvdx_priv->fw_loaded_by_punit = 0;
-	}
+
 	else
 #endif
 		msvdx_priv->fw_loaded_by_punit =
@@ -806,11 +803,6 @@ static int msvdx_startup_init(struct drm_device *dev)
 	else
 #endif
 		drm_msvdx_bottom_half = PSB_BOTTOM_HALF_WQ;
-
-#ifdef MERRIFIELD
-	//if (IS_TNG_B0(dev))
-	//	return tng_msvdx_fw_init("signed_msvdx_fw_mrfld.bin", dev);
-#endif
 
 	return 0;
 
@@ -1000,7 +992,7 @@ int psb_msvdx_init(struct drm_device *dev)
         }
 
 #ifdef MERRIFIELD
-	if (!IS_TNG_B0(dev)) {
+	if (!(IS_TNG_B0(dev) || IS_ANN_A0(dev))) {
 #endif
 		ret = psb_msvdx_post_init(dev);
 		if (ret) {

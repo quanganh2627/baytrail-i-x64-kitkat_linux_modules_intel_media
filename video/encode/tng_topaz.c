@@ -3368,6 +3368,7 @@ int tng_topaz_power_off(struct drm_device *dev)
 	return 0;
 }
 
+/* FIXME change name to is_secure_fw*/
 int Is_Mrfld_B0()
 {
 	if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
