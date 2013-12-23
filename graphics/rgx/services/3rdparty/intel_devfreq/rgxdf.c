@@ -1,8 +1,8 @@
 /*************************************************************************/ /*!
 @File
-@Title          System Description Header
+@Title          Device specific utility routines
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    This header provides system-specific declarations and macros
+@Description    Device specific functions
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -40,30 +40,66 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
+#include <linux/module.h>
+#include "device.h"
+#include "rgxdevice.h"
+#include "pvrsrv.h"
+#include "rgx_fwif_km.h"
+#include "pdump_km.h"
+#include "osfunc.h"
+#include "allocmem.h"
+#include "pvr_debug.h"
+#include "power.h"
+#include "pvrsrv.h"
+#include "sync_internal.h"
+#include "rgxfwutils.h"
 
-#if !defined(__SYSINFO_H__)
-#define __SYSINFO_H__
+int RGXAcquireIsDevicePowered(void)
+{
+	PVRSRV_DEVICE_IDENTIFIER *pDeviceList = IMG_NULL;
+	PVRSRV_DEVICE_NODE* psDeviceNode = IMG_NULL;
+	IMG_HANDLE hDevCookie = IMG_NULL;
+	IMG_UINT32 numDevices = 0;
+	IMG_UINT32 i = 0;
+	IMG_UINT32 rgxIndex = -1;
+	int isPowered = IMG_FALSE;
+	IMG_UINT32 error = 0;
 
-/*!< System specific poll/timeout details */
-#define MAX_HW_TIME_US				(500000)
-#define WAIT_TRY_COUNT				(10000)
+	pDeviceList = OSAllocMem(PVRSRV_MAX_DEVICES * sizeof(PVRSRV_DEVICE_IDENTIFIER));
+	if (!pDeviceList)
+	{
+		error = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto go_out;
+	}
 
-#define SYS_DEVICE_COUNT 3 /* RGX, DISPLAY (external), BUFFER (external) */
+	/* Enumerate active devices */
+	error = PVRSRVEnumerateDevicesKM(&numDevices, pDeviceList);
+	if(error || !pDeviceList){
+		goto go_free_list;
+	}
 
-#define SYS_PHYS_HEAP_COUNT		1
+	for(i =0; i < numDevices; i++){
+		if(  pDeviceList[i].eDeviceType == PVRSRV_DEVICE_TYPE_RGX){
+			rgxIndex = i;
+		}
+	}
 
-#if defined(__linux__)
-#define SYS_RGX_DEV_NAME    "rgxnohw"
-#if defined(SUPPORT_DRM)
-/*
- * Use the static bus ID for the platform DRM device.
- */
-#if defined(PVR_DRM_DEV_BUS_ID)
-#define	SYS_RGX_DEV_DRM_BUS_ID	PVR_DRM_DEV_BUS_ID
-#else
-#define SYS_RGX_DEV_DRM_BUS_ID	"platform:rgxnohwomap"
-#endif	/* defined(PVR_DRM_DEV_BUS_ID) */
-#endif	/* defined(SUPPORT_DRM) */
-#endif
+	if(rgxIndex < 0){
+		goto go_free_list;
+	}
 
-#endif	/* !defined(__SYSINFO_H__) */
+	/* Now we have to acquire the node to work with, RGX device required*/
+	error = PVRSRVAcquireDeviceDataKM (rgxIndex, PVRSRV_DEVICE_TYPE_RGX, &hDevCookie);
+	if(error){
+			goto go_free_list;
+	}
+
+	psDeviceNode = (PVRSRV_DEVICE_NODE*)hDevCookie;
+	isPowered = PVRSRVIsDevicePowered(psDeviceNode->sDevId.ui32DeviceIndex);
+
+go_free_list:
+	OSFreeMem(pDeviceList);
+go_out:
+	return isPowered;
+}
+EXPORT_SYMBOL(RGXAcquireIsDevicePowered);

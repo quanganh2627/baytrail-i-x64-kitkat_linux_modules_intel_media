@@ -1,7 +1,8 @@
 /*************************************************************************/ /*!
-@File           ion_sys_private.h
-@Title          System-specific private data for ion support code
+@File
+@Title          System Description Header
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
+@Description    This header provides system-specific declarations and macros
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -40,12 +41,47 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#include <linux/ion.h>
+#if !defined(__SYSINFO_H__)
+#define __SYSINFO_H__
 
-typedef struct
-{
-	ion_phys_addr_t uiHeapBase;
-	size_t uiHeapSize;
-	IMG_UINT32 ui32IonPhysHeapID;
-	IMG_CPU_PHYADDR sPCIAddrRangeStart;
-} ION_TC_PRIVATE_DATA;
+/*!< System specific poll/timeout details */
+#define MAX_HW_TIME_US                 (500000)
+#define FATAL_ERROR_DETECTION_POLL_MS  (10000)
+#define WAIT_TRY_COUNT                 (10000)
+
+#define SYS_DEVICE_COUNT 3 /* RGX, DISPLAY (external), BUFFER (external) */
+
+#if defined(TDMETACODE)
+#define SYS_PHYS_HEAP_COUNT		2
+#else
+#define SYS_PHYS_HEAP_COUNT		1
+#endif
+
+#define SYS_RGX_DEV_VENDOR_ID		0x8086
+#define SYS_RGX_DEV_DEVICE_ID		0x1180
+
+/*!
+* Active Power Latency default in ms
+*/
+#define RGX_APM_LATENCY_DEFAULT			(500)
+
+/*!
+* Core Clock Speed in Hz
+*/
+#define RGX_CORE_CLOCK_SPEED_DEFAULT	(400000000)
+
+#if defined(__linux__)
+#define SYS_RGX_DEV_NAME    "Merrifield"
+#if defined(SUPPORT_DRM)
+/*
+ * Use the static bus ID for the platform DRM device.
+ */
+#if defined(PVR_DRM_DEV_BUS_ID)
+#define	SYS_RGX_DEV_DRM_BUS_ID	PVR_DRM_DEV_BUS_ID
+#else
+#define SYS_RGX_DEV_DRM_BUS_ID	"platform:Merrifield"
+#endif	/* defined(PVR_DRM_DEV_BUS_ID) */
+#endif	/* defined(SUPPORT_DRM) */
+#endif
+
+#endif	/* !defined(__SYSINFO_H__) */

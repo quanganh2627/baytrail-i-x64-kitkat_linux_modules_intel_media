@@ -583,9 +583,6 @@ void ospm_power_uninit(void)
 bool ospm_power_suspend(void)
 {
 	PSB_DEBUG_PM("%s\n", __func__);
-	/* Asking RGX to power off */
-	if (!PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_OFF))
-	        return false;
 
 	return true;
 }
@@ -598,10 +595,6 @@ bool ospm_power_suspend(void)
 void ospm_power_resume(void)
 {
 	PSB_DEBUG_PM("%s\n", __func__);
-
-	/* restore Graphics State */
-	PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_ON);
-
 }
 
 /* FIXME: hkpatel */

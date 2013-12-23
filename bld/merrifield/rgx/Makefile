@@ -56,13 +56,13 @@ ccflags-y += \
 	-I$(RGXINC)/services/include/env/linux \
 	-I$(RGXINC)/services/3rdparty/intel_drm \
 	-I$(RGXINC)/services/3rdparty/bufferclass_video \
+	-I$(RGXINC)/services/3rdparty/intel_devfreq \
 	-I$(RGXINC)/services/system/include \
 	-I$(RGXINC)/services/shared/devices/rgx \
 	-I$(RGXINC)/services/shared/include \
-	-I$(RGXINC)/services/server/devices/rgx \
 	-I$(RGXINC)/services/server/env/linux \
 	-I$(RGXINC)/services/server/include \
-	-I$(RGXINC)/services/system/rgx_nohw \
+	-I$(RGXINC)/services/server/devices/rgx \
 	-I$(DISPINC)/interface \
 	-I$(DISPINC)/drv/ospm \
 	-I$(DISPINC)/drv \
@@ -101,7 +101,8 @@ ccflags-y += \
 	-DSUPPORT_LINUX_X86_WRITECOMBINE \
 	-DSUPPORT_LINUX_X86_PAT \
 	-DSYS_USING_INTERRUPTS \
-	-DLDM_DEVICE_CLASS \
+	-DSUPPORT_DRM_INTEL \
+	-DLDM_PCI \
 	-DSUPPORT_DRM \
 	-DSUPPORT_DRM_EXT \
 	-DBC_DISCONTIG_BUFFERS \
@@ -171,6 +172,7 @@ ccflags-$(CONFIG_DRM_HANDSET_DEBUG) += \
 	-DDEBUG \
 	-DPVRSRV_ENABLE_PROCESS_STATS \
 	-DDEBUG_LINUX_MEMORY_ALLOCATIONS \
+	-DDEBUG_HANDLEALLOC_KM \
 	-DRGXFW_ALIGNCHECKS \
 	-DPVR_RI_DEBUG
 
@@ -206,7 +208,6 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/allocmem.o \
 	$(RGXDIR)/services/server/env/linux/mm.o \
 	$(RGXDIR)/services/server/env/linux/physmem_osmem_linux.o \
-	$(RGXDIR)/services/server/env/linux/physmem_tdmetacode_linux.o \
 	$(RGXDIR)/services/server/env/linux/physmem_tdsecbuf_linux.o \
 	$(RGXDIR)/services/server/env/linux/osfunc_x86.o \
 	$(RGXDIR)/services/server/env/linux/mutils.o \
@@ -281,9 +282,9 @@ $(DRIVER_NAME)-y += \
 
 # For devfreq
 $(DRIVER_NAME)-y += \
-	$(RGXDIR)/services/server/devices/rgx/rgxdf.o \
-	$(RGXDIR)/services/server/devices/rgx/dfrgx_utilstats.o \
-	$(RGXDIR)/services/server/devices/rgx/dfrgx_interface.o
+	$(RGXDIR)/services/3rdparty/intel_devfreq/rgxdf.o \
+	$(RGXDIR)/services/3rdparty/intel_devfreq/dfrgx_utilstats.o \
+	$(RGXDIR)/services/3rdparty/intel_devfreq/dfrgx_interface.o
 
 # For Power Monitor
 $(DRIVER_NAME)-y += \
@@ -347,7 +348,6 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/3rdparty/intel_drm/sysconfig.o \
 	$(RGXDIR)/services/3rdparty/intel_drm/pvr_drm.o \
 	$(RGXDIR)/services/3rdparty/intel_drm/msvdx_power.o \
-	$(RGXDIR)/services/3rdparty/intel_drm/topaz_power.o \
 	$(RGXDIR)/services/3rdparty/intel_drm/dc_mrfld.o \
 	$(RGXDIR)/services/system/common/env/linux/pci_support.o
 

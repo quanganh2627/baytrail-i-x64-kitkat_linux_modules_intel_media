@@ -125,7 +125,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxsysinfo.h"
 #include "pvrsrv.h"
 #include "process_stats.h"
-#include "rgxdf.h"
 
 #if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 #include "syscommon.h"
@@ -170,8 +169,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 MODULE_SUPPORTED_DEVICE(DEVNAME);
 
-EXPORT_SYMBOL(RGXAcquireIsDevicePowered);
-
 #if defined(PVRSRV_NEED_PVR_DPF)
 #include <linux/moduleparam.h>
 extern IMG_UINT32 gPVRDebugLevel;
@@ -212,8 +209,6 @@ EXPORT_SYMBOL(RGXHWPerfDisableCounters);
 EXPORT_SYMBOL(RGXHWPerfAcquireData);
 EXPORT_SYMBOL(RGXHWPerfReleaseData);
 #endif
-
-extern IMG_BOOL gbSystemActivePMEnabled;
 
 #if defined(PVR_LDM_DEVICE_CLASS) && !defined(SUPPORT_DRM)
 /*
@@ -780,7 +775,7 @@ err_unlock:
 
 *****************************************************************************/
 #if defined(SUPPORT_DRM)
-void PVRSRVRelease(struct drm_file *pFile)
+void PVRSRVRelease(void *pvPrivData)
 #else
 static int PVRSRVRelease(struct inode unref__ * pInode, struct file *pFile)
 #endif
@@ -789,8 +784,11 @@ static int PVRSRVRelease(struct inode unref__ * pInode, struct file *pFile)
 
 	LinuxLockMutex(&gPVRSRVLock);
 
+#if defined(SUPPORT_DRM)
+	psPrivateData = (PVRSRV_FILE_PRIVATE_DATA *)pvPrivData;
+#else
 	psPrivateData = PRIVATE_DATA(pFile);
-
+#endif
 	if (psPrivateData != IMG_NULL)
 	{
 #if defined(SUPPORT_DRM_AUTH_IMPORT)
@@ -1301,39 +1299,3 @@ static void __exit PVRCore_Cleanup(void)
 module_init(PVRCore_Init);
 module_exit(PVRCore_Cleanup);
 #endif
-
-/*!
- ******************************************************************************
-
- @Function		PVRSRVRGXSetPowerState
-
- @ input ePVRState = 1 to turn on, 0 to turn off,
-
- @Description
-
- *****************************************************************************/
-int PVRSRVRGXSetPowerState(struct drm_device *dev, int ePVRState)
-{
-	PVRSRV_ERROR eError = PVRSRV_OK;
-
-	if (! gbSystemActivePMEnabled) {
-		LinuxLockMutex(&gsPMMutex);
-
-		LinuxLockMutex(&gPVRSRVLock);
-
-		eError = PVRSRVSetPowerStateKM(ePVRState, IMG_FALSE);
-
-		if (eError != PVRSRV_OK) {
-			LinuxUnLockMutex(&gPVRSRVLock);
-			LinuxUnLockMutex(&gsPMMutex);
-			return 0;
-		}
-
-		LinuxUnLockMutex(&gPVRSRVLock);
-
-		LinuxUnLockMutex(&gsPMMutex);
-	}
-
-	return 1;
-}
-

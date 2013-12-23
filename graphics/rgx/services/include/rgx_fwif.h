@@ -383,16 +383,6 @@ typedef enum
 	RGX_ACTIVEPM_DEFAULT = 3
 } RGX_ACTIVEPM_CONF;
 
-/*!
-* Active Power Latency default in ms
-*/
-#define RGX_APM_LATENCY_DEFAULT			(500)
-
-/*!
-* Core Clock Speed in Hz
-*/
-#define RGX_CORE_CLOCK_SPEED_DEFAULT		(400000000)
-
 
 /*!
  ******************************************************************************
