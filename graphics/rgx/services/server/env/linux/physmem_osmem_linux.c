@@ -170,7 +170,7 @@ static IMG_UINT32 g_ui32PagePoolEntryCount = 0;
 	yet (we can't mix uncached and write-combined) we have to disable the pool
 	feature by forcing it to zero pages
 */
-static IMG_UINT32 g_ui32PagePoolMaxEntries = 0;
+static IMG_UINT32 g_ui32PagePoolMaxEntries = PVR_LINUX_PYSMEM_MAX_POOL_PAGES;
 #else
 static IMG_UINT32 g_ui32PagePoolMaxEntries = PVR_LINUX_PYSMEM_MAX_POOL_PAGES;
 #endif
