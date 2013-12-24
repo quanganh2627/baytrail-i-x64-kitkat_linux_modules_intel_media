@@ -109,6 +109,9 @@ IMG_UINT32 g_ui32HostSampleIRQCount = 0;
 
 #undef RGXFW_POWMON_TEST
 
+IMG_BOOL gbSystemActivePMEnabled = IMG_FALSE;
+IMG_BOOL gbSystemActivePMInit = IMG_FALSE;
+
 #if !defined(NO_HARDWARE)
 
 #if defined(RGXFW_POWMON_TEST)
@@ -561,6 +564,9 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 		IMG_BOOL bEnableAPM = ((eActivePMConf == RGX_ACTIVEPM_DEFAULT) && bSysEnableAPM) ||
 							   (eActivePMConf == RGX_ACTIVEPM_FORCE_ON);
 
+		gbSystemActivePMEnabled = bEnableAPM;
+               	gbSystemActivePMInit = IMG_TRUE;
+               	psRGXData->psRGXTimingInfo->bEnableActivePM = bEnableAPM;
 		if (bEnableAPM)
 		{
 			psDevInfo->pfnActivePowerCheck = RGXCheckFWActivePowerState;
@@ -966,12 +972,14 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 									    IMG_UINT32					ui32ConfigFlags,
 									    IMG_UINT32					ui32LogType,
 									    IMG_UINT32					ui32FilterFlags,
-									    RGXFWIF_COMPCHECKS_BVNC     *psClientBVNC)
+									    RGXFWIF_COMPCHECKS_BVNC     *psClientBVNC,
+									    IMG_UINT32 ui32APMLatency,
+									    IMG_UINT32 ui32CoreClockSpeed)
 {
 	PVRSRV_ERROR				eError = PVRSRV_OK;
 	RGXFWIF_COMPCHECKS_BVNC_DECLARE_AND_INIT(sBVNC);
 	IMG_BOOL bCompatibleAll, bCompatibleVersion, bCompatibleLenMax, bCompatibleBNC, bCompatibleV;
-	IMG_UINT32 ui32NumBIFTilingConfigs, *pui32BIFTilingXStrides, i;
+	IMG_UINT32 ui32NumBIFTilingConfigs = 0, *pui32BIFTilingXStrides, i;
 
 
 	/* Check if BVNC numbers of client and driver are compatible */
@@ -1079,7 +1087,9 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 							     ui32NumBIFTilingConfigs,
 							     pui32BIFTilingXStrides,
 							     ui32FilterFlags,
-							     psRGXFwInit);
+							     psRGXFwInit,
+							     ui32APMLatency,
+							     ui32CoreClockSpeed);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitFirmwareKM: RGXSetupFirmware failed (%u)", eError));

@@ -61,6 +61,10 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #define FIX_HW_BRN_38344
 
+#define FIX_HW_BRN_42480
+#define FIX_HW_BRN_37270
+#define FIX_HW_BRN_37566
+
 
  
 /******************************************************************************

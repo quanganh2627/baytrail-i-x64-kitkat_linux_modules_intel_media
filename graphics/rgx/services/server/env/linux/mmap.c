@@ -154,6 +154,9 @@ static struct vm_operations_struct gsMMapOps =
 	.access=MMapVAccess,
 };
 
+// INTEL_TEMP
+// SINCE PVR_DRM_FILE_FROM_FILE is NOT found
+/*
 #if defined(SUPPORT_DRM)
 #define DRM_PRIVATE_DATA(pFile) ((pFile)->driver_priv)
 
@@ -187,6 +190,7 @@ static int MMapGEM(struct file* pFile, struct vm_area_struct* ps_vma)
 	return ret;
 }
 #endif
+*/
 
 int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 {
@@ -202,14 +206,18 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
     unsigned long ulNewFlags = 0;
     pgprot_t sPageProt;
 #if defined(SUPPORT_DRM)
-    CONNECTION_DATA *psConnection = LinuxConnectionFromFile(PVR_DRM_FILE_FROM_FILE(pFile));
+    // INTEL_TEMP
+    // SINCE PVR_DRM_FILE_FROM_FILE is NOT found
+    CONNECTION_DATA *psConnection = LinuxConnectionFromFile(pFile->private_data);
 
-	if (ps_vma->vm_pgoff > INT_MAX)
-	{
-		ps_vma->vm_pgoff -= ((unsigned int)INT_MAX + 1);
+    // INTEL_TEMP
+    // SINCE PVR_DRM_FILE_FROM_FILE is NOT found
+       //if (ps_vma->vm_pgoff > INT_MAX)
+       //{
+       //      ps_vma->vm_pgoff -= ((unsigned int)INT_MAX + 1);
+       //      return MMapGEM(pFile, ps_vma);
+       //}
 
-		return MMapGEM(pFile, ps_vma);
-	}
 #else
     CONNECTION_DATA *psConnection = LinuxConnectionFromFile(pFile);
 #endif
@@ -292,7 +300,7 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 #elif defined(__i386__) || defined(__x86_64)
 	sPageProt = pgprot_modify(ps_vma->vm_page_prot,
 							   vm_get_page_prot(ulNewFlags));
-#elif defined(__metag__) || defined(__mips__)
+#elif defined(__metag__)
 	sPageProt = vm_get_page_prot(ulNewFlags);
 #else
 #error Please add pgprot_modify equivalent for your system
@@ -319,68 +327,13 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 
     uiLength = ps_vma->vm_end - ps_vma->vm_start;
 
-    ps_vma->vm_flags |= VM_IO;
-
-/* Don't include the mapping in core dumps */
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
-    ps_vma->vm_flags |= VM_DONTDUMP;
-#else
-    ps_vma->vm_flags |= VM_RESERVED;
-#endif
-
-    /*
-     * Disable mremap because our nopage handler assumes all
-     * page requests have already been validated.
-     */
-    ps_vma->vm_flags |= VM_DONTEXPAND;
-    
-    /* Don't allow mapping to be inherited across a process fork */
-    ps_vma->vm_flags |= VM_DONTCOPY;
-
-#if defined(PVR_MMAP_USE_VM_INSERT)
-	{
-		IMG_BOOL bMixedMap = IMG_FALSE;
-
-		/* Scan the map range for pfns without struct page* handling. If we find
-		 * one, this is a mixed map, and we can't use vm_insert_page().
-		 */
-		for (uiOffset = 0; uiOffset < uiLength; uiOffset += 1ULL<<PAGE_SHIFT)
-		{
-			IMG_CPU_PHYADDR sCpuPAddr;
-			IMG_BOOL bValid;
-
-			eError = PMR_CpuPhysAddr(psPMR, uiOffset, &sCpuPAddr, &bValid);
-			PVR_ASSERT(eError == PVRSRV_OK);
-			if (eError)
-			{
-				goto e2;
-			}
-
-			if (bValid)
-			{
-				uiPFN = sCpuPAddr.uiAddr >> PAGE_SHIFT;
-				PVR_ASSERT(((IMG_UINT64)uiPFN << PAGE_SHIFT) == sCpuPAddr.uiAddr);
-
-				if (!pfn_valid(uiPFN) || page_count(pfn_to_page(uiPFN)) == 0)
-				{
-					bMixedMap = IMG_TRUE;
-				}
-			}
-		}
-
-		if (bMixedMap)
-		{
-		    ps_vma->vm_flags |= VM_MIXEDMAP;
-		}
-	}
-#endif /* defined(PVR_MMAP_USE_VM_INSERT) */
-
-    for (uiOffset = 0; uiOffset < uiLength; uiOffset += 1ULL<<PAGE_SHIFT)
+     for (uiOffset = 0; uiOffset < uiLength; uiOffset += 1ULL<<PAGE_SHIFT)
     {
         IMG_SIZE_T uiNumContiguousBytes;
         IMG_INT32 iStatus;
         IMG_CPU_PHYADDR sCpuPAddr;
         IMG_BOOL bValid;
+	struct page *psPage = NULL;
 
         uiNumContiguousBytes = 1ULL<<PAGE_SHIFT;
         eError = PMR_CpuPhysAddr(psPMR,
@@ -401,31 +354,11 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
 		{
 	        uiPFN = sCpuPAddr.uiAddr >> PAGE_SHIFT;
 	        PVR_ASSERT(((IMG_UINT64)uiPFN << PAGE_SHIFT) == sCpuPAddr.uiAddr);
-
-#if defined(PVR_MMAP_USE_VM_INSERT)
-			if (ps_vma->vm_flags & VM_MIXEDMAP)
-			{
-				/* This path is just for debugging. It should be equivalent
-				 * to the remap_pfn_range() path.
-				 */
-				iStatus = vm_insert_mixed(ps_vma,
-										  ps_vma->vm_start + uiOffset,
-										  uiPFN);
-			}
-			else
-			{
-				iStatus = vm_insert_page(ps_vma,
-										 ps_vma->vm_start + uiOffset,
-										 pfn_to_page(uiPFN));
-			}
-#else /* defined(PVR_MMAP_USE_VM_INSERT) */
-	        iStatus = remap_pfn_range(ps_vma,
-	                                  ps_vma->vm_start + uiOffset,
-	                                  uiPFN,
-	                                  uiNumContiguousBytes,
-	                                  ps_vma->vm_page_prot);
-#endif /* defined(PVR_MMAP_USE_VM_INSERT) */
-
+               	PVR_ASSERT(pfn_valid(uiPFN));
+               	psPage = pfn_to_page(uiPFN);
+               	iStatus = vm_insert_page(ps_vma,
+                               ps_vma->vm_start + uiOffset,
+                               psPage);
 	        PVR_ASSERT(iStatus == 0);
 	        if(iStatus)
 	        {
@@ -438,13 +371,31 @@ int MMapPMR(struct file* pFile, struct vm_area_struct* ps_vma)
         (void)pFile;
     }
 
+    ps_vma->vm_flags |= VM_IO;
+
+/* Don't include the mapping in core dumps */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,7,0))
+    ps_vma->vm_flags |= VM_DONTDUMP;
+#else
+    ps_vma->vm_flags |= VM_RESERVED;
+#endif
+
+    /*
+     * Disable mremap because our nopage handler assumes all
+     * page requests have already been validated.
+     */
+    ps_vma->vm_flags |= VM_DONTEXPAND;
+
+    /* Don't allow mapping to be inherited across a process fork */
+    ps_vma->vm_flags |= VM_DONTCOPY;
+
     /* let us see the PMR so we can unlock it later */
     ps_vma->vm_private_data = psPMR;
 
     /* Install open and close handlers for ref-counting */
     ps_vma->vm_ops = &gsMMapOps;
 
-	LinuxUnLockMutex(&g_sMMapMutex);
+    LinuxUnLockMutex(&g_sMMapMutex);
 
     return 0;
 
