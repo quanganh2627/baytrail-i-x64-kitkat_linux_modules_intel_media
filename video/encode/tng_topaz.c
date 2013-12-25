@@ -2622,8 +2622,10 @@ tng_topaz_send(
 		" one by one, cmdsize(%d), sequence(%08x)\n",
 		cmd_size, sync_seq);
 
-	/* Must flush here in case of invalid cache data */
-	tng_topaz_mmu_flushcache(dev_priv);
+	if (is_island_on(OSPM_VIDEO_ENC_ISLAND)) {
+		/* Must flush here in case of invalid cache data */
+		tng_topaz_mmu_flushcache(dev_priv);
+	}
 
 	while (cmd_size > 0) {
 		cur_cmd_header = (struct tng_topaz_cmd_header *) command;
