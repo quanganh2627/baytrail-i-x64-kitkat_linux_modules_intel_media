@@ -2067,66 +2067,6 @@ static inline void tng_topaz_trace_ctx(
 	return ;
 }
 
-static int tng_update_mtx_context(
-	struct drm_device *dev,
-	uint32_t *cmd)
-{
-	unsigned int *p;
-	int ret = 0;
-	unsigned int offset;
-	int value;
-	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
-	struct psb_video_ctx *video_ctx;
-
-	offset = *(cmd + 3) / 4;
-	value = *(cmd + 4);
-
-	video_ctx = topaz_priv->cur_context;
-
-	PSB_DEBUG_TOPAZ("Update context %08x(%s) IMG_MTX_VIDEO_CONTEXT of offset %d to %d\n",
-		video_ctx, codec_to_string(video_ctx->codec), offset, value);
-
-	if (Is_Mrfld_B0()) {
-		ret = tng_topaz_power_off(dev);
-		if (ret) {
-			DRM_ERROR("TOPAZ: Failed to power off");
-			return ret;
-		}
-	} else {
-		ret = tng_topaz_save_mtx_state(dev);
-		if (ret) {
-			DRM_ERROR("Failed to save mtx status");
-			return ret;
-		}
-	}
-
-	p = video_ctx->setv_addr;
-	*(p + offset) = value;
-
-	if (Is_Mrfld_B0()) {
-		ret = tng_topaz_power_up(dev, video_ctx->codec);
-		if (ret) {
-			DRM_ERROR("TOPAZ: Failed to power up");
-			return ret;
-		}
-		ret = tng_topaz_restore_mtx_state_b0(dev);
-		if (ret) {
-			DRM_ERROR("Failed to restore mtx status B0");
-			return ret;
-		}
-	} else {
-		ret = tng_topaz_restore_mtx_state(dev);
-		if (ret) {
-			DRM_ERROR("Failed to restore mtx status");
-			return ret;
-		}
-	}
-
-	return ret;
-}
-
-
 static int tng_context_switch(
 	struct drm_device *dev,
 	struct drm_file *file_priv,
@@ -2721,14 +2661,6 @@ tng_topaz_send(
 				return ret;
 			}
 
-			break;
-		case MTX_CMDID_SW_UPDATE_MTX_CONTEXT:
-			ret = tng_update_mtx_context(dev, (uint32_t *)command);
-			if (ret) {
-				DRM_ERROR("Failed to update mtx context");
-				return ret;
-			}
-			cur_cmd_size = 5;
 			break;
 		case MTX_CMDID_SW_WRITEREG:
 			ret = tng_topaz_set_bias(dev, file_priv,
