@@ -1085,8 +1085,12 @@ loop: /* just for coding style check */
 		if (fault_region->num_region) {
 			reg_idx = fault_region->num_region - 1;
 			if ((start <= fault_region->mb_regions[reg_idx].end) &&
-			    (end > fault_region->mb_regions[reg_idx].end))
+			    (end > fault_region->mb_regions[reg_idx].end)) {
 				fault_region->mb_regions[reg_idx].end = end;
+				if (msvdx_ec_ctx->cur_frame_info) {
+					msvdx_ec_ctx->cur_frame_info->decode_status.mb_regions[reg_idx].end = end;
+				}
+			}
 			else {
 				reg_idx = fault_region->num_region++;
 				if (unlikely(reg_idx >=
@@ -1097,11 +1101,21 @@ loop: /* just for coding style check */
 				}
 				fault_region->mb_regions[reg_idx].start = start;
 				fault_region->mb_regions[reg_idx].end = end;
+				if (msvdx_ec_ctx->cur_frame_info) {
+					msvdx_ec_ctx->cur_frame_info->decode_status.num_region = fault_region->num_region;
+					msvdx_ec_ctx->cur_frame_info->decode_status.mb_regions[reg_idx].start = start;
+					msvdx_ec_ctx->cur_frame_info->decode_status.mb_regions[reg_idx].end = end;
+				}
 			}
 		} else {
 			fault_region->num_region++;
 			fault_region->mb_regions[0].start = start;
 			fault_region->mb_regions[0].end = end;
+			if (msvdx_ec_ctx->cur_frame_info) {
+				msvdx_ec_ctx->cur_frame_info->decode_status.num_region = fault_region->num_region;
+				msvdx_ec_ctx->cur_frame_info->decode_status.mb_regions[0].start = start;
+				msvdx_ec_ctx->cur_frame_info->decode_status.mb_regions[0].end = end;
+			}
 		}
 
 		break;
