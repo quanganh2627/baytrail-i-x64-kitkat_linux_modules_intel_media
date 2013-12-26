@@ -590,8 +590,9 @@ int vsp_send_command(struct drm_device *dev,
 				else
 					continue;
 			} else if (cur_cmd->type == VspSetContextCommand ||
-					cur_cmd->type == Vss_Sys_Ref_Frame_COMMAND) {
-				VSP_DEBUG("skip Vss_Sys_Ref_Frame_COMMAND\n");
+				cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND ||
+				cur_cmd->type == Vss_Sys_Ref_Frame_COMMAND) {
+				VSP_DEBUG("VspSetContextCommand | Vss_Sys_STATE_BUF_COMMAND\n");
 				cur_cmd++;
 
 				cmd_size -= sizeof(*cur_cmd);
@@ -605,6 +606,11 @@ int vsp_send_command(struct drm_device *dev,
 			cur_cell_cmd = vsp_priv->cmd_queue +
 				(wr + cmd_idx) % VSP_CMD_QUEUE_SIZE;
 			++cmd_idx;
+
+			if (filp == vsp_priv->vp8_filp[0])
+				cur_cmd->context = 1;
+			if (filp == vsp_priv->vp8_filp[1])
+				cur_cmd->context = 2;
 
 			memcpy(cur_cell_cmd, cur_cmd, sizeof(*cur_cmd));
 			VSP_DEBUG("cmd: %.8x %.8x %.8x %.8x %.8x %.8x\n",
@@ -688,27 +694,53 @@ static int vsp_prehandle_command(struct drm_file *priv,
 				goto out;
 			}
 		} else if (cur_cmd->type == VspSetContextCommand) {
+			struct vsp_context_settings_t *context_setting;
+			context_setting =
+			    &(vsp_priv->context_setting[VSP_CONTEXT_NUM_VPP]);
 			VSP_DEBUG("set context and new vsp FRC context\n");
+			VSP_DEBUG("set context base %x, size %x\n",
+				  cur_cmd->buffer, cur_cmd->size);
+
+			/* initialize the context-data */
+			context_setting->app_id = VSP_APP_ID_FRC_VPP;
+			context_setting->usage = vsp_context_starting;
+			context_setting->state_buffer_size = cur_cmd->size;
+			context_setting->state_buffer_addr = cur_cmd->buffer;
+
+			vsp_priv->fw_type = VSP_FW_TYPE_VPP;
+
 		} else if (cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND) {
-			VSP_DEBUG("set context and new vsp VP8 context\n");
+			struct vsp_context_settings_t *context_setting;
+			context_setting =
+			    &(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8]);
+			/* create 3 context_setting buffer in vsp_init *
+			 * FRC/VPP take buf_0, 2 VP8 processes take buf_1 and buf_2 *
+			 * */
+			if (context_setting->usage == vsp_context_unused) {
+				context_setting =
+				    &(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8]);
+				vsp_priv->context_vp8_id = 0;
+			} else {
+				context_setting =
+				    &(vsp_priv->context_setting[VSP_CONTEXT_NUM_VP8 + 1]);
+				vsp_priv->context_vp8_id = 1;
+			}
+
 			/* store the fd of 2 vp8 encoding processes */
 			vsp_priv->vp8_filp[vsp_priv->context_vp8_id] = priv->filp;
-			vsp_priv->context_vp8_id++;
-			if (vsp_priv->context_vp8_id > 1)
-				vsp_priv->context_vp8_id = 0;
 
-			cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
-			cur_cmd->type = VssGenInitializeContext;
-			if (priv->filp == vsp_priv->vp8_filp[0])
-				cur_cmd->buffer = 1;
-			if (priv->filp == vsp_priv->vp8_filp[1])
-				cur_cmd->buffer = 2;
+			VSP_DEBUG("set context and new vsp VP8 context\n");
+			VSP_DEBUG("set context base %x, size %x\n",
+				  cur_cmd->buffer, cur_cmd->size);
 
-			cur_cmd->size = VSP_APP_ID_VP8_ENC;
-			cur_cmd->buffer_id = 0;
-			cur_cmd->irq = 0;
-			cur_cmd->reserved6 = 0;
-			cur_cmd->reserved7 = 0;
+			/* initialize the context-data */
+			context_setting->app_id = VSP_APP_ID_VP8_ENC;
+			context_setting->usage = vsp_context_starting;
+			context_setting->state_buffer_size = cur_cmd->size;
+			context_setting->state_buffer_addr = cur_cmd->buffer;
+
+			vsp_priv->fw_type = VSP_FW_TYPE_VP8;
+
 		} else
 			/* calculate the numbers of cmd send to VSP */
 			vsp_cmd_num++;
@@ -757,13 +789,6 @@ static int vsp_prehandle_command(struct drm_file *priv,
 				ret = -1;
 				goto out;
 			}
-		}
-
-		if (cur_cmd->type == VssVp8encSetSequenceParametersCommand) {
-			if (priv->filp == vsp_priv->vp8_filp[0])
-				cur_cmd->context = 1;
-			else if (priv->filp == vsp_priv->vp8_filp[1])
-				cur_cmd->context = 2;
 		}
 
 		cmd_size -= sizeof(*cur_cmd);
@@ -1092,8 +1117,6 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	bool ret = true;
 	int count = 0;
-	struct vss_command_t *cur_cmd;
-	bool tmp = true;
 
 	dev_priv = dev->dev_private;
 	if (dev_priv == NULL) {
@@ -1108,40 +1131,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	}
 
 	VSP_DEBUG("ctx_type=%d\n", ctx_type);
-
 	if (VAEntrypointEncSlice == ctx_type) {
-		/* power on again to send VssGenDestroyContext to firmware */
-		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
-			tmp = -EBUSY;
-		}
-		if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
-			tmp = vsp_resume_function(dev_priv);
-			VSP_DEBUG("The VSP is on suspend, send resume!\n");
-		}
-
-		VSP_DEBUG("VP8 send the last command here to destroy context buffer\n ");
-		cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
-
-		cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
-		cur_cmd->type = VssGenDestroyContext;
-		cur_cmd->size = 0;
-		cur_cmd->buffer_id = 0;
-		cur_cmd->irq = 0;
-		cur_cmd->reserved6 = 0;
-		cur_cmd->reserved7 = 0;
-
-		/* judge which vp8 process should be remove context */
-		if (filp == vsp_priv->vp8_filp[0]) {
-			cur_cmd->buffer = 1;
-		} else if (filp == vsp_priv->vp8_filp[1]) {
-			cur_cmd->buffer = 2;
-		} else {
-			VSP_DEBUG("support dual VP8 encoding at most\n");
-		}
-		
-		vsp_priv->ctrl->cmd_wr =
-			(vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
-
 		/* Wait all the cmd be finished */
 		while (vsp_priv->vp8_cmd_num > 0 && count++ < 120) {
 			msleep(1);
@@ -1158,7 +1148,35 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		}
 
 		vsp_priv->context_vp8_num--;
-	}
+
+		/* judge which vp8 process should be remove context */
+		struct vsp_context_settings_t *context_setting;
+		if (filp == vsp_priv->vp8_filp[0]) {
+			context_setting =
+				&(vsp_priv->context_setting[1]);
+			context_setting->app_id = 0;
+			context_setting->usage = vsp_context_unused;
+			context_setting->state_buffer_size = 0;
+			context_setting->state_buffer_addr = 0;
+		} else if (filp == vsp_priv->vp8_filp[1]){
+			context_setting =
+				&(vsp_priv->context_setting[2]);
+			context_setting->app_id = 0;
+			context_setting->usage = vsp_context_unused;
+			context_setting->state_buffer_size = 0;
+			context_setting->state_buffer_addr = 0;
+		} else {
+			DRM_ERROR("Remove 3rd vp8 process\n");
+		}
+	 } else {
+		struct vsp_context_settings_t *context_setting;
+		context_setting =
+			&(vsp_priv->context_setting[VSP_CONTEXT_NUM_VPP]);
+		context_setting->app_id = 0;
+		context_setting->usage = vsp_context_unused;
+		context_setting->state_buffer_size = 0;
+		context_setting->state_buffer_addr = 0;
+	 }
 
 	vsp_priv->context_num--;
 
@@ -1365,6 +1383,8 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 
 	/* The setting-struct */
 	VSP_DEBUG("setting addr:%x\n", vsp_priv->setting_bo->offset);
+	VSP_DEBUG("setting->max_contexts: %d\n",
+			vsp_priv->setting->max_contexts);
 	VSP_DEBUG("setting->command_queue_size:0x%x\n",
 			vsp_priv->setting->command_queue_size);
 	VSP_DEBUG("setting->command_queue_addr:%x\n",
@@ -1373,6 +1393,32 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 			vsp_priv->setting->response_queue_size);
 	VSP_DEBUG("setting->response_queue_addr:%x\n",
 			vsp_priv->setting->response_queue_addr);
+	VSP_DEBUG("setting->contexts_array_addr:%x\n",
+			vsp_priv->setting->contexts_array_addr);
+
+	/* The context_setting struct */
+	VSP_DEBUG("context_settings(addr):%x\n",
+			vsp_priv->context_setting_bo->offset);
+	VSP_DEBUG("context_settings.app_id:%d\n",
+			vsp_priv->context_setting[0].app_id);
+	VSP_DEBUG("context_setting->state_buffer_size:0x%x\n",
+			vsp_priv->context_setting[0].state_buffer_size);
+	VSP_DEBUG("context_setting->state_buffer_addr:%x\n",
+			vsp_priv->context_setting[0].state_buffer_addr);
+	VSP_DEBUG("context_settings.usage:%d\n",
+			vsp_priv->context_setting[0].usage);
+
+	VSP_DEBUG("context_settings(addr):%x\n",
+			vsp_priv->context_setting_bo->offset);
+	VSP_DEBUG("context_settings.app_id:%d\n",
+			vsp_priv->context_setting[1].app_id);
+	VSP_DEBUG("context_setting->state_buffer_size:0x%x\n",
+			vsp_priv->context_setting[1].state_buffer_size);
+	VSP_DEBUG("context_setting->state_buffer_addr:%x\n",
+			vsp_priv->context_setting[1].state_buffer_addr);
+	VSP_DEBUG("context_settings.usage:%d\n",
+			vsp_priv->context_setting[1].usage);
+
 
 	/* dump dma register */
 	VSP_DEBUG("partition1_dma_external_ch[0..23]_pending_req_cnt\n");
