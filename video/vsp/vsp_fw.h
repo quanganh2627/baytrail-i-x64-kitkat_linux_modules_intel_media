@@ -69,9 +69,6 @@ struct VssProcPipelineParameterBuffer {
 	enum VssProcFilterType filter_pipeline[VssProcPipelineMaxNumFilters];
 	unsigned int intermediate_buffer_base;
 	unsigned int intermediate_buffer_size;
-	/* VssRectangle      output_region; */
-	/* unsigned int      output_background_color; */
-	/* VssColorPrimaries output_color_primaries; */
 };
 
 struct VssProcSharpenParameterBuffer {
@@ -300,6 +297,104 @@ struct vsp_secure_boot_header {
 	unsigned int boot_start_reg;
 };
 
+#define VSP_MULTI_APP_MAGIC_NR 0xb10b0004
+/*
+ * Note: application index/id 0 is reserved.
+ * So the maximum number of applications is one less than listed here.
+ * */
+#define VSP_MULTI_APP_MAX_APPS 16
+
+/*
+ * With a 1MB state-buffer in IMR and a 50k context-buffer-size, we could run
+ * * max 20 apps. Using 32 as a nice round number of maximum nr of contexts.
+ * * Actual maximum allowed contexts is currently less, since context-buffer-size
+ * * is larger than 50k.
+ * */
+#define VSP_MULTI_APP_MAX_CONTEXTS 32
+#define VSP_API_GENERIC_CONTEXT_ID (0xffffffff)
+/*
+ * Struct used by VSP-boot-processor to start the correct application
+ * Read from header in firmware ma-blob.
+ * Address of the header is communicated by p-unit.
+ *
+ * Note: this is a VIED internal header
+ */
+struct vsp_multi_app_blob_data {
+	unsigned int magic_number;
+	unsigned int offset_from_start;
+	/** State buffer address in virtual memory, default location on TNG B0 and ANN
+	 * * is 0xA0000000 (2.5GB memory offset, master port 2, 2nd IMR region) */
+	unsigned int imr_state_buffer_addr;
+	/** Size of state-buffer in IMR (in bytes). Default state buffer size for TNG
+	 * * B0 and ANN is 1 MB */
+	unsigned int imr_state_buffer_size;
+	/** default context-buffer size of apps in this blob (each app also has it's
+	 * context-size in it's header. */
+	unsigned int apps_default_context_buffer_size;
+	/*
+	 * * This table contains a zero (offset of zero) for unused entries
+	 * * Offsets here are relative to the start-address of this header.
+	 */
+	unsigned int application_blob_offsets[VSP_MULTI_APP_MAX_APPS];
+};
+
+/*
+ * Struct for the settings of a single context. Normally placed in an array in
+ * the multi-app header in IMR
+ *
+ * Context-id is determined by the position in the array, so it is not stored in
+ * the struct itself.
+ *
+ * State_buffer_size and state_buffer_addr are currently not stored, since they
+ * can/will be determined automatically based on generic IMR parameters.
+ *
+ * Usage field is the last field, so that it gets written last during a memory
+ * transfer.
+ */
+struct vsp_multi_app_context_settings {
+	unsigned int app_id;  /* Which app this context belongs to */
+	unsigned int usage; /* Indicates if this context is in use */
+};
+
+/*
+ * Datastructure placed at the beginning of the VSP IMR state-save region.
+ * */
+struct vsp_multi_app_imr_header {
+	/*
+	 * Usage field (32-bit), set to 0 by Chaabi during system bootup, set to 1
+	 * by VSP if it is safe for PUnit to perform a restart without power-cycle.
+	 * Set to any other value by VSP if VSP is running.
+	 * */
+	unsigned int vsp_and_imr_state;
+	/* Reserved field for 256-bit alignment of header */
+	unsigned int reserved_1;
+	/* Reserved field for 256-bit alignment of header */
+	unsigned int reserved_2;
+	/* Reserved field for 256-bit alignment of header */
+	unsigned int reserved_3;
+	/* Reserved field for 256-bit alignment of header */
+	unsigned int reserved_4;
+	/* Reserved field for 256-bit alignment of header */
+	unsigned int reserved_5;
+	/* Reserved field for 256-bit alignment of header */
+	unsigned int reserved_6;
+	/* Reserved field for 256-bit alignment of header */
+	unsigned int reserved_7;
+	/* Settings of all active/available contexts */
+	struct vsp_multi_app_context_settings context_settings[VSP_MULTI_APP_MAX_CONTEXTS];
+};
+
+enum vsp_imr_state{
+	/** State when no data for VSP is initialized */
+	vsp_imr_uninitialized = 0,
+	/** State where datastructures are initialized, but no VSP is running */
+	vsp_imr_safe_to_resume = 1,
+	/** State where datastructures are initialized and VSP(-API) is running */
+	vsp_imr_initialized = 2,
+	/** State where datastructures are initialized and VSP(-APP) is running */
+	vsp_imr_app_is_running = 3
+};
+
 enum vsp_ctrl_reg_addr {
 	VSP_SETTING_ADDR_REG      = 3,
 	VSP_SECBOOT_DEBUG_REG     = 4,
@@ -353,36 +448,17 @@ struct vsp_ctrl_reg {
  * struct is written to ddr in vsp_init call, destroyed upon uninit
  */
 struct vsp_settings_t {
-	unsigned int max_contexts;
+	/* Extra field to align to 256 bit (for DMA) */
+	unsigned int reserved0;
 	unsigned int command_queue_size;
 	unsigned int command_queue_addr;
 	unsigned int response_queue_size;
 	unsigned int response_queue_addr;
-	unsigned int contexts_array_addr;
+	/* Extra field to align to 256 bit (for DMA) */
+	unsigned int reserved5;
 	/* Extra field to align to 256 bit (for DMA) */
 	unsigned int reserved6;
 	unsigned int reserved7;
-};
-
-/*
- * Struct for the settings of a single context. Normally placed in an array in
- * the generic settings struct.
- *
- * Context-id is determined by the position in the array, so it is not stored in
- * the struct itself.
- *
- * Usage field is the last field, so that it gets written last during a memory
- * transfer.
- * */
-struct vsp_context_settings_t {
-	unsigned int app_id;  /* Which app this context belongs to */
-	unsigned int state_buffer_size; /* state buffer for single context */
-	unsigned int state_buffer_addr; /* state buffer for single context */
-	unsigned int reserved3; /* Extra field to align to 256 bit (for DMA) */
-	unsigned int reserved4; /* Extra field to align to 256 bit (for DMA) */
-	unsigned int reserved5; /* Extra field to align to 256 bit (for DMA) */
-	unsigned int reserved6; /* Extra field to align to 256 bit (for DMA) */
-	unsigned int usage; /* Indicates if this context is in use */
 };
 
 /**
@@ -541,5 +617,25 @@ enum VssVp8encCommandType {
 	VssVp8encInit,
 	Vss_Sys_Ref_Frame_COMMAND
 };
+
+/*
+ * Generic VSP commands
+ *
+ * Generic VSP commands should be sent with the context field set to
+ * VSP_API_GENERIC_CONTEXT_ID.
+ */
+enum VssGenCommandType {
+	/** Generic command to instruct the VSP to (create and) initialize a context.
+	 * * The buffer field contains the context-id of the new context to initialize.
+	 * The size-field contains the app-id for the new context to initialize
+	 */
+	VssGenInitializeContext       = 0xab01,
+	/** Generic command to instruct the VSP to de-initialize and destroy a
+	 * context. The buffer field contains the context-id of the context to
+	 * de-initialize and destroy. The size-field should always be set to 0.
+	 */
+	VssGenDestroyContext          = 0xab02
+};
+
 #pragma pack()
 #endif
