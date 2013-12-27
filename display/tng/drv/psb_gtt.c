@@ -1202,7 +1202,7 @@ static int psb_get_vaddr_pages(u32 vaddr, u32 size,
 	}
 
 	/*allocate page list*/
-	pfns = kzalloc(num_pages * sizeof(u32), GFP_KERNEL);
+	pfns = kzalloc(num_pages * sizeof(unsigned long), GFP_KERNEL);
 	if (!pfns) {
 		DRM_ERROR("No memory\n");
 		goto get_page_err;

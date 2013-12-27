@@ -264,12 +264,12 @@ struct psb_validate_buffer {
 struct psb_video_ctx {
 	struct list_head head;
 	struct file *filp; /* DRM device file pointer */
-	int ctx_type; /* (msvdx_tile&0xff)<<16|profile<<8|entrypoint */
+	uint64_t ctx_type; /* (msvdx_tile&0xff)<<16|profile<<8|entrypoint */
 	/* todo: more context specific data for multi-context support */
 	/* Write back buffer object */
 	struct ttm_buffer_object *wb_bo;
 	struct ttm_bo_kmap_obj wb_bo_kmap;
-	uint32_t wb_addr[WB_FIFO_SIZE];
+	uint32_t *wb_addr[WB_FIFO_SIZE];
 	/* Setvideo buffer object */
 	struct ttm_buffer_object *mtx_ctx_bo;
 	struct ttm_bo_kmap_obj mtx_ctx_kmap;

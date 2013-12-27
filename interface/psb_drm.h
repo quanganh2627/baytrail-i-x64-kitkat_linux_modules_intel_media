@@ -193,7 +193,6 @@ struct psb_validate_req {
 	uint64_t presumed_gpu_offset;
 	uint32_t buffer_handle;
 	uint32_t presumed_flags;
-	uint32_t group;
 	uint32_t pad64;
 	uint32_t unfence_flag;
 };
@@ -207,8 +206,8 @@ struct psb_validate_rep {
 #define PSB_USE_PRESUMED                (1 << 0)
 
 struct psb_validate_arg {
-	int handled;
-	int ret;
+	uint64_t handled;
+	uint64_t ret;
 	union {
 		struct psb_validate_req req;
 		struct psb_validate_rep rep;
@@ -269,7 +268,7 @@ typedef enum {
 } lnc_getparam_key_t;
 
 struct drm_lnc_video_getparam_arg {
-	lnc_getparam_key_t key;
+	uint64_t key;
 	uint64_t arg;	/* argument pointer */
 	uint64_t value;	/* feed back pointer */
 };

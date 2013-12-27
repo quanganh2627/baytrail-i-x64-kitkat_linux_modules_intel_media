@@ -160,7 +160,7 @@ static int psb_msvdx_map_command(struct drm_device *dev,
 	struct ttm_bo_kmap_obj cmd_kmap;
 	void *cmd, *cmd_copy, *cmd_start;
 	bool is_iomem;
-
+	union msg_header *header;
 
 	/* command buffers may not exceed page boundary */
 	if ((cmd_size > PAGE_SIZE) || (cmd_size + cmd_page_offset > PAGE_SIZE))
@@ -185,8 +185,10 @@ static int psb_msvdx_map_command(struct drm_device *dev,
 			ret = -EINVAL;
 			goto out;
 		}
-		uint32_t cur_cmd_size = MEMIO_READ_FIELD(cmd, MTX_GENMSG_SIZE);
-		uint32_t cur_cmd_id = MEMIO_READ_FIELD(cmd, MTX_GENMSG_ID);
+		header = (union msg_header *)cmd;
+		uint32_t cur_cmd_size = header->bits.msg_size;
+		uint32_t cur_cmd_id = header->bits.msg_type;
+
 		uint32_t mmu_ptd = 0, msvdx_mmu_invalid = 0;
 
 		PSB_DEBUG_GENERAL("cmd start at %08x cur_cmd_size = %d"
@@ -691,11 +693,14 @@ static int psb_msvdx_send(struct drm_device *dev, void *cmd,
 {
 	int ret = 0;
 	struct drm_psb_private *dev_priv = psb_priv(dev);
+	union msg_header *header;
 	uint32_t cur_sequence = 0xffffffff;
 
 	while (cmd_size > 0) {
-		uint32_t cur_cmd_size = MEMIO_READ_FIELD(cmd, MTX_GENMSG_SIZE);
-		uint32_t cur_cmd_id = MEMIO_READ_FIELD(cmd, MTX_GENMSG_ID);
+		header = (union msg_header *)cmd;
+		uint32_t cur_cmd_size = header->bits.msg_size;
+		uint32_t cur_cmd_id = header->bits.msg_type;
+
 		cur_sequence = ((struct fw_msg_header *)cmd)->header.bits.msg_fence;
 
 		if (cur_cmd_size > cmd_size) {
@@ -735,6 +740,8 @@ int psb_mtx_send(struct drm_psb_private *dev_priv, const void *msg)
 	const uint32_t *p_msg = (uint32_t *) msg;
 	uint32_t msg_num, words_free, ridx, widx, buf_size, buf_offset;
 	int ret = 0;
+	union msg_header *header;
+	header = (union msg_header *)msg;
 
 	PSB_DEBUG_GENERAL("MSVDX: psb_mtx_send\n");
 
@@ -742,7 +749,7 @@ int psb_mtx_send(struct drm_psb_private *dev_priv, const void *msg)
 	 * but fw will take care of the clock after fw is loaded
 	 */
 
-	msg_num = (MEMIO_READ_FIELD(msg, MTX_GENMSG_SIZE) + 3) / 4;
+	msg_num = (header->bits.msg_size + 3) / 4;
 
 #if 0
 	{
@@ -775,8 +782,7 @@ int psb_mtx_send(struct drm_psb_private *dev_priv, const void *msg)
 	/* message would wrap, need to send a pad message */
 	if (widx + msg_num > buf_size) {
 		/* Shouldn't happen for a PAD message itself */
-		if (MEMIO_READ_FIELD(msg, MTX_GENMSG_ID)
-		       == MTX_MSGID_PADDING)
+		if (header->bits.msg_type == MTX_MSGID_PADDING)
 			DRM_INFO("MSVDX WARNING: should not wrap pad msg, "
 				"buf_size is %d, widx is %d, msg_num is %d.\n",
 				buf_size, widx, msg_num);
@@ -851,6 +857,7 @@ static void psb_msvdx_mtx_interrupt(struct drm_device *dev)
 	uint32_t num, ofs; /* message num and offset */
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	int i;
+	union msg_header *header;
 	int cmd_complete = 0;
 #ifdef CONFIG_SLICE_HEADER_PARSING
 	int frame_finished = 1;
@@ -876,9 +883,10 @@ loop: /* just for coding style check */
 
 	ofs = 0;
 	buf[ofs] = PSB_RMSVDX32(buf_offset + (ridx << 2));
+	header = (union msg_header *)buf;
 
 	/* round to nearest word */
-	num = (MEMIO_READ_FIELD(buf, MTX_GENMSG_SIZE) + 3) / 4;
+	num = (header->bits.msg_size + 3) / 4;
 
 	/* ASSERT(num <= sizeof(buf) / sizeof(uint32_t)); */
 
@@ -898,7 +906,7 @@ loop: /* just for coding style check */
 	if (msvdx_priv->msvdx_needs_reset)
 		goto loop;
 
-	switch (MEMIO_READ_FIELD(buf, MTX_GENMSG_ID)) {
+	switch (header->bits.msg_type) {
 	case MTX_MSGID_HW_PANIC: {
 		/* For VXD385 firmware, fence value is not validate here */
 		uint32_t diff = 0;
@@ -1162,7 +1170,7 @@ loop: /* just for coding style check */
 	}
 #endif
 	default:
-		DRM_ERROR("ERROR: msvdx Unknown message from MTX, ID:0x%08x\n", MEMIO_READ_FIELD(buf, MTX_GENMSG_ID));
+		DRM_ERROR("ERROR: msvdx Unknown message from MTX, ID:0x%08x\n", header->bits.msg_type);
 		goto done;
 	}
 

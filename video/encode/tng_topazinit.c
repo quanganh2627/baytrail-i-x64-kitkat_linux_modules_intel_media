@@ -935,21 +935,12 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	const struct firmware *raw = NULL;
-
-	struct ttm_buffer_object **cur_drm_obj;
-	struct ttm_bo_kmap_obj tmp_kmap;
-	bool is_iomem;
-
-	unsigned char *uc_ptr;
-	unsigned char *uc_header;
-	unsigned int  *ui_ptr;
-	uint32_t ret = 0;
-	int n;
-
-	unsigned long imr_addr;
-	int imr_size;
-	unsigned char *imr_ptr;
-	const unsigned long tng_magic_num = 0x43455624;
+	uint32_t imr6l_val, imr6l_addr;
+	void *ptr = NULL;
+	int32_t ret = 0;
+	int fw_size;
+	uint8_t *imr_ptr;
+	const uint32_t tng_magic_num = 0x43455624;
 
 #ifdef VERIFYFW_INIT
 	uint32_t i, *p_buf;
@@ -969,42 +960,44 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Opened firmware, size 0x%08x\n", raw->size);
 
-	uc_ptr = (unsigned char *) raw->data;
-	if (!uc_ptr) {
-		DRM_ERROR("TOPAZ: firmware data addr = 0x%08x\n",
-			(unsigned int)uc_ptr);
-		ret = -1;
-		goto out;
-	}
-
 	/* # load fw from file */
 	PSB_DEBUG_TOPAZ("TOPAZ: copy firmware data to IMR6\n");
 
 	/* get imr 11 region start address and size */
-	imr_addr = intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,
+	imr6l_val = intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,
 		TNG_IMR6L_MSG_REGADDR);
-	imr_addr <<= TNG_IMR_ADDRESS_SHIFT;
-	PSB_DEBUG_TOPAZ("IMR6 base address 0x%08x\n", imr_addr);
-	imr_size = raw->size;
+
+	imr6l_addr = (imr6l_val & TNG_IMR_ADDRESS_MASK) << TNG_IMR_ADDRESS_SHIFT;
+
+	PSB_DEBUG_TOPAZ("IMR6 base address 0x%08x, 0x%08x\n",
+		imr6l_val, imr6l_addr);
+
+	ptr = (int *)(raw)->data;
+	if (!ptr) {
+		DRM_ERROR("TOPAZ: firmware data addr = 0x%08x\n",
+			(unsigned int)ptr);
+		ret = -1;
+		goto out;
+	}
+
+	fw_size = (int)(raw)->size;
 	/* FIXME: set imr_addr to default value */
 	/* imr_addr = 0x48f3000; */
 
 	/* map imr 11 */
 	/* check if raw size is smaller than */
 	/* ioremap the region */
-	PSB_DEBUG_TOPAZ("ioremap IMR6 0x%08x, size 0x%08x\n",
-		imr_addr, imr_size);
-	imr_ptr = ioremap(imr_addr, imr_size);
+	PSB_DEBUG_TOPAZ("ioremap fw size 0x%08x\n", fw_size);
+	imr_ptr = ioremap(imr6l_addr, fw_size);
 	if (!imr_ptr) {
-		DRM_ERROR("failed to map imr_addr\n");
+		DRM_ERROR("failed to map imr6l_addr\n");
 		ret = -1;
 		goto out;
 	}
 
-	PSB_DEBUG_TOPAZ("copy fw data to IMR6 0x%08x\n",
-		(u32)imr_ptr);
+	PSB_DEBUG_TOPAZ("copy fw data to IMR6 0x%08x\n", (u32)imr_ptr);
 	/* copy the firmware to imr 11 */
-	memcpy(imr_ptr, uc_ptr, raw->size);
+	memcpy(imr_ptr, ptr, fw_size);
 
 	PSB_DEBUG_TOPAZ("iounmap IMR6 0x%08x\n", imr_ptr);
 	/* unmap the region */
@@ -1012,23 +1005,27 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 
 #ifdef CONFIG_DX_SEP54
 	PSB_DEBUG_TOPAZ("CALL chaabi API to verify it\n");
-	ret = sepapp_image_verify(imr_addr, imr_size, 0,
-		tng_magic_num);
+	PSB_DEBUG_TOPAZ("addr = 0x%08x, fw_size = 0x%08x, magic = 0x%08x\n",
+		imr6l_addr, fw_size, tng_magic_num);
+#ifdef MRFLD_B0_DEBUG
+	PSB_DEBUG_TOPAZ("imr6 L 0x98 = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X98));
+	PSB_DEBUG_TOPAZ("imr6 H 0x99 = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X99));
+	PSB_DEBUG_TOPAZ("imr6 RAC 0x9a = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9a));
+	PSB_DEBUG_TOPAZ("imr6 WAC 0x9b = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9b));
+#endif
+	ret = sepapp_image_verify(imr6l_addr, fw_size, 0, tng_magic_num);
 	if (ret) {
 		DRM_ERROR("failed to verify vec firmware ret %x\n", ret);
 		ret = -1;
 		goto out;
 	}
+	PSB_DEBUG_TOPAZ("FW is verified\n");
 #ifdef MRFLD_B0_DEBUG
-	ret = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
-		TNG_IMR6_WAC_MSG_REGADDR);
-	PSB_DEBUG_TOPAZ("TOPAZ: WAC = 0x%08x\n",
-		ret);
-	ret = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
-		TNG_IMR6_RAC_MSG_REGADDR);
-	PSB_DEBUG_TOPAZ("TOPAZ: RAC = 0x%08x\n",
-		ret);
-	udelay(10);
+	PSB_DEBUG_TOPAZ("imr6 L 0x98 = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X98));
+	PSB_DEBUG_TOPAZ("imr6 H 0x99 = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X99));
+	PSB_DEBUG_TOPAZ("imr6 RAC 0x9a = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9a));
+	PSB_DEBUG_TOPAZ("imr6 WAC 0x9b = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9b));
+	PSB_DEBUG_TOPAZ("vec FW power PM0 = 0x%x\n", intel_mid_msgbus_read32(0x04, 0x34));
 #endif
 #endif
 

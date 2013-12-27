@@ -285,6 +285,21 @@ config DRM_HANDSET_DEBUG
 
 endchoice
 
+config GFX_RGX_BVNC
+	string
+	depends on DRM_INTEL_HANDSET
+	prompt "IMG graphics driver BNVC specification"
+	help
+	    A build configuration parameter which must have the same value
+	    for the IMG kernel mode driver and the IMG user mode driver.
+	    The BVNC value will differ depending upon target (e.g.,
+	    Merrifield vs. Moorefield) and desired build configuration.
+	    Normally a value recommended by IMG is used.
+	    Examples as of 2013-12-06:
+	    - Merrifield - 1.14.4.4 - DDK1.2
+	    - Merrifield - 1.76.4.6 - DDK1.3
+	    - Moorefield - 1.72.4.12 - either DDK
+
 config MRFL_DISPLAY
 	tristate "Intel Merrifield Generic Framebuffer Driver"
 	depends on PCI && X86_MRFLD && !DRM_MDFLD && FB

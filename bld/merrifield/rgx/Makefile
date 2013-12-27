@@ -71,6 +71,23 @@ ccflags-y += \
 	-Idrivers/staging/android \
 	-Iarch/arm/include
 
+ifeq ($(CONFIG_GFX_RGX_BVNC),)
+# If not defined, default to Tangier/Merrifield
+CONFIG_GFX_RGX_BVNC := 1.76.4.6
+endif
+
+cgr_bvnc := $(subst ., ,$(CONFIG_GFX_RGX_BVNC))
+cgr_b := $(word 1, $(cgr_bvnc))
+cgr_v := $(word 2, $(cgr_bvnc))
+cgr_n := $(word 3, $(cgr_bvnc))
+cgr_c := $(word 4, $(cgr_bvnc))
+
+# Example: ccflags-y += -DRGX_BVNC_CORE_KM_HEADER="\"cores/rgxcore_km_1.76.4.6.h\""
+# Example: ccflags-y += -DRGX_BNC_CONFIG_KM_HEADER="\"configs/rgxconfig_km_1.V.4.4.h\""
+
+ccflags-y += -DRGX_BVNC_CORE_KM_HEADER="\"cores/rgxcore_km_$(CONFIG_GFX_RGX_BVNC).h\""
+ccflags-y += -DRGX_BNC_CONFIG_KM_HEADER="\"configs/rgxconfig_km_$(cgr_b).V.$(cgr_n).$(cgr_c).h\""
+
 ccflags-y += \
 	-DANDROID \
 	-DLINUX -D__linux__ -D__KERNEL__\
@@ -79,8 +96,6 @@ ccflags-y += \
 	-DPVR_LDM_DRIVER_REGISTRATION_NAME="\"pvrsrvkm\"" \
 	-DSUPPORT_RGX=1 \
 	-DPVR_SECURE_HANDLES \
-	-DRGX_BVNC_CORE_KM_HEADER="\"cores/rgxcore_km_1.76.4.6.h\"" \
-	-DRGX_BNC_CONFIG_KM_HEADER="\"configs/rgxconfig_km_1.V.4.6.h\"" \
 	-DDISPLAY_CONTROLLER=pvrlfb \
 	-DSUPPORT_RENDER_TARGET_ARRAYS \
 	-DSUPPORT_LINUX_X86_WRITECOMBINE \
@@ -156,7 +171,8 @@ ccflags-$(CONFIG_DRM_HANDSET_DEBUG) += \
 	-DDEBUG \
 	-DPVRSRV_ENABLE_PROCESS_STATS \
 	-DDEBUG_LINUX_MEMORY_ALLOCATIONS \
-	-DRGXFW_ALIGNCHECKS
+	-DRGXFW_ALIGNCHECKS \
+	-DPVR_RI_DEBUG
 
 # The following is an option, it can be enabled for more debug information
 # Add 'DEBUG_PVR_BRIDGE=y' to AndroidRGX.mk to enable it.
@@ -228,7 +244,7 @@ $(DRIVER_NAME)-y += \
 $(DRIVER_NAME)-y += \
 	$(RGXDIR)/services/server/env/linux/pvr_sync.o
 
-$(DRIVER_NAME)-$(CONFIG_RI_DEBUG) += \
+$(DRIVER_NAME)-$(CONFIG_DRM_HANDSET_DEBUG) += \
 	$(RGXDIR)/services/server/common/ri_server.o
 
 # for PDUMP
@@ -297,7 +313,7 @@ $(DRIVER_NAME)-y += \
 	$(RGXDIR)/generated/rgxhwperf_bridge/server_rgxhwperf_bridge.o \
 	$(RGXDIR)/generated/regconfig_bridge/server_regconfig_bridge.o \
 
-$(DRIVER_NAME)-$(CONFIG_RI_DEBUG) += \
+$(DRIVER_NAME)-$(CONFIG_DRM_HANDSET_DEBUG) += \
 	$(RGXDIR)/generated/dri_bridge/client_ri_bridge.o \
 	$(RGXDIR)/generated/ri_bridge/server_ri_bridge.o \
 
