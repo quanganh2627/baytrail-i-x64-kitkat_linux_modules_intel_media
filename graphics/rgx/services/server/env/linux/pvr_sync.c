@@ -1015,9 +1015,6 @@ static const struct file_operations gsPVRSyncFOps =
 	.open           = PVRSyncOpen,
 	.release        = PVRSyncRelease,
 	.unlocked_ioctl = PVRSyncIOCTL,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = PVRSyncIOCTL,
-#endif
 };
 
 static struct miscdevice sPVRSyncDev =
