@@ -537,7 +537,7 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 			PSB_DEBUG_PM("SLC: flush and invalide timeout\n" );
 	}
 
-	if (!ret && IS_TNG_B0(dev)) {
+	if (!ret) {
 		uint32_t reg, data;
 
 		/* soc.gfx_wrapper.gbypassenable_sw = 1 */
@@ -545,7 +545,10 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 		data = WRAPPER_REG_READ(reg);
 		data |= 0x100; /*Bypass SLC for VEC*/
 		WRAPPER_REG_WRITE(reg, data);
+	}
 
+	if (!ret && IS_TNG_B0(dev)) {
+		uint32_t reg, data;
 		/* soc.gfx_wrapper.gclip_control.aes_bypass_disable = 1*/
 		reg = 0x160020 - GFX_WRAPPER_OFFSET;
 		data = WRAPPER_REG_READ(reg);
