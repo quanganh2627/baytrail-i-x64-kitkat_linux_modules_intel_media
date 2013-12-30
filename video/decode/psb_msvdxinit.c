@@ -747,7 +747,6 @@ static int msvdx_startup_init(struct drm_device *dev)
 
 	if (IS_MRFLD(dev))
 			msvdx_priv->fw_loaded_by_punit = 1;
-
 	else
 #endif
 		msvdx_priv->fw_loaded_by_punit =

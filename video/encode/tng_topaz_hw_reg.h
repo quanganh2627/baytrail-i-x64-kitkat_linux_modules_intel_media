@@ -2311,7 +2311,7 @@ int tng_topaz_power_up(
 
 int tng_topaz_power_off(struct drm_device *dev);
 
-int Is_Mrfld_B0();
+int Is_Secure_Fw();
 
 #define SHIFT_WB_PRODUCER       (0)
 #define MASK_WB_PRODUCER	\

@@ -37,6 +37,7 @@
 static int pm_cmd_freq_get(u32 reg_freq);
 static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd);
 static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd);
+static pm_cmd_power_set(int pm_reg, int pm_mask);
 
 static void vsp_set_max_frequency(struct drm_device *dev);
 static void vsp_set_default_frequency(struct drm_device *dev);
@@ -75,16 +76,8 @@ static bool vsp_power_up(struct drm_device *dev,
 	pm_ret = pmu_set_power_state_tng(VSP_SS_PM0, VSP_SSC, TNG_COMPOSITE_I0);
 #endif
 
-	u32 pm_mask = 0x0;
-	int pm_reg = 0x0;
-
-	pm_mask = 0x0;
-	pm_reg = 0x37; //VSP
-	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
-	udelay(500);
-
-	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("\nHACK - PR: After PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	if (IS_ANN_A0(dev))
+		pm_cmd_power_set(0x37, 0x0);
 
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state ON failed!\n");
@@ -133,15 +126,9 @@ static bool vsp_power_down(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VSP_SS_PM0, VSP_SSC, TNG_COMPOSITE_D3);
 #endif
-	u32 pm_mask = 0x0;
-	int pm_reg = 0x0;
-	pm_mask = 0x3;
-	pm_reg = 0x37; //VSP
-	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
-	udelay(500);
 
-	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("\nHACK - PR: After PWR OFF - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	if (IS_ANN_A0(dev))
+		pm_cmd_power_set(0x37, 0x3);
 
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state OFF failed!\n");
@@ -188,18 +175,9 @@ static bool ved_power_up(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VED_SS_PM0, VED_SSC, TNG_COMPOSITE_I0);
 #endif
-	u32 pm_mask = 0x0;
-	int pm_reg = 0x0;
 
-	pm_mask = 0x0;
-	pm_reg = 0x32; //VED
-	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("\nHACK - PR: Before PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
-	pm_mask = 0x0;
-	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
-	udelay(500);
-	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("\nHACK - PR: After PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	if (IS_ANN_A0(dev))
+		pm_cmd_power_set(0x32, 0x0);
 
 	if (pm_ret) {
 		PSB_DEBUG_PM("power up ved failed\n");
@@ -248,16 +226,9 @@ static bool ved_power_down(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VED_SS_PM0, VED_SSC, TNG_COMPOSITE_D3);
 #endif
-	u32 pm_mask = 0x0;
-	int pm_reg = 0x0;
-	pm_mask = 0x3;
-	pm_reg = 0x32; //VED
-	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
-	udelay(500);
 
-	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("\nHACK - PR: After PWR OFF - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
-
+	if (IS_ANN_A0(dev))
+		pm_cmd_power_set(0x32, 0x3);
 
 	if (pm_ret) {
 		PSB_DEBUG_PM("power down ved failed\n");
@@ -302,18 +273,14 @@ static bool vec_power_up(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VEC_SS_PM0, VEC_SSC, TNG_COMPOSITE_I0);
 #endif
-	u32 pm_mask = 0x0;
-	int pm_reg = 0x0;
 
-	pm_reg = 0x34; //VEC
-	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("\nHACK - PR: Before PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
-	pm_mask &= ~((u32)0x3);
-	printk ("\nHACK - PR: Before PWR ON - pwr_mask writing is: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
-	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
-	udelay(500);
-	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("\nHACK - PR: After PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	if (IS_ANN_A0(dev)) {
+		int pm_reg = 0x34;
+		u32 pm_mask = 0x0;
+		pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+		pm_mask &= ~((u32)0x3);
+		pm_cmd_power_set(0x34, pm_mask);
+	}
 
 	if (pm_ret) {
 		PSB_DEBUG_PM("power up vec failed\n");
@@ -390,16 +357,8 @@ static bool vec_power_down(struct drm_device *dev,
 	pm_ret = pmu_set_power_state_tng(VEC_SS_PM0, VEC_SSC, TNG_COMPOSITE_D3);
 #endif
 
-	u32 pm_mask = 0x0;
-	int pm_reg = 0x0;
-	pm_mask = 0x3;
-	pm_reg = 0x34; //VEC
-	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
-	udelay(1000);
-
-	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("\nHACK - PR: After PWR OFF - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
-
+	if (IS_ANN_A0(dev))
+		pm_cmd_power_set(0x34, 0x3);
 
 	if (pm_ret) {
 		DRM_ERROR("Power down ved failed\n");
@@ -506,6 +465,9 @@ static void vsp_set_max_frequency(struct drm_device *dev)
 	} else if (pci_device == 0x1181) {
 		max_freq_code = IP_FREQ_400_00;
 		PSB_DEBUG_PM("vsp maximum freq is 400\n");
+	} else if (pci_device == 0x1480) {
+		PSB_DEBUG_PM("DFS is not enabled for ANN yet, just run on default clk rate\n");
+		return;
 	} else {
 		DRM_ERROR("invalid pci device id %x\n", pci_device);
 		return;
@@ -576,4 +538,18 @@ int psb_msvdx_get_ved_freq(u32 reg_freq)
 void psb_set_freq_control_switch(bool config_value)
 {
 	need_set_ved_freq = config_value;
+}
+
+static pm_cmd_power_set(int pm_reg, int pm_mask)
+{
+	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
+	udelay(500);
+
+	if (pm_reg == VEC_SS_PM0 && !(pm_mask & 0x3)) {
+		printk("HACK  PR: Power up VEC, delay another 1500 us\n");
+		udelay(1500);
+	}
+
+	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("HACK - PR: After PWR SET - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
 }

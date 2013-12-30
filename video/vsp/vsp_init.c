@@ -35,6 +35,7 @@
 
 #define FW_NAME "vsp_vpp_vp8.bin"
 #define FW_NAME_B0 "vsp_vpp_vp8_b0.bin"
+#define FW_NAME_ANN "ann_signed_vsp_a0key0.bin"
 
 #ifdef CONFIG_DX_SEP54
 extern int sepapp_image_verify(u8 *addr, ssize_t size, u32 key_index, u32 magic_num);
@@ -371,8 +372,16 @@ int vsp_init_fw(struct drm_device *dev)
 
 	/* read firmware img */
 	VSP_DEBUG("load vsp fw\n");
-	if (vsp_priv->fw_loaded_by_punit)
-		ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
+	if (vsp_priv->fw_loaded_by_punit) {
+		if (IS_ANN_A0(dev))
+			ret = request_firmware(&raw, FW_NAME_ANN, &dev->pdev->dev);
+		else if (IS_TNG_B0(dev))
+			ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
+		else {
+			DRM_ERROR("VSP secure fw: bad platform\n");
+			raw = NULL;
+		}
+	}
 	else
 		ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
 
