@@ -76,9 +76,6 @@ static bool vsp_power_up(struct drm_device *dev,
 	pm_ret = pmu_set_power_state_tng(VSP_SS_PM0, VSP_SSC, TNG_COMPOSITE_I0);
 #endif
 
-	if (IS_ANN_A0(dev))
-		pm_cmd_power_set(0x37, 0x0);
-
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state ON failed!\n");
 		return false;
@@ -127,9 +124,6 @@ static bool vsp_power_down(struct drm_device *dev,
 	pm_ret = pmu_set_power_state_tng(VSP_SS_PM0, VSP_SSC, TNG_COMPOSITE_D3);
 #endif
 
-	if (IS_ANN_A0(dev))
-		pm_cmd_power_set(0x37, 0x3);
-
 	if (pm_ret) {
 		PSB_DEBUG_PM("VSP: pmu_nc_set_power_state OFF failed!\n");
 		return false;
@@ -175,9 +169,6 @@ static bool ved_power_up(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VED_SS_PM0, VED_SSC, TNG_COMPOSITE_I0);
 #endif
-
-	if (IS_ANN_A0(dev))
-		pm_cmd_power_set(0x32, 0x0);
 
 	if (pm_ret) {
 		PSB_DEBUG_PM("power up ved failed\n");
@@ -227,9 +218,6 @@ static bool ved_power_down(struct drm_device *dev,
 	pm_ret = pmu_set_power_state_tng(VED_SS_PM0, VED_SSC, TNG_COMPOSITE_D3);
 #endif
 
-	if (IS_ANN_A0(dev))
-		pm_cmd_power_set(0x32, 0x3);
-
 	if (pm_ret) {
 		PSB_DEBUG_PM("power down ved failed\n");
 		return false;
@@ -273,14 +261,6 @@ static bool vec_power_up(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VEC_SS_PM0, VEC_SSC, TNG_COMPOSITE_I0);
 #endif
-
-	if (IS_ANN_A0(dev)) {
-		int pm_reg = 0x34;
-		u32 pm_mask = 0x0;
-		pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-		pm_mask &= ~((u32)0x3);
-		pm_cmd_power_set(0x34, pm_mask);
-	}
 
 	if (pm_ret) {
 		PSB_DEBUG_PM("power up vec failed\n");
@@ -356,9 +336,6 @@ static bool vec_power_down(struct drm_device *dev,
 #else
 	pm_ret = pmu_set_power_state_tng(VEC_SS_PM0, VEC_SSC, TNG_COMPOSITE_D3);
 #endif
-
-	if (IS_ANN_A0(dev))
-		pm_cmd_power_set(0x34, 0x3);
 
 	if (pm_ret) {
 		DRM_ERROR("Power down ved failed\n");
@@ -546,10 +523,10 @@ static pm_cmd_power_set(int pm_reg, int pm_mask)
 	udelay(500);
 
 	if (pm_reg == VEC_SS_PM0 && !(pm_mask & 0x3)) {
-		printk("HACK  PR: Power up VEC, delay another 1500 us\n");
+		PSB_DEBUG_PM("Power up VEC, delay another 1500 us\n");
 		udelay(1500);
 	}
 
 	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
-	printk ("HACK - PR: After PWR SET - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	PSB_DEBUG_PM("pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
 }
