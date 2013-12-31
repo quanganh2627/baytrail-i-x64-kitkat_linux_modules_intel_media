@@ -82,6 +82,24 @@
 #define KEEP_UNUSED_CODE_DRIVER_DISPATCH 0
 
 #define HDMI_MONITOR_NAME_LENGTH 20
+
+/* Hack to Turn GFX islands up - BEGIN */
+static void power_up(int pm_reg, u32 pm_mask);
+
+static void power_up(int pm_reg, u32 pm_mask) {
+	u32 pwr_mask = 0;
+
+	pwr_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pwr_mask);
+	// pwr_mask &= ~pm_mask;
+	pwr_mask =0;
+
+	intel_mid_msgbus_write32(0x04, pm_reg, pwr_mask);
+	printk ("\nHACK - pwr_mask read modify write: reg=0x%x pwr_mask=0x%x \n", pm_reg, pwr_mask);
+	udelay(10);
+}
+/* Hack to Turn GFX islands up - END */
+
 int drm_psb_debug;
 int drm_decode_flag = 0x0;
 int drm_psb_enable_pr2_cabc = 1;
@@ -1219,7 +1237,11 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 		return false;
 	}
 
-	dev_priv->panel_id = PanelID;
+	if (IS_ANN_A0(dev))
+		dev_priv->panel_id = JDI_7x12_CMD;
+	else
+		dev_priv->panel_id = PanelID;
+
 	dev_priv->mipi_encoder_type = is_panel_vid_or_cmd(dev_priv->dev);
 
 	if (IS_TNG_B0(dev) || IS_ANN_A0(dev)) {
@@ -1585,6 +1607,32 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	unsigned long irqflags;
 	int ret = -ENOMEM;
 	uint32_t tt_pages;
+	u32 pm_mask = 0x0;
+	int pm_reg = 0x0;
+
+	if (IS_ANN_A0(dev)) {
+		pm_reg = 0x3f;
+		pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+		printk ("\nHACK - Before PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+
+		pm_mask = 0x0;
+		pm_reg = 0x30; //GFXSS
+		power_up(pm_reg,pm_mask);
+
+		pm_mask = 0x0;
+		pm_reg = 0x36; //DSPSS
+		power_up(pm_reg,pm_mask);
+
+		pm_reg = 0x3c; //HDMISS
+		power_up(pm_reg,pm_mask);
+
+		pm_reg = 0x39; //ATOMISP
+		power_up(pm_reg,pm_mask);
+
+		pm_reg = 0x3f;
+		pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+		printk ("\nHACK - PR: After PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	}
 
 	DRM_INFO("psb - %s\n", PSB_PACKAGE_VERSION);
 
@@ -1964,7 +2012,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	*/
 	dpst_init(dev, 5, 1);
 
-	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
+	if (!IS_ANN_A0(dev))
+		mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:
@@ -2984,9 +3033,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				if (ret) {
 					DRM_ERROR("%s: fail to get pipe %d vsync\n",
 							__func__, pipe);
-					if ((pipe != 1) && (is_panel_vid_or_cmd(dev) ==
-								MDFLD_DSI_ENCODER_DBI))
-						schedule_work(&dev_priv->reset_panel_work);
+
+					if (!IS_ANN_A0(dev)) {
+						if ((pipe != 1) && (is_panel_vid_or_cmd(dev) ==
+									MDFLD_DSI_ENCODER_DBI))
+							schedule_work(&dev_priv->reset_panel_work);
+					}
 				}
 
 				mdfld_dsi_dsr_allow(dsi_config);
@@ -3000,31 +3052,33 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			return ret;
 		}
 
-		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
-			if (dev_priv->vsync_enabled[pipe]) {
-				DRM_ERROR("%s: vsync has been enabled on pipe %d",
-					__func__, pipe);
-				return 0;
+		if (!IS_ANN_A0(dev)) {
+			if (arg->vsync_operation_mask & VSYNC_ENABLE) {
+				if (dev_priv->vsync_enabled[pipe]) {
+					DRM_ERROR("%s: vsync has been enabled on pipe %d",
+							__func__, pipe);
+					return 0;
+				}
+				mdfld_dsi_dsr_forbid(dsi_config);
+				ret = drm_vblank_get(dev, pipe);
+				if (ret != 0) {
+					DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
+							__func__, pipe);
+					mdfld_dsi_dsr_allow(dsi_config);
+				} else
+					dev_priv->vsync_enabled[pipe] = true;
 			}
-			mdfld_dsi_dsr_forbid(dsi_config);
-			ret = drm_vblank_get(dev, pipe);
-			if (ret != 0) {
-				DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
-					__func__, pipe);
-				mdfld_dsi_dsr_allow(dsi_config);
-			} else
-				dev_priv->vsync_enabled[pipe] = true;
-		}
 
-		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
-			if (!dev_priv->vsync_enabled[pipe]) {
-				DRM_ERROR("%s: vsync has been disabled on pipe %d",
-					__func__, pipe);
-				return 0;
+			if (arg->vsync_operation_mask & VSYNC_DISABLE) {
+				if (!dev_priv->vsync_enabled[pipe]) {
+					DRM_ERROR("%s: vsync has been disabled on pipe %d",
+							__func__, pipe);
+					return 0;
+				}
+				dev_priv->vsync_enabled[pipe] = false;
+				drm_vblank_put(dev, pipe);
+				mdfld_dsi_dsr_allow(dsi_config);
 			}
-			dev_priv->vsync_enabled[pipe] = false;
-			drm_vblank_put(dev, pipe);
-			mdfld_dsi_dsr_allow(dsi_config);
 		}
 	}
 

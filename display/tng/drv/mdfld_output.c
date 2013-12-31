@@ -69,6 +69,9 @@ mdfld_dsi_encoder_t is_panel_vid_or_cmd(struct drm_device *dev)
 		(struct drm_psb_private *) dev->dev_private;
 	int i;
 
+	if (IS_ANN_A0(dev))
+		dev_priv->panel_id = JDI_7x12_CMD;
+
 	for (i = 0; i < ARRAY_SIZE(panel_list); i++) {
 		if (panel_list[i].p_type == dev_priv->panel_id)
 			return panel_list[i].encoder_type;

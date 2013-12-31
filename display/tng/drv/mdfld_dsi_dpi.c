@@ -325,6 +325,15 @@ reset_recovery:
 	REG_WRITE(regs->dsppos_reg, ctx->dsppos);
 	REG_WRITE(regs->dspstride_reg, ctx->dspstride);
 
+	if (IS_ANN_A0(dev)) {
+		/*reset registers*/
+		REG_WRITE(0x7002C, 0x000A0200);
+		REG_WRITE(0x70508, 0x0c0c0c0c);
+		REG_WRITE(0x70504, 0xffffffff);
+		REG_WRITE(0x70500, 0xffffffff);
+		DRM_DEBUG("LOADING: 0x70504 %#x\n", REG_READ(0x70504));
+	}
+
 	/*Setup plane*/
 	REG_WRITE(regs->dspsize_reg, ctx->dspsize);
 	REG_WRITE(regs->dspsurf_reg, ctx->dspsurf);

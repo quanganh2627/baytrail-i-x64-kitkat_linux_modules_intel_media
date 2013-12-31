@@ -112,11 +112,18 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/sharp25x16_vid.o \
 	$(DISPLAYDIR)/dc_callbacks.o \
 	$(DISPLAYDIR)/ospm/pwr_mgmt.o \
-	$(DISPLAYDIR)/ospm/gfx_ospm.o \
 	$(DISPLAYDIR)/ospm/gfx_rtpm.o \
 	$(DISPLAYDIR)/ospm/dc_ospm.o \
 	$(DISPLAYDIR)/ospm/video_ospm.o \
 	$(DISPLAYDIR)/ospm/early_suspend.o
+
+ifeq ($(CONFIG_MOOREFIELD),y)
+$(DRIVER_NAME)-objs += \
+	$(DISPLAYDIR)/ospm/gfx_ospm_ann.o
+else
+$(DRIVER_NAME)-objs += \
+	$(DISPLAYDIR)/ospm/gfx_ospm.o
+endif
 
 ifeq ($(CONFIG_SUPPORT_HDMI),y)
 # Platform independent library

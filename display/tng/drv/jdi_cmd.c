@@ -99,32 +99,35 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		goto ic_init_err;
 	}
 
-	err = mdfld_dsi_send_mcs_short_hs(sender,
-			write_cabc_min_bright, 51, 1,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Write CABC minimum brightness\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
-	err = mdfld_dsi_send_gen_short_hs(sender,
-		access_protect, 4, 2,
-		MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Manufacture command protect on\n",
-		__func__, __LINE__);
-		goto ic_init_err;
+	if (!IS_ANN_A0(dev)) {
+		err = mdfld_dsi_send_mcs_short_hs(sender,
+				write_cabc_min_bright, 51, 1,
+				MDFLD_DSI_SEND_PACKAGE);
+		if (err) {
+			DRM_ERROR("%s: %d: Write CABC minimum brightness\n",
+					__func__, __LINE__);
+			goto ic_init_err;
+		}
+		err = mdfld_dsi_send_gen_short_hs(sender,
+				access_protect, 4, 2,
+				MDFLD_DSI_SEND_PACKAGE);
+		if (err) {
+			DRM_ERROR("%s: %d: Manufacture command protect on\n",
+					__func__, __LINE__);
+			goto ic_init_err;
+		}
+
+		err = mdfld_dsi_send_gen_long_lp(sender,
+				jdi_timing_control,
+				21, MDFLD_DSI_SEND_PACKAGE);
+		if (err) {
+			DRM_ERROR("%s: %d: Set panel timing\n",
+					__func__, __LINE__);
+			goto ic_init_err;
+		}
+		msleep(20);
 	}
 
-	err = mdfld_dsi_send_gen_long_lp(sender,
-			jdi_timing_control,
-			21, MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set panel timing\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
-	msleep(20);
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 			set_tear_on, 0x00, 1,
 			MDFLD_DSI_SEND_PACKAGE);
@@ -230,25 +233,46 @@ void jdi_cmd_controller_init(
 	hw_ctx->cck_div = 1;
 	hw_ctx->pll_bypass_mode = 0;
 
-	hw_ctx->mipi_control = 0x0;
-	hw_ctx->intr_en = 0xFFFFFFFF;
-	hw_ctx->hs_tx_timeout = 0xFFFFFF;
-	hw_ctx->lp_rx_timeout = 0xFFFFFF;
-	hw_ctx->device_reset_timer = 0xffff;
-	hw_ctx->turn_around_timeout = 0x1a;
-	hw_ctx->high_low_switch_count = 0x21;
-	hw_ctx->clk_lane_switch_time_cnt = 0x21000f;
-	hw_ctx->lp_byteclk = 0x5;
-	hw_ctx->dphy_param = 0x25155b1e;
-	hw_ctx->eot_disable = 0x3;
-	hw_ctx->init_count = 0xf0;
-	hw_ctx->dbi_bw_ctrl = 1390;
-	hw_ctx->hs_ls_dbi_enable = 0x0;
-	hw_ctx->dsi_func_prg = ((DBI_DATA_WIDTH_OPT2 << 13) |
+	if (IS_ANN_A0(dev)) {
+		hw_ctx->mipi_control = 0x18;
+		hw_ctx->intr_en = 0xFFFFFFFF;
+		hw_ctx->hs_tx_timeout = 0xFFFFFF;
+		hw_ctx->lp_rx_timeout = 0xFFFFFF;
+		hw_ctx->device_reset_timer = 0xff;
+		hw_ctx->turn_around_timeout = 0xffff;
+		hw_ctx->high_low_switch_count = 0x20;
+		hw_ctx->clk_lane_switch_time_cnt = 0x21000e;
+		hw_ctx->lp_byteclk = 0x4;
+		hw_ctx->dphy_param = 0x1b104315;
+		hw_ctx->eot_disable = 0x1;
+		hw_ctx->init_count = 0x7d0;
+		hw_ctx->dbi_bw_ctrl = 1390;
+		hw_ctx->hs_ls_dbi_enable = 0x0;
+		hw_ctx->dsi_func_prg = ((DBI_DATA_WIDTH_OPT2 << 13) |
 				dsi_config->lane_count);
-	hw_ctx->mipi = PASS_FROM_SPHY_TO_AFE |
+		hw_ctx->mipi = SEL_FLOPPED_HSTX	| PASS_FROM_SPHY_TO_AFE |
+			BANDGAP_CHICKEN_BIT | TE_TRIGGER_GPIO_PIN;
+	} else {
+		hw_ctx->mipi_control = 0x0;
+		hw_ctx->intr_en = 0xFFFFFFFF;
+		hw_ctx->hs_tx_timeout = 0xFFFFFF;
+		hw_ctx->lp_rx_timeout = 0xFFFFFF;
+		hw_ctx->device_reset_timer = 0xffff;
+		hw_ctx->turn_around_timeout = 0x1a;
+		hw_ctx->high_low_switch_count = 0x21;
+		hw_ctx->clk_lane_switch_time_cnt = 0x21000f;
+		hw_ctx->lp_byteclk = 0x5;
+		hw_ctx->dphy_param = 0x25155b1e;
+		hw_ctx->eot_disable = 0x3;
+		hw_ctx->init_count = 0xf0;
+		hw_ctx->dbi_bw_ctrl = 1390;
+		hw_ctx->hs_ls_dbi_enable = 0x0;
+		hw_ctx->dsi_func_prg = ((DBI_DATA_WIDTH_OPT2 << 13) |
+				dsi_config->lane_count);
+		hw_ctx->mipi = PASS_FROM_SPHY_TO_AFE |
 			BANDGAP_CHICKEN_BIT |
 			TE_TRIGGER_GPIO_PIN;
+	}
 	hw_ctx->video_mode_format = 0xf;
 
 #ifdef ENABLE_CSC_GAMMA /*FIXME*/
