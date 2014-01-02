@@ -381,6 +381,7 @@ config DRM_VXD_BYT
 config MOOREFIELD
 	bool "Build option for the Moorefield platform"
 	depends on DRM_INTEL_HANDSET
+	default n
 	help
 	  For the GFX block of TNG/ANN, its power islands' power on/off sequences are:
 	  1. Power on:  SLC_LDO -> SLC -> Sidekick -> Rascal/Dust;
