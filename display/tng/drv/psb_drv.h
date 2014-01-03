@@ -77,6 +77,10 @@ enum {
 	CHIP_MRFLD_1480 = 5
 };
 
+enum enum_ports {
+	PORT_A = 0,
+	PORT_C = 1
+} ;
 
 #define PCI_ID_TOPAZ_DISABLED 0x4101
 

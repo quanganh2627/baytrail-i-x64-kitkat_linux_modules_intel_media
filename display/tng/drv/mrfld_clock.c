@@ -347,7 +347,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 				clk_n = 1;
 				clock.m = 120;
 			}
-		} else if (get_panel_type(dev, pipe) == SHARP_25x16_VID) {
+		} else if (is_dual_dsi(dev)) {
 			clock.p1 = 2;
 			clk_n = 1;
 			clock.m = 104;

@@ -99,10 +99,6 @@ void mdfld_dsi_sharp25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_confi
 	/* Virtual channel number */
 	int mipi_vc = 0;
 	int mipi_pixel_format = 0x4;
-	/* BURST_MODE */
-	int mipi_mode = 0x3;
-	/* IP_TG_CONFIG */
-	int ip_tg_config = 0x4;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -136,17 +132,13 @@ void mdfld_dsi_sharp25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_confi
 
 	/*setup mipi port configuration*/
 	hw_ctx->mipi = MIPI_PORT_EN | PASS_FROM_SPHY_TO_AFE |
-		BANDGAP_CHICKEN_BIT | dsi_config->lane_config;
+		dsi_config->lane_config | 3;
 }
 
 static int mdfld_dsi_sharp25x16_detect(struct mdfld_dsi_config *dsi_config)
 {
 	int status;
-	struct drm_device *dev = dsi_config->dev;
-	struct mdfld_dsi_hw_registers *regs = &dsi_config->regs;
-	u32 dpll_val, device_ready_val;
 	int pipe = dsi_config->pipe;
-	u32 power_island = 0;
 
 	PSB_DEBUG_ENTRY("\n");
 

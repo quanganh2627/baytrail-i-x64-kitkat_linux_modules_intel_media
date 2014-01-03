@@ -188,6 +188,8 @@ int mdfld_dsi_dsr_update_panel_fb(struct mdfld_dsi_config *dsi_config)
 
 	PSB_DEBUG_ENTRY("\n");
 
+	if (dsi_config->type == MDFLD_DSI_ENCODER_DPI)
+		return 0;
 	mutex_lock(&dsi_config->context_lock);
 
 	if (!dsi_config->dsi_hw_context.panel_on) {
@@ -298,7 +300,6 @@ int mdfld_dsi_dsr_forbid_locked(struct mdfld_dsi_config *dsi_config)
 
 	/*if no dsr attached, return 0*/
 	if (!dsr) {
-		DRM_ERROR("dsr is NULL\n");
 		return 0;
 	}
 	/*exit dsr if necessary*/
@@ -356,7 +357,6 @@ int mdfld_dsi_dsr_allow_locked(struct mdfld_dsi_config *dsi_config)
 
 	/*if no dsr attached, return 0*/
 	if (!dsr) {
-		DRM_ERROR("dsr is NULL\n");
 		return 0;
 	}
 
