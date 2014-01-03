@@ -193,7 +193,6 @@ struct psb_validate_req {
 	uint64_t presumed_gpu_offset;
 	uint32_t buffer_handle;
 	uint32_t presumed_flags;
-	uint32_t group;
 	uint32_t pad64;
 	uint32_t unfence_flag;
 };
