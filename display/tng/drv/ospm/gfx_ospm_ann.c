@@ -533,16 +533,7 @@ static bool ospm_sidekick_power_up(struct drm_device *dev,
 		if (unlikely(count >= 10000))
 			PSB_DEBUG_PM("SLC: flush and invalide timeout\n" );
 	}
-
-	if (!ret) {
-		uint32_t reg, data;
-
-		/* soc.gfx_wrapper.gbypassenable_sw = 1 */
-		reg = 0x160854 - GFX_WRAPPER_OFFSET;
-		data = WRAPPER_REG_READ(reg);
-		data |= 0x100; /*Bypass SLC for VEC*/
-		WRAPPER_REG_WRITE(reg, data);
-	}
+#endif
 
 	if (!ret && IS_TNG_B0(dev)) {
 		uint32_t reg, data;
@@ -554,6 +545,7 @@ static bool ospm_sidekick_power_up(struct drm_device *dev,
 		WRAPPER_REG_WRITE(reg, data);
 	}
 
+#if 0
 	/* SLC hash set */
 	if (!ret)
 	{
@@ -626,6 +618,16 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 
 	PSB_DEBUG_PM("Post-power-up status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
+
+	if (!ret) {
+		uint32_t reg, data;
+
+		/* soc.gfx_wrapper.gbypassenable_sw = 1 */
+		reg = 0x160854 - GFX_WRAPPER_OFFSET;
+		data = WRAPPER_REG_READ(reg);
+		data |= 0x100; /*Bypass SLC for VEC*/
+		WRAPPER_REG_WRITE(reg, data);
+	}
 
 	return !ret;
 }
