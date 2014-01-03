@@ -41,9 +41,6 @@
 extern int sepapp_image_verify(u8 *addr, ssize_t size, u32 key_index, u32 magic_num);
 #endif
 
-static inline unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
-					    unsigned int processor);
-
 static ssize_t psb_vsp_pmstate_show(struct device *dev,
 				      struct device_attribute *attr, char *buf)
 {
@@ -101,45 +98,7 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->context_vp8_id = 0;
 	atomic_set(&dev_priv->vsp_mmu_invaldc, 0);
 
-        if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
-	    intel_mid_soc_stepping() < 1) {
-		vsp_priv->fw_loaded_by_punit = 0;
-	} else if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
-		   intel_mid_soc_stepping() == 1) {
-		vsp_priv->fw_loaded_by_punit = 1;
-	} else {
-		VSP_DEBUG("higher stepping, guess fw loaded by punit\n");
-		vsp_priv->fw_loaded_by_punit = 1;
-	}
-
 	dev_priv->vsp_private = vsp_priv;
-
-	if (vsp_priv->fw_loaded_by_punit) {
-		vsp_priv->firmware_sz = 0;
-		vsp_priv->firmware = NULL;
-	} else {
-		VSP_DEBUG("allocate buffer for fw\n");
-		/* FIXME: assume 1 page, will modify to a proper value */
-		vsp_priv->firmware_sz = FW_SZ;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
-		ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
-				ttm_bo_type_kernel,
-				DRM_PSB_FLAG_MEM_MMU |
-				TTM_PL_FLAG_NO_EVICT,
-				0, 0, 0, NULL, &vsp_priv->firmware);
-#else
-		ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
-				ttm_bo_type_kernel,
-				DRM_PSB_FLAG_MEM_MMU |
-				TTM_PL_FLAG_NO_EVICT,
-				0, 0, NULL, &vsp_priv->firmware);
-#endif
-		if (ret != 0) {
-			DRM_ERROR("VSP: failed to allocate VSP"
-					" buffer for firmware\n");
-			goto out_clean;
-		}
-	}
 
 	vsp_priv->cmd_queue_sz = VSP_CMD_QUEUE_SIZE *
 		sizeof(struct vss_command_t);
@@ -274,8 +233,6 @@ int vsp_deinit(struct drm_device *dev)
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 
 	VSP_DEBUG("free VSP firmware/context buffer\n");
-	if (vsp_priv->firmware)
-		ttm_bo_unref(&vsp_priv->firmware);
 
 	if (vsp_priv->cmd_queue) {
 		ttm_bo_kunmap(&vsp_priv->cmd_kmap);
@@ -354,14 +311,11 @@ int vsp_init_fw(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	struct ttm_bo_device *bdev = &dev_priv->bdev;
-	int ret;
+	int ret = 0;
 	const struct firmware *raw;
-	unsigned char *ptr, *bo_ptr, *ma_ptr;
+	unsigned char *ptr, *ma_ptr;
 	struct vsp_secure_boot_header *boot_header;
 	struct vsp_multi_app_blob_data *ma_header;
-	struct ttm_bo_kmap_obj tmp_kmap;
-	bool is_iomem;
 	unsigned long imr_addr;
 	int imr_size;
 	unsigned char *imr_ptr;
@@ -372,18 +326,14 @@ int vsp_init_fw(struct drm_device *dev)
 
 	/* read firmware img */
 	VSP_DEBUG("load vsp fw\n");
-	if (vsp_priv->fw_loaded_by_punit) {
-		if (IS_ANN_A0(dev))
-			ret = request_firmware(&raw, FW_NAME_ANN, &dev->pdev->dev);
-		else if (IS_TNG_B0(dev))
-			ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
-		else {
-			DRM_ERROR("VSP secure fw: bad platform\n");
-			raw = NULL;
-		}
+	if (IS_ANN_A0(dev))
+		ret = request_firmware(&raw, FW_NAME_ANN, &dev->pdev->dev);
+	else if (IS_TNG_B0(dev))
+		ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
+	else {
+		DRM_ERROR("VSP secure fw: bad platform\n");
+		raw = NULL;
 	}
-	else
-		ret = request_firmware(&raw, FW_NAME, &dev->pdev->dev);
 
 	if (ret < 0 || raw == NULL) {
 		DRM_ERROR("VSP: request_firmware failed: reason %d\n", ret);
@@ -399,14 +349,10 @@ int vsp_init_fw(struct drm_device *dev)
 
 	ptr = (void *)raw->data;
 	ma_ptr = (void *) raw->data + vrl_header_size;
-	if (vsp_priv->fw_loaded_by_punit) {
-		boot_header = (struct vsp_secure_boot_header *)
-			(ptr + vrl_header_size);
-		ma_header = (struct vsp_multi_app_blob_data *)
-			(ma_ptr + boot_header->ma_header_offset);
-	} else {
-		boot_header = (struct vsp_secure_boot_header *) ptr;
-	}
+	boot_header = (struct vsp_secure_boot_header *)
+		(ptr + vrl_header_size);
+	ma_header = (struct vsp_multi_app_blob_data *)
+		(ma_ptr + boot_header->ma_header_offset);
 
 	/* get firmware header */
 	memcpy(&vsp_priv->boot_header, boot_header, sizeof(vsp_priv->boot_header));
@@ -452,90 +398,37 @@ int vsp_init_fw(struct drm_device *dev)
 	VSP_DEBUG("apps_default_context_buffer_size %x\n",
 			ma_header->apps_default_context_buffer_size);
 
-	if (vsp_priv->fw_loaded_by_punit) {
-		/* get imr 11 region start address and size */
-		imr_addr = intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,
-						   TNG_IMR11L_MSG_REGADDR);
-		imr_addr <<= 10;
-		VSP_DEBUG("IMR11 base address %p\n", imr_addr);
+	/* get imr 11 region start address and size */
+	imr_addr = intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,
+					   TNG_IMR11L_MSG_REGADDR);
+	imr_addr <<= 10;
+	VSP_DEBUG("IMR11 base address %p\n", imr_addr);
 
-		imr_size = raw->size;
+	imr_size = raw->size;
 
-		/* map imr 11 */
-		/* check if raw size is smaller than */
-		/* ioremap the region */
-		imr_ptr = ioremap(imr_addr, imr_size);
-		if (!imr_ptr) {
-			DRM_ERROR("failed to map imr_addr\n");
-			ret = -1;
-			goto out;
-		}
-
-		/* copy the firmware to imr 11 */
-		memcpy(imr_ptr, ptr, raw->size);
-
-		/* unmap the region */
-		iounmap(imr_ptr);
-#ifdef CONFIG_DX_SEP54
-		ret = sepapp_image_verify(imr_addr, imr_size, 0,
-					vsp_magic_num);
-		if (ret) {
-			DRM_ERROR("failed to verify vsp firmware"
-					", ret %x\n", ret);
-			ret = -1;
-			goto out;
-		}
-#endif
-	} else {
-		/* If the memory is less than FW, re-alloc it */
-		if (raw->size >
-		    (vsp_priv->firmware_sz - VSP_FIRMWARE_MEM_ALIGNMENT)) {
-			if (vsp_priv->firmware)
-				ttm_bo_unref(&vsp_priv->firmware);
-
-			VSP_DEBUG("allocate a new bo from size %d to size %d\n",
-					vsp_priv->firmware_sz, raw->size);
-
-		vsp_priv->firmware_sz = raw->size + VSP_FIRMWARE_MEM_ALIGNMENT;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
-		ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
-				ttm_bo_type_kernel,
-				DRM_PSB_FLAG_MEM_MMU |
-				TTM_PL_FLAG_NO_EVICT,
-				0, 0, 0, NULL,
-				&vsp_priv->firmware);
-#else
-		ret = ttm_buffer_object_create(bdev, vsp_priv->firmware_sz,
-				ttm_bo_type_kernel,
-				DRM_PSB_FLAG_MEM_MMU |
-				TTM_PL_FLAG_NO_EVICT,
-				0, 0, NULL,
-				&vsp_priv->firmware);
-#endif
-
-			if (ret != 0) {
-				DRM_ERROR("VSP: failed to allocate"
-						" firmware buffer\n");
-				return -1;
-				goto out;
-			}
-		}
-
-		ret = ttm_bo_kmap(vsp_priv->firmware, 0,
-				vsp_priv->firmware->num_pages, &tmp_kmap);
-		if (ret) {
-			DRM_ERROR("drm_bo_kmap failed: %d\n", ret);
-			ttm_bo_unref(&vsp_priv->firmware);
-			ttm_bo_kunmap(&tmp_kmap);
-			ret = -1;
-			goto out;
-		}
-
-		bo_ptr = ttm_kmap_obj_virtual(&tmp_kmap, &is_iomem);
-		memcpy(bo_ptr, ptr, raw->size);
-
-		ttm_bo_kunmap(&tmp_kmap);
+	/* map imr 11 */
+	/* check if raw size is smaller than */
+	/* ioremap the region */
+	imr_ptr = ioremap(imr_addr, imr_size);
+	if (!imr_ptr) {
+		DRM_ERROR("failed to map imr_addr\n");
+		ret = -1;
+		goto out;
 	}
+
+	/* copy the firmware to imr 11 */
+	memcpy(imr_ptr, ptr, raw->size);
+
+	/* unmap the region */
+	iounmap(imr_ptr);
+#ifdef CONFIG_DX_SEP54
+	ret = sepapp_image_verify(imr_addr, imr_size, 0, vsp_magic_num);
+	if (ret) {
+		DRM_ERROR("failed to verify vsp firmware, ret %x\n", ret);
+		ret = -1;
+		goto out;
+	}
+#endif
 
 	vsp_priv->fw_loaded = VSP_FW_LOADED;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
@@ -561,7 +454,6 @@ int vsp_reset(struct drm_psb_private *dev_priv)
 int vsp_setup_fw(struct drm_psb_private *dev_priv)
 {
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	int ret;
 	uint32_t pd_addr;
 
 	/* set MMU */
@@ -583,9 +475,6 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 	vsp_priv->ctrl->ack_wr = 0;
 
 	VSP_DEBUG("setup firmware\n");
-
-	if (!vsp_priv->fw_loaded_by_punit)
-		vsp_set_firmware(dev_priv, vsp_vp0);
 
 	/* Set power-saving mode */
 	if (drm_vsp_pmpolicy == PSB_PMPOLICY_NOPM)
@@ -629,7 +518,7 @@ void vsp_start_function(struct drm_psb_private *dev_priv, unsigned int pc,
 	SP_REG_WRITE32(SP_STAT_AND_CTRL_REG, reg, processor);
 	return;
 }
-
+#if 0
 unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
 			      unsigned int processor)
 {
@@ -661,6 +550,7 @@ unsigned int vsp_set_firmware(struct drm_psb_private *dev_priv,
 
 	return 0;
 }
+#endif
 
 void vsp_init_function(struct drm_psb_private *dev_priv)
 {
@@ -674,9 +564,6 @@ void vsp_continue_function(struct drm_psb_private *dev_priv)
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 
 	vsp_priv->ctrl->entry_kind = vsp_entry_booted;
-
-	if (!vsp_priv->fw_loaded_by_punit)
-		vsp_set_firmware(dev_priv, vsp_vp0);
 
 	vsp_priv->ctrl->entry_kind = vsp_entry_resume;
 
@@ -722,10 +609,6 @@ int vsp_resume_function(struct drm_psb_private *dev_priv)
 			vsp_priv->saved_config_regs[VSP_ACK_QUEUE_RD_REG]);
 	CONFIG_REG_WRITE32(VSP_ACK_QUEUE_WR_REG,
 			vsp_priv->saved_config_regs[VSP_ACK_QUEUE_WR_REG]);
-
-	/* setup firmware */
-	if (!vsp_priv->fw_loaded_by_punit)
-		vsp_set_firmware(dev_priv, vsp_vp0);
 
 	vsp_priv->ctrl->entry_kind = vsp_entry_resume;
 

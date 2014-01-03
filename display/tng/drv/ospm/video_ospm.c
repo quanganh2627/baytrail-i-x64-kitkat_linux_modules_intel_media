@@ -81,7 +81,7 @@ static bool vsp_power_up(struct drm_device *dev,
 		return false;
 	}
 
-	if (vsp_priv->fw_loaded_by_punit && drm_vsp_burst)
+	if (drm_vsp_burst)
 		vsp_set_max_frequency(dev);
 
 	psb_irq_preinstall_islands(dev, OSPM_VIDEO_VPP_ISLAND);
@@ -115,7 +115,7 @@ static bool vsp_power_down(struct drm_device *dev,
 	/* save VSP registers */
 	psb_vsp_save_context(dev);
 
-	if (vsp_priv->fw_loaded_by_punit && drm_vsp_burst)
+	if (drm_vsp_burst)
 		vsp_set_default_frequency(dev);
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC

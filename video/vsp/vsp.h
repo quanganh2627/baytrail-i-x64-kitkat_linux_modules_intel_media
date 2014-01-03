@@ -213,15 +213,11 @@ struct vsp_private {
 
 	int fw_loaded;
 	int vsp_state;
-	int fw_loaded_by_punit;
 
 	spinlock_t lock;
 
 	unsigned int cmd_queue_size;
 	unsigned int ack_queue_size;
-
-	struct ttm_buffer_object *firmware;
-	unsigned int firmware_sz;
 
 	struct ttm_buffer_object *cmd_queue_bo;
 	unsigned int cmd_queue_sz;
