@@ -1223,7 +1223,7 @@ typedef struct _compat_PVRSRV_BRIDGE_IN_RGXSUBMITTRANSFER_TAG
 	IMG_UINT32 phServerSync;
 	IMG_UINT32 ui32NumFenceFDs;
 	/* IMG_INT32 * pi32FenceFDs; */
-	IMG_UINT32 pi32FenceFDs;
+	IMG_INT32 pi32FenceFDs;
 	/* IMG_UINT32 * pui32CommandSize; */
 	IMG_UINT32 pui32CommandSize;
 	/* IMG_UINT8* * pui8FWCommand; */
