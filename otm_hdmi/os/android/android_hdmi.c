@@ -2665,22 +2665,15 @@ void android_hdmi_driver_init(struct drm_device *dev,
 		return;
 
 	psb_intel_output->mode_dev = mode_dev;
+	psb_intel_output->type = INTEL_OUTPUT_HDMI;
+	psb_intel_output->dev_priv = (struct drm_psb_private *)hdmi_priv;
+
 	connector = &psb_intel_output->base;
 	encoder = &psb_intel_output->enc;
+
 	drm_connector_init(dev, &psb_intel_output->base,
 				&android_hdmi_connector_funcs,
 				DRM_MODE_CONNECTOR_DVID);
-
-	drm_encoder_init(dev, &psb_intel_output->enc, &android_hdmi_enc_funcs,
-			 DRM_MODE_ENCODER_TMDS);
-
-	drm_mode_connector_attach_encoder(&psb_intel_output->base,
-					  &psb_intel_output->enc);
-	psb_intel_output->type = INTEL_OUTPUT_HDMI;
-
-	psb_intel_output->dev_priv = (struct drm_psb_private *)hdmi_priv;
-
-	drm_encoder_helper_add(encoder, &android_hdmi_enc_helper_funcs);
 	drm_connector_helper_add(connector,
 				 &android_hdmi_connector_helper_funcs);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
@@ -2695,9 +2688,15 @@ void android_hdmi_driver_init(struct drm_device *dev,
 	connector->display_info.subpixel_order = SubPixelHorizontalRGB;
 	connector->interlace_allowed = false;
 	connector->doublescan_allowed = false;
-
 	/* Disable polling */
 	connector->polled = 0;
+
+	drm_encoder_init(dev, &psb_intel_output->enc, &android_hdmi_enc_funcs,
+			 DRM_MODE_ENCODER_TMDS);
+	drm_encoder_helper_add(encoder, &android_hdmi_enc_helper_funcs);
+
+	drm_mode_connector_attach_encoder(&psb_intel_output->base,
+					  &psb_intel_output->enc);
 
 #ifdef OTM_HDMI_HDCP_ENABLE
 	otm_hdmi_hdcp_init(hdmi_priv->context, &hdmi_ddc_read_write);
