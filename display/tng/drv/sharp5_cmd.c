@@ -21,145 +21,142 @@
  * DEALINGS IN THE SOFTWARE.
  *
  * Authors:
- * Faxing Lu<faxing.lu@intel.com>
+ * Faxing Lu <faxing.lu@intel.com>
  */
 
 #include "mdfld_dsi_dbi.h"
 #include "mdfld_dsi_esd.h"
 #include <asm/intel_scu_pmic.h>
-#include <linux/i2c.h>
-#include <linux/i2c/pca953x.h>
+#include <asm/intel_mid_rpmsg.h>
+#include <asm/intel_mid_remoteproc.h>
 
 #include "displays/sharp5_cmd.h"
 
+/* The register to control secure I2C FLIS pin */
+#define SECURE_I2C_FLIS_REG	0xFF0C1D30
+
 static int mipi_reset_gpio;
+static int bias_en_gpio;
 
-static u8 sharp5_enable_PWM_output[] = {0x53, 0x0c};
-static u8 sharp5_brightness[] = {0x51, 0xff};
-static u8 sharp5_unlock_manufacturing[] = {0xb0, 0x00};
-static u8 sharp5_remove_NVM_reload[] = {0xd6, 0x01};
-static u8 sharp5_mcs_clumn_addr[] = {
-			0x2a, 0x00, 0x00, 0x04, 0x37};
-static u8 sharp5_mcs_page_addr[] = {
-			0x2b, 0x00, 0x00, 0x07, 0x7f};
+#define sharp5_remove_nvm_reload 0xd6
+static	u8 sharp5_mcs_column_addr[] = { 0x2a, 0x00, 0x00, 0x04, 0x37 };
+static	u8 sharp5_mcs_page_addr[] = { 0x2b, 0x00, 0x00, 0x07, 0x7f };
 
-
-static
-int sharp5_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
+static int sharp5_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 {
-	struct mdfld_dsi_pkg_sender *sender
-		= mdfld_dsi_get_pkg_sender(dsi_config);
-	int err = 0;
-	PSB_DEBUG_ENTRY("\n");
-	if (!sender) {
-		DRM_ERROR("Cannot get sender\n");
-		return -EINVAL;
-	}
-	mdfld_dsi_send_gen_long_lp(sender,
-			sharp5_unlock_manufacturing, 0x2, 0);
+	struct mdfld_dsi_pkg_sender *sender =
+		mdfld_dsi_get_pkg_sender(dsi_config);
+	int ret;
+	u8 cmd;
 
-	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL) {
-		DRM_ERROR("%s: %d: unlock_manufacturing\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
+	/* exit sleep */
+	cmd = exit_sleep_mode;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0, 0, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
+	msleep(120);
 
-	mdfld_dsi_send_gen_long_lp(sender,
-			sharp5_remove_NVM_reload, 0x2, 0);
+	/* unlock MCW */
+	cmd = access_protect;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0x0, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL) {
-		DRM_ERROR("%s: %d: Remove NVM reload\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
+	/* reload NVM */
+	cmd = sharp5_remove_nvm_reload;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0x1, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	mdfld_dsi_send_mcs_long_lp(sender, sharp5_brightness, 2, 0);
-	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL) {
-		DRM_ERROR("%s: %d: Set brightness\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
+	/* send display brightness */
+	cmd = write_display_brightness;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0xff, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	mdfld_dsi_send_mcs_long_lp(sender, sharp5_enable_PWM_output, 2, 0);
-	if (sender->status == MDFLD_DSI_CONTROL_ABNORMAL) {
-		DRM_ERROR("%s: %d: Set PWM outpur enable\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
+	/* display control */
+	cmd = write_ctrl_display;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0x0c, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	err = mdfld_dsi_send_mcs_short_lp(sender,
-			set_tear_on, 0x00, 1,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Tear On\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
+	/* CABC */
+	cmd = 0x55;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0x0, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	err = mdfld_dsi_send_mcs_long_lp(sender,
-			sharp5_mcs_clumn_addr,
-			5, MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Clumn Address\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
+	/* tear on*/
+	cmd = set_tear_on;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0x0, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	err = mdfld_dsi_send_mcs_long_lp(sender,
-			sharp5_mcs_page_addr,
-			5, MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Page Address\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
+	/* column address */
+	cmd = 0x2a;
+	ret = mdfld_dsi_send_mcs_long_hs(sender, sharp5_mcs_column_addr, 5,
+					 MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
+
+	/* page address */
+	cmd = 0x2b;
+	ret = mdfld_dsi_send_mcs_long_hs(sender, sharp5_mcs_page_addr, 5,
+					 MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
+
 	return 0;
 
-ic_init_err:
-	err = -EIO;
-	return err;
+err_out:
+	DRM_ERROR("failed to send command %#x\n", cmd);
+	return ret;
 }
 
-static
-void sharp5_cmd_controller_init(
-		struct mdfld_dsi_config *dsi_config)
+static void sharp5_cmd_controller_init(struct mdfld_dsi_config *dsi_config)
 {
-	struct mdfld_dsi_hw_context *hw_ctx =
-				&dsi_config->dsi_hw_context;
+	struct mdfld_dsi_hw_context *hw_ctx = &dsi_config->dsi_hw_context;
 
 	PSB_DEBUG_ENTRY("\n");
 
-	/*reconfig lane configuration*/
+	/* reconfig lane configuration */
 	dsi_config->lane_count = 4;
 	dsi_config->lane_config = MDFLD_DSI_DATA_LANE_4_0;
 	hw_ctx->cck_div = 1;
 	hw_ctx->pll_bypass_mode = 0;
 
-	hw_ctx->mipi_control = 0x0;
-	hw_ctx->intr_en = 0xFFFFFFFF;
-	hw_ctx->hs_tx_timeout = 0xFFFFFF;
-	hw_ctx->lp_rx_timeout = 0xFFFFFF;
+	/* properties for 800MHz dotclock, 4 data lanes */
+	hw_ctx->mipi_control = 0x18;
+	hw_ctx->intr_en = 0xffffffff;
+	hw_ctx->hs_tx_timeout = 0x00ffffff;
+	hw_ctx->lp_rx_timeout = 0x00ffffff;
 	hw_ctx->device_reset_timer = 0xffff;
 	hw_ctx->turn_around_timeout = 0x14;
-	hw_ctx->high_low_switch_count = 0x2B;
-	hw_ctx->clk_lane_switch_time_cnt =  0x2b0014;
+	hw_ctx->high_low_switch_count = 0x2c;
+	hw_ctx->clk_lane_switch_time_cnt =  0x2e0016;
 	hw_ctx->lp_byteclk = 0x6;
 	hw_ctx->dphy_param = 0x2a18681f;
-	hw_ctx->eot_disable = 0x0;
+	hw_ctx->eot_disable = 0x1;
 	hw_ctx->init_count = 0xf0;
-	hw_ctx->dbi_bw_ctrl = 1100;
+	hw_ctx->dbi_bw_ctrl = 0x820;
 	hw_ctx->hs_ls_dbi_enable = 0x0;
-	hw_ctx->dsi_func_prg = ((DBI_DATA_WIDTH_OPT2 << 13) |
-				dsi_config->lane_count);
+	hw_ctx->dsi_func_prg = (DBI_DATA_WIDTH_OPT2 << 13) |
+			       dsi_config->lane_count;
 
-	hw_ctx->mipi = PASS_FROM_SPHY_TO_AFE |
-			BANDGAP_CHICKEN_BIT |
-		TE_TRIGGER_GPIO_PIN;
+	hw_ctx->mipi = SEL_FLOPPED_HSTX	| PASS_FROM_SPHY_TO_AFE |
+		       BANDGAP_CHICKEN_BIT /*| TE_TRIGGER_GPIO_PIN */;
 	hw_ctx->video_mode_format = 0xf;
 }
-static
-int sharp5_cmd_panel_connection_detect(
-	struct mdfld_dsi_config *dsi_config)
+
+static int
+sharp5_cmd_panel_connection_detect(struct mdfld_dsi_config *dsi_config)
 {
 	int status;
 	int pipe = dsi_config->pipe;
@@ -169,22 +166,19 @@ int sharp5_cmd_panel_connection_detect(
 	if (pipe == 0) {
 		status = MDFLD_DSI_PANEL_CONNECTED;
 	} else {
-		DRM_INFO("%s: do NOT support dual panel\n",
-		__func__);
+		DRM_INFO("%s: do NOT support dual panel\n", __func__);
 		status = MDFLD_DSI_PANEL_DISCONNECTED;
 	}
 
 	return status;
 }
 
-static
-int sharp5_cmd_power_on(
-	struct mdfld_dsi_config *dsi_config)
+static int sharp5_cmd_power_on(struct mdfld_dsi_config *dsi_config)
 {
-
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
-	int err = 0;
+	int ret;
+	u8 cmd;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -193,44 +187,32 @@ int sharp5_cmd_power_on(
 		return -EINVAL;
 	}
 
-	err = mdfld_dsi_send_mcs_short_hs(sender,
-		set_address_mode, 0x0, 1,
-		MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Address Mode\n",
-		__func__, __LINE__);
-		goto power_err;
-	}
-	usleep_range(20000, 20100);
+	/* address mode */
+	cmd = set_address_mode;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0x0, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	err = mdfld_dsi_send_mcs_short_hs(sender,
-			set_pixel_format, 0x77, 1,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Pixel format\n",
-		__func__, __LINE__);
-		goto power_err;
-	}
+	/* pixel format*/
+	cmd = set_pixel_format;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0x77, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	/* Set Display on 0x29 */
-	err = mdfld_dsi_send_mcs_short_hs(sender, set_display_on, 0, 0,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Display On\n", __func__, __LINE__);
-		goto power_err;
-	}
+	/* display on */
+	cmd = set_display_on;
+	ret = mdfld_dsi_send_mcs_short_hs(sender,
+					  cmd, 0, 0, MDFLD_DSI_SEND_PACKAGE);
+	if (ret)
+		goto err_out;
 
-	/* Sleep Out */
-	err = mdfld_dsi_send_mcs_short_hs(sender, exit_sleep_mode, 0, 0,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Exit Sleep Mode\n", __func__, __LINE__);
-		goto power_err;
-	}
-	usleep_range(20000, 20100);
+	return 0;
 
-power_err:
-	return err;
+err_out:
+	DRM_ERROR("failed to send command %#x\n", cmd);
+	return ret;
 }
 
 static void __vpro2_power_ctrl(bool on)
@@ -238,8 +220,7 @@ static void __vpro2_power_ctrl(bool on)
 	u8 addr, value;
 	addr = 0xad;
 	if (intel_scu_ipc_ioread8(addr, &value))
-		DRM_ERROR("%s: %d: failed to read vPro2\n",
-		__func__, __LINE__);
+		DRM_ERROR("%s: %d: failed to read vPro2\n", __func__, __LINE__);
 
 	/* Control vPROG2 power rail with 2.85v. */
 	if (on)
@@ -252,8 +233,7 @@ static void __vpro2_power_ctrl(bool on)
 				__func__, __LINE__);
 }
 
-static int sharp5_cmd_power_off(
-		struct mdfld_dsi_config *dsi_config)
+static int sharp5_cmd_power_off(struct mdfld_dsi_config *dsi_config)
 {
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
@@ -265,37 +245,60 @@ static int sharp5_cmd_power_off(
 		DRM_ERROR("Failed to get DSI packet sender\n");
 		return -EINVAL;
 	}
+
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 			set_display_off, 0, 0,
 			MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
-		DRM_ERROR("%s: %d: Set Display Off\n",
-		__func__, __LINE__);
+		DRM_ERROR("%s: %d: Set Display Off\n", __func__, __LINE__);
 		goto power_off_err;
 	}
 	usleep_range(20000, 20100);
 
 	err = mdfld_dsi_send_mcs_short_hs(sender,
+			set_tear_off, 0, 0,
+			MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Tear Off\n", __func__, __LINE__);
+		goto power_off_err;
+	}
+
+	err = mdfld_dsi_send_mcs_short_hs(sender,
 			enter_sleep_mode, 0, 0,
 			MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
-		DRM_ERROR("%s: %d: Enter Sleep Mode\n",
-		__func__, __LINE__);
+		DRM_ERROR("%s: %d: Enter Sleep Mode\n", __func__, __LINE__);
 		goto power_off_err;
 	}
-	if (mipi_reset_gpio)
-		gpio_set_value_cansleep(mipi_reset_gpio, 0);
+
+	msleep(60);
+
+	err = mdfld_dsi_send_gen_short_hs(sender,
+		access_protect, 4, 2,
+		MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Access Protect\n", __func__, __LINE__);
+		goto power_off_err;
+	}
+
+	err = mdfld_dsi_send_gen_short_hs(sender, low_power_mode, 1, 2,
+					  MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Low Power Mode\n", __func__, __LINE__);
+		goto power_off_err;
+	}
+	if (bias_en_gpio)
+		gpio_set_value_cansleep(bias_en_gpio, 0);
 	usleep_range(1000, 1500);
+
 	return 0;
 power_off_err:
 	err = -EIO;
 	return err;
 }
 
-static
-int sharp5_cmd_set_brightness(
-		struct mdfld_dsi_config *dsi_config,
-		int level)
+static int
+sharp5_cmd_set_brightness( struct mdfld_dsi_config *dsi_config, int level)
 {
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
@@ -307,6 +310,7 @@ int sharp5_cmd_set_brightness(
 		DRM_ERROR("Failed to get DSI packet sender\n");
 		return -EINVAL;
 	}
+
 	duty_val = (0xFF * level) / 100;
 	mdfld_dsi_send_mcs_short_hs(sender,
 			write_display_brightness, duty_val, 1,
@@ -314,8 +318,7 @@ int sharp5_cmd_set_brightness(
 	return 0;
 }
 
-static
-void _get_panel_reset_gpio(void)
+static void _get_panel_reset_gpio(void)
 {
 	int ret = 0;
 	if (mipi_reset_gpio == 0) {
@@ -334,9 +337,8 @@ void _get_panel_reset_gpio(void)
 		gpio_direction_output(mipi_reset_gpio, 0);
 	}
 }
-static
-int sharp5_cmd_panel_reset(
-		struct mdfld_dsi_config *dsi_config)
+
+static int sharp5_cmd_panel_reset(struct mdfld_dsi_config *dsi_config)
 {
 	int ret = 0;
 	u8 *vaddr = NULL, *vaddr1 = NULL;
@@ -347,23 +349,37 @@ int sharp5_cmd_panel_reset(
 	/* Because when reset touchscreen panel, touchscreen will pull i2c bus
 	 * to low, sometime this operation will cause i2c bus enter into wrong
 	 * status, so before reset, switch i2c scl pin */
-
-	vaddr1 = ioremap(0xff0c1d30, 4);
+	vaddr1 = ioremap(SECURE_I2C_FLIS_REG, 4);
 	reg_value_scl = ioread32(vaddr1);
 	reg_value_scl &= ~0x1000;
-	iowrite32(reg_value_scl, vaddr1);
+	rpmsg_send_generic_raw_command(RP_INDIRECT_WRITE, 0,
+					(u8 *)&reg_value_scl, 4,
+					NULL, 0,
+					SECURE_I2C_FLIS_REG, 0);
 
 	__vpro2_power_ctrl(true);
 	usleep_range(2000, 2500);
 
+	if (bias_en_gpio == 0) {
+		bias_en_gpio = 189;
+		ret = gpio_request(bias_en_gpio, "bias_enable");
+		if (ret) {
+			DRM_ERROR("Faild to request bias_enable gpio\n");
+			return -EINVAL;
+		}
+		gpio_direction_output(bias_en_gpio, 0);
+	}
+
 	_get_panel_reset_gpio();
 
+	gpio_direction_output(bias_en_gpio, 0);
 	gpio_direction_output(mipi_reset_gpio, 0);
+	gpio_set_value_cansleep(bias_en_gpio, 0);
 	gpio_set_value_cansleep(mipi_reset_gpio, 0);
-	usleep_range(20000, 25000);
+	usleep_range(2000, 2500);
+	gpio_set_value_cansleep(bias_en_gpio, 1);
+	usleep_range(2000, 2500);
 	gpio_set_value_cansleep(mipi_reset_gpio, 1);
-	usleep_range(3000, 3500);
-
 	usleep_range(3000, 3500);
 	vaddr = ioremap(0xff0c2d00, 0x60);
 	iowrite32(0x3221, vaddr + 0x1c);
@@ -372,34 +388,31 @@ int sharp5_cmd_panel_reset(
 
 	/* switch i2c scl pin back */
 	reg_value_scl |= 0x1000;
-	iowrite32(reg_value_scl, vaddr1);
+	rpmsg_send_generic_raw_command(RP_INDIRECT_WRITE, 0,
+					(u8 *)&reg_value_scl, 4,
+					NULL, 0,
+					SECURE_I2C_FLIS_REG, 0);
 	iounmap(vaddr1);
-	usleep_range(20000, 25000);
-
 	return 0;
 }
 
-int kk = 0;
-static
-int sharp5_cmd_exit_deep_standby(
-		struct mdfld_dsi_config *dsi_config)
+static int sharp5_cmd_exit_deep_standby(struct mdfld_dsi_config *dsi_config)
 {
 	PSB_DEBUG_ENTRY("\n");
-	if (kk == 0) kk++;
-	else {
+
+	if (bias_en_gpio)
+		gpio_set_value_cansleep(bias_en_gpio, 1);
 	_get_panel_reset_gpio();
 	gpio_direction_output(mipi_reset_gpio, 0);
 
 	gpio_set_value_cansleep(mipi_reset_gpio, 0);
-	usleep_range(2000, 2500);
+	usleep_range(1000, 1500);
 	gpio_set_value_cansleep(mipi_reset_gpio, 1);
 	usleep_range(3000, 3500);
-	}
 	return 0;
 }
 
-static
-struct drm_display_mode *sharp5_cmd_get_config_mode(void)
+static struct drm_display_mode *sharp5_cmd_get_config_mode(void)
 {
 	struct drm_display_mode *mode;
 
@@ -410,15 +423,14 @@ struct drm_display_mode *sharp5_cmd_get_config_mode(void)
 		return NULL;
 
 	mode->hdisplay = 1080;
-
-	mode->hsync_start = mode->hdisplay + 58;
-	mode->hsync_end = mode->hsync_start + 4;
-	mode->htotal = mode->hsync_end + 130;
+	mode->hsync_start = 1168;
+	mode->hsync_end = 1200;
+	mode->htotal = 1496;
 
 	mode->vdisplay = 1920;
-	mode->vsync_start = mode->vdisplay + 3;
-	mode->vsync_end = mode->vsync_start + 5;
-	mode->vtotal = mode->vsync_end;
+	mode->vsync_start = 1923;
+	mode->vsync_end = 1926;
+	mode->vtotal = 1987;
 
 	mode->vrefresh = 60;
 	mode->clock =  mode->vrefresh * mode->vtotal * mode->htotal / 1000;
@@ -430,9 +442,7 @@ struct drm_display_mode *sharp5_cmd_get_config_mode(void)
 	return mode;
 }
 
-static
-void sharp5_cmd_get_panel_info(int pipe,
-		struct panel_info *pi)
+static void sharp5_cmd_get_panel_info(int pipe, struct panel_info *pi)
 {
 	PSB_DEBUG_ENTRY("\n");
 
@@ -442,8 +452,7 @@ void sharp5_cmd_get_panel_info(int pipe,
 	}
 }
 
-void sharp5_cmd_init(struct drm_device *dev,
-		struct panel_funcs *p_funcs)
+void sharp5_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 {
 	if (!dev || !p_funcs) {
 		DRM_ERROR("Invalid parameters\n");
@@ -451,19 +460,15 @@ void sharp5_cmd_init(struct drm_device *dev,
 	}
 
 	PSB_DEBUG_ENTRY("\n");
+
 	p_funcs->reset = sharp5_cmd_panel_reset;
 	p_funcs->power_on = sharp5_cmd_power_on;
 	p_funcs->power_off = sharp5_cmd_power_off;
 	p_funcs->drv_ic_init = sharp5_cmd_drv_ic_init;
 	p_funcs->get_config_mode = sharp5_cmd_get_config_mode;
 	p_funcs->get_panel_info = sharp5_cmd_get_panel_info;
-	p_funcs->dsi_controller_init =
-			sharp5_cmd_controller_init;
-	p_funcs->detect =
-			sharp5_cmd_panel_connection_detect;
-	p_funcs->set_brightness =
-			sharp5_cmd_set_brightness;
-	p_funcs->exit_deep_standby =
-				sharp5_cmd_exit_deep_standby;
-
+	p_funcs->dsi_controller_init = sharp5_cmd_controller_init;
+	p_funcs->detect = sharp5_cmd_panel_connection_detect;
+	p_funcs->set_brightness = sharp5_cmd_set_brightness;
+	p_funcs->exit_deep_standby = sharp5_cmd_exit_deep_standby;
 }

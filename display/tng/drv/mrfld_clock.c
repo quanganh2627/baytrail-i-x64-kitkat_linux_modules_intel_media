@@ -341,7 +341,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 			} else if (get_panel_type(dev, pipe) == SHARP_10x19_CMD) {
 				clock.p1 = 3;
 				clk_n = 1;
-				clock.m = 137;
+				clock.m = 125;
 			} else {
 				clock.p1 = 4;
 				clk_n = 1;

@@ -351,8 +351,10 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 					_DSI_LDO_EN);
 
 		if (IS_ANN_A0(dev)) {
-			// intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0x177);
+			if (get_panel_type(dev, dsi_config->pipe) == JDI_7x12_CMD)
+				intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0x177);
+			else
+				intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
 
 			guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
 			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
