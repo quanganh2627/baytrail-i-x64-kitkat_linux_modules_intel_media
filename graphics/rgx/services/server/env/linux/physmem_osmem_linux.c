@@ -712,6 +712,9 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 		if (psPage != IMG_NULL)
 		{
 			bFromPagePool = IMG_TRUE;
+			if (bFlush) {
+				   clear_highpage(psPage);
+			}
 		}
 	}
 
