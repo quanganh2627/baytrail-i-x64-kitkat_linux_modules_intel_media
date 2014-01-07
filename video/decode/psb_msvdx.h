@@ -222,10 +222,8 @@ struct msvdx_private {
 
 	uint32_t msvdx_hw_busy;
 
-#ifdef CONFIG_VIDEO_MRFLD
-	uint32_t vec_ec_mem_data[4];
+	uint32_t vec_ec_mem_data[5];
 	uint32_t vec_ec_mem_saved;
-#endif
 
 	uint32_t psb_dash_access_ctrl;
 	uint32_t decoding_err;

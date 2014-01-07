@@ -3734,6 +3734,9 @@ int psb_release(struct inode *inode, struct file *filp)
 	file_priv = (struct drm_file *)filp->private_data;
 	psb_fp = BCVideoGetPriv(file_priv);
 	dev_priv = psb_priv(file_priv->minor->dev);
+	struct ttm_object_file *tfile = psb_fpriv(file_priv)->tfile;
+	int i;
+	struct psb_msvdx_ec_ctx *ec_ctx;
 	msvdx_priv = (struct msvdx_private *)dev_priv->msvdx_private;
 
 #if 0
@@ -3750,6 +3753,21 @@ int psb_release(struct inode *inode, struct file *filp)
 	tng_topaz_handle_sigint(file_priv->minor->dev, filp);
 
 	BCVideoDestroyBuffers(psb_fp->bcd_index);
+
+	if (msvdx_priv->msvdx_ec_ctx[0] != NULL) {
+		for (i = 0; i < PSB_MAX_EC_INSTANCE; i++) {
+			if (msvdx_priv->msvdx_ec_ctx[i]->tfile == tfile)
+				break;
+		}
+
+		if (i < PSB_MAX_EC_INSTANCE) {
+			ec_ctx = msvdx_priv->msvdx_ec_ctx[i];
+			printk(KERN_DEBUG "remove ec ctx with tfile 0x%08x\n",
+			       ec_ctx->tfile);
+			ec_ctx->tfile = NULL;
+			ec_ctx->fence = PSB_MSVDX_INVALID_FENCE;
+		}
+	}
 
 	ttm_object_file_release(&psb_fp->tfile);
 	kfree(psb_fp);

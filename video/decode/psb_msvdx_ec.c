@@ -27,7 +27,12 @@
  *
  **************************************************************************/
 
+#ifdef CONFIG_DRM_VXD_BYT
+#include "vxd_drv.h"
+#else
 #include "psb_drv.h"
+#endif
+
 #include "psb_msvdx.h"
 #include "psb_msvdx_msg.h"
 #include "psb_msvdx_reg.h"
@@ -93,7 +98,11 @@ void psb_msvdx_do_concealment(struct work_struct *work)
 	uint32_t cmd_space = 0;
 	int ret = 0;
 
+#ifdef CONFIG_VIDEO_MRFLD
+	if (!power_island_get(OSPM_VIDEO_DEC_ISLAND)) {
+#else
 	if (!ospm_power_using_video_begin(OSPM_VIDEO_DEC_ISLAND)) {
+#endif
 		printk(KERN_ERR, "MSVDX: fail to power on ved for ec\n");
 		return;
 	}
@@ -337,8 +346,12 @@ ec_done:
 		MSVDX_CMDS_END_SLICE_PICTURE_OFFSET,
 		1, cmd_space);
 
-	ospm_power_using_video_end(OSPM_VIDEO_DEC_ISLAND);
 
+#ifdef CONFIG_VIDEO_MRFLD
+	power_island_put(OSPM_VIDEO_DEC_ISLAND);
+#else
+	ospm_power_using_video_end(OSPM_VIDEO_DEC_ISLAND);
+#endif
 	fault_region->num_region = 0;
 
 	preempt_enable();

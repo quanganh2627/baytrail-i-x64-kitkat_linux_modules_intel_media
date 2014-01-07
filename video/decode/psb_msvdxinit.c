@@ -36,8 +36,9 @@
 #include "psb_msvdx.h"
 #include "psb_msvdx_msg.h"
 #include "psb_msvdx_reg.h"
-#ifdef CONFIG_VIDEO_MRFLD
 #include "psb_msvdx_ec.h"
+#include <linux/firmware.h>
+#ifdef CONFIG_VIDEO_MRFLD
 #endif
 #include <linux/firmware.h>
 
@@ -126,7 +127,7 @@ int psb_msvdx_core_reset(struct drm_psb_private *dev_priv)
 	/* This is neccessary for all cores up to Tourmaline */
 	if ((PSB_RMSVDX32(MSVDX_CORE_REV_OFFSET) < 0x00050502) &&
 		(PSB_RMSVDX32(MSVDX_INTERRUPT_STATUS_OFFSET)
-			& MSVDX_INTERRUPT_STATUS__MMU_FAULT_IRQ_MASK) &&
+			& MSVDX_INTERRUPT_STATUS_MMU_FAULT_IRQ_MASK) &&
 		(PSB_RMSVDX32(MSVDX_MMU_STATUS_OFFSET) & 1)) {
 		unsigned int *pptd;
 		unsigned int loop;
@@ -148,7 +149,7 @@ int psb_msvdx_core_reset(struct drm_psb_private *dev_priv)
 		PSB_WMSVDX32(ptd_addr, MSVDX_MMU_DIR_LIST_BASE_OFFSET + 12);
 
 		PSB_WMSVDX32(6, MSVDX_MMU_CONTROL0_OFFSET);
-		PSB_WMSVDX32(MSVDX_INTERRUPT_STATUS__MMU_FAULT_IRQ_MASK,
+		PSB_WMSVDX32(MSVDX_INTERRUPT_STATUS_MMU_FAULT_IRQ_MASK,
 					MSVDX_INTERRUPT_STATUS_OFFSET);
 		kunmap(msvdx_priv->mmu_recover_page);
 	}
@@ -174,7 +175,7 @@ int psb_msvdx_core_reset(struct drm_psb_private *dev_priv)
 		PSB_WMSVDX32(cmd, MSVDX_RENDEC_CONTROL1_OFFSET);
 
 		/* Issue software reset for all but core */
-		PSB_WMSVDX32((unsigned int)~MSVDX_CONTROL__MSVDX_SOFT_RESET_MASK, MSVDX_CONTROL_OFFSET);
+		PSB_WMSVDX32((unsigned int)~MSVDX_CONTROL_MSVDX_SOFT_RESET_MASK, MSVDX_CONTROL_OFFSET);
 		PSB_RMSVDX32(MSVDX_CONTROL_OFFSET);
 		/* bit format is set as little endian */
 		PSB_WMSVDX32(0, MSVDX_CONTROL_OFFSET);
@@ -183,10 +184,10 @@ int psb_msvdx_core_reset(struct drm_psb_private *dev_priv)
 						0, 0xff, 100, 100);
 		if (!ret) {
 			/* Issue software reset */
-			PSB_WMSVDX32(MSVDX_CONTROL__MSVDX_SOFT_RESET_MASK, MSVDX_CONTROL_OFFSET);
+			PSB_WMSVDX32(MSVDX_CONTROL_MSVDX_SOFT_RESET_MASK, MSVDX_CONTROL_OFFSET);
 
 			ret = psb_wait_for_register(dev_priv, MSVDX_CONTROL_OFFSET, 0,
-					MSVDX_CONTROL__MSVDX_SOFT_RESET_MASK,
+					MSVDX_CONTROL_MSVDX_SOFT_RESET_MASK,
 					2000000, 5);
 			if (!ret) {
 				/* Clear interrupt enabled flag */
@@ -218,10 +219,10 @@ int psb_msvdx_reset(struct drm_psb_private *dev_priv)
 
 	/* Issue software reset */
 	/* PSB_WMSVDX32(msvdx_sw_reset_all, MSVDX_CONTROL); */
-	PSB_WMSVDX32(MSVDX_CONTROL__MSVDX_SOFT_RESET_MASK, MSVDX_CONTROL_OFFSET);
+	PSB_WMSVDX32(MSVDX_CONTROL_MSVDX_SOFT_RESET_MASK, MSVDX_CONTROL_OFFSET);
 
 	ret = psb_wait_for_register(dev_priv, MSVDX_CONTROL_OFFSET, 0,
-			MSVDX_CONTROL__MSVDX_SOFT_RESET_MASK, 2000000, 5);
+			MSVDX_CONTROL_MSVDX_SOFT_RESET_MASK, 2000000, 5);
 	if (!ret) {
 		/* Clear interrupt enabled flag */
 		PSB_WMSVDX32(0, MSVDX_HOST_INTERRUPT_ENABLE_OFFSET);
@@ -510,10 +511,13 @@ static void msvdx_init_ec(struct msvdx_private *msvdx_priv)
 
 	/* we should restore the state, if we power down/up
 	 * during EC */
+	PSB_WMSVDX32(0, 0x2000 + 0xcc4); /* EXT_FW_ERROR_STATE */
 	PSB_WMSVDX32(0, 0x2000 + 0xcb0); /* EXT_FW_LAST_MBS */
 	PSB_WMSVDX32(0, 0x2000 + 0xcb4); /* EXT_FW_LAST_MBS */
 	PSB_WMSVDX32(0, 0x2000 + 0xcb8); /* EXT_FW_LAST_MBS */
 	PSB_WMSVDX32(0, 0x2000 + 0xcbc); /* EXT_FW_LAST_MBS */
+
+	msvdx_priv->vec_ec_mem_saved = 1;
 
 	msvdx_priv->msvdx_ec_ctx[0] =
 		kzalloc(sizeof(struct psb_msvdx_ec_ctx) *
@@ -823,7 +827,7 @@ int psb_msvdx_post_boot_init(struct drm_device *dev)
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	uint32_t device_node_flags =
 			DSIABLE_IDLE_GPIO_SIG | DSIABLE_Auto_CLOCK_GATING |
-			RETURN_VDEB_DATA_IN_COMPLETION;
+			RETURN_VDEB_DATA_IN_COMPLETION | NOT_ENABLE_ON_HOST_CONCEALMENT;
 
 	/* DDK set fe_wdt_clks as 0x820 and be_wdt_clks as 0x8200 */
 	uint32_t fe_wdt_clks = 0x334 * WDT_CLOCK_DIVIDER;
