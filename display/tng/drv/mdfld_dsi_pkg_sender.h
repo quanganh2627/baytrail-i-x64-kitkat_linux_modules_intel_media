@@ -119,6 +119,7 @@ struct mdfld_dsi_pkg_sender {
 	u32 panel_mode;
 
 	int pipe;
+	bool work_for_slave_panel;
 
 	struct mutex lock;
 	struct list_head pkg_list;

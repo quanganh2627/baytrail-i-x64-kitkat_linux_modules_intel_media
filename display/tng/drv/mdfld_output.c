@@ -39,6 +39,7 @@
 #include "displays/cmi_cmd.h"
 #include "displays/sharp5_cmd.h"
 #include "displays/sharp25x16_vid.h"
+#include "displays/jdi25x16_vid.h"
 #include "psb_drv.h"
 #include "android_hdmi.h"
 
@@ -49,6 +50,7 @@ static struct intel_mid_panel_list panel_list[] = {
 	{CMI_7x12_CMD, MDFLD_DSI_ENCODER_DBI, cmi_cmd_init},
 	{SHARP_10x19_CMD, MDFLD_DSI_ENCODER_DBI, sharp5_cmd_init},
 	{SHARP_25x16_VID, MDFLD_DSI_ENCODER_DPI, sharp25x16_vid_init},
+	{JDI_25x16_VID, MDFLD_DSI_ENCODER_DPI, jdi25x16_vid_init},
 };
 
 enum panel_type get_panel_type(struct drm_device *dev, int pipe)
