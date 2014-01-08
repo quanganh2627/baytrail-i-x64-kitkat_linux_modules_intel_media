@@ -416,7 +416,7 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 	/*
 	 * Initialise SLC.
 	 */
-	RGX_INIT_SLC(psDevInfo);
+	//RGX_INIT_SLC(psDevInfo);
 #endif
 
 #if !defined(SUPPORT_META_SLAVE_BOOT)
