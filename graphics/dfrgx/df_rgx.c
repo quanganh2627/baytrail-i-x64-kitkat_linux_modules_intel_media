@@ -233,6 +233,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 			if(new_index > -1){
 				mutex_lock(&pdfrgx_data->g_mutex_sts);
 				pdfrgx_data->g_freq_mhz_min = df->min_freq;
+				bfdata->gbp_cooldv_latest_freq_min = df->min_freq;
 				pdfrgx_data->g_min_freq_index = new_index;
 				mutex_unlock(&pdfrgx_data->g_mutex_sts);
 			}
@@ -257,6 +258,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 			if(new_index > -1){
 				mutex_lock(&pdfrgx_data->g_mutex_sts);
 				pdfrgx_data->g_freq_mhz_max = df->max_freq;
+				bfdata->gbp_cooldv_latest_freq_max = df->max_freq;
 				pdfrgx_data->g_max_freq_index = new_index;
 				mutex_unlock(&pdfrgx_data->g_mutex_sts);
 			}
@@ -439,8 +441,8 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 
 			if (!cs) {
 				/* We are back in normal operation so set initial values*/
-				df->max_freq = bfdata->gbp_cooldv_init_freq_max;
-				df->min_freq = bfdata->gbp_cooldv_init_freq_min;
+				df->max_freq = bfdata->gbp_cooldv_latest_freq_max;
+				df->min_freq = bfdata->gbp_cooldv_latest_freq_min;
 				b_update_freq = 1;
 			}
 			else {
@@ -794,8 +796,8 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	bfdata->g_dfrgx_data.g_freq_mhz_min = df->min_freq;
 	bfdata->g_dfrgx_data.g_max_freq_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
 	bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
-	bfdata->gbp_cooldv_init_freq_min = df->min_freq;
-	bfdata->gbp_cooldv_init_freq_max = df->max_freq;
+	bfdata->gbp_cooldv_latest_freq_min = df->min_freq;
+	bfdata->gbp_cooldv_latest_freq_max = df->max_freq;
 
 	df_rgx_set_governor_profile(df->governor->name, &bfdata->g_dfrgx_data);
 
