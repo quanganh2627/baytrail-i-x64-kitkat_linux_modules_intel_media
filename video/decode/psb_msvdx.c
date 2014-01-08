@@ -1028,9 +1028,6 @@ loop: /* just for coding style check */
 			/*Now send the next command from the msvdx cmd queue */
 #ifndef CONFIG_DRM_VXD_BYT
 			if (!(IS_MRFLD(dev)) ||
-#ifdef CONFIG_SLICE_HEADER_PARSING
-				!frame_finished ||
-#endif
 				drm_msvdx_pmpolicy == PSB_PMPOLICY_NOPM)
 #endif
 				psb_msvdx_dequeue_send(dev);
