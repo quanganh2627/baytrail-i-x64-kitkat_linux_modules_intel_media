@@ -318,8 +318,7 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 				__func__, iPipe);
 		if (iPipe != DC_PIPE_B)
 			DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
-		if (iPipe != DC_PIPE_B)
-			goto err_out;
+		goto err_out;
 	}
 
 	for (i = 0; i < uiNumBuffers; i++) {
