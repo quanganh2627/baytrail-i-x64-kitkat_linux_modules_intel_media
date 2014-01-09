@@ -982,7 +982,7 @@ IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
 				psUFOPtr->ui32Value = ui32FenceValue;
 				pui8ServerFenceStart += sizeof(RGXFWIF_UFO);
 
-#if defined(LINUX)
+#if defined(LINUX) && defined(SUPPORT_GPUTRACE_EVENTS)
 				trace_pvr_fence_checks(pcszDMName,
 									   ui32CtxAddr,
 									   psCmdHelperData->psClientCCB->ui32HostWriteOffset + ui32AllocSize,
@@ -1002,7 +1002,7 @@ IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
 				psUFOPtr->ui32Value = ui32UpdateValue;
 				pui8ServerUpdateStart += sizeof(RGXFWIF_UFO);
 
-#if defined(LINUX)
+#if defined(LINUX) && defined(SUPPORT_GPUTRACE_EVENTS)
 				trace_pvr_fence_updates(pcszDMName,
 										ui32CtxAddr,
 										psCmdHelperData->psClientCCB->ui32HostWriteOffset + ui32AllocSize,
@@ -1021,7 +1021,7 @@ IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
 			}
 		}
 
-#if defined(LINUX)
+#if defined(LINUX)  && defined(SUPPORT_GPUTRACE_EVENTS)
 		trace_pvr_fence_checks(pcszDMName,
 							   ui32CtxAddr,
 							   psCmdHelperData->psClientCCB->ui32HostWriteOffset + ui32AllocSize,

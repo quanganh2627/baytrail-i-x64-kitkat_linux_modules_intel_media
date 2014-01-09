@@ -1946,10 +1946,10 @@ IMG_VOID DCDisplayConfigurationRetired(IMG_HANDLE hConfigData)
 	/* Sanity check */
 	if (psData->ui32Token != psDisplayContext->ui32TokenIn)
 	{
-		PVR_DPF((PVR_DBG_ERROR,
+		PVR_DPF((PVR_DBG_MESSAGE,
 				"Display config retired in unexpected order (was %d, expecting %d)",
 				psData->ui32Token, psDisplayContext->ui32TokenIn));
-		PVR_ASSERT(IMG_FALSE);
+		/* PVR_ASSERT(IMG_FALSE); */
 	}
 
 	OSLockAcquire(psDisplayContext->hLock);

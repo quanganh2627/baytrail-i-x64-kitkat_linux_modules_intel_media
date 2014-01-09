@@ -101,6 +101,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "env_connection.h"
 #include "rgxsysinfo.h"
 #include "pvrsrv.h"
+#include "rgxdf.h"
 #include "process_stats.h"
 
 #if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING) || defined(SUPPORT_DRM)
@@ -143,6 +144,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * This is all module configuration stuff required by the linux kernel.
  */
 MODULE_SUPPORTED_DEVICE(DEVNAME);
+
+EXPORT_SYMBOL(RGXAcquireIsDevicePowered);
 
 #if defined(PVRSRV_NEED_PVR_DPF)
 #include <linux/moduleparam.h>
@@ -269,7 +272,7 @@ static int PVRSRVDriverResume(struct device *device);
 
 #if defined(LDM_PCI)
 /* This structure is used by the Linux module code */
-struct pci_device_id powervr_id_table[] __devinitdata = {
+struct pci_device_id powervr_id_table[] = {
 	{PCI_DEVICE(SYS_RGX_DEV_VENDOR_ID, SYS_RGX_DEV_DEVICE_ID)},
 #if defined (SYS_RGX_DEV1_DEVICE_ID)
 	{PCI_DEVICE(SYS_RGX_DEV_VENDOR_ID, SYS_RGX_DEV1_DEVICE_ID)},
@@ -282,7 +285,7 @@ MODULE_DEVICE_TABLE(pci, powervr_id_table);
 #endif	/*defined(LDM_PCI) */ 
 
 #if defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
-static struct platform_device_id powervr_id_table[] __devinitdata = {
+static struct platform_device_id powervr_id_table[]  = {
 	{SYS_RGX_DEV_NAME, 0},
 	{}
 };
@@ -312,7 +315,7 @@ static LDM_DRV powervr_driver = {
 	.remove		= PVRSRVDriverRemove,
 #endif
 #if defined(LDM_PCI)
-	.remove		= __devexit_p(PVRSRVDriverRemove),
+	.remove		= PVRSRVDriverRemove,
 #endif
 	.shutdown	= PVRSRVDriverShutdown,
 };
@@ -443,7 +446,7 @@ PVR_MOD_STATIC void PVRSRVSystemDeInit(void)
 static int PVRSRVDriverProbe(LDM_DEV *pDevice)
 #endif
 #if defined(LDM_PCI)
-static int __devinit PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *pID)
+static int PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device_id *pID)
 #endif
 {
 	int result = 0;
@@ -484,7 +487,7 @@ static int __devinit PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device
 static int PVRSRVDriverRemove(LDM_DEV *pDevice)
 #endif
 #if defined(LDM_PCI)
-static void __devexit PVRSRVDriverRemove(LDM_DEV *pDevice)
+static void PVRSRVDriverRemove(LDM_DEV *pDevice)
 #endif
 {
 	PVR_TRACE(("PVRSRVDriverRemove (pDevice=%p)", pDevice));

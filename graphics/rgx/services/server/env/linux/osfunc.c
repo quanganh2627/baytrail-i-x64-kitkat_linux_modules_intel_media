@@ -44,6 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <asm/io.h>
 #include <asm/page.h>
 #include <asm/div64.h>
+#include <asm/tlbflush.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/hugetlb.h> 
@@ -126,6 +127,12 @@ static void init_pvr_pool(void)
 	/* Reserve space in the vmalloc vm range */
 	tmp_area = __get_vm_area(POOL_SIZE, VM_ALLOC,
 			VMALLOC_START, VMALLOC_END);
+        if (!tmp_area) {
+                printk(KERN_ERR "%s:get vm area failed\n",
+                                __func__);
+		return ;
+	}
+
 	pool_start = tmp_area->addr;
 
 	if (!pool_start) {

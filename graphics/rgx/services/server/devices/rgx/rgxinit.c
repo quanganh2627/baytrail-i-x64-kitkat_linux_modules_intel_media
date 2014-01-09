@@ -76,6 +76,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "rgxta3d.h"
 #include "debug_request_ids.h"
+#include "pwr_mgmt.h"
+#include "power.h"
 
 static PVRSRV_ERROR RGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_UINT32 ui32ClientBuildOptions);
 static PVRSRV_ERROR RGXDevVersionString(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_CHAR **ppszVersionString);
@@ -99,7 +101,7 @@ static PVRSRV_ERROR RGXDevClockSpeed(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_PUINT
 
 #define VAR(x) #x
 
-/* FIXME: This is a workaround due to having 2 inits but only 1 deinit */
+/* */
 static IMG_BOOL g_bDevInit2Done = IMG_FALSE;
 
 
@@ -226,6 +228,9 @@ static IMG_BOOL RGX_LISRHandler (IMG_VOID *pvData)
 	IMG_UINT32 ui32IRQStatus;
 	IMG_BOOL bInterruptProcessed = IMG_FALSE;
 
+	if (!ospm_power_is_hw_on(OSPM_GRAPHICS_ISLAND))
+		return bInterruptProcessed;
+
 	psDeviceNode = pvData;
 	psDevConfig = psDeviceNode->psDevConfig;
 	psDevInfo = psDeviceNode->pvDevice;
@@ -294,21 +299,16 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 	IMG_UINT64				ui64CurrentCRTimer;
 	IMG_UINT32				ui32Remainder;
 	RGXFWIF_GPU_UTIL_STATS	sRet;
-	PVRSRV_DEV_POWER_STATE  ePowerState;
+	PVRSRV_DEV_POWER_STATE	ePowerState;
 	PVRSRV_ERROR            eError;
 
-	/* init response */
 	sRet.ui32GpuStatActive	= 0;
 	sRet.ui32GpuStatBlocked	= 0;
 	sRet.ui32GpuStatIdle	= 0;
 	sRet.bPoweredOn			= IMG_FALSE;
 
 	/* take the power lock as we issue an OSReadHWReg64 below */
-	eError = PVRSRVPowerLock();
-	if (eError != PVRSRV_OK)
-	{
-		return sRet;
-	}
+	PVRSRVForcedPowerLock();
 
 	PVRSRVGetDevicePowerState(psDeviceNode->sDevId.ui32DeviceIndex, &ePowerState);
     if (ePowerState != PVRSRV_DEV_POWER_STATE_ON)
@@ -347,7 +347,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 				  If it's greater then we have a FW CB overlap. */
 				break;
 			}
-		
+
 			/* Calculate the difference between current CR timer and CR timer at DVFS transition. */
 			ui64Period = ui64CurrentCRTimer - RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(ui64FWCbEntryCurrent);
 			/* Scale the difference to microseconds */
@@ -362,7 +362,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 			{
 				ui64Period = RGXFWIF_GPU_STATS_WINDOW_SIZE_US - ui32StatCumulative;
 			}
-		
+
 			/* Update cumulative time of state transition */
 			ui32StatCumulative += (IMG_UINT32)ui64Period;
 
@@ -392,6 +392,8 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 	/* break if we wrapped up the CB or we have already calculated the whole window */
 	while ((ui32WOffSample != ui32WOffSampleSaved) && (ui32StatCumulative < RGXFWIF_GPU_STATS_WINDOW_SIZE_US));
 
+	// INTEL TO REVIEW
+	// DDK1.3@271... put the power unlock before the stats update.
 	PVRSRVPowerUnlock();
 
 	if (ui32StatCumulative)
@@ -402,6 +404,9 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 		sRet.ui32GpuStatIdle	= OSDivide64(((IMG_UINT64)ui32StatIdle * RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE), ui32StatCumulative, &ui32Remainder);
 		sRet.bPoweredOn			= IMG_TRUE;
 	}
+
+	// Moved upwards
+	//PVRSRVPowerUnlock();
 
 	return sRet;
 }
@@ -565,8 +570,9 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 							   (eActivePMConf == RGX_ACTIVEPM_FORCE_ON);
 
 		gbSystemActivePMEnabled = bEnableAPM;
-               	gbSystemActivePMInit = IMG_TRUE;
-               	psRGXData->psRGXTimingInfo->bEnableActivePM = bEnableAPM;
+		gbSystemActivePMInit = IMG_TRUE;
+		psRGXData->psRGXTimingInfo->bEnableActivePM = bEnableAPM;
+
 		if (bEnableAPM)
 		{
 			psDevInfo->pfnActivePowerCheck = RGXCheckFWActivePowerState;
@@ -751,8 +757,8 @@ PVRSRV_ERROR PVRSRVRGXInitAllocFWImgMemKM(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	}
 	
 	eError = DevmemFindHeapByName(psDevInfo->psKernelDevmemCtx,
-								  "Firmware", /* FIXME: We need to create an IDENT macro for this string.
-								                 Make sure the IDENT macro is not accessible to userland */
+								  "Firmware", /* 
+*/
 								  &psDevInfo->psFirmwareHeap);
 	if (eError != PVRSRV_OK)
 	{
@@ -1348,7 +1354,7 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 	if (psDevInfo->psKernelDevmemCtx)
 	{
 		eError = DevmemDestroyContext(psDevInfo->psKernelDevmemCtx);
-		/* FIXME - this should return void */
+		/* oops - this should return void -- */
 		PVR_ASSERT(eError == PVRSRV_OK);
 	}
 
@@ -1404,7 +1410,7 @@ static PVRSRV_ERROR RGX_InitHeaps(DEVICE_MEMORY_INFO *psNewMemoryInfo)
 {
     DEVMEM_HEAP_BLUEPRINT *psDeviceMemoryHeapCursor;
 
-    /* FIXME - consider whether this ought not to be on the device node itself */
+    /* actually - this ought not to be on the device node itself, I think.  Hmmm.  */
 	psNewMemoryInfo->psDeviceMemoryHeap = OSAllocMem(sizeof(DEVMEM_HEAP_BLUEPRINT) * RGX_MAX_HEAP_ID);
     if(psNewMemoryInfo->psDeviceMemoryHeap == IMG_NULL)
 	{
@@ -1559,15 +1565,8 @@ PVRSRV_ERROR RGXRegisterDevice (PVRSRV_DEVICE_NODE *psDeviceNode)
 #if defined(PDUMP)
 	psDeviceNode->sDevId.pszPDumpRegName	= RGX_PDUMPREG_NAME;
 	/*
-		FIXME: This should not be required as PMR's should give the memspace
-		name. However, due to limitations within PDump we need a memspace name
-		when dpumping with MMU context with virtual address in which case we
-		don't have a PMR to get the name from.
 		
-		There is also the issue obtaining a namespace name for the catbase which
-		is required when we PDump the write of the physical catbase into the FW
-		structure
-	*/
+*/
 	psDeviceNode->sDevId.pszPDumpDevName	= PhysHeapPDumpMemspaceName(psDeviceNode->apsPhysHeap[PVRSRV_DEVICE_PHYS_HEAP_GPU_LOCAL]);
 	psDeviceNode->pfnPDumpInitDevice = &RGXResetPDump;
 #endif /* PDUMP */
