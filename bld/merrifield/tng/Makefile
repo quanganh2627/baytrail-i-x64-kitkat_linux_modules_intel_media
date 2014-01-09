@@ -110,6 +110,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/cmi_cmd.o \
 	$(DISPLAYDIR)/sharp5_cmd.o \
 	$(DISPLAYDIR)/sharp25x16_vid.o \
+	$(DISPLAYDIR)/sharp25x16_cmd.o \
 	$(DISPLAYDIR)/jdi25x16_vid.o \
 	$(DISPLAYDIR)/ospm/pwr_mgmt.o \
     $(DISPLAYDIR)/ospm/gfx_ospm_ann.o \

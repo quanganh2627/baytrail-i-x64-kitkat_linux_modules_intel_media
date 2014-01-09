@@ -165,8 +165,11 @@ static int __dpi_enter_ulps_locked(struct mdfld_dsi_config *dsi_config, int offs
 		return -EINVAL;
 	}
 
+	if (offset != 0)
+		sender->work_for_slave_panel = true;
 	/*wait for all FIFOs empty*/
 	mdfld_dsi_wait_for_fifos_empty(sender);
+	sender->work_for_slave_panel = false;
 
 	/*inform DSI host is to be put on ULPS*/
 	ctx->device_ready |= DSI_POWER_STATE_ULPS_ENTER;

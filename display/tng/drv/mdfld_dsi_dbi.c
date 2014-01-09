@@ -87,7 +87,6 @@ void mdfld_dsi_dbi_exit_dsr(struct drm_device *dev,
 {
 }
 
-
 static
 void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 {
@@ -211,7 +210,8 @@ int mdfld_dbi_dsr_init(struct drm_device *dev)
 }
 #endif
 
-static int __dbi_enter_ulps_locked(struct mdfld_dsi_config *dsi_config)
+static int __dbi_enter_ulps_locked(struct mdfld_dsi_config *dsi_config,
+				int offset)
 {
 	struct mdfld_dsi_hw_registers *regs = &dsi_config->regs;
 	struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
@@ -223,53 +223,60 @@ static int __dbi_enter_ulps_locked(struct mdfld_dsi_config *dsi_config)
 		return -EINVAL;
 	}
 
-	ctx->device_ready = REG_READ(regs->device_ready_reg);
+	ctx->device_ready = REG_READ(regs->device_ready_reg + offset);
 
-	if (ctx->device_ready & DSI_POWER_STATE_ULPS_MASK) {
+	if ((offset == 0) && (ctx->device_ready & DSI_POWER_STATE_ULPS_MASK)) {
 		DRM_ERROR("Broken ULPS states\n");
 		return -EINVAL;
 	}
 
+	if (offset != 0)
+		sender->work_for_slave_panel = true;
 	/*wait for all FIFOs empty*/
 	mdfld_dsi_wait_for_fifos_empty(sender);
+	sender->work_for_slave_panel = false;
 
 	/*inform DSI host is to be put on ULPS*/
 	ctx->device_ready |= (DSI_POWER_STATE_ULPS_ENTER |
 				 DSI_DEVICE_READY);
-	REG_WRITE(regs->device_ready_reg, ctx->device_ready);
+	REG_WRITE(regs->device_ready_reg + offset, ctx->device_ready);
 	mdelay(1);
 
 	/* set AFE hold value*/
-	REG_WRITE(regs->mipi_reg,
-	     REG_READ(regs->mipi_reg) & (~PASS_FROM_SPHY_TO_AFE));
+	REG_WRITE(regs->mipi_reg + offset,
+	     REG_READ(regs->mipi_reg + offset) & (~PASS_FROM_SPHY_TO_AFE));
 
 	PSB_DEBUG_ENTRY("%s: entered ULPS state\n", __func__);
 	return 0;
 }
 
-static int __dbi_exit_ulps_locked(struct mdfld_dsi_config *dsi_config)
+static int __dbi_exit_ulps_locked(struct mdfld_dsi_config *dsi_config,
+			int offset)
 {
+	int tem = 0;
 	struct mdfld_dsi_hw_registers *regs = &dsi_config->regs;
 	struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
 	struct drm_device *dev = dsi_config->dev;
 
-	ctx->device_ready = REG_READ(regs->device_ready_reg);
+	ctx->device_ready = REG_READ(regs->device_ready_reg + offset);
 
 	/*inform DSI host is to be put on ULPS*/
 	ctx->device_ready |= (DSI_POWER_STATE_ULPS_ENTER |
 				 DSI_DEVICE_READY);
-	REG_WRITE(regs->device_ready_reg, ctx->device_ready);
+	REG_WRITE(regs->device_ready_reg + offset, ctx->device_ready);
 
 	mdelay(1);
 	/* clear AFE hold value*/
-	REG_WRITE(regs->mipi_reg,
-		REG_READ(regs->mipi_reg) | PASS_FROM_SPHY_TO_AFE);
+	if (offset != 0)
+		tem = 0x1000;
+	REG_WRITE(regs->mipi_reg + tem,
+		REG_READ(regs->mipi_reg + tem) | PASS_FROM_SPHY_TO_AFE);
 
 	/*enter ULPS EXIT state*/
 	ctx->device_ready &= ~DSI_POWER_STATE_ULPS_MASK;
 	ctx->device_ready |= (DSI_POWER_STATE_ULPS_EXIT |
 			DSI_DEVICE_READY);
-	REG_WRITE(regs->device_ready_reg, ctx->device_ready);
+	REG_WRITE(regs->device_ready_reg + offset, ctx->device_ready);
 
 	/*wait for 1ms as spec suggests*/
 	mdelay(1);
@@ -277,13 +284,54 @@ static int __dbi_exit_ulps_locked(struct mdfld_dsi_config *dsi_config)
 	/*clear ULPS state*/
 	ctx->device_ready &= ~DSI_POWER_STATE_ULPS_MASK;
 	ctx->device_ready |= DSI_DEVICE_READY;
-	REG_WRITE(regs->device_ready_reg, ctx->device_ready);
+	REG_WRITE(regs->device_ready_reg + offset, ctx->device_ready);
 
 	mdelay(1);
 
 	PSB_DEBUG_ENTRY("%s: exited ULPS state\n", __func__);
 	return 0;
 }
+
+static void __dbi_set_properties(struct mdfld_dsi_config *dsi_config,
+			enum enum_ports port)
+{
+	struct mdfld_dsi_hw_registers *regs;
+	struct mdfld_dsi_hw_context *ctx;
+	struct drm_device *dev;
+	int offset = 0;
+
+	regs = &dsi_config->regs;
+	ctx = &dsi_config->dsi_hw_context;
+	dev = dsi_config->dev;
+
+	if (port == PORT_C)
+		offset = 0x800;
+	/*D-PHY parameter*/
+	REG_WRITE(regs->dphy_param_reg + offset, ctx->dphy_param);
+
+	/*Configure DSI controller*/
+	REG_WRITE(regs->mipi_control_reg + offset, ctx->mipi_control);
+	REG_WRITE(regs->intr_en_reg + offset, ctx->intr_en);
+	REG_WRITE(regs->hs_tx_timeout_reg + offset, ctx->hs_tx_timeout);
+	REG_WRITE(regs->lp_rx_timeout_reg + offset, ctx->lp_rx_timeout);
+	REG_WRITE(regs->turn_around_timeout_reg + offset,
+		ctx->turn_around_timeout);
+	REG_WRITE(regs->device_reset_timer_reg + offset,
+		ctx->device_reset_timer);
+	REG_WRITE(regs->high_low_switch_count_reg + offset,
+		ctx->high_low_switch_count);
+	REG_WRITE(regs->init_count_reg + offset, ctx->init_count);
+	REG_WRITE(regs->eot_disable_reg + offset, ctx->eot_disable);
+	REG_WRITE(regs->lp_byteclk_reg + offset, ctx->lp_byteclk);
+	REG_WRITE(regs->clk_lane_switch_time_cnt_reg + offset,
+		ctx->clk_lane_switch_time_cnt);
+	REG_WRITE(regs->dsi_func_prg_reg + offset, ctx->dsi_func_prg);
+
+	/*DBI bw ctrl*/
+	REG_WRITE(regs->dbi_bw_ctrl_reg + offset, ctx->dbi_bw_ctrl);
+
+}
+
 /* dbi interface power on*/
 int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 {
@@ -297,8 +345,8 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	u32 guit_val = 0;
 	u32 power_island = 0;
 	u32 sprite_reg_offset = 0;
-	uint32_t pll_select = 0, ctrl_reg5 = 0;
 	int i = 0;
+	int offset = 0;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -315,10 +363,34 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
 
+	if (is_dual_dsi(dev))
+	power_island |= OSPM_DISPLAY_C;
+
 	if (!power_island_get(power_island))
 		return -EAGAIN;
 
-	if (dev_priv->bUseHFPLL) {
+	if (is_dual_dsi(dev)) {
+		intel_mid_msgbus_write32(CCK_PORT, 0x68, 0x682);
+		/* Disable PLL*/
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
+		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		intel_mid_msgbus_write32(CCK_PORT,
+					DSI_PLL_CTRL_REG,
+					_DSI_LDO_EN);
+		/* Program PLL */
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
+		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
+				((guit_val & ~_P1_POST_DIV_MASK) |
+				 (ctx->dpll & _P1_POST_DIV_MASK)));
+		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		ctx->dpll |= DPLL_VCO_ENABLE;
+		ctx->dpll &= ~(_DSI_LDO_EN |
+			       _CLK_EN_CCK_DSI0 | _CLK_EN_CCK_DSI1 |
+			       _DSI_MUX_SEL_CCK_DSI1 | _DSI_MUX_SEL_CCK_DSI0);
+		ctx->dpll |= _CLK_EN_PLL_DSI0 | _CLK_EN_PLL_DSI1;
+		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, ctx->dpll);
+	} else if (dev_priv->bUseHFPLL) {
 		/* Disable PLL*/
 		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
 		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
@@ -453,7 +525,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	}
 
 	/*exit ULPS*/
-	if (__dbi_exit_ulps_locked(dsi_config)) {
+	if (__dbi_exit_ulps_locked(dsi_config, 0)) {
 		DRM_ERROR("Failed to exit ULPS\n");
 		goto power_on_err;
 	}
@@ -464,6 +536,21 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	/*unready dsi adapter for re-programming*/
 	REG_WRITE(regs->device_ready_reg,
 		REG_READ(regs->device_ready_reg) & ~(DSI_DEVICE_READY));
+
+	if (is_dual_dsi(dev)) {
+		if (__dbi_exit_ulps_locked(dsi_config, 0x800)) {
+			DRM_ERROR("Failed to exit ULPS\n");
+			goto power_on_err;
+		}
+		offset = 0x1000;
+		REG_WRITE(regs->mipi_reg + offset, ctx->mipi |
+				 REG_READ(regs->mipi_reg + offset));
+		/*unready dsi adapter for re-programming*/
+		offset = 0x800;
+		REG_WRITE(regs->device_ready_reg + offset,
+			REG_READ(regs->device_ready_reg + offset) & ~(DSI_DEVICE_READY));
+	}
+
 	/*
 	 * According to MIPI D-PHY spec, if clock stop feature is enabled (EOT
 	 * Disable), un-ready MIPI adapter needs to wait for 20 cycles from HS
@@ -472,29 +559,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	if (ctx->eot_disable & CLOCK_STOP)
 		udelay(1);
 
-	/*D-PHY parameter*/
-	REG_WRITE(regs->dphy_param_reg, ctx->dphy_param);
-
-	/*Configure DSI controller*/
-	REG_WRITE(regs->mipi_control_reg, ctx->mipi_control);
-	REG_WRITE(regs->intr_en_reg, ctx->intr_en);
-	REG_WRITE(regs->hs_tx_timeout_reg, ctx->hs_tx_timeout);
-	REG_WRITE(regs->lp_rx_timeout_reg, ctx->lp_rx_timeout);
-	REG_WRITE(regs->turn_around_timeout_reg,
-		ctx->turn_around_timeout);
-	REG_WRITE(regs->device_reset_timer_reg,
-		ctx->device_reset_timer);
-	REG_WRITE(regs->high_low_switch_count_reg,
-		ctx->high_low_switch_count);
-	REG_WRITE(regs->init_count_reg, ctx->init_count);
-	REG_WRITE(regs->eot_disable_reg, ctx->eot_disable);
-	REG_WRITE(regs->lp_byteclk_reg, ctx->lp_byteclk);
-	REG_WRITE(regs->clk_lane_switch_time_cnt_reg,
-		ctx->clk_lane_switch_time_cnt);
-	REG_WRITE(regs->dsi_func_prg_reg, ctx->dsi_func_prg);
-
-	/*DBI bw ctrl*/
-	REG_WRITE(regs->dbi_bw_ctrl_reg, ctx->dbi_bw_ctrl);
+	__dbi_set_properties(dsi_config, PORT_A);
 
 	/*Setup pipe timing*/
 	REG_WRITE(regs->htotal_reg, ctx->htotal);
@@ -529,6 +594,9 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(regs->dspsurf_reg, ctx->dspsurf);
 	REG_WRITE(regs->dsplinoff_reg, ctx->dsplinoff);
 	REG_WRITE(regs->vgacntr_reg, ctx->vgacntr);
+
+	if (is_dual_dsi(dev))
+		__dbi_set_properties(dsi_config, PORT_C);
 
 	/*enable plane*/
 	val = ctx->dspcntr | BIT31;
@@ -568,6 +636,10 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(regs->device_ready_reg,
 		REG_READ(regs->device_ready_reg) | DSI_DEVICE_READY);
 	mdelay(1);
+	if (is_dual_dsi(dev)) {
+		REG_WRITE(regs->device_ready_reg + offset,
+			REG_READ(regs->device_ready_reg + offset) | DSI_DEVICE_READY);
+	}
 
 	/*Enable pipe*/
 	val = ctx->pipeconf;
@@ -657,7 +729,6 @@ reset_recovery:
 			goto power_on_err;
 		}
 	}
-
 	/* Issue "write_mem_start" DSI command during power on. */
 	dsr_info = dev_priv->dbi_dsr_info;
 	dbi_outputs = dsr_info->dbi_outputs;
@@ -676,7 +747,6 @@ reset_recovery:
 			err = -EAGAIN;
 			goto power_on_err;
 		}
-
 	if (p_funcs && p_funcs->set_brightness)
 		if (p_funcs->set_brightness(dsi_config,
 					ctx->lastbrightnesslevel))
@@ -684,6 +754,11 @@ reset_recovery:
 
 	/*wait for all FIFOs empty*/
 	mdfld_dsi_wait_for_fifos_empty(sender);
+	if (is_dual_dsi(dev)) {
+		sender->work_for_slave_panel = true;
+		mdfld_dsi_wait_for_fifos_empty(sender);
+		sender->work_for_slave_panel = false;
+	}
 
 	if (IS_ANN_A0(dev))
 		intel_dsi_dbi_update_fb(dbi_output);
@@ -708,8 +783,10 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	int pipe0_enabled;
 	int pipe2_enabled;
 	int err = 0;
+	u32 guit_val = 0;
 	u32 power_island = 0;
 	int retry;
+	int offset = 0;
 
 	if (!dsi_config)
 		return -EINVAL;
@@ -720,34 +797,86 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	ctx = &dsi_config->dsi_hw_context;
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
-
 	/*Disable plane*/
 	REG_WRITE(regs->dspcntr_reg, 0);
 
 	/*Disable pipe*/
 	/* Don't disable DSR mode. */
 	REG_WRITE(regs->pipeconf_reg, (REG_READ(regs->pipeconf_reg) & ~BIT31));
+	/*wait for pipe disabling,
+	  pipe synchronization plus , only avaiable when
+	  timer generator is working*/
+	if (REG_READ(regs->mipi_reg) & BIT31) {
+		retry = 100000;
+		while (--retry && (REG_READ(regs->pipeconf_reg) & BIT30))
+			udelay(5);
 
-	/*Disable DSI PLL*/
-	pipe0_enabled = (REG_READ(PIPEACONF) & BIT31) ? 1 : 0;
-	pipe2_enabled = (REG_READ(PIPECCONF) & BIT31) ? 1 : 0;
-
-	if (!pipe0_enabled && !pipe2_enabled) {
-		u32 val;
-
-		/* Disable PLL*/
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-
-		val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		val &= ~DPLL_VCO_ENABLE;
-		val |= _DSI_LDO_EN;
-		val &= ~_CLK_EN_MASK;
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
+		if (!retry) {
+			DRM_ERROR("Failed to disable pipe\n");
+			err = -EAGAIN;
+			goto power_off_err;
+		}
 	}
-	/*enter ulps*/
-	if (__dbi_enter_ulps_locked(dsi_config)) {
-		DRM_ERROR("Failed to enter ULPS\n");
-		goto power_off_err;
+	if (!is_dual_dsi(dev)) {
+		/*Disable DSI PLL*/
+		pipe0_enabled = (REG_READ(PIPEACONF) & BIT31) ? 1 : 0;
+		pipe2_enabled = (REG_READ(PIPECCONF) & BIT31) ? 1 : 0;
+
+		if (!pipe0_enabled && !pipe2_enabled) {
+			u32 val;
+
+			/* Disable PLL*/
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
+
+			val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+			val &= ~DPLL_VCO_ENABLE;
+			val |= _DSI_LDO_EN;
+			val &= ~_CLK_EN_MASK;
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
+		}
+		/*enter ULPS*/
+		__dbi_enter_ulps_locked(dsi_config, offset);
+	} else {
+		/*Disable MIPI port*/
+		REG_WRITE(regs->mipi_reg, (REG_READ(regs->mipi_reg) & ~BIT31));
+		/*clear Low power output hold*/
+		REG_WRITE(regs->mipi_reg, (REG_READ(regs->mipi_reg) & ~BIT16));
+		/*Disable DSI controller*/
+		REG_WRITE(regs->device_ready_reg, (ctx->device_ready & ~BIT0));
+		/*enter ULPS*/
+		__dbi_enter_ulps_locked(dsi_config, offset);
+
+		offset = 0x1000;
+		/*Disable MIPI port*/
+		REG_WRITE(regs->mipi_reg +offset,
+		(REG_READ(regs->mipi_reg + offset) & ~BIT31));
+		/*clear Low power output hold*/
+		REG_WRITE(regs->mipi_reg + offset,
+		(REG_READ(regs->mipi_reg + offset) & ~BIT16));
+
+		offset = 0x800;
+		/*Disable DSI controller*/
+		REG_WRITE(regs->device_ready_reg + offset, (ctx->device_ready & ~BIT0));
+		/*enter ULPS*/
+		__dbi_enter_ulps_locked(dsi_config, offset);
+		offset = 0x0;
+
+		/*Disable DSI PLL*/
+		pipe0_enabled = (REG_READ(PIPEACONF) & BIT31) ? 1 : 0;
+		pipe2_enabled = (REG_READ(PIPECCONF) & BIT31) ? 1 : 0;
+
+		if (!pipe0_enabled && !pipe2_enabled) {
+			u32 val;
+
+			/* Disable PLL*/
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
+
+			val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+			val &= ~DPLL_VCO_ENABLE;
+			val |= _DSI_LDO_EN;
+			val &= ~_CLK_EN_MASK;
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
+		}
 	}
 power_off_err:
 
@@ -755,6 +884,8 @@ power_off_err:
 
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
+	if (is_dual_dsi(dev))
+		power_island |= OSPM_DISPLAY_C;
 
 	if (!power_island_put(power_island))
 		return -EINVAL;
@@ -886,7 +1017,6 @@ int mdfld_generic_dsi_dbi_set_power(struct drm_encoder *encoder, bool on)
 		if (!dsi_config->dsi_hw_context.panel_on &&
 		    !dbi_output->first_boot)
 			goto fun_exit;
-
 		if (__dbi_panel_power_off(dsi_config, p_funcs)) {
 			DRM_ERROR("Faild to turn off panel\n");
 			goto set_power_err;
@@ -1299,7 +1429,6 @@ void mdfld_reset_panel_handler_work(struct work_struct *work)
 		mutex_lock(&dsi_config->context_lock);
 
 		DRM_INFO("Starts ESD panel reset\n");
-
 		if (__dbi_panel_power_off(dsi_config, p_funcs)) {
 			mutex_unlock(&dsi_config->context_lock);
 			return;
