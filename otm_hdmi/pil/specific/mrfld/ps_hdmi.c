@@ -155,7 +155,7 @@ otm_hdmi_ret_t ps_hdmi_pci_dev_init(void *context, struct pci_dev *pdev)
 	pr_debug("map IO region\n");
 	/* Map IO region and save its length */
 	ctx->io_length = PS_VDC_SIZE;
-	ctx->io_address = ioremap_cache(pci_address, ctx->io_length);
+	ctx->io_address = ioremap(pci_address, ctx->io_length);
 	if (!ctx->io_address) {
 		rc = OTM_HDMI_ERR_FAILED;
 		goto exit;
