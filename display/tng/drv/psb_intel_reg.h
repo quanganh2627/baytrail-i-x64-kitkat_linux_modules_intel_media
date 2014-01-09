@@ -525,17 +525,21 @@ struct dpst_guardband {
 #define PIPE_PIXEL_SHIFT        0
 
 #define DSPARB			0x70030
+#define DSPARB2			0x7002C
 #define DSPFW1			0x70034
 #define DSPFW2			0x70038
 #define DSPFW3			0x7003c
 #define DSPFW4			0x70050
 #define DSPFW5			0x70054
 #define DSPFW6			0x70058
+#define DSPFW7			0x70070
 #define DSPCHICKENBIT		0x70400
 #define DSPACNTR		0x70180
 #define DSPBCNTR		0x71180
 #define DSPCCNTR		0x72180
 #define DSPDCNTR		0x73180
+#define DSPECNTR		0x74180
+#define DSPFCNTR		0x75180
 #define DISPLAY_PLANE_ENABLE 			(1<<31)
 #define DISPLAY_PLANE_DISABLE			0
 #define DISPPLANE_GAMMA_ENABLE			(1<<30)
@@ -1337,5 +1341,14 @@ gamma settings.
 #define PIPEC_COLOR_COEF12 	0x6207c
 #define PIPEC_COLOR_COEF21 	0x62080
 #define PIPEC_COLOR_COEF22 	0x62084
+
+/* Necessary reset registers for ANN A0*/
+#define DSPCLK_GATE_D		0x70500
+#define RAMCLK_GATE_D		0x70504
+#define DSPIEDCFGSHDW		0x6414
+#define DSPSRCTRL		0x7005c
+#define FBDC_CHICKEN		0x70508
+#define IEP_OVA_CTRL 		0x32000
+#define IEP_OVC_CTRL 		0x3A000
 
 #endif
