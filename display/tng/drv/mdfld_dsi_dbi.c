@@ -111,10 +111,12 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 
 	/* if mode setting on-going, back off */
 
-	if ((dbi_output->mode_flags & MODE_SETTING_ON_GOING) ||
-	    (psb_crtc && (psb_crtc->mode_flags & MODE_SETTING_ON_GOING)) ||
-	    !(dbi_output->mode_flags & MODE_SETTING_ENCODER_DONE))
-		return;
+	if (!IS_ANN_A0(dev)) {
+		if ((dbi_output->mode_flags & MODE_SETTING_ON_GOING) ||
+				(psb_crtc && (psb_crtc->mode_flags & MODE_SETTING_ON_GOING)) ||
+				!(dbi_output->mode_flags & MODE_SETTING_ENCODER_DONE))
+			return;
+	}
 
 	if (pipe == 2) {
 		dspcntr_reg = DSPCCNTR;
@@ -133,11 +135,13 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 	   !(REG_READ(pipeconf_reg) & DISPLAY_PLANE_ENABLE))
 		return;
 
-	/* refresh plane changes */
+	if (!IS_ANN_A0(dev)) {
+		/* refresh plane changes */
 
-	REG_WRITE(dsplinoff_reg, REG_READ(dsplinoff_reg));
-	REG_WRITE(dspsurf_reg, REG_READ(dspsurf_reg));
-	REG_READ(dspsurf_reg);
+		REG_WRITE(dsplinoff_reg, REG_READ(dsplinoff_reg));
+		REG_WRITE(dspsurf_reg, REG_READ(dspsurf_reg));
+		REG_READ(dspsurf_reg);
+	}
 
 	mdfld_dsi_send_dcs(sender,
 			   write_mem_start,
@@ -346,16 +350,35 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 					DSI_PLL_CTRL_REG,
 					_DSI_LDO_EN);
 
-		/* Program PLL */
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
+		if (IS_ANN_A0(dev)) {
+			if (get_panel_type(dev, dsi_config->pipe) == JDI_7x12_CMD)
+				intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0x177);
+			else
+				intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
 
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-				((guit_val & ~_P1_POST_DIV_MASK) |
-				 (ctx->dpll & _P1_POST_DIV_MASK)));
+			guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
+					((guit_val & ~_P1_POST_DIV_MASK) |
+					 (ctx->dpll & _P1_POST_DIV_MASK)));
+			guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
 
-		ctx->dpll |= DPLL_VCO_ENABLE;
-		ctx->dpll &= ~_DSI_LDO_EN;
+			ctx->dpll |= DPLL_VCO_ENABLE;
+			ctx->dpll &= ~(_DSI_LDO_EN |
+					_CLK_EN_CCK_DSI0 | _CLK_EN_CCK_DSI1 |
+					_DSI_MUX_SEL_CCK_DSI1 | _DSI_MUX_SEL_CCK_DSI0);
+			ctx->dpll |= _CLK_EN_PLL_DSI0 | _CLK_EN_PLL_DSI1;
+		} else {
+			/* Program PLL */
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
+
+			guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
+					((guit_val & ~_P1_POST_DIV_MASK) |
+					 (ctx->dpll & _P1_POST_DIV_MASK)));
+
+			ctx->dpll |= DPLL_VCO_ENABLE;
+			ctx->dpll &= ~_DSI_LDO_EN;
+		}
 
 		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, ctx->dpll);
 	}
@@ -444,19 +467,30 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(regs->dsppos_reg, ctx->dsppos);
 	REG_WRITE(regs->dspstride_reg, ctx->dspstride);
 
-	/*restore color_coef (chrome) */
-	for (i = 0; i < 6; i++)
-		REG_WRITE(regs->color_coef_reg + (i<<2), ctx->color_coef[i]);
+	if (IS_ANN_A0(dev)) {
+		/*reset registers*/
+		REG_WRITE(0x7002C, 0x000A0200);
+		REG_WRITE(0x70508, 0x0c0c0c0c);
+		REG_WRITE(0x70504, 0xffffffff);
+		REG_WRITE(0x70500, 0xffffffff);
+		DRM_DEBUG("LOADING: 0x70504 %#x\n", REG_READ(0x70504));
+	}
+
+	if (!IS_ANN_A0(dev)) {
+		/*restore color_coef (chrome) */
+		for (i = 0; i < 6; i++)
+			REG_WRITE(regs->color_coef_reg + (i<<2), ctx->color_coef[i]);
 
 
-	/* restore palette (gamma) */
-	for (i = 0; i < 256; i++)
-		REG_WRITE(regs->palette_reg + (i<<2), ctx->palette[i]);
+		/* restore palette (gamma) */
+		for (i = 0; i < 256; i++)
+			REG_WRITE(regs->palette_reg + (i<<2), ctx->palette[i]);
 
-	/* restore dpst setting */
-	if (dev_priv->psb_dpst_state) {
-		dpstmgr_reg_restore_locked(dev, dsi_config);
-		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
+		/* restore dpst setting */
+		if (dev_priv->psb_dpst_state) {
+			dpstmgr_reg_restore_locked(dev, dsi_config);
+			psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
+		}
 	}
 
 	/*Setup plane*/
@@ -598,7 +632,8 @@ reset_recovery:
 	dbi_outputs = dsr_info->dbi_outputs;
 	dbi_output = dsi_config->pipe ? dbi_outputs[1] : dbi_outputs[0];
 
-	intel_dsi_dbi_update_fb(dbi_output);
+	if (!IS_ANN_A0(dev))
+		intel_dsi_dbi_update_fb(dbi_output);
 
 	/**
 	 * Different panel may have different ways to have
@@ -618,6 +653,9 @@ reset_recovery:
 
 	/*wait for all FIFOs empty*/
 	mdfld_dsi_wait_for_fifos_empty(sender);
+
+	if (IS_ANN_A0(dev))
+		intel_dsi_dbi_update_fb(dbi_output);
 
 power_on_err:
 	if (err && reset_count) {

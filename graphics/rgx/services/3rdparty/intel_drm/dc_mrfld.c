@@ -215,6 +215,7 @@ static void _Flip_Overlay(DC_MRFLD_DEVICE *psDevice,
 			__func__, psContext->index, iPipe);
 		return;
 	}
+
 	if ((iPipe && psContext->pipe) || (!iPipe && !psContext->pipe))
 		DCCBFlipOverlay(psDevice->psDrmDevice, psContext);
 }
@@ -317,7 +318,8 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 				__func__, iPipe);
 		if (iPipe != DC_PIPE_B)
 			DCCBDsrAllow(gpsDevice->psDrmDevice, iPipe);
-		goto err_out;
+		if (iPipe != DC_PIPE_B)
+			goto err_out;
 	}
 
 	for (i = 0; i < uiNumBuffers; i++) {
@@ -341,6 +343,11 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 			psSurfCustom = &pasBuffers[i].sContext[j];
 			switch (psSurfCustom->type) {
 			case DC_SPRITE_PLANE:
+				/*need fix up the surface address*/
+				if (!psSurfCustom->ctx.sp_ctx.surf)
+					psSurfCustom->ctx.sp_ctx.surf =
+						pasBuffers[i].sDevVAddr.uiAddr;
+
 				/*Flip sprite context*/
 				_Flip_Sprite(gpsDevice,
 						&psSurfCustom->ctx.sp_ctx,
@@ -1026,6 +1033,8 @@ static PVRSRV_ERROR DC_MRFLD_BufferAlloc(IMG_HANDLE hDisplayContext,
 			GFP_KERNEL | __GFP_HIGHMEM | __GFP_ZERO,
 			 __pgprot((pgprot_val(PAGE_KERNEL) & ~_PAGE_CACHE_MASK)
 			| _PAGE_CACHE_WC));
+	/*FIXME: */
+	//DCCBGetStolen(gpsDevice->psDrmDevice, &psBuffer->sCPUVAddr, &psBuffer->ui32BufferSize);
 	if (psBuffer->sCPUVAddr == NULL) {
 		DRM_ERROR("Failed to allocate buffer\n");
 		eRes = PVRSRV_ERROR_OUT_OF_MEMORY;

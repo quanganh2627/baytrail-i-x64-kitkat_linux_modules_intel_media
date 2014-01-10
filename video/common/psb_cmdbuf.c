@@ -917,14 +917,11 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 #endif
 	} else if (arg->engine == VSP_ENGINE_VPP) {
 #ifdef SUPPORT_VSP
-		if (vsp_priv->fw_loaded_by_punit) {
-			if (unlikely(vsp_priv->fw_loaded == 0)) {
-				ret = vsp_init_fw(dev);
-				if (ret != 0) {
-					DRM_ERROR("VSP: failed to init"
-						  "firmware\n");
-					goto out_err1;
-				}
+		if (unlikely(vsp_priv->fw_loaded == 0)) {
+			ret = vsp_init_fw(dev);
+			if (ret != 0) {
+				DRM_ERROR("VSP: failed to init firmware\n");
+				goto out_err1;
 			}
 		}
 

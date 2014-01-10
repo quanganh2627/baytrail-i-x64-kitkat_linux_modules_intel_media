@@ -93,14 +93,14 @@ static const unsigned int vsp_processor_base[] = {
 /* help macro */
 #define MM_WRITE32(base, offset, value)					\
 	do {								\
-		*((unsigned long *)((unsigned char *)(dev_priv->vsp_reg) \
+		*((uint32_t *)((unsigned char *)(dev_priv->vsp_reg) \
 				    + base + offset)) = value;		\
 	} while (0)
 
 #define MM_READ32(base, offset, pointer)				\
 	do {								\
 		*(pointer) =						\
-			*((unsigned long *)((unsigned char *)		\
+			*((uint32_t *)((unsigned char *)		\
 					    (dev_priv->vsp_reg)		\
 						 + base + offset));	\
 	} while (0)
@@ -213,15 +213,11 @@ struct vsp_private {
 
 	int fw_loaded;
 	int vsp_state;
-	int fw_loaded_by_punit;
 
 	spinlock_t lock;
 
 	unsigned int cmd_queue_size;
 	unsigned int ack_queue_size;
-
-	struct ttm_buffer_object *firmware;
-	unsigned int firmware_sz;
 
 	struct ttm_buffer_object *cmd_queue_bo;
 	unsigned int cmd_queue_sz;
@@ -237,11 +233,8 @@ struct vsp_private {
 	struct ttm_bo_kmap_obj setting_kmap;
 	struct vsp_settings_t *setting;
 
-	struct ttm_buffer_object *context_setting_bo;
-	struct ttm_bo_kmap_obj context_setting_kmap;
-	struct vsp_context_settings_t *context_setting;
-
 	struct vsp_secure_boot_header boot_header;
+	struct vsp_multi_app_blob_data ma_header;
 
 	struct vsp_ctrl_reg *ctrl;
 
@@ -264,8 +257,6 @@ struct vsp_private {
 	/* the number of cmd will send to VSP */
 	int vsp_cmd_num;
 
-	unsigned int fw_type;
-
 	/* save the address of vp8 cmd_buffer for now */
 	struct VssVp8encPictureParameterBuffer *vp8_encode_frame_cmd;
 	struct ttm_bo_kmap_obj vp8_encode_frame__kmap;
@@ -277,7 +268,6 @@ struct vsp_private {
 
 	/* For VP8 dual encoding */
 	struct file *vp8_filp[2];
-	int context_vp8_id;
 	int context_vp8_num;
 
 	/*
@@ -285,6 +275,7 @@ struct vsp_private {
 	 * save VssVp8encEncodeFrameCommand cmd numbers *
 	 * */
 	int vp8_cmd_num;
+	int context_vp8_id;
 };
 
 extern int vsp_init(struct drm_device *dev);

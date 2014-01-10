@@ -26,6 +26,7 @@
  */
 
 
+
 #include <linux/spinlock.h>
 #include <asm/intel-mid.h>
 #include <asm/intel_scu_ipc.h>
@@ -37,7 +38,7 @@
 #include "tng_wa.h"
 #include "pwr_mgmt.h"
 #include "gfx_rtpm.h"
-#include "gfx_ospm.h"
+#include "gfx_ospm_ann.h"
 #include "dc_ospm.h"
 #include "video_ospm.h"
 #include "early_suspend.h"
@@ -53,8 +54,10 @@ struct ospm_power_island island_list[] = {
 	{OSPM_DISPLAY_C, OSPM_POWER_OFF, {0}, ospm_disp_c_init, NULL},
 	{OSPM_DISPLAY_MIO, OSPM_POWER_OFF, {0}, ospm_mio_init, NULL},
 	{OSPM_DISPLAY_HDMI, OSPM_POWER_OFF, {0}, ospm_hdmi_init, NULL},
-	{OSPM_GRAPHICS_ISLAND, OSPM_POWER_OFF, {0}, ospm_gfx_init, NULL},
+	{OSPM_GRAPHICS_ISLAND, OSPM_POWER_OFF, {0}, ospm_rscd_init, NULL},
+	{OSPM_SIDEKICK_ISLAND, OSPM_POWER_OFF, {0}, ospm_sidekick_init, NULL},
 	{OSPM_SLC_ISLAND, OSPM_POWER_OFF, {0}, ospm_slc_init, NULL},
+	{OSPM_SLC_LDO_ISLAND, OSPM_POWER_OFF, {0}, ospm_slc_ldo_init, NULL},
 	{OSPM_VIDEO_VPP_ISLAND, OSPM_POWER_OFF, {0}, ospm_vsp_init, NULL},
 	{OSPM_VIDEO_DEC_ISLAND, OSPM_POWER_OFF, {0}, ospm_ved_init, NULL},
 	{OSPM_VIDEO_ENC_ISLAND, OSPM_POWER_OFF, {0}, ospm_vec_init, NULL},

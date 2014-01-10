@@ -59,6 +59,14 @@ enum panel_type get_panel_type(struct drm_device *dev, int pipe)
 	return dev_priv->panel_id;
 }
 
+bool is_dual_dsi(struct drm_device *dev)
+{
+	if ((get_panel_type(dev, 0) == SHARP_25x16_VID) ||
+		(get_panel_type(dev, 0) == JDI_25x16_VID))
+		return true;
+	else return false;
+}
+
 /**
  * is_panel_vid_or_cmd(struct drm_device *dev)
  * Function return value: panel encoder type

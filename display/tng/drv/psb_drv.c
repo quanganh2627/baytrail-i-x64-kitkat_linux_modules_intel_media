@@ -82,6 +82,24 @@
 #define KEEP_UNUSED_CODE_DRIVER_DISPATCH 0
 
 #define HDMI_MONITOR_NAME_LENGTH 20
+
+/* Hack to Turn GFX islands up - BEGIN */
+static void power_up(int pm_reg, u32 pm_mask);
+
+static void power_up(int pm_reg, u32 pm_mask) {
+	u32 pwr_mask = 0;
+
+	pwr_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+	printk ("\nHACK - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pwr_mask);
+	// pwr_mask &= ~pm_mask;
+	pwr_mask =0;
+
+	intel_mid_msgbus_write32(0x04, pm_reg, pwr_mask);
+	printk ("\nHACK - pwr_mask read modify write: reg=0x%x pwr_mask=0x%x \n", pm_reg, pwr_mask);
+	udelay(10);
+}
+/* Hack to Turn GFX islands up - END */
+
 int drm_psb_debug;
 int drm_decode_flag = 0x0;
 int drm_psb_enable_pr2_cabc = 1;
@@ -1069,164 +1087,23 @@ bool mid_get_pci_revID(struct drm_psb_private *dev_priv)
 
 bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 {
-	struct mrst_vbt *pVBT = &dev_priv->vbt_data;
-	u32 platform_config_address;
-	u16 new_size;
-	u8 *pVBT_virtual;
-	u8 bpi;
-	u8 number_desc = 0;
-	struct mrst_timing_info *dp_ti = &dev_priv->gct_data.DTD;
-	struct gct_r10_timing_info ti;
-	void *pGCT;
-	struct pci_dev *pci_gfx_root = pci_get_bus_and_slot(0, PCI_DEVFN(2, 0));
-	if (!pci_gfx_root) {
-		DRM_ERROR("pci_gfx_root is NULL\n");
-		return false;
-	}
-
-	/*get the address of the platform config vbt, B0:D2:F0;0xFC */
-	pci_read_config_dword(pci_gfx_root, 0xFC, &platform_config_address);
-	pci_dev_put(pci_gfx_root);
-	DRM_INFO("drm platform config address is %x\n",
-		 platform_config_address);
-
-	/* check for platform config address == 0. */
-	/* this means fw doesn't support vbt */
-
-	if (platform_config_address == 0) {
-		pVBT->Size = 0;
-		return false;
-	}
-
-	/* get the virtual address of the vbt */
-	pVBT_virtual = ioremap(platform_config_address, sizeof(*pVBT));
-
-	if (!pVBT_virtual) {
-		DRM_ERROR("pVBT_virtual is NULL, problem during ioremap\n");
-		return false;
-	}
-
-	memcpy(pVBT, pVBT_virtual, sizeof(*pVBT));
-	iounmap(pVBT_virtual);	/* Free virtual address space */
-
-	PSB_DEBUG_ENTRY("GCT Revision is %x\n", pVBT->Revision);
-	switch (pVBT->Revision) {
-	case 0:
-		pVBT->mrst_gct = NULL;
-		pVBT->mrst_gct =
-		    ioremap(platform_config_address + sizeof(*pVBT) - 4,
-			    pVBT->Size - sizeof(*pVBT) + 4);
-		if (!pVBT->mrst_gct) {
-			DRM_ERROR("pVBT->mrst_gct NULL from ioremap\n");
-			return false;
-		}
-		pGCT = pVBT->mrst_gct;
-		bpi = ((struct mrst_gct_v1 *)pGCT)->PD.BootPanelIndex;
-		dev_priv->gct_data.bpi = bpi;
-		dev_priv->gct_data.pt =
-		    ((struct mrst_gct_v1 *)pGCT)->PD.PanelType;
-		memcpy(&dev_priv->gct_data.DTD,
-		       &((struct mrst_gct_v1 *)pGCT)->panel[bpi].DTD,
-		       sizeof(struct mrst_timing_info));
-		dev_priv->gct_data.Panel_Port_Control =
-		    ((struct mrst_gct_v1 *)pGCT)->panel[bpi].Panel_Port_Control;
-		dev_priv->gct_data.Panel_MIPI_Display_Descriptor =
-		    ((struct mrst_gct_v1 *)pGCT)->
-		    panel[bpi].Panel_MIPI_Display_Descriptor;
-		break;
-	case 1:
-		pVBT->mrst_gct = NULL;
-		pVBT->mrst_gct =
-		    ioremap(platform_config_address + sizeof(*pVBT) - 4,
-			    pVBT->Size - sizeof(*pVBT) + 4);
-		if (!pVBT->mrst_gct) {
-		    DRM_ERROR("pVBT->mrst_gct NULL from ioremap\n");
-		    return false;
-		}
-		pGCT = pVBT->mrst_gct;
-		bpi = ((struct mrst_gct_v2 *)pGCT)->PD.BootPanelIndex;
-		dev_priv->gct_data.bpi = bpi;
-		dev_priv->gct_data.pt =
-		    ((struct mrst_gct_v2 *)pGCT)->PD.PanelType;
-		memcpy(&dev_priv->gct_data.DTD,
-		       &((struct mrst_gct_v2 *)pGCT)->panel[bpi].DTD,
-		       sizeof(struct mrst_timing_info));
-		dev_priv->gct_data.Panel_Port_Control =
-		    ((struct mrst_gct_v2 *)pGCT)->panel[bpi].Panel_Port_Control;
-		dev_priv->gct_data.Panel_MIPI_Display_Descriptor =
-		    ((struct mrst_gct_v2 *)pGCT)->
-		    panel[bpi].Panel_MIPI_Display_Descriptor;
-		break;
-	case 0x10:
-		/*header definition changed from rev 01 (v2) to rev 10h. */
-		/*so, some values have changed location */
-		new_size = pVBT->Checksum;
-		/*checksum contains lo size byte */
-		/*LSB of mrst_gct contains hi size byte */
-		new_size |= ((0xff & (unsigned int)pVBT->mrst_gct)) << 8;
-
-		pVBT->Checksum = pVBT->Size;	/*size contains the checksum */
-		if (new_size > 0xff)
-			pVBT->Size = 0xff;	/*restrict size to 255 */
-		else
-			pVBT->Size = new_size;
-
-		/* number of descriptors defined in the GCT */
-		number_desc = ((0xff00 & (unsigned int)pVBT->mrst_gct)) >> 8;
-		bpi = ((0xff0000 & (unsigned int)pVBT->mrst_gct)) >> 16;
-		pVBT->mrst_gct = NULL;
-		pVBT->mrst_gct =
-		    ioremap(platform_config_address + GCT_R10_HEADER_SIZE,
-			    GCT_R10_DISPLAY_DESC_SIZE * number_desc);
-		pGCT = pVBT->mrst_gct;
-		pGCT = (u8 *) pGCT + (bpi * GCT_R10_DISPLAY_DESC_SIZE);
-		dev_priv->gct_data.bpi = bpi;	/*save boot panel id */
-
-		/*copy the GCT display timings into a temp structure */
-		memcpy(&ti, pGCT, sizeof(struct gct_r10_timing_info));
-
-		/*now copy the temp struct into the dev_priv->gct_data */
-		dp_ti->pixel_clock = ti.pixel_clock;
-		dp_ti->hactive_hi = ti.hactive_hi;
-		dp_ti->hactive_lo = ti.hactive_lo;
-		dp_ti->hblank_hi = ti.hblank_hi;
-		dp_ti->hblank_lo = ti.hblank_lo;
-		dp_ti->hsync_offset_hi = ti.hsync_offset_hi;
-		dp_ti->hsync_offset_lo = ti.hsync_offset_lo;
-		dp_ti->hsync_pulse_width_hi = ti.hsync_pulse_width_hi;
-		dp_ti->hsync_pulse_width_lo = ti.hsync_pulse_width_lo;
-		dp_ti->vactive_hi = ti.vactive_hi;
-		dp_ti->vactive_lo = ti.vactive_lo;
-		dp_ti->vblank_hi = ti.vblank_hi;
-		dp_ti->vblank_lo = ti.vblank_lo;
-		dp_ti->vsync_offset_hi = ti.vsync_offset_hi;
-		dp_ti->vsync_offset_lo = ti.vsync_offset_lo;
-		dp_ti->vsync_pulse_width_hi = ti.vsync_pulse_width_hi;
-		dp_ti->vsync_pulse_width_lo = ti.vsync_pulse_width_lo;
-
-		/*mov the MIPI_Display_Descriptor data from GCT to dev priv */
-		dev_priv->gct_data.Panel_MIPI_Display_Descriptor =
-		    *((u8 *) pGCT + 0x0d);
-		dev_priv->gct_data.Panel_MIPI_Display_Descriptor |=
-		    (*((u8 *) pGCT + 0x0e)) << 8;
-		break;
-	case 0x20:
-		pVBT->Size = 0;
-		break;
-	default:
-		PSB_DEBUG_ENTRY("Unknown revision of GCT!\n");
-		pVBT->Size = 0;
-		return false;
-	}
+	struct drm_device *dev = dev_priv->dev;
 
 	dev_priv->panel_id = PanelID;
 	dev_priv->mipi_encoder_type = is_panel_vid_or_cmd(dev_priv->dev);
 
-	if (IS_TNG_B0(dev) || IS_ANN_A0(dev)) {
+	if (is_dual_dsi(dev) && IS_ANN_A0(dev)) {
+		dev_priv->bUseHFPLL = false;
+		dev_priv->bRereadZero = false;
+	} else if (IS_TNG_B0(dev) || IS_ANN_A0(dev)) {
 		if (dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DBI) {
-			dev_priv->bUseHFPLL = true;
+			if (IS_ANN_A0(dev))
+				dev_priv->bUseHFPLL = false;
+			else {
+				dev_priv->bUseHFPLL = true;
+				enable_HFPLL(dev_priv->dev);
+			}
 			dev_priv->bRereadZero = false;
-			enable_HFPLL(dev_priv->dev);
 		} else {
 			dev_priv->bUseHFPLL = false;
 			dev_priv->bRereadZero = true;
@@ -1235,7 +1112,6 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 		dev_priv->bUseHFPLL = false;
 		dev_priv->bRereadZero = false;
 	}
-
 	return true;
 }
 
@@ -1585,6 +1461,32 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	unsigned long irqflags;
 	int ret = -ENOMEM;
 	uint32_t tt_pages;
+	u32 pm_mask = 0x0;
+	int pm_reg = 0x0;
+
+	if (IS_ANN_A0(dev)) {
+		pm_reg = 0x3f;
+		pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+		printk ("\nHACK - Before PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+
+		pm_mask = 0x0;
+		pm_reg = 0x30; //GFXSS
+		power_up(pm_reg,pm_mask);
+
+		pm_mask = 0x0;
+		pm_reg = 0x36; //DSPSS
+		power_up(pm_reg,pm_mask);
+
+		pm_reg = 0x3c; //HDMISS
+		power_up(pm_reg,pm_mask);
+
+		pm_reg = 0x39; //ATOMISP
+		power_up(pm_reg,pm_mask);
+
+		pm_reg = 0x3f;
+		pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
+		printk ("\nHACK - PR: After PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
+	}
 
 	DRM_INFO("psb - %s\n", PSB_PACKAGE_VERSION);
 
@@ -2984,9 +2886,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				if (ret) {
 					DRM_ERROR("%s: fail to get pipe %d vsync\n",
 							__func__, pipe);
-					if ((pipe != 1) && (is_panel_vid_or_cmd(dev) ==
-								MDFLD_DSI_ENCODER_DBI))
-						schedule_work(&dev_priv->reset_panel_work);
+
+					if (!IS_ANN_A0(dev)) {
+						if ((pipe != 1) && (is_panel_vid_or_cmd(dev) ==
+									MDFLD_DSI_ENCODER_DBI))
+							schedule_work(&dev_priv->reset_panel_work);
+					}
 				}
 
 				mdfld_dsi_dsr_allow(dsi_config);
@@ -3000,31 +2905,33 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			return ret;
 		}
 
-		if (arg->vsync_operation_mask & VSYNC_ENABLE) {
-			if (dev_priv->vsync_enabled[pipe]) {
-				DRM_ERROR("%s: vsync has been enabled on pipe %d",
-					__func__, pipe);
-				return 0;
+		if (!IS_ANN_A0(dev)) {
+			if (arg->vsync_operation_mask & VSYNC_ENABLE) {
+				if (dev_priv->vsync_enabled[pipe]) {
+					DRM_ERROR("%s: vsync has been enabled on pipe %d",
+							__func__, pipe);
+					return 0;
+				}
+				mdfld_dsi_dsr_forbid(dsi_config);
+				ret = drm_vblank_get(dev, pipe);
+				if (ret != 0) {
+					DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
+							__func__, pipe);
+					mdfld_dsi_dsr_allow(dsi_config);
+				} else
+					dev_priv->vsync_enabled[pipe] = true;
 			}
-			mdfld_dsi_dsr_forbid(dsi_config);
-			ret = drm_vblank_get(dev, pipe);
-			if (ret != 0) {
-				DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
-					__func__, pipe);
-				mdfld_dsi_dsr_allow(dsi_config);
-			} else
-				dev_priv->vsync_enabled[pipe] = true;
-		}
 
-		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
-			if (!dev_priv->vsync_enabled[pipe]) {
-				DRM_ERROR("%s: vsync has been disabled on pipe %d",
-					__func__, pipe);
-				return 0;
+			if (arg->vsync_operation_mask & VSYNC_DISABLE) {
+				if (!dev_priv->vsync_enabled[pipe]) {
+					DRM_ERROR("%s: vsync has been disabled on pipe %d",
+							__func__, pipe);
+					return 0;
+				}
+				dev_priv->vsync_enabled[pipe] = false;
+				drm_vblank_put(dev, pipe);
+				mdfld_dsi_dsr_allow(dsi_config);
 			}
-			dev_priv->vsync_enabled[pipe] = false;
-			drm_vblank_put(dev, pipe);
-			mdfld_dsi_dsr_allow(dsi_config);
 		}
 	}
 

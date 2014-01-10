@@ -245,6 +245,7 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 				(get_panel_type(dev, pipe) == TMD_6X10_VID) ||
 				(get_panel_type(dev, pipe) == CMI_7x12_VID) ||
 				(get_panel_type(dev, pipe) == CMI_7x12_CMD) ||
+				(get_panel_type(dev, pipe) == SHARP_10x19_CMD) ||
 				(get_panel_type(dev, pipe) == JDI_7x12_CMD) ||
 				(get_panel_type(dev, pipe) == JDI_7x12_VID))) {
 		return;
