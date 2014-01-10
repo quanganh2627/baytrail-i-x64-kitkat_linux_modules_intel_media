@@ -274,6 +274,9 @@ void DCCBFlipSprite(struct drm_device *dev,
 		PSB_WVDC32(ctx->stride, DSPASTRIDE + reg_offset);
 	}
 
+	if ((ctx->update_mask & SPRITE_UPDATE_CONSTALPHA))
+		PSB_WVDC32(ctx->contalpa, DSPACONSTALPHA + reg_offset);
+
 	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL))
 		PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
 
@@ -330,6 +333,9 @@ void DCCBFlipPrimary(struct drm_device *dev,
 		PSB_WVDC32(ctx->size, DSPASIZE + reg_offset);
 		PSB_WVDC32(ctx->stride, DSPASTRIDE + reg_offset);
 	}
+
+	if ((ctx->update_mask & SPRITE_UPDATE_CONSTALPHA))
+		PSB_WVDC32(ctx->contalpa, DSPACONSTALPHA + reg_offset);
 
 	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL))
 		PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
