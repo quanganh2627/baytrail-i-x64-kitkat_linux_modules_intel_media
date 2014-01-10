@@ -237,8 +237,11 @@ struct vsp_private {
 	struct ttm_bo_kmap_obj setting_kmap;
 	struct vsp_settings_t *setting;
 
+	struct ttm_buffer_object *context_setting_bo;
+	struct ttm_bo_kmap_obj context_setting_kmap;
+	struct vsp_context_settings_t *context_setting;
+
 	struct vsp_secure_boot_header boot_header;
-	struct vsp_multi_app_blob_data ma_header;
 
 	struct vsp_ctrl_reg *ctrl;
 
@@ -261,6 +264,8 @@ struct vsp_private {
 	/* the number of cmd will send to VSP */
 	int vsp_cmd_num;
 
+	unsigned int fw_type;
+
 	/* save the address of vp8 cmd_buffer for now */
 	struct VssVp8encPictureParameterBuffer *vp8_encode_frame_cmd;
 	struct ttm_bo_kmap_obj vp8_encode_frame__kmap;
@@ -272,6 +277,7 @@ struct vsp_private {
 
 	/* For VP8 dual encoding */
 	struct file *vp8_filp[2];
+	int context_vp8_id;
 	int context_vp8_num;
 
 	/*
@@ -279,7 +285,6 @@ struct vsp_private {
 	 * save VssVp8encEncodeFrameCommand cmd numbers *
 	 * */
 	int vp8_cmd_num;
-	int context_vp8_id;
 };
 
 extern int vsp_init(struct drm_device *dev);
