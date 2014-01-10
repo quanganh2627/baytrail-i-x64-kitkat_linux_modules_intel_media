@@ -97,7 +97,6 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->coded_buf = NULL;
 
 	vsp_priv->context_num = 0;
-	vsp_priv->context_vp8_id = 0;
 	atomic_set(&dev_priv->vsp_mmu_invaldc, 0);
 
         if (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER &&
@@ -205,6 +204,31 @@ int vsp_init(struct drm_device *dev)
 		goto out_clean;
 	}
 
+	/* Create context buffer */
+	context_size = VSP_CONTEXT_NUM_MAX *
+			sizeof(struct vsp_context_settings_t);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
+	ret =  ttm_buffer_object_create(bdev,
+				       context_size,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, 0, NULL,
+				       &vsp_priv->context_setting_bo);
+#else
+	ret =  ttm_buffer_object_create(bdev,
+				       context_size,
+				       ttm_bo_type_kernel,
+				       DRM_PSB_FLAG_MEM_MMU |
+				       TTM_PL_FLAG_NO_EVICT,
+				       0, 0, NULL,
+				       &vsp_priv->context_setting_bo);
+#endif
+	if (ret != 0) {
+		DRM_ERROR("VSP: failed to allocate context setting buffer\n");
+		goto out_clean;
+	}
+
 	/* map cmd queue */
 	ret = ttm_bo_kmap(vsp_priv->cmd_queue_bo, 0,
 			  vsp_priv->cmd_queue_bo->num_pages,
@@ -247,8 +271,23 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->setting = ttm_kmap_obj_virtual(&vsp_priv->setting_kmap,
 						 &is_iomem);
 
+	/* map vsp context setting */
+	ret = ttm_bo_kmap(vsp_priv->context_setting_bo, 0,
+			  vsp_priv->context_setting_bo->num_pages,
+			  &vsp_priv->context_setting_kmap);
+	if (ret) {
+		DRM_ERROR("drm_bo_kmap context_setting_bo failed: %d\n", ret);
+		ttm_bo_unref(&vsp_priv->context_setting_bo);
+		ttm_bo_kunmap(&vsp_priv->context_setting_kmap);
+		goto out_clean;
+	}
+	vsp_priv->context_setting = ttm_kmap_obj_virtual(
+						&vsp_priv->context_setting_kmap,
+						&is_iomem);
+
 	vsp_priv->vp8_filp[0] = NULL;
 	vsp_priv->vp8_filp[1] = NULL;
+	vsp_priv->context_vp8_id = 0;
 	vsp_priv->context_vp8_num = 0;
 
 	vsp_priv->vp8_cmd_num = 0;
@@ -290,12 +329,20 @@ int vsp_deinit(struct drm_device *dev)
 		vsp_priv->setting = NULL;
 	}
 
+	if (vsp_priv->context_setting) {
+		ttm_bo_kunmap(&vsp_priv->context_setting_kmap);
+		vsp_priv->context_setting = NULL;
+	}
+
 	if (vsp_priv->ack_queue_bo)
 		ttm_bo_unref(&vsp_priv->ack_queue_bo);
 	if (vsp_priv->cmd_queue_bo)
 		ttm_bo_unref(&vsp_priv->cmd_queue_bo);
 	if (vsp_priv->setting_bo)
 		ttm_bo_unref(&vsp_priv->setting_bo);
+	if (vsp_priv->context_setting_bo)
+		ttm_bo_unref(&vsp_priv->context_setting_bo);
+
 
 	device_remove_file(&dev->pdev->dev, &dev_attr_vsp_pmstate);
 	sysfs_put(vsp_priv->sysfs_pmstate);
@@ -356,9 +403,8 @@ int vsp_init_fw(struct drm_device *dev)
 	struct ttm_bo_device *bdev = &dev_priv->bdev;
 	int ret;
 	const struct firmware *raw;
-	unsigned char *ptr, *bo_ptr, *ma_ptr;
+	unsigned char *ptr, *bo_ptr;
 	struct vsp_secure_boot_header *boot_header;
-	struct vsp_multi_app_blob_data *ma_header;
 	struct ttm_bo_kmap_obj tmp_kmap;
 	bool is_iomem;
 	unsigned long imr_addr;
@@ -389,15 +435,11 @@ int vsp_init_fw(struct drm_device *dev)
 	}
 
 	ptr = (void *)raw->data;
-	ma_ptr = (void *) raw->data + vrl_header_size;
-	if (vsp_priv->fw_loaded_by_punit) {
+	if (vsp_priv->fw_loaded_by_punit)
 		boot_header = (struct vsp_secure_boot_header *)
 			(ptr + vrl_header_size);
-		ma_header = (struct vsp_multi_app_blob_data *)
-			(ma_ptr + boot_header->ma_header_offset);
-	} else {
+	else
 		boot_header = (struct vsp_secure_boot_header *) ptr;
-	}
 
 	/* get firmware header */
 	memcpy(&vsp_priv->boot_header, boot_header, sizeof(vsp_priv->boot_header));
@@ -411,20 +453,8 @@ int vsp_init_fw(struct drm_device *dev)
 		goto out;
 	}
 
-	/* read application firmware image data (for state-buffer size, etc) */
-	/* load the multi-app blob header */
-	memcpy(&vsp_priv->ma_header, ma_header, sizeof(vsp_priv->ma_header));
-	if (vsp_priv->ma_header.magic_number != VSP_MULTI_APP_MAGIC_NR) {
-		DRM_ERROR("VSP: failed to load correct vsp firmware\n"
-			  "FW magic number is wrong %x (should be %x)\n",
-			  vsp_priv->ma_header.magic_number,
-			  VSP_MULTI_APP_MAGIC_NR);
-		ret = -1;
-		goto out;
-	}
-
 	VSP_DEBUG("firmware secure header:\n");
-	VSP_DEBUG("boot_header magic number %x\n", boot_header->magic_number);
+	VSP_DEBUG("magic number %x\n", boot_header->magic_number);
 	VSP_DEBUG("boot_text_offset %x\n", boot_header->boot_text_offset);
 	VSP_DEBUG("boot_text_reg %x\n", boot_header->boot_text_reg);
 	VSP_DEBUG("boot_icache_value %x\n", boot_header->boot_icache_value);
@@ -435,13 +465,6 @@ int vsp_init_fw(struct drm_device *dev)
 	VSP_DEBUG("ma_header_reg %x\n", boot_header->ma_header_reg);
 	VSP_DEBUG("boot_start_value %x\n", boot_header->boot_start_value);
 	VSP_DEBUG("boot_start_reg %x\n", boot_header->boot_start_reg);
-	VSP_DEBUG("firmware ma_blob header:\n");
-	VSP_DEBUG("ma_header magic number %x\n", ma_header->magic_number);
-	VSP_DEBUG("offset_from_start %x\n", ma_header->offset_from_start);
-	VSP_DEBUG("imr_state_buffer_addr %x\n", ma_header->imr_state_buffer_addr);
-	VSP_DEBUG("imr_state_buffer_size %x\n", ma_header->imr_state_buffer_size);
-	VSP_DEBUG("apps_default_context_buffer_size %x\n",
-			ma_header->apps_default_context_buffer_size);
 
 	if (vsp_priv->fw_loaded_by_punit) {
 		/* get imr 11 region start address and size */
@@ -565,6 +588,10 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 	vsp_priv->setting->command_queue_addr = vsp_priv->cmd_queue_bo->offset;
 	vsp_priv->setting->response_queue_size = VSP_ACK_QUEUE_SIZE;
 	vsp_priv->setting->response_queue_addr = vsp_priv->ack_queue_bo->offset;
+
+	vsp_priv->setting->max_contexts = VSP_CONTEXT_NUM_MAX;
+	vsp_priv->setting->contexts_array_addr =
+				vsp_priv->context_setting_bo->offset;
 
 	vsp_priv->ctrl->setting_addr = vsp_priv->setting_bo->offset;
 	vsp_priv->ctrl->mmu_tlb_soft_invalidate = 0;
