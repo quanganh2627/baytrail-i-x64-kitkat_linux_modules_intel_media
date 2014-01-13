@@ -154,6 +154,7 @@ struct busfreq_data {
 	unsigned long int     bf_freq_mhz_rlzd;
 	unsigned long int     bf_prev_freq_rlzd;
 	unsigned long int     bf_desired_freq;
+	unsigned int	      b_resumed;
 	char		      prev_governor[DEVFREQ_NAME_LEN + 1];
 
 	struct thermal_cooling_device *gbp_cooldv_hdl;
