@@ -202,6 +202,8 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 		int gpu_defer_req = 0;
 		df = bfdata->devfreq;
 		pdfrgx_data = &bfdata->g_dfrgx_data;
+		if (!pdfrgx_data || !pdfrgx_data->g_initialized)
+			goto out;
 
 		desired_freq = *p_freq;
 
