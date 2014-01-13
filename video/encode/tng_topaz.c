@@ -2024,7 +2024,9 @@ static void tng_topaz_getvideo(
 		goto out;
 	}
 
-	/* tng_wait_on_sync(dev, 0, cmd_header.id); */
+	if ((video_ctx->codec == IMG_CODEC_H263_VBR) ||
+		(video_ctx->codec == IMG_CODEC_H263_CBR))
+		tng_wait_on_sync(dev, 0, cmd_header.id);
 out:
     return;
 }
@@ -2050,7 +2052,9 @@ static void tng_topaz_setvideo(
 		goto out;
 	}
 
-	/* tng_wait_on_sync(dev, 0, cmd_header.id); */
+	if ((video_ctx->codec == IMG_CODEC_H263_VBR) ||
+		(video_ctx->codec == IMG_CODEC_H263_CBR))
+		tng_wait_on_sync(dev, 0, cmd_header.id);
 out:
     return;
 }
@@ -2120,13 +2124,13 @@ static int tng_context_switch(
 	}
 
 	if (topaz_priv->cur_context == video_ctx) {
-#ifdef MRFLD_B0_DEBUG
-		ret = tng_topaz_power_off(dev);
-		if (ret) {
-			DRM_ERROR("TOPAZ: Failed to power off");
-			return ret;
+		if (drm_topaz_pmpolicy == PSB_PMPOLICY_FORCE_PM) {
+			ret = tng_topaz_power_off(dev);
+			if (ret) {
+				DRM_ERROR("TOPAZ: Failed to power off");
+				return ret;
+			}
 		}
-#endif
 		if (video_ctx->status & MASK_TOPAZ_CONTEXT_SAVED) {
 			PSB_DEBUG_TOPAZ("Same comtext %08x(%s, %08x) and already saved\n",
 				video_ctx, \
