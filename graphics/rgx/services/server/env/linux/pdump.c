@@ -71,7 +71,7 @@ static IMG_VOID DbgSetMarker			(PDBG_STREAM psStream, IMG_UINT32 ui32Marker);
 /*
 	Maximum file size to split output files
 */
-#define MAX_FILE_SIZE	0x40000000
+#define MAX_FILE_SIZE	0xC0000000
 
 static atomic_t gsPDumpSuspended = ATOMIC_INIT(0);
 
@@ -224,6 +224,8 @@ PVRSRV_ERROR PDumpOSVSprintf(IMG_CHAR *pszComment, IMG_UINT32 ui32ScriptSizeMax,
 IMG_VOID PDumpOSDebugPrintf(IMG_CHAR* pszFormat, ...)
 {
 	PVR_UNREFERENCED_PARAMETER(pszFormat);
+
+	/* FIXME: Implement using services PVR_DBG or otherwise with kprintf */
 }
 
 /*!

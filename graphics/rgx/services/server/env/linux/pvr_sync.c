@@ -41,7 +41,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
 #include "pvr_sync.h"
-#include <linux/version.h>
 
 #include <linux/errno.h>
 #include <linux/file.h>
@@ -1015,9 +1014,6 @@ static const struct file_operations gsPVRSyncFOps =
 	.open           = PVRSyncOpen,
 	.release        = PVRSyncRelease,
 	.unlocked_ioctl = PVRSyncIOCTL,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl = PVRSyncIOCTL,
-#endif
 };
 
 static struct miscdevice sPVRSyncDev =

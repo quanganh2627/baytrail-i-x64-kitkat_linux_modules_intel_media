@@ -289,7 +289,7 @@ IMG_VOID RIDeInitKM(IMG_VOID)
 #if (USE_RI_LOCK == 1)
 	if (g_ui16RICount > 0)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: called with %d entries remaining - deferring OSLockDestroy()",__func__,g_ui16RICount));
+		PVR_DPF((PVR_DBG_WARNING, "%s: called with %d entries remaining - deferring OSLockDestroy()",__func__,g_ui16RICount));
 		bRIDeInitDeferred = IMG_TRUE;
 	}
 	else
@@ -489,7 +489,7 @@ PVRSRV_ERROR RIWriteMEMDESCEntryKM(PMR *hPMR,
 		else
 		{
 			/*
-			 * Insert new entry in sublist according to offset
+			 * Insert new entry in sublist
 			 */
 			PDLLIST_NODE currentNode = dllist_get_next_node(&(psRIEntry->sSubListFirst));
 
@@ -545,26 +545,14 @@ PVRSRV_ERROR RIWriteMEMDESCEntryKM(PMR *hPMR,
 		else
 		{
 			/*
-			 * Insert allocation into correct place in the pid allocations linked list
+			 * Insert allocation into pid allocations linked list
 			 */
-			IMG_BOOL	 bNewListHead = IMG_FALSE;
 			PDLLIST_NODE currentNode = (PDLLIST_NODE)hashData;
 
 			/*
-			 * Insert new entry before currentNode
+			 * Insert new entry
 			 */
-			if (!currentNode)
-			{
-				currentNode = (PDLLIST_NODE)hashData;
-			}
 			dllist_add_to_tail(currentNode, (PDLLIST_NODE)&(psRISubEntry->sProcListNode));
-			if ((currentNode == (PDLLIST_NODE)hashData) &&
-				bNewListHead)
-			{
-				/* We inserted at head of list, so we need to make the hash entry point to this new node */
-				HASH_Remove_Extended(g_pProcHashTable, (IMG_VOID *)&pid);
-				HASH_Insert_Extended (g_pProcHashTable, (IMG_VOID *)&pid, (IMG_UINTPTR_T)&(psRISubEntry->sProcListNode));
-			}
 		}
 		*phRIHandle = (RI_HANDLE)psRISubEntry;
 		/* Release RI Lock */
@@ -748,7 +736,7 @@ PVRSRV_ERROR RIDeleteMEMDESCEntryKM(RI_HANDLE hRIHandle)
 	/* Remove the entry from the proc allocations linked list */
 	pid = psRISubEntry->pid;
 	/* If this is the only allocation for this pid, just remove it from the hash table */
-	if (dllist_get_next_node(&(psRISubEntry->sProcListNode)) == &(psRISubEntry->sProcListNode))
+	if (dllist_get_next_node(&(psRISubEntry->sProcListNode)) == IMG_NULL)
 	{
 		HASH_Remove_Extended(g_pProcHashTable, (IMG_VOID *)&pid);
 		/* Decrement number of entries in proc hash table, and delete the hash table if there are now none */
@@ -941,34 +929,7 @@ IMG_BOOL RIGetListEntryKM(IMG_PID pid,
 			}
 
 			{
-#if 0
-				IMG_PCHAR   pszAnnotationText = IMG_NULL;
-				IMG_CHAR 	szImport[RI_IMPORT_TAG_CHAR_LEN];
-
-				if( psRISubEntry->bIsImport)
-				{
-					OSSNPrintf( (IMG_CHAR *)&szImport, RI_IMPORT_TAG_CHAR_LEN, "{Import from PID %d}",psRISubEntry->psRI->pid);
-					/* Set pszAnnotationText to that of the 'parent' PMR RI entry */
-					pszAnnotationText = (IMG_PCHAR)psRISubEntry->psRI->ai8TextA;
-				}
-				else
-				{
-					szImport[0] = '\0';
-					if (psRISubEntry->bIsExportable)
-					{
-						/* Set pszAnnotationText to that of the 'parent' PMR RI entry */
-						pszAnnotationText = (IMG_PCHAR)psRISubEntry->psRI->ai8TextA;
-					}
-					else
-					{
-						/* Set pszAnnotationText to that of the MEMDESC RI entry */
-						pszAnnotationText = (IMG_PCHAR)psRISubEntry->ai8TextB;
-					}
-				}
-				OSSNPrintf( (IMG_CHAR *)&ai8DebugfsSummaryString, RI_MAX_DEBUGFS_ENTRY_LEN, IMG_DEV_VIRTADDR_FMTSPEC "   %-80s   0x" IMG_SIZE_FMTSPECX " %s %d%d\n",(psRISubEntry->sVAddr.uiAddr+psRISubEntry->uiOffset),pszAnnotationText,psRISubEntry->uiSize,szImport,psRISubEntry->bIsImport,psRISubEntry->bIsExportable);
-#else
 				_GenerateMEMDESCEntryString(psRISubEntry, IMG_TRUE, RI_MAX_DEBUGFS_ENTRY_LEN, (IMG_CHAR *)&ai8DebugfsSummaryString);
-#endif
 				ai8DebugfsSummaryString[RI_MAX_DEBUGFS_ENTRY_LEN] = '\0';
 			}
 			*ppszEntryString = (IMG_CHAR *)&ai8DebugfsSummaryString;

@@ -54,8 +54,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "osfunc.h"
 #include "rgxdebug.h"
 #include "rgx_meta.h"
-#include "dfrgx_interface.h"
-#include "rgxpowermon.h"
 #include "devicemem_pdump.h"
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
@@ -304,7 +302,7 @@ static IMG_VOID RGXInitBIF(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	 * Trusted META boot
 	 */
 #if defined(SUPPORT_TRUSTED_DEVICE)
-	#if TRUSTED_DEVICE_DEFAULT_ENABLED == 1
+	#if defined(TRUSTED_DEVICE_DEFAULT_ENABLED)
 	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXStart: Trusted Device enabled");
 	OSWriteHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_BIF_TRUST, RGX_CR_BIF_TRUST_ENABLE_EN);
 	PDUMPREG32(RGX_PDUMPREG_NAME, RGX_CR_BIF_TRUST, RGX_CR_BIF_TRUST_ENABLE_EN, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
@@ -388,12 +386,12 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 
 	/* Set RGX in soft-reset */
 	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXStart: soft reset everything");
-	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_SOFT_RESET, RGX_CR_SOFT_RESET_MASKFULL & (~RGX_CR_SOFT_RESET_SLC_EN));
+	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_SOFT_RESET, RGX_CR_SOFT_RESET_MASKFULL);
 	PDUMPREG64(RGX_PDUMPREG_NAME, RGX_CR_SOFT_RESET, RGX_CR_SOFT_RESET_MASKFULL, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
 
 	/* Take Rascal and Dust out of reset */
 	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXStart: Rascal and Dust out of reset");
-	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_SOFT_RESET, (RGX_CR_SOFT_RESET_MASKFULL ^ RGX_CR_SOFT_RESET_RASCALDUSTS_EN) & (~RGX_CR_SOFT_RESET_SLC_EN));
+	OSWriteHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_SOFT_RESET, RGX_CR_SOFT_RESET_MASKFULL ^ RGX_CR_SOFT_RESET_RASCALDUSTS_EN);
 	PDUMPREG64(RGX_PDUMPREG_NAME, RGX_CR_SOFT_RESET, RGX_CR_SOFT_RESET_MASKFULL ^ RGX_CR_SOFT_RESET_RASCALDUSTS_EN, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
 
 	/* Read soft-reset to fence previos write in order to clear the SOCIF pipeline */
@@ -412,12 +410,10 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 	RGXEnableClocks(psDevInfo);
 #endif
 
-#ifndef CONFIG_MOOREFIELD
 	/*
 	 * Initialise SLC.
 	 */
-	//RGX_INIT_SLC(psDevInfo);
-#endif
+	RGX_INIT_SLC(psDevInfo);
 
 #if !defined(SUPPORT_META_SLAVE_BOOT)
 	/* Configure META to Master boot */
@@ -569,18 +565,8 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 		PVRSRV_RGXDEV_INFO	*psDevInfo = psDeviceNode->pvDevice;
 		RGXFWIF_KCCB_CMD	sPowCmd;
 		RGXFWIF_TRACEBUF	*psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
-		IMG_UINT32		ui32DM;
-		IMG_BOOL		bCanPowerOff = IMG_FALSE;
+		IMG_UINT32			ui32DM;
 
-		/* Can We power-off the device?*/
-		bCanPowerOff = rgx_powermeter_poweroff();
-		if (!bCanPowerOff) {
-			/* Abort power-off*/
-			rgx_powermeter_poweron();
-			/* PUnit is using RGX or We timed out, either case don't go to D0i3*/
-			eError = PVRSRV_ERROR_RETRY;
-			return eError;
-		}
 		/* Send the Power off request to the FW */
 		sPowCmd.eCmdType = RGXFWIF_KCCB_CMD_POW;
 		sPowCmd.uCmdData.sPowData.ePowType = RGXFWIF_POW_OFF_REQ;
@@ -635,10 +621,6 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 						eError = PVRSRV_ERROR_DEVICE_POWER_CHANGE_FAILURE;
 					}
 					psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
-
-					/*Report dfrgx We have the device OFF*/
-					dfrgx_interface_power_state_set(0);
-
 				}
 			}
 			else
@@ -708,11 +690,6 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 
 			/* Coming up from off, re-allow RGX interrupts.  */
 			psDevInfo->bIgnoreFurtherIRQs = IMG_FALSE;
-
-			/*Report dfrgx We have the device back ON*/
-			dfrgx_interface_power_state_set(1);
-			/*Report Punit that We have exited D0i3*/
-			rgx_powermeter_poweron();
 
 		}
 	}

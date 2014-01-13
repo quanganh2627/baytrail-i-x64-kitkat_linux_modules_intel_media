@@ -56,11 +56,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgx_memallocflags.h"
 
 /*
-	
+	FIXME:
+	For now just get global state, but what we really want is to do
+	this per memory context
 */
 static IMG_UINT32 ui32CacheOpps = 0;
 static IMG_UINT32 ui32CacheOpSequence = 0;
-/* */
+/* FIXME: End */
 
 #define SERVER_MMU_CONTEXT_MAX_NAME 40
 typedef struct _SERVER_MMU_CONTEXT_ {
@@ -174,13 +176,19 @@ PVRSRV_ERROR RGXPreKickCacheCommand(PVRSRV_RGXDEV_INFO 	*psDevInfo)
 	/* Set which memory context this command is for (all ctxs for now) */
 	ui32CacheOpps |= RGXFWIF_MMUCACHEDATA_FLAGS_CTX_ALL;
 #if 0
-	/* Set which memory context this command is for */
 	sFlushCmd.uCmdData.sMMUCacheData.psMemoryContext = ???
 #endif
 
 	/* PVRSRVPowerLock guarantees atomicity between commands and global variables consistency.
 	 * This is helpful in a scenario with several applications allocating resources. */
-	PVRSRVForcedPowerLock();
+	eError = PVRSRVPowerLock();
+
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_WARNING, "RGXPreKickCacheCommand: failed to acquire powerlock (%s)",
+					PVRSRVGetErrorStringKM(eError)));
+		goto _PVRSRVPowerLock_Exit;
+	}
 
 	PDUMPPOWCMDSTART();
 
@@ -301,7 +309,7 @@ PVRSRV_ERROR RGXRegisterMemoryContext(PVRSRV_DEVICE_NODE	*psDeviceNode,
 			application.
 		*/
 		PDUMPCOMMENT("Allocate RGX firmware memory context");
-		/* */
+		/* FIXME: why cache-consistent? */
 		eError = DevmemFwAllocate(psDevInfo,
 								sizeof(*psFWMemContext),
 								uiFWMemContextMemAllocFlags,

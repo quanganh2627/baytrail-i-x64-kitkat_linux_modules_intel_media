@@ -55,6 +55,9 @@ extern "C" {
 #include "lock_types.h"
 #include "pvr_debug.h"
 
+/* FIXME: Can't do this as dc_client includes services.h
+#include "dc_client.h"
+*/
 
 #if defined(LDDM)
 /* LDDM build needs to include this for the allocation structure */
@@ -95,6 +98,11 @@ extern "C" {
 /*
 	Pdump flags which are accessible to Services clients
 */
+/* FIXME: defined to be the same as
+ * #define PDUMP_FLAGS_CONTINUOUS		0x40000000UL
+ * (from services/include/pdump.h)
+ * The flags need to either be moved here, or e.g. all PDump functions need a bContinuous parameter
+ */
 #define PVRSRV_PDUMP_FLAGS_CONTINUOUS		0x40000000UL /*!< pdump continuous */
 
 #define PVRSRV_UNDEFINED_HEAP_ID			(~0LU)

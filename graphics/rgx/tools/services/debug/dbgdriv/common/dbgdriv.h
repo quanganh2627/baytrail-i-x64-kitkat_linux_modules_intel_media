@@ -61,6 +61,12 @@ extern IMG_VOID *	g_pvAPIMutex;
 /* Called by WDDM debug driver win7/hostfunc.c */
 IMG_VOID * IMG_CALLCONV DBGDrivCreateStream(IMG_CHAR *pszName, IMG_UINT32 ii32CapMode, IMG_UINT32 ui32OutMode, IMG_UINT32 ui32Flags, IMG_UINT32 ui32Pages);
 
+/* Called by Linux debug driver main.c to allow the API mutex lock to be used
+ * to protect the common ICOTL read buffer while avoiding deadlock in the Ext
+ * layer
+ */
+IMG_UINT32 IMG_CALLCONV DBGDrivRead(PDBG_STREAM psMainStream, IMG_BOOL bReadInitBuffer, IMG_UINT32 ui32OutBuffSize,IMG_UINT8 * pui8OutBuf);
+
 /* Called by WDDM debug driver win7/hostfunc.c */
 IMG_VOID   IMG_CALLCONV DBGDrivSetDebugLevel(PDBG_STREAM psStream,IMG_UINT32 ui32DebugLevel);
 

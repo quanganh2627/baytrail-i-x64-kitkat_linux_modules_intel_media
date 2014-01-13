@@ -1853,7 +1853,7 @@ PVRSRV_ERROR DCRegisterDevice(DC_DEVICE_FUNCTIONS *psFuncTable,
 	psNew->hSystemBuffer = IMG_NULL;
 	psNew->psSystemBufferPMR = IMG_NULL;
 	psNew->sSystemContext.psDevice = psNew;
-	psNew->sSystemContext.hDisplayContext = hDeviceData;	/* */
+	psNew->sSystemContext.hDisplayContext = hDeviceData;	/* FIXME: Is this the correct thing to do? */
 
 	OSLockAcquire(g_hDCListLock);
 	psNew->psNext = g_psDCDeviceList;
@@ -1946,10 +1946,10 @@ IMG_VOID DCDisplayConfigurationRetired(IMG_HANDLE hConfigData)
 	/* Sanity check */
 	if (psData->ui32Token != psDisplayContext->ui32TokenIn)
 	{
-		PVR_DPF((PVR_DBG_MESSAGE,
+		PVR_DPF((PVR_DBG_ERROR,
 				"Display config retired in unexpected order (was %d, expecting %d)",
 				psData->ui32Token, psDisplayContext->ui32TokenIn));
-		/* PVR_ASSERT(IMG_FALSE); */
+		PVR_ASSERT(IMG_FALSE);
 	}
 
 	OSLockAcquire(psDisplayContext->hLock);

@@ -1057,8 +1057,11 @@ DevmemAllocate(DEVMEM_HEAP *psHeap,
 			goto failZero;
 		}
 
-		/* 
-*/
+		/* FIXME: uiSize is a 64-bit quantity whereas the 3rd argument
+		 * to OSMemSet is a 32-bit quantity on 32-bit systems
+		 * hence a compiler warning of implicit cast and loss of data.
+		 * Added explicit cast and assert to remove warning.
+		 */
 #if (defined(_WIN32) && !defined(_WIN64)) || (defined(LINUX) && defined(__i386__))
 		PVR_ASSERT(uiSize<IMG_UINT32_MAX);
 #endif
@@ -1122,6 +1125,8 @@ DevmemAllocateExportable(IMG_HANDLE hBridge,
 	DEVMEM_IMPORT *psImport;
 	IMG_UINT32 uiLog2Quantum = 12;	/* Should call OS function */
 	IMG_BOOL bMappingTable = IMG_TRUE;
+
+
 
 	DevmemExportalignAdjustSizeAndAlign(IMG_NULL,
 										&uiSize,
@@ -1230,6 +1235,8 @@ DevmemAllocateSparse(IMG_HANDLE hBridge,
     DEVMEM_MEMDESC *psMemDesc = IMG_NULL;
 	DEVMEM_IMPORT *psImport;
 	IMG_UINT32 uiLog2Quantum = 12;	/* Should call OS function */
+
+
 
 	DevmemExportalignAdjustSizeAndAlign(IMG_NULL,
 										&uiSize,

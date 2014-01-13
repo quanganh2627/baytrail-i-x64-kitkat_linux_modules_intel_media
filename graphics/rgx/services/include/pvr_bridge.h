@@ -97,7 +97,7 @@ extern "C" {
  */
 
 
-/* */
+/* FIXME remove anything OS-specific from this file */
 
 #ifdef __linux__
 

@@ -204,8 +204,8 @@ PVRSRV_ERROR RGXCreateCCB(PVRSRV_DEVICE_NODE	*psDeviceNode,
 								PVRSRV_MEMALLOCFLAG_GPU_READABLE |
 								PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
 								PVRSRV_MEMALLOCFLAG_CPU_READABLE |
-								/* 
-*/
+								/* FIXME: Client CCB Ctl should be read-only for the CPU 
+									(it is not because for now we initialize it from the host) */
 								PVRSRV_MEMALLOCFLAG_CPU_WRITEABLE | 
 								PVRSRV_MEMALLOCFLAG_UNCACHED |
 								PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC |
@@ -982,7 +982,7 @@ IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
 				psUFOPtr->ui32Value = ui32FenceValue;
 				pui8ServerFenceStart += sizeof(RGXFWIF_UFO);
 
-#if defined(LINUX) && defined(SUPPORT_GPUTRACE_EVENTS)
+#if defined(LINUX)
 				trace_pvr_fence_checks(pcszDMName,
 									   ui32CtxAddr,
 									   psCmdHelperData->psClientCCB->ui32HostWriteOffset + ui32AllocSize,
@@ -1002,7 +1002,7 @@ IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
 				psUFOPtr->ui32Value = ui32UpdateValue;
 				pui8ServerUpdateStart += sizeof(RGXFWIF_UFO);
 
-#if defined(LINUX) && defined(SUPPORT_GPUTRACE_EVENTS)
+#if defined(LINUX)
 				trace_pvr_fence_updates(pcszDMName,
 										ui32CtxAddr,
 										psCmdHelperData->psClientCCB->ui32HostWriteOffset + ui32AllocSize,
@@ -1021,7 +1021,7 @@ IMG_VOID RGXCmdHelperReleaseCmdCCB(IMG_UINT32 ui32CmdCount,
 			}
 		}
 
-#if defined(LINUX) && defined(SUPPORT_GPUTRACE_EVENTS)
+#if defined(LINUX)
 		trace_pvr_fence_checks(pcszDMName,
 							   ui32CtxAddr,
 							   psCmdHelperData->psClientCCB->ui32HostWriteOffset + ui32AllocSize,

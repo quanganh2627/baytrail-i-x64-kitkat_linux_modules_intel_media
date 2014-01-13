@@ -81,10 +81,6 @@ typedef struct
 
 	IMG_PID uPID;
 #endif
-
-#if defined(SUPPORT_DRM_EXT)
-	IMG_PVOID pPriv;	/*private data for extending this struct*/
-#endif
 }
 PVRSRV_FILE_PRIVATE_DATA;
 

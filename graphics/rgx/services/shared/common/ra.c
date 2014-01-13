@@ -913,7 +913,7 @@ _AttemptAllocAligned (RA_ARENA *pArena,
 					  IMG_UINT32 uFlags,
 					  RA_LENGTH_T uAlignment,
 					  RA_BASE_T *base,
-                      RA_PERISPAN_HANDLE *phPriv) // is this the "per-import" private data? 
+                      RA_PERISPAN_HANDLE *phPriv) // is this the "per-import" private data? FIXME: check
 {
 	IMG_UINT32 uIndex;
 	PVR_ASSERT (pArena!=IMG_NULL);
@@ -964,8 +964,9 @@ _AttemptAllocAligned (RA_ARENA *pArena,
 
 				if (pBT->base + pBT->uSize >= aligned_base + uSize)
 				{
-                    /* 
-*/
+                    /* FIXME: do we need a "bCheckFlags"?  I think it's
+                       ok to say that caller would just supply 0 for
+                       such RAs, and 0 == 0, so all is good */
 					if(/*!pArena->bCheckFlags ||*/ pBT->uFlags == uFlags)
 					{
 						_FreeListRemove (pArena, pBT);
@@ -1270,7 +1271,7 @@ RA_Alloc (RA_ARENA *pArena,
 
     if (pArena->pfnPreAllocCheck)
     {
-        pArena->pfnPreAllocCheck(); // 
+        pArena->pfnPreAllocCheck(); // FIXME: per-RA private data?
     }
 
 	if (pActualSize != IMG_NULL)

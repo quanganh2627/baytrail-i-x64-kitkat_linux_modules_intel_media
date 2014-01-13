@@ -44,11 +44,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #ifndef _PDUMP_KM_H_
 #define _PDUMP_KM_H_
 
-/*
- * Include the OS abstraction APIs
- */
-#include "pdump_osfunc.h"
-
 /* services/srvkm/include/ */
 #include "device.h"
 

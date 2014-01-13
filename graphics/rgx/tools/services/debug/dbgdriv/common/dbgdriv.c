@@ -1099,9 +1099,9 @@ static IMG_UINT32 WriteExpandingBuffer(PDBG_STREAM psStream,IMG_UINT8 * pui8InBu
 			IMG_UINT32	ui32NewBufSize;
 
 			/*
-				Find new buffer size 
+				Find new buffer size, double the current size or increase by 1MB
 			*/
-			ui32NewBufSize = 2 * psStream->ui32Size;
+			ui32NewBufSize = MIN(psStream->ui32Size<<1,psStream->ui32Size+(1<<20));
 
 			PVR_DPF((PVR_DBGDRIV_MESSAGE, "Expanding buffer size = %x, new size = %x",
 					psStream->ui32Size, ui32NewBufSize));

@@ -559,8 +559,10 @@ static PVRSRV_ERROR RGXSetupKernelCCB(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 
 
 	/*
-	 * 
-*/
+	 * FIXME: the write offset need not be writeable by the firmware, indeed may
+	 * not even be needed for reading. Consider moving it to its own data
+	 * structure.
+	 */
 	uiCCBCtlMemAllocFlags = PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
 							PVRSRV_MEMALLOCFLAG_GPU_READABLE |
 							PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
@@ -704,8 +706,10 @@ static PVRSRV_ERROR RGXSetupFirmwareCCB(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 	IMG_UINT32			ui32FWCCBSize = (1U << ui32NumCmdsLog2);
 
 	/*
-	 * 
-*/
+	 * FIXME: the write offset need not be writeable by the host, indeed may
+	 * not even be needed for reading. Consider moving it to its own data
+	 * structure.
+	 */
 	uiCCBCtlMemAllocFlags = PVRSRV_MEMALLOCFLAG_DEVICE_FLAG(PMMETA_PROTECT) |
 							PVRSRV_MEMALLOCFLAG_GPU_READABLE |
 							PVRSRV_MEMALLOCFLAG_GPU_WRITEABLE |
@@ -1026,8 +1030,8 @@ static PVRSRV_ERROR RGXHwBrn37200(PVRSRV_RGXDEV_INFO *psDevInfo)
 				PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC;
 
 	eError = DevmemFindHeapByName(psDevInfo->psKernelDevmemCtx,
-							  "HWBRN37200", /* 
-*/
+							  "HWBRN37200", /* FIXME: We need to create an IDENT macro for this string.
+							                 Make sure the IDENT macro is not accessible to userland */
 							  &psBRNHeap);
 
 	if (eError != PVRSRV_OK)
@@ -1107,9 +1111,7 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 							     IMG_UINT32            ui32NumTilingCfgs,
 							     IMG_UINT32            *pui32BIFTilingXStrides,
 							     IMG_UINT32			ui32FilterFlags,
-							     RGXFWIF_DEV_VIRTADDR	*psRGXFWInitFWAddr,
-							     IMG_UINT32			ui32APMLatency,
-							     IMG_UINT32			ui32CoreClockSpeed)
+							     RGXFWIF_DEV_VIRTADDR	*psRGXFWInitFWAddr)
 {
  	PVRSRV_ERROR		eError;
 	DEVMEM_FLAGS_T		uiMemAllocFlags;
@@ -1126,7 +1128,7 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 						PVRSRV_MEMALLOCFLAG_KERNEL_CPU_MAPPABLE |
 						PVRSRV_MEMALLOCFLAG_UNCACHED |
 						PVRSRV_MEMALLOCFLAG_ZERO_ON_ALLOC;
-						/* */
+						/* FIXME: Change to Cached */
 
 	PDUMPCOMMENT("Allocate RGXFWIF_INIT structure");
 	eError = DevmemFwAllocate(psDevInfo,
@@ -1408,17 +1410,8 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	{
 		RGX_DATA *psRGXData = (RGX_DATA*) psDeviceNode->psDevConfig->hDevData;
 
-		/* if user defined clockspeed */
-		if (ui32CoreClockSpeed != psRGXData->psRGXTimingInfo->ui32CoreClockSpeed)
-			psRGXFWInit->ui32InitialCoreClockSpeed = ui32CoreClockSpeed;
-		else
-			psRGXFWInit->ui32InitialCoreClockSpeed = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
-
-		/* if user defined latency */
-		if (psRGXData->psRGXTimingInfo->ui32ActivePMLatencyms != ui32APMLatency)
-			psRGXFWInit->ui32ActivePMLatencyms = ui32APMLatency;
-		else
-			psRGXFWInit->ui32ActivePMLatencyms = psRGXData->psRGXTimingInfo->ui32ActivePMLatencyms;
+		psRGXFWInit->ui32InitialCoreClockSpeed = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
+		psRGXFWInit->ui32ActivePMLatencyms = psRGXData->psRGXTimingInfo->ui32ActivePMLatencyms;
 	}
 
 	/* Setup BIF Fault read register */
@@ -1755,8 +1748,8 @@ PVRSRV_ERROR RGXSetupFirmware(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	
 	/* Dump the config options so they can be edited.
 	 * 
-	 * 
-*/
+	 * FIXME: Need new DevmemPDumpWRW API which writes a WRW to load ui32ConfigFlags
+	 */
 	PDUMPCOMMENT("(Set the FW config options here)");
 	PDUMPCOMMENT("( bit 0: Ctx Switch TA Enable)");
 	PDUMPCOMMENT("( bit 1: Ctx Switch 3D Enable)");
@@ -2169,8 +2162,16 @@ PVRSRV_ERROR RGXSendCommandWithPowLock(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 	PVRSRV_DEVICE_NODE *psDeviceNode = psDevInfo->psDeviceNode;
 
 	/* Ensure RGX is powered up before kicking MTS */
-	PVRSRVForcedPowerLock();
+	eError = PVRSRVPowerLock();
 
+	if (eError != PVRSRV_OK) 
+	{
+		PVR_DPF((PVR_DBG_WARNING, "RGXSendCommandWithPowLock: failed to acquire powerlock (%s)",
+					PVRSRVGetErrorStringKM(eError)));
+
+		goto _PVRSRVPowerLock_Exit;
+	}
+	
 	PDUMPPOWCMDSTART();
 
 	eError = PVRSRVSetDevicePowerStateKM(psDeviceNode->sDevId.ui32DeviceIndex,
@@ -2265,7 +2266,7 @@ PVRSRV_ERROR RGXSendCommandRaw(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 				psDevInfo->abDumpedKCCBCtlAlready[eKCCBType] = IMG_TRUE;
 
 				/* wait for firmware to catch up */
-				PVR_DPF((PVR_DBG_WARNING, "RGXSendCommandRaw: waiting on fw to catch-up. DM: %d, roff: %d, woff: %d",
+				PVR_DPF((PVR_DBG_MESSAGE, "RGXSendCommandRaw: waiting on fw to catch-up. DM: %d, roff: %d, woff: %d",
 							eKCCBType, psKCCBCtl->ui32ReadOffset, ui32OldWriteOffset));
 				PVRSRVPollForValueKM(&psKCCBCtl->ui32ReadOffset, ui32OldWriteOffset, 0xFFFFFFFF);
 
@@ -2363,10 +2364,6 @@ static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 	PVRSRV_RGXDEV_INFO *psDevInfo = psDeviceNode->pvDevice;
 	RGXFWIF_DM			eDM;
 	PVRSRV_ERROR		eError;
-
-	/* If RGX is not powered on, don't continue */
-	if (!PVRSRVIsDevicePowered(psDeviceNode->sDevId.ui32DeviceIndex))
-		return;
 
 	/* Ensure RGX is powered up before kicking MTS */
 	eError = PVRSRVPowerLock();
@@ -2705,7 +2702,7 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 			 ui32MaxRetries > 0;
 			 ui32MaxRetries--)
 		{
-			/* */
+			/* FIXME: Need to re-think PVRSRVLocking */
 			OSSetKeepPVRLock();
 			eError = PVRSRVWaitForValueKM(psSyncPrim->pui32LinAddr, 1, 0xffffffff);
 			OSSetReleasePVRLock();
@@ -2774,7 +2771,6 @@ PVRSRV_ERROR RGXScheduleCleanupCommand(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 	/* Wait for sync primitive to be updated */
 #if defined(PDUMP)
 	PDUMPCOMMENT("Wait for the firmware to reply to the cleanup command");
-	/* Wait for the firmware to reply */
 	SyncPrimPDumpPol(psSyncPrim,
 					RGXFWIF_CLEANUP_RUN,
 					RGXFWIF_CLEANUP_RUN,
@@ -2814,7 +2810,7 @@ PVRSRV_ERROR RGXScheduleCleanupCommand(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 			 ui32MaxRetries > 0;
 			 ui32MaxRetries--)
 		{
-			/* */
+			/* FIXME: Need to re-think PVRSRVLocking */
 			OSSetKeepPVRLock();
 			eError = PVRSRVWaitForValueKM(psSyncPrim->pui32LinAddr, RGXFWIF_CLEANUP_RUN, RGXFWIF_CLEANUP_RUN);
 			OSSetReleasePVRLock();
@@ -3168,11 +3164,13 @@ PVRSRV_ERROR RGXUpdateHealthStatus(PVRSRV_DEVICE_NODE* psDevNode,
 		return PVRSRV_OK;
 	}
 
-	/* If RGX is not powered on, don't continue */
-	if (!PVRSRVIsDevicePowered(psDevNode->sDevId.ui32DeviceIndex)) 
+	/* If RGX is not powered on, don't continue 
+	   (there is a race condition where PVRSRVIsDevicePowered returns TRUE when the GPU is actually powering down. 
+	   That's not a problem as this function does not touch the HW except for the RGXScheduleCommand function,
+	   which is already powerlock safe. The worst thing that could happen is that RGX might power back up
+	   but the chances of that are very low */
+	if (!PVRSRVIsDevicePowered(psDevNode->sDevId.ui32DeviceIndex))
 	{
-		PVR_DPF((PVR_DBG_WARNING,
-					"RGXGetDeviceHealthStatus: Device is powered off.\n"));
 		return PVRSRV_OK;
 	}
 	
@@ -3408,6 +3406,12 @@ PVRSRV_ERROR RGXResetHWRLogs(PVRSRV_DEVICE_NODE *psDevNode)
 	for(i = 0 ; i < RGXFWIF_HWINFO_MAX ; i++)
 	{
 		psHWRInfoBuf->sHWRInfo[i].ui32HWRNumber = 0;
+	}
+
+	for(i = 0 ; i < RGXFW_THREAD_NUM ; i++)
+	{
+		psHWRInfoBuf->ui32FirstCrPollAddr[i] = 0;
+		psHWRInfoBuf->ui32FirstCrPollValue[i] = 0;
 	}
 
 	psHWRInfoBuf->ui32WriteIndex = 0;

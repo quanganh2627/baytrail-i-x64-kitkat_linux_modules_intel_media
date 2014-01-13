@@ -52,7 +52,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sync_server.h"
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-#include <linux/version.h>
 #include <linux/file.h>
 #include <linux/seq_file.h>
 #include <linux/version.h>
@@ -311,17 +310,12 @@ PVRSRV_ERROR _SCPCommandReady(SCP_COMMAND *psCommand)
 
 	for (i = 0; i < psCommand->ui32SyncCount; i++)
 	{
-		if (!psCommand->pasSCPSyncData)
-				continue;
-
 		SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
 
 		/*
 			If the same sync is used in concurrent command we can skip the check
 		*/
-		if (psSCPSyncData &&
-					(psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE) &&
-					(psSCPSyncData->psSync))
+		if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE)
 		{
 			if (!ServerSyncFenceIsMeet(psSCPSyncData->psSync, psSCPSyncData->ui32Fence))
 			{
@@ -436,17 +430,12 @@ static IMG_VOID _SCPDumpCommand(SCP_COMMAND *psCommand)
 	{
 		for (i = 0; i < psCommand->ui32SyncCount; i++)
 		{
-			if (!psCommand->pasSCPSyncData)
-				continue;
-
 			SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
 		   
 			/*
 				Only dump this sync if there is a fence operation on it
 			*/
-			if (psSCPSyncData &&
-					(psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE) &&
-					(psSCPSyncData->psSync))
+			if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE)
 			{
 				PVR_LOG(("\t\tFenced on 0x%08x = 0x%08x (?= 0x%08x)",
 						ServerSyncGetFWAddr(psSCPSyncData->psSync),
@@ -840,9 +829,6 @@ IMG_VOID SCPCommandComplete(SCP_CONTEXT *psContext)
 IMG_EXPORT
 IMG_VOID IMG_CALLCONV SCPDumpStatus(SCP_CONTEXT *psContext)
 {
-	if (psContext == IMG_NULL)
-		return;
-
 	/*
 		Acquire the lock to ensure that the SCP isn't run while
 		while we're dumping info
