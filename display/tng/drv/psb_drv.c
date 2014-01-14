@@ -1332,9 +1332,9 @@ static int psb_driver_unload(struct drm_device *dev)
 	if (drm_psb_no_fb == 0)
 		psb_modeset_cleanup(dev);
 
-	destroy_workqueue(dev_priv->vsync_wq);
-
 	if (dev_priv) {
+		destroy_workqueue(dev_priv->vsync_wq);
+
 		/* psb_watchdog_takedown(dev_priv); */
 		psb_do_takedown(dev);
 
