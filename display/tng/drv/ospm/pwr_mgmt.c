@@ -819,6 +819,12 @@ void ospm_apm_power_down_vsp(struct drm_device *dev)
 		power_down_island(p_island->p_dependency);
 	}
 
+	if (!any_island_on()) {
+		PSB_DEBUG_PM("Suspending PCI\n");
+		pm_runtime_put(&g_ospm_data->dev->pdev->dev);
+		wake_unlock(&dev_priv->ospm_wake_lock);
+	}
+
 	PSB_DEBUG_PM("Power down VPP done\n");
 out:
 	mutex_unlock(&g_ospm_data->ospm_lock);
