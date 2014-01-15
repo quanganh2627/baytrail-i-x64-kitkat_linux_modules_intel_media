@@ -161,6 +161,7 @@ static bool ved_power_up(struct drm_device *dev,
 {
 	bool ret = true;
 	int pm_ret = 0;
+	unsigned int pci_device = dev->pci_device & 0xffff;
 	struct drm_psb_private *dev_priv = dev->dev_private;
 
 	PSB_DEBUG_PM("powering up ved\n");
@@ -177,11 +178,12 @@ static bool ved_power_up(struct drm_device *dev,
 
 	iowrite32(0xffffffff, dev_priv->ved_wrapper_reg + 0);
 
-	if (need_set_ved_freq) {
+	if (need_set_ved_freq && (pci_device != 0x1182)) {
 		if (!psb_msvdx_set_ved_freq(IP_FREQ_320_00))
 			PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
 				"320MHZ after power up\n");
 	}
+
 	return ret;
 }
 
@@ -195,6 +197,7 @@ static bool ved_power_down(struct drm_device *dev,
 {
 	bool ret = true;
 	int pm_ret = 0;
+	unsigned int pci_device = dev->pci_device & 0xffff;
 
 	/* Need to implement force_off */
 	PSB_DEBUG_PM("powering down ved\n");
@@ -206,11 +209,13 @@ static bool ved_power_down(struct drm_device *dev,
 
 	psb_msvdx_save_context(dev);
 
-	if (need_set_ved_freq) {
+
+	if (need_set_ved_freq && (pci_device != 0x1182)) {
 		if (!psb_msvdx_set_ved_freq(IP_FREQ_200_00))
 			PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
 				"200MHZ after power up\n");
 	}
+
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_DEC, OSPM_ISLAND_DOWN, VED_SS_PM0);
