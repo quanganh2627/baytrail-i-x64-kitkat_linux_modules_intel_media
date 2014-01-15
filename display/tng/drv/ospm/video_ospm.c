@@ -474,8 +474,8 @@ static void vsp_set_max_frequency(struct drm_device *dev)
 		max_freq_code = IP_FREQ_400_00;
 		PSB_DEBUG_PM("vsp maximum freq is 400\n");
 	} else if (pci_device == 0x1480) {
-		PSB_DEBUG_PM("DFS is not enabled for ANN yet, just run on default clk rate\n");
-		return;
+		max_freq_code = IP_FREQ_400_00;
+		PSB_DEBUG_PM("vsp maximum freq for ANN A0 is 400\n");
 	} else {
 		DRM_ERROR("invalid pci device id %x\n", pci_device);
 		return;
