@@ -212,8 +212,10 @@ int vxd_release(struct inode *inode, struct file *filp)
 	}
 #endif
 
-	ttm_object_file_release(&psb_fp->tfile);
-	kfree(psb_fp);
+	if(NULL != psb_fp) {
+                ttm_object_file_release(&psb_fp->tfile);
+	        kfree(psb_fp);
+	}
 
 	/* remove video context */
 	/* psb_remove_videoctx(dev_priv, filp); */
