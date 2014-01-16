@@ -280,7 +280,6 @@ struct psb_video_ctx {
 	uint32_t pseudo_rand_seed;
 	int32_t last_cir_index;
 	/* Save state registers */
-	uint32_t *mtx_reg;
 	uint32_t *bias_reg;
 
 	uint32_t status;

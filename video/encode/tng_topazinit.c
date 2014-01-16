@@ -833,6 +833,16 @@ int tng_topaz_init(struct drm_device *dev)
 		}
 	}
 
+	for (n = 0; n < MAX_TOPAZHP_CORES; n++)
+		topaz_priv->topaz_mtx_reg_state[n] = NULL;
+
+	topaz_priv->topaz_mtx_reg_state[0] = kzalloc(2 * PAGE_SIZE, GFP_KERNEL);
+	if (topaz_priv->topaz_mtx_reg_state[0] == NULL) {
+		DRM_ERROR("Failed to kzalloc mtx reg, OOM\n");
+		ret = -1;
+		goto out;
+	}
+
 	return ret;
 out:
 	for (n = 0; n < IMG_CODEC_NUM; ++n) {
@@ -927,6 +937,14 @@ int tng_topaz_uninit(struct drm_device *dev)
 	}
 
 	if (topaz_priv) {
+		for(n = 0; n < MAX_TOPAZHP_CORES; n++) {
+			if (topaz_priv->topaz_mtx_reg_state[n] != NULL) {
+				PSB_DEBUG_TOPAZ("TOPAZ: Free mtx reg\n");
+				kfree(topaz_priv->topaz_mtx_reg_state[n]);
+				topaz_priv->topaz_mtx_reg_state[n] = NULL;
+			}
+		}
+
 		pci_set_drvdata(dev->pdev, NULL);
 		device_remove_file(&dev->pdev->dev,
 				   &dev_attr_topaz_pmstate);
