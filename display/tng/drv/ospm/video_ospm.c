@@ -476,6 +476,9 @@ static void vsp_set_max_frequency(struct drm_device *dev)
 	} else if (pci_device == 0x1480) {
 		max_freq_code = IP_FREQ_400_00;
 		PSB_DEBUG_PM("vsp maximum freq for ANN A0 is 400\n");
+	} else if (pci_device == 0x1182) {
+		PSB_DEBUG_PM("Max freq is the default freq 200MHZ for SKU3 \n");
+		max_freq_code = IP_FREQ_200_00;
 	} else {
 		DRM_ERROR("invalid pci device id %x\n", pci_device);
 		return;
