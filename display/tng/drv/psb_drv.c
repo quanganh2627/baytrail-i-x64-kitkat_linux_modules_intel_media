@@ -412,6 +412,16 @@ MODULE_DEVICE_TABLE(pci, pciidlist);
 #define DRM_IOCTL_PSB_DISABLE_IED_SESSION \
 		DRM_IO(DRM_PSB_DISABLE_IED_SESSION + DRM_COMMAND_BASE)
 
+/* Panel type query */
+#define DRM_IOCTL_PSB_PANEL_QUERY \
+		DRM_IOR(DRM_PSB_PANEL_QUERY + DRM_COMMAND_BASE, \
+			uint32_t)
+
+/* Idle control */
+#define DRM_IOCTL_PSB_IDLE_CTRL \
+		DRM_IOW(DRM_PSB_IDLE_CTRL + DRM_COMMAND_BASE, \
+			struct drm_psb_idle_ctrl)
+
 /*
  * TTM execbuf extension.
  */
@@ -596,6 +606,11 @@ static int psb_enable_ied_session_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 static int psb_disable_ied_session_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
+static int psb_panel_query_ioctl(struct drm_device *dev, void *data,
+					struct drm_file *file_priv);
+static int psb_idle_ioctl(struct drm_device *dev, void *data,
+				struct drm_file *file_priv);
+
 
 static int user_printk_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file_priv)
@@ -752,6 +767,12 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 		psb_enable_ied_session_ioctl, DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_DISABLE_IED_SESSION,
 		psb_disable_ied_session_ioctl, DRM_AUTH),
+
+	PSB_IOCTL_DEF(DRM_IOCTL_PSB_PANEL_QUERY,
+		psb_panel_query_ioctl, DRM_AUTH),
+	PSB_IOCTL_DEF(DRM_IOCTL_PSB_IDLE_CTRL,
+		psb_idle_ioctl, DRM_AUTH),
+
 };
 
 static void get_imr_info(struct drm_psb_private *dev_priv)
@@ -2139,6 +2160,37 @@ static int psb_disable_ied_session_ioctl(struct drm_device *dev, void *data,
 	} else {
 		DRM_ERROR("%s: Failed to power on display island.\n", __func__);
 		ret = -1;
+	}
+
+	return 0;
+}
+
+static int psb_panel_query_ioctl(struct drm_device *dev, void *data,
+				struct drm_file *file_priv) {
+
+	uint32_t *arg = data;
+
+	*arg = (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DPI);
+	return 0;
+}
+
+static int psb_idle_ioctl(struct drm_device *dev, void *data,
+				struct drm_file *file_priv) {
+
+	struct drm_psb_idle_ctrl *ctrl = (struct drm_psb_idle_ctrl*) data;
+
+	switch (ctrl->cmd) {
+	case IDLE_CTRL_ENABLE:
+		break;
+	case IDLE_CTRL_DISABLE:
+		break;
+	case IDLE_CTRL_ENTER:
+		break;
+	case IDLE_CTRL_EXIT:
+		break;
+	default:
+		DRM_ERROR("%s: invalid command.\n", __func__);
+		break;
 	}
 
 	return 0;
