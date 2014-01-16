@@ -249,6 +249,24 @@ void ospm_ved_init(struct drm_device *dev,
 /***********************************************************
  * vec islands
  ***********************************************************/
+static u32 vec_get_max_freq(struct drm_device *dev)
+{
+	unsigned int pci_device = dev->pci_device & 0xffff;
+	u32 max_freq = IP_FREQ_320_00;
+
+	if ((pci_device == 0x1180) ||
+		(pci_device == 0x1181)) {
+		max_freq = IP_FREQ_400_00;
+		PSB_DEBUG_PM("vec 1180 1181 maximum freq is 400\n");
+	} else if (pci_device == 0x1182) {
+		max_freq = IP_FREQ_266_67;
+		PSB_DEBUG_PM("vec 1182 maximum freq is 400\n");
+	} else {
+		DRM_ERROR("invalid pci device id %x\n", pci_device);
+	}
+	return max_freq;
+}
+
 /**
  * vec_power_up
  *
@@ -258,7 +276,8 @@ static bool vec_power_up(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
 	int pm_ret = 0;
-	int freq_code = 0;
+	u32 freq_code = 0;
+	u32 freq_max = 0;
 
 	PSB_DEBUG_PM("powering up vec\n");
 #ifndef USE_GFX_INTERNAL_PM_FUNC
@@ -272,13 +291,20 @@ static bool vec_power_up(struct drm_device *dev,
 		return false;
 	}
 
-	if (drm_vec_force_up_freq < 0)
-		drm_vec_force_up_freq = 0;
-
-	if (!drm_vec_force_up_freq)
-		freq_code = IS_TNG_B0(dev)? IP_FREQ_400_00:IP_FREQ_320_00;
+	if (IS_TNG_B0(dev))
+		freq_max = vec_get_max_freq(dev);
 	else
-		freq_code = drm_vec_force_up_freq;
+		freq_max = IP_FREQ_320_00;
+
+	if (drm_vec_force_up_freq < 0) {
+		drm_vec_force_up_freq = 0;
+		freq_code = freq_max;
+	} else {
+		if (freq_max > drm_vec_force_up_freq)
+			freq_code = drm_vec_force_up_freq;
+		else
+			freq_code = freq_max;
+	}
 
 	if(!tng_topaz_set_vec_freq(freq_code))
 		PSB_DEBUG_PM("TOPAZ: Set VEC freq by code %d\n", freq_code);
