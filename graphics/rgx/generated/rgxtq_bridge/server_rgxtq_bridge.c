@@ -1250,7 +1250,6 @@ compat_PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
 	IMG_UINT32 **ui32ServerSyncFlagsInt = IMG_NULL;
 	SERVER_SYNC_PRIMITIVE * **psServerSyncInt = IMG_NULL;
 	IMG_HANDLE **hServerSyncInt2 = IMG_NULL;
-	IMG_UINT32 **hServerSyncInt3 = IMG_NULL;
 	IMG_INT32 *i32FenceFDsInt = IMG_NULL;
 	IMG_UINT32 *ui32CommandSizeInt = IMG_NULL;
 	IMG_UINT8 **ui8FWCommandInt = IMG_NULL;
@@ -1731,9 +1730,6 @@ compat_PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
 		IMG_UINT32 ui32AllocSize2=0;
 		IMG_UINT32 ui32Size2;
 		IMG_UINT8 *pui8Ptr2 = IMG_NULL;
-		IMG_UINT32 ui32AllocSize3=0;
-		IMG_UINT32 ui32Size3;
-		IMG_UINT8 *pui8Ptr3 = IMG_NULL;
 
 		/*
 			Two pass loop, 1st find out the size and 2nd allocation and set offsets.
@@ -1743,12 +1739,10 @@ compat_PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
 		{
 			ui32Size = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(SERVER_SYNC_PRIMITIVE * *);
 			ui32Size2 = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_HANDLE *);
-			ui32Size3 = psRGXSubmitTransferIN->ui32PrepareCount * sizeof(IMG_UINT32 *);
 			if (ui32Pass == 0)
 			{
 				ui32AllocSize += ui32Size;
 				ui32AllocSize2 += ui32Size2;
-				ui32AllocSize3 += ui32Size3;
 			}
 			else
 			{
@@ -1768,28 +1762,18 @@ compat_PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
 				}
 				hServerSyncInt2 = (IMG_HANDLE **) pui8Ptr2;
 				pui8Ptr2 += ui32Size2;
-				pui8Ptr3 = OSAllocMem(ui32AllocSize3);
-				if (pui8Ptr3 == IMG_NULL)
-				{
-					psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-					goto RGXSubmitTransfer_exit;
-				}
-				hServerSyncInt3 = (IMG_UINT32 **) pui8Ptr3;
-				pui8Ptr3 += ui32Size3;
 			}
 
 			for (i=0;i<psRGXSubmitTransferIN->ui32PrepareCount;i++)
 			{
 				ui32Size = psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(SERVER_SYNC_PRIMITIVE *);
 				ui32Size2 = psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_HANDLE);
-				ui32Size3 = psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_UINT32);
 				if (ui32Size)
 				{
 					if (ui32Pass == 0)
 					{
 						ui32AllocSize += ui32Size;
 						ui32AllocSize2 += ui32Size2;
-						ui32AllocSize3 += ui32Size3;
 					}
 					else
 					{
@@ -1797,8 +1781,6 @@ compat_PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
 						pui8Ptr += ui32Size;
 						hServerSyncInt2[i] = (IMG_HANDLE *) pui8Ptr2;
 						pui8Ptr2 += ui32Size2;
-						hServerSyncInt3[i] = (IMG_UINT32 *) pui8Ptr3;
-						pui8Ptr3 += ui32Size3;
 					}
 				}
 			}
@@ -1806,7 +1788,7 @@ compat_PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
 	}
 
 	{
-		IMG_UINT32 i, j;
+		IMG_UINT32 i;
 		IMG_HANDLE **psPtr = 0;
 
 		/* Loop over all the pointers in the array copying the data into the kernel */
@@ -1823,22 +1805,15 @@ compat_PVRSRVBridgeRGXSubmitTransfer(IMG_UINT32 ui32BridgeID,
 			}
 
 			/* Copy the data over */
-			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_UINT32)))
-				|| (OSCopyFromUser(NULL, (hServerSyncInt3[i]), psPtr,
-				(psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_UINT32))) != PVRSRV_OK) )
+			if ( !OSAccessOK(PVR_VERIFY_READ, (IMG_VOID*) psPtr, (psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_HANDLE)))
+				|| (OSCopyFromUser(NULL, (hServerSyncInt2[i]), psPtr,
+				(psRGXSubmitTransferIN->pui32ServerSyncCount[i] * sizeof(IMG_HANDLE))) != PVRSRV_OK) )
 			{
 				psRGXSubmitTransferOUT->eError = PVRSRV_ERROR_INVALID_PARAMS;
 
 				goto RGXSubmitTransfer_exit;
 			}
-			/* Expand each second level pointer to 64 bit */
-			for (j=0; j<psRGXSubmitTransferIN->pui32ServerSyncCount[i]; j++)
-			{
-				hServerSyncInt2[i][j] = (IMG_HANDLE)((IMG_UINT64)hServerSyncInt3[i][j]);
-			}
 		}
-		/* Now assign look-up handle buffer pointer since data has been copied correctly */
-		psRGXSubmitTransferIN->phServerSync = hServerSyncInt2;
 	}
 	if (psRGXSubmitTransferIN->ui32NumFenceFDs != 0)
 	{
@@ -2071,8 +2046,6 @@ RGXSubmitTransfer_exit:
 		OSFreeMem(psServerSyncInt);
 	if (hServerSyncInt2)
 		OSFreeMem(hServerSyncInt2);
-	if (hServerSyncInt3)
-		OSFreeMem(hServerSyncInt3);
 	if (i32FenceFDsInt)
 		OSFreeMem(i32FenceFDsInt);
 	if (ui32CommandSizeInt)
