@@ -1853,7 +1853,7 @@ PVRSRV_ERROR DCRegisterDevice(DC_DEVICE_FUNCTIONS *psFuncTable,
 	psNew->hSystemBuffer = IMG_NULL;
 	psNew->psSystemBufferPMR = IMG_NULL;
 	psNew->sSystemContext.psDevice = psNew;
-	psNew->sSystemContext.hDisplayContext = hDeviceData;	/* */
+	psNew->sSystemContext.hDisplayContext = hDeviceData;	/* FIXME: Is this the correct thing to do? */
 
 	OSLockAcquire(g_hDCListLock);
 	psNew->psNext = g_psDCDeviceList;

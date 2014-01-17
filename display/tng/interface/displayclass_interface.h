@@ -71,7 +71,7 @@ void DC_MRFLD_onPowerOn(uint32_t iPipe);
 void DC_MRFLD_onPowerOff(uint32_t iPipe);
 int DC_MRFLD_Enable_Plane(int type, int index, uint32_t ctx);
 int DC_MRFLD_Disable_Plane(int type, int index, uint32_t ctx);
-void DCLockMutex();
-void DCUnLockMutex();
+void DCLockMutex(void);
+void DCUnLockMutex(void);
 
 #endif				/* __DC_INTERFACE_H__ */

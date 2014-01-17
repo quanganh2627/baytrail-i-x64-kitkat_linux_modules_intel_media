@@ -47,7 +47,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <linux/hardirq.h>
 #include <linux/module.h>
 #include <linux/spinlock.h>
-#include <linux/string.h>			// strncpy, strlen
+#include <linux/string.h>
 #include <linux/slab.h>
 #include <stdarg.h>
 
@@ -124,14 +124,16 @@ IMG_EXPORT IMG_VOID PVRSRVDebugPrintfDumpCCB(void)
 
 	LinuxLockMutex(&gsDebugCCBMutex);
 	
-	for(i = 0; i < PVRSRV_DEBUG_CCB_MAX; i++)
+	for (i = 0; i < PVRSRV_DEBUG_CCB_MAX; i++)
 	{
 		PVRSRV_DEBUG_CCB *psDebugCCBEntry =
 			&gsDebugCCB[(giOffset + i) % PVRSRV_DEBUG_CCB_MAX];
 
 		/* Early on, we won't have PVRSRV_DEBUG_CCB_MAX messages */
-		if(!psDebugCCBEntry->pszFile)
+		if (!psDebugCCBEntry->pszFile)
+		{
 			continue;
+		}
 
 		printk(KERN_ERR "%s:%d: (%ld.%ld,tid=%u) %s\n",
 			   psDebugCCBEntry->pszFile,
@@ -209,15 +211,12 @@ static PVRSRV_LINUX_MUTEX gsDebugMutexNonIRQ;
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
 /* The lock is used to control access to gszBufferIRQ */
-/* PRQA S 0671,0685 1 */ /* ignore warnings about C99 style initialisation */
 static spinlock_t gsDebugLockIRQ = SPIN_LOCK_UNLOCKED;
 #else
 static DEFINE_SPINLOCK(gsDebugLockIRQ);
 #endif
 
-#if !defined (USE_SPIN_LOCK) /* to keep QAC happy */ 
 #define	USE_SPIN_LOCK (in_interrupt() || !preemptible())
-#endif
 
 static inline void GetBufferLock(unsigned long *pulLockFlags)
 {
@@ -419,55 +418,50 @@ IMG_VOID PVRSRVDebugPrintf(IMG_UINT32 ui32DebugLevel,
 
 		GetBufferLock(&ulLockFlags);
 
-		/* Add in the level of warning */
-		if (bNoLoc == IMG_FALSE)
+		switch (ui32DebugLevel)
 		{
-			switch(ui32DebugLevel)
+			case DBGPRIV_FATAL:
 			{
-				case DBGPRIV_FATAL:
-				{
-					strncpy (pszBuf, "PVR_K:(Fatal): ", (ui32BufSiz -2));
-					break;
-				}
-				case DBGPRIV_ERROR:
-				{
-					strncpy (pszBuf, "PVR_K:(Error): ", (ui32BufSiz -2));
-					break;
-				}
-				case DBGPRIV_WARNING:
-				{
-					strncpy (pszBuf, "PVR_K:(Warn): ", (ui32BufSiz -2));
-					break;
-				}
-				case DBGPRIV_MESSAGE:
-				{
-					strncpy (pszBuf, "PVR_K:(Mesg): ", (ui32BufSiz -2));
-					break;
-				}
-				case DBGPRIV_VERBOSE:
-				{
-					strncpy (pszBuf, "PVR_K:(Verb): ", (ui32BufSiz -2));
-					break;
-				}
-				case DBGPRIV_BUFFERED:
-				{
-					strncpy (pszBuf, "PVR_K:", (ui32BufSiz -2));
-					break;
-				}
-				default:
-				{
-					strncpy (pszBuf, "PVR_K:(Unkn)", (ui32BufSiz -2));
-					break;
-				}
+				strncpy(pszBuf, "PVR_K:(Fatal): ", (ui32BufSiz - 2));
+				break;
 			}
-		}
-		else
-		{
-			strncpy (pszBuf, "PVR_K: ", (ui32BufSiz -2));
+			case DBGPRIV_ERROR:
+			{
+				strncpy(pszBuf, "PVR_K:(Error): ", (ui32BufSiz - 2));
+				break;
+			}
+			case DBGPRIV_WARNING:
+			{
+				strncpy(pszBuf, "PVR_K:(Warn):  ", (ui32BufSiz - 2));
+				break;
+			}
+			case DBGPRIV_MESSAGE:
+			{
+				strncpy(pszBuf, "PVR_K:(Mesg):  ", (ui32BufSiz - 2));
+				break;
+			}
+			case DBGPRIV_VERBOSE:
+			{
+				strncpy(pszBuf, "PVR_K:(Verb):  ", (ui32BufSiz - 2));
+				break;
+			}
+			case DBGPRIV_DEBUG:
+			{
+				strncpy(pszBuf, "PVR_K:(Debug): ", (ui32BufSiz - 2));
+				break;
+			}
+			case DBGPRIV_CALLTRACE:
+			case DBGPRIV_ALLOC:
+			case DBGPRIV_BUFFERED:
+			default:
+			{
+				strncpy(pszBuf, "PVR_K:  ", (ui32BufSiz - 2));
+				break;
+			}
 		}
 		pszBuf[ui32BufSiz - 1] = '\0';
 
-		(void) BAppend(pszBuf, ui32BufSiz, "%5u: ", current->pid);
+		(void) BAppend(pszBuf, ui32BufSiz, "%u: ", current->pid);
 
 
 		if (VBAppend(pszBuf, ui32BufSiz, pszFormat, vaArgs))

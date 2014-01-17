@@ -678,7 +678,8 @@ static IMG_VOID _RGXDumpFWHWRInfo(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 
 				switch(psHWRInfo->eHWRType)
 				{
-					case RGX_HWRTYPE_BIF01FAILURE: case RGX_HWRTYPE_BIF0FAILURE: case RGX_HWRTYPE_BIF1FAILURE:
+					case RGX_HWRTYPE_BIF0FAILURE:
+					case RGX_HWRTYPE_BIF1FAILURE:
 					{
 						_RGXDumpRGXBIFBank(pfnDumpDebugPrintf, psDevInfo, RGXFWIF_HWRTYPE_BIF_BANK_GET(psHWRInfo->eHWRType),
 										psHWRInfo->uHWRData.sBIFInfo.ui64BIFMMUStatus,
@@ -698,6 +699,7 @@ static IMG_VOID _RGXDumpFWHWRInfo(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 					break;
 
 					case RGX_HWRTYPE_OVERRUN:
+					case RGX_HWRTYPE_UNKNOWNFAILURE:
 					{
 						/* Nothing to dump */
 					}
@@ -873,7 +875,7 @@ IMG_VOID RGXDumpDebugInfo(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 {
 	IMG_UINT32 i;
 
-	for(i=0;i<DEBUG_REQUEST_VERBOSITY_MAX;i++)
+	for(i=0;i<=DEBUG_REQUEST_VERBOSITY_MAX;i++)
 	{
 		RGXDebugRequestProcess(pfnDumpDebugPrintf, psDevInfo, i);
 	}

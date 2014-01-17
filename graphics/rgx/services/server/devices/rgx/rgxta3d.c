@@ -913,7 +913,7 @@ IMG_VOID RGXProcessRequestFreelistsReconstruction(PVRSRV_RGXDEV_INFO *psDevInfo,
 /* Create HWRTDataSet */
 IMG_EXPORT
 PVRSRV_ERROR RGXCreateHWRTData(PVRSRV_DEVICE_NODE	*psDeviceNode,
-							   IMG_UINT32			psRenderTarget, /* */
+							   IMG_UINT32			psRenderTarget, /* FIXME this should not be IMG_UINT32 */
 							   IMG_DEV_VIRTADDR		psPMMListDevVAddr,
 							   IMG_DEV_VIRTADDR		psVFPPageTableAddr,
 							   RGX_FREELIST			*apsFreeLists[RGXFW_MAX_FREELISTS],
@@ -1005,8 +1005,8 @@ PVRSRV_ERROR RGXCreateHWRTData(PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 	DevmemAcquireCpuVirtAddr(*ppsMemDesc, (IMG_VOID **)&psHWRTData);
 
-	/* 
-*/
+	/* FIXME: MList is something that that PM writes physical addresses to,
+	 * so ideally its best allocated in kernel */
 	psHWRTData->psPMMListDevVAddr = psPMMListDevVAddr;
 	psHWRTData->psParentRenderTarget.ui32Addr = psRenderTarget;
 	#if defined(SUPPORT_VFP)
@@ -1036,9 +1036,11 @@ PVRSRV_ERROR RGXCreateHWRTData(PVRSRV_DEVICE_NODE	*psDeviceNode,
 	{
 		psTmpCleanup->apsFreeLists[ui32Loop] = apsFreeLists[ui32Loop];
 		psTmpCleanup->apsFreeLists[ui32Loop]->ui32RefCount++;
-		psHWRTData->apsFreeLists[ui32Loop] = *((PRGXFWIF_FREELIST *)&(psTmpCleanup->apsFreeLists[ui32Loop]->sFreeListFWDevVAddr.ui32Addr)); /* */
-		/* invalid initial snapshot value, in case first TA using this freelist fails */
-		psHWRTData->aui32FreeListHWRSnapshot[ui32Loop] = IMG_UINT32_MAX;
+		psHWRTData->apsFreeLists[ui32Loop] = *((PRGXFWIF_FREELIST *)&(psTmpCleanup->apsFreeLists[ui32Loop]->sFreeListFWDevVAddr.ui32Addr)); /* FIXME: Fix pointer type casting */
+		/* invalid initial snapshot value, the snapshot is always taken during first kick
+		 * and hence the value get replaced during the first kick anyway. So its safe to set it 0.
+		*/
+		psHWRTData->aui32FreeListHWRSnapshot[ui32Loop] = 0;
 	}
 	OSLockRelease(psDevInfo->hLockFreeList);
 	

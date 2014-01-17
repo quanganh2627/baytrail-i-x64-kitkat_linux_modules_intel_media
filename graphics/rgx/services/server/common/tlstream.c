@@ -55,8 +55,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "tlstream.h"
 
 /* To debug buffer utilisation enable this macro here and
- * define PVRSRV_NEED_PVR_TRACE in the server pvr_debug.c and in tlutils.c
- * before the inclusion of pvr_debug.h. Issue tlioctl_cmd 6 on target to see
+ * define PVRSRV_NEED_PVR_TRACE in the server pvr_debug.c and in tutils.c
+ * before the inclusion of pvr_debug.h. Issue pvrtutils 6 on target to see
  * stream buffer utilisation. */
 //#define TL_BUFFER_UTILIZATION 1
 

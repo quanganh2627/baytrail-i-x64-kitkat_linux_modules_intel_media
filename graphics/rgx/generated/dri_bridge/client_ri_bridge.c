@@ -48,7 +48,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "ri_server.h"
 
-
 IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIWritePMREntry(IMG_HANDLE hBridge,
 							     IMG_HANDLE hPMRHandle,
 							     const IMG_CHAR *puiTextA,
@@ -174,4 +173,3 @@ IMG_INTERNAL PVRSRV_ERROR IMG_CALLCONV BridgeRIDumpProcess(IMG_HANDLE hBridge,
 
 	return eError;
 }
-

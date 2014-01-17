@@ -54,9 +54,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "osfunc.h"
 #include "rgxdebug.h"
 #include "rgx_meta.h"
+#include "devicemem_pdump.h"
 #include "dfrgx_interface.h"
 #include "rgxpowermon.h"
-#include "devicemem_pdump.h"
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
@@ -304,7 +304,7 @@ static IMG_VOID RGXInitBIF(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	 * Trusted META boot
 	 */
 #if defined(SUPPORT_TRUSTED_DEVICE)
-	#if TRUSTED_DEVICE_DEFAULT_ENABLED == 1
+	#if defined(TRUSTED_DEVICE_DEFAULT_ENABLED)
 	PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXStart: Trusted Device enabled");
 	OSWriteHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_BIF_TRUST, RGX_CR_BIF_TRUST_ENABLE_EN);
 	PDUMPREG32(RGX_PDUMPREG_NAME, RGX_CR_BIF_TRUST, RGX_CR_BIF_TRUST_ENABLE_EN, PDUMP_FLAGS_CONTINUOUS | PDUMP_FLAGS_POWERTRANS);
@@ -413,10 +413,10 @@ static PVRSRV_ERROR RGXStart(PVRSRV_RGXDEV_INFO	*psDevInfo, PVRSRV_DEVICE_CONFIG
 #endif
 
 #ifndef CONFIG_MOOREFIELD
-	/*
-	 * Initialise SLC.
-	 */
-	RGX_INIT_SLC(psDevInfo);
+	/*		
+	 Initialise SLC.		
+	*/
+	//RGX_INIT_SLC(psDevInfo);
 #endif
 
 #if !defined(SUPPORT_META_SLAVE_BOOT)
@@ -569,7 +569,7 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 		PVRSRV_RGXDEV_INFO	*psDevInfo = psDeviceNode->pvDevice;
 		RGXFWIF_KCCB_CMD	sPowCmd;
 		RGXFWIF_TRACEBUF	*psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
-		IMG_UINT32		ui32DM;
+		IMG_UINT32			ui32DM;
 		IMG_BOOL		bCanPowerOff = IMG_FALSE;
 
 		/* Can We power-off the device?*/
@@ -628,6 +628,7 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 				}
 				else
 				{
+
 					eError = RGXStop(psDevInfo);
 					if (eError != PVRSRV_OK)
 					{
@@ -635,10 +636,9 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 						eError = PVRSRV_ERROR_DEVICE_POWER_CHANGE_FAILURE;
 					}
 					psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
-
+					
 					/*Report dfrgx We have the device OFF*/
 					dfrgx_interface_power_state_set(0);
-
 				}
 			}
 			else
@@ -705,8 +705,7 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 				PVR_DPF((PVR_DBG_ERROR,"RGXPostPowerState: RGXStart failed"));
 				return eError;
 			}
-
-			/* Coming up from off, re-allow RGX interrupts.  */
+			
 			psDevInfo->bIgnoreFurtherIRQs = IMG_FALSE;
 
 			/*Report dfrgx We have the device back ON*/

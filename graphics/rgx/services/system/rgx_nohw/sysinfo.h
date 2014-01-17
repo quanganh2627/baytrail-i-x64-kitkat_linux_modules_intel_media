@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@File			Apollo.h
+@File
 @Title          System Description Header
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @Description    This header provides system-specific declarations and macros
@@ -41,53 +41,30 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#if !defined(__APOLLO_H__)
-#define __APOLLO_H__
+#if !defined(__SYSINFO_H__)
+#define __SYSINFO_H__
 
-#define TC_SYSTEM_NAME			"Rogue Test Chip"
+/*!< System specific poll/timeout details */
+#define MAX_HW_TIME_US                 (500000)
+#define FATAL_ERROR_DETECTION_POLL_MS  (10000)
+#define WAIT_TRY_COUNT                 (10000)
 
-/* Valid values for the TC_MEMORY_CONFIG configuration option */
-#define TC_MEMORY_LOCAL			(1)
-#define TC_MEMORY_HOST			(2)
-#define TC_MEMORY_HYBRID		(3)
-#define TC_MEMORY_DIRECT_MAPPED		(4)
+#define SYS_DEVICE_COUNT 3 /* RGX, DISPLAY (external), BUFFER (external) */
 
-#define RGX_TC_CORE_CLOCK_SPEED		(90000000)
-#define RGX_TC_MEM_CLOCK_SPEED		(65000000)
-
-#if defined(SUPPORT_DISPLAY_CLASS)
-/* Memory reserved for use by the PDP DC. */
-#define RGX_TC_RESERVE_DC_MEM_SIZE	(32 * 1024 * 1024)
+#if defined(TDMETACODE)
+/* in systems that support trusted device address protection, there are three
+   physical heaps from which pages should be allocated:
+   - one heap for normal allocations
+   - one heap for allocations holding META code memory
+   - one heap for allocations holding secured DRM data
+*/
+#define SYS_PHYS_HEAP_COUNT		3
+#else
+#define SYS_PHYS_HEAP_COUNT		1
 #endif
 
-#if defined(SUPPORT_ION)
-/* Memory reserved for use by ion. */
-#define RGX_TC_RESERVE_ION_MEM_SIZE	(384 * 1024 * 1024)
+#if defined(__linux__)
+#define SYS_RGX_DEV_NAME    "rgxnohw"
 #endif
 
-
-/* Apollo reg on base register 0 */
-#define SYS_APOLLO_REG_PCI_BASENUM	(0)
-#define SYS_APOLLO_REG_REGION_SIZE	(0x00010000)
-
-#define SYS_APOLLO_REG_SYS_OFFSET	(0x0000)
-#define SYS_APOLLO_REG_SYS_SIZE		(0x0400)
-
-#define SYS_APOLLO_REG_PLL_OFFSET	(0x1000)
-#define SYS_APOLLO_REG_PLL_SIZE		(0x0400)
-
-#define SYS_APOLLO_REG_PDP_OFFSET	(0xC000)
-#define SYS_APOLLO_REG_PDP_SIZE		(0x0400)
-
-/* RGX reg on base register 1 */
-#define SYS_RGX_REG_PCI_BASENUM		(1)
-#define SYS_RGX_REG_REGION_SIZE		(0x00004000)
-
-/* Device memory (including HP mapping) on base register 2 */
-#define SYS_DEV_MEM_PCI_BASENUM		(2)
-/* number of bytes that are broken */
-#define SYS_DEV_MEM_BROKEN_BYTES	(1024 * 1024)
-#define SYS_DEV_MEM_REGION_SIZE		(0x40000000 - SYS_DEV_MEM_BROKEN_BYTES)
-
-#endif /* if !defined(__APOLLO_H__) */
-
+#endif	/* !defined(__SYSINFO_H__) */

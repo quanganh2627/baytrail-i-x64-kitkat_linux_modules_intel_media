@@ -116,8 +116,8 @@
 #endif
 
 
-/*is tng B0 hw*/
-extern int is_tng_b0;
+/*is tng a0 hw*/
+extern int is_tng_a0;
 
 /* df_rgx_created_dev - Pointer to created device, if any. */
 static struct platform_device *df_rgx_created_dev;
@@ -502,7 +502,7 @@ static int tcd_get_available_states(struct thermal_cooling_device *tcd,
 {
 	int ret = 0;
 
-	if(is_tng_b0){
+	if (!is_tng_a0) {
 	ret = sprintf(buf, "%lu %lu %lu %lu %lu %lu %lu %lu\n", aAvailableStateFreq[0].freq,
 			 aAvailableStateFreq[1].freq,
 			 aAvailableStateFreq[2].freq,
@@ -560,7 +560,7 @@ static int tcd_set_force_state_override(struct thermal_cooling_device *tcd,
 	unsigned long int prev_freq = DFRGX_FREQ_320_MHZ;
 	int i = 0;
 
-	if(is_tng_b0)
+	if (!is_tng_a0)
 		prev_freq = DFRGX_FREQ_533_MHZ;
 
 	sscanf(buf, "%lu %lu %lu %lu\n", &freqs[0],
@@ -704,7 +704,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	df->previous_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 	bfdata->bf_prev_freq_rlzd = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 
-	if(is_tng_b0){
+	if (!is_tng_a0){
 		/*On TNG_B0 We will use 457KHZ and 533KHZ as turbo*/
 		df->min_freq = DFRGX_FREQ_457_MHZ;
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX;

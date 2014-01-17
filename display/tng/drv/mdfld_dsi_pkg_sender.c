@@ -121,6 +121,8 @@ static inline int wait_for_gen_fifo_empty(struct mdfld_dsi_pkg_sender *sender,
 	u32 gen_fifo_stat_reg = sender->mipi_gen_fifo_stat_reg;
 	int retry = 10000;
 
+	if (sender->work_for_slave_panel)
+		gen_fifo_stat_reg += MIPIC_REG_OFFSET;
 	while (retry--) {
 		if ((mask & REG_READ(gen_fifo_stat_reg)) == mask)
 			return 0;
@@ -385,6 +387,10 @@ static int __send_short_pkg(struct mdfld_dsi_pkg_sender *sender,
 	u32 gen_ctrl_val = 0;
 	struct mdfld_dsi_gen_short_pkg *short_pkg = &pkg->pkg.short_pkg;
 
+	if (sender->work_for_slave_panel) {
+		hs_gen_ctrl_reg += MIPIC_REG_OFFSET;
+		lp_gen_ctrl_reg += MIPIC_REG_OFFSET;
+	}
 	gen_ctrl_val |= short_pkg->cmd << MCS_COMMANDS_POS;
 	gen_ctrl_val |= 0 << DCS_CHANNEL_NUMBER_POS;
 	gen_ctrl_val |= pkg->pkg_type;
@@ -428,6 +434,12 @@ static int __send_long_pkg(struct mdfld_dsi_pkg_sender *sender,
 	struct mdfld_dsi_gen_long_pkg *long_pkg = &pkg->pkg.long_pkg;
 
 	dp = long_pkg->data;
+	if (sender->work_for_slave_panel) {
+		hs_gen_ctrl_reg += MIPIC_REG_OFFSET;
+		hs_gen_data_reg += MIPIC_REG_OFFSET;
+		lp_gen_ctrl_reg += MIPIC_REG_OFFSET;
+		lp_gen_data_reg += MIPIC_REG_OFFSET;
+	}
 
 	/**
 	 * Set up word count for long pkg

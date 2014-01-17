@@ -1,9 +1,6 @@
 /*************************************************************************/ /*!
-@File           ion_omap_support.c
-@Title          OMAP Tiler Ion support
+@Title          RGX Config BVNC 1.V.4.19
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    This file does the Ion initialisation and De-initialistion for
-                system using the omap tiler ion implementation.
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -42,42 +39,26 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#include "pvr_debug.h"
-#include "ion_sys.h"
+#ifndef _RGXCONFIG_KM_1_V_4_19_H_
+#define _RGXCONFIG_KM_1_V_4_19_H_
 
-#include <linux/ion.h>
-#include <linux/omap_ion.h>
+/***** Automatically generated file (11/21/2013 4:21:19 PM): Do not edit manually ********************/
+/***** Timestamp:  (11/21/2013 4:21:19 PM)************************************************************/
 
-extern struct ion_device *omap_ion_device;
+#define RGX_BNC_KM_B 1
+#define RGX_BNC_KM_N 4
+#define RGX_BNC_KM_C 19
 
-PVRSRV_ERROR IonInit(IMG_VOID)
-{
-	return PVRSRV_OK;
-}
+/******************************************************************************
+ * DDK Defines
+ *****************************************************************************/
+#define RGX_FEATURE_NUM_CLUSTERS (4)
+#define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
+#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
+#define RGX_FEATURE_AXI_ACELITE 
+#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
+#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
+#define RGX_FEATURE_META (MTP218)
 
-struct ion_device *IonDevAcquire(IMG_VOID)
-{
-	return omap_ion_device;
-}
 
-IMG_VOID IonDevRelease(struct ion_device *psIonDev)
-{
-	/* Nothing to do, sanity check the pointer we're passed back */
-	PVR_ASSERT(psIonDev == omap_ion_device);
-}
-
-IMG_UINT IonSupportedHeaps(IMG_VOID)
-{
-	return (1 << ION_HEAP_TYPE_CARVEOUT |
-			1 << OMAP_ION_HEAP_TYPE_TILER);
-}
-
-IMG_UINT32 IonPhysHeapID(IMG_VOID)
-{
-	return 0;
-}
-
-IMG_VOID IonDeinit(IMG_VOID)
-{
-}
-
+#endif /* _RGXCONFIG_1_V_4_19_H_ */

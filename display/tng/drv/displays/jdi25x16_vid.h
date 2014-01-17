@@ -1,11 +1,10 @@
-/*****************************************************************************
- *
- * Copyright © 2010 Intel Corporation
+/*
+ * Copyright (c)  2010 Intel Corporation
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation
- * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * the rights to use, copy, modify, merge, publish, distribute, sublicensen
  * and/or sell copies of the Software, and to permit persons to whom the
  * Software is furnished to do so, subject to the following conditions:
  *
@@ -21,22 +20,22 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
  * DEALINGS IN THE SOFTWARE.
  *
- ******************************************************************************/
+ * Authors:
+ * Faxing Lu<faxing.lu@intel.com>
+*/
 
-#if !defined(__PVR_DRM_EXPORT_H__)
-#define __PVR_DRM_EXPORT_H__
 
-int PVRSRVOpen(struct drm_device *dev, struct drm_file *pFile);
-int PVRSRVDrmLoad(struct drm_device *dev, unsigned long flags);
-int PVRSRVDrmUnload(struct drm_device *dev);
-void PVRSRVDrmPostClose(struct drm_device *dev, struct drm_file *file);
-void PVRSRVQueryIoctls(struct drm_ioctl_desc *ioctls);
+#ifndef JDI25x16_VID_H
+#define JDI25x16_VID_H
 
-unsigned int PVRSRVGetMeminfoSize(void *hKernelMemInfo);
-void *PVRSRVGetMeminfoCPUAddr(void *hMemHandle);
-int PVRSRVGetMeminfoPages(void *hMemHandle, int npages, struct page ***pages);
-int PVRSRVGetMeminfoPfn(void *hMemHandle, int npages, unsigned long **pfns);
-int PVRSRVMMap(struct file *pFile, struct vm_area_struct *ps_vma);
-int PVRSRVInterrupt(struct drm_device *dev);
+#include <drm/drmP.h>
+#include <drm/drm.h>
+#include <drm/drm_crtc.h>
+#include <drm/drm_edid.h>
+#include <asm/intel_scu_ipc.h>
+#include "mdfld_output.h"
+#include "mdfld_dsi_dpi.h"
+#include "mdfld_dsi_pkg_sender.h"
 
+void jdi25x16_vid_init(struct drm_device *dev, struct panel_funcs *p_funcs);
 #endif

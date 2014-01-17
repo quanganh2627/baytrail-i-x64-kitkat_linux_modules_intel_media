@@ -39,23 +39,8 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ### ###########################################################################
 
-pvrsrvkm-y += \
-	services/system/$(PVR_SYSTEM)/sysconfig.o \
-	services/system/common/env/linux/pci_support.o \
-	services/system/common/env/linux/interrupt_support.o
+modules := srvkm
 
-ifeq ($(SUPPORT_ION),1)
-ifeq ($(LMA),1)
-# For LMA, use the TC-specific ion heap.
-pvrsrvkm-y += \
-	services/system/$(PVR_SYSTEM)/ion_support.o \
-	services/system/common/env/linux/ion_lma_heap.o
-else
-# For UMA, use the generic ion support code, which creates heaps from system
-# memory.
-pvrsrvkm-y += \
-	services/system/common/env/linux/ion_support.o
-endif # LMA
-endif # SUPPORT_ION
-
-ccflags-y += -I$(TOP)/services/system/common/env/linux
+srvkm_type := kernel_module
+srvkm_target := pvrsrvkm.ko
+srvkm_makefile := $(THIS_DIR)/Kbuild.mk

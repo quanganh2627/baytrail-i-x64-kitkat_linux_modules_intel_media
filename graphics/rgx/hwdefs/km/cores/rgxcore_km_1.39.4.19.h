@@ -1,8 +1,6 @@
 /*************************************************************************/ /*!
-@File
-@Title          System Description Header
+@Title          RGX Core BVNC 1.39.4.19
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
-@Description    This header provides system-specific declarations and macros
 @License        Dual MIT/GPLv2
 
 The contents of this file are subject to the MIT license as set out below.
@@ -41,25 +39,34 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#if !defined(__SYSINFO_H__)
-#define __SYSINFO_H__
+#ifndef _RGXCORE_KM_1_39_4_19_H_
+#define _RGXCORE_KM_1_39_4_19_H_
 
-#define SYS_RGX_DEV_VENDOR_ID	(0x1010)
-#define SYS_RGX_DEV_DEVICE_ID	(0x1CF2)
+/***** Automatically generated file (11/21/2013 4:21:19 PM): Do not edit manually ********************/
+/***** Timestamp:  (11/21/2013 4:21:19 PM)************************************************************/
+/***** CS: @2615226 ******************************************************************/
 
-/*!< System specific poll/timeout details */
-#define MAX_HW_TIME_US                 (500000)
-#define FATAL_ERROR_DETECTION_POLL_MS  (10000)
-#define WAIT_TRY_COUNT                 (10000)
 
-/* RGX, DISPLAY (external), BUFFER (external) */
-#define SYS_DEVICE_COUNT	(3)
+/******************************************************************************
+ * BVNC = 1.39.4.19 
+ *****************************************************************************/
+#define RGX_BVNC_KM_B 1
+#define RGX_BVNC_KM_V 39
+#define RGX_BVNC_KM_N 4
+#define RGX_BVNC_KM_C 19
 
-/* This should be one higher than the highest possible physical heap ID */
-#define SYS_PHYS_HEAP_COUNT 3
+/******************************************************************************
+ * Errata 
+ *****************************************************************************/
 
-#if defined(__linux__)
-#define SYS_RGX_DEV_NAME	"rgxtc"
-#endif /* defined(__linux__) */
+#define FIX_HW_BRN_38344
 
-#endif /* !defined(__SYSINFO_H__) */
+
+ 
+/******************************************************************************
+ * Enhancements 
+ *****************************************************************************/
+
+
+
+#endif /* _RGXCORE_KM_1_39_4_19_H_ */

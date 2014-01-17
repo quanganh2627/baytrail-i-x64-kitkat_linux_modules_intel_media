@@ -60,15 +60,12 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /* ourselves */
 #include "physmem_osmem.h"
 
-// INTEL to double check if this should be commented out.
-/*
 #include <linux/version.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(3,0,0))
 #include <linux/mm.h>
 #define PHYSMEM_SUPPORTS_SHRINKER
 #endif
-*/
 
 #include <linux/slab.h>
 #include <linux/highmem.h>
@@ -149,6 +146,7 @@ typedef	struct
 {
 	/* Linkage for page pool LRU list */
 	struct list_head sPagePoolItem;
+	IMG_BOOL bPageZero;
 
 	struct page *psPage;
 } LinuxPagePoolEntry;
@@ -175,6 +173,11 @@ static IMG_UINT32 g_ui32PagePoolMaxEntries = PVR_LINUX_PYSMEM_MAX_POOL_PAGES;
 static IMG_UINT32 g_ui32PagePoolMaxEntries = PVR_LINUX_PYSMEM_MAX_POOL_PAGES;
 #endif
 static IMG_UINT32 g_ui32LiveAllocs = 0;
+
+/* infomation about zeroed pages */
+static IMG_UINT32 g_ui32ZeroPageEntries = 0;
+/* this is a experience value, need adjust for performance */
+#define _PAGE_NEED_CLEAR ((g_ui32ZeroPageEntries & 3) == 0)
 
 /* Global structures we use to manage the page pool */
 static struct kmem_cache *g_psLinuxPagePoolCache = IMG_NULL;
@@ -231,6 +234,15 @@ _LinuxPagePoolEntryFree(LinuxPagePoolEntry *psPagePoolEntry)
 	kmem_cache_free(g_psLinuxPagePoolCache, psPagePoolEntry);
 }
 
+static IMG_VOID
+_ClearPage(LinuxPagePoolEntry *psPagePoolEntry)
+{
+	if (psPagePoolEntry->psPage) {
+		clear_highpage(psPagePoolEntry->psPage);
+		psPagePoolEntry->bPageZero = IMG_TRUE;
+	}
+}
+
 static inline IMG_BOOL
 _AddEntryToPool(struct page *psPage, IMG_UINT32 ui32CPUCacheFlags)
 {
@@ -249,8 +261,20 @@ _AddEntryToPool(struct page *psPage, IMG_UINT32 ui32CPUCacheFlags)
 	}
 
 	psEntry->psPage = psPage;
+
+	/* select some pages to be cleared*/
+	if (_PAGE_NEED_CLEAR) {
+		_ClearPage(psEntry);
+	}
+
 	_PagePoolLock();
-	list_add_tail(&psEntry->sPagePoolItem, psPoolHead);
+	/* zero pages locate at the begin, others at the end */
+	if (psEntry->bPageZero) {
+		list_add(&psEntry->sPagePoolItem, psPoolHead);
+		g_ui32ZeroPageEntries++;
+	} else {
+		list_add_tail(&psEntry->sPagePoolItem, psPoolHead);
+	}
 	g_ui32PagePoolEntryCount++;
 	_PagePoolUnlock();
 
@@ -261,11 +285,14 @@ static inline void
 _RemoveEntryFromPoolUnlocked(LinuxPagePoolEntry *psPagePoolEntry)
 {
 	list_del(&psPagePoolEntry->sPagePoolItem);
+	if (psPagePoolEntry->bPageZero) {
+		g_ui32ZeroPageEntries--;
+	}
 	g_ui32PagePoolEntryCount--;
 }
 
 static inline struct page *
-_RemoveFirstEntryFromPool(IMG_UINT32 ui32CPUCacheFlags)
+_RemoveFirstEntryFromPool(IMG_UINT32 ui32CPUCacheFlags, IMG_BOOL bFlush)
 {
 	LinuxPagePoolEntry *psPagePoolEntry;
 	struct page *psPage;
@@ -277,14 +304,24 @@ _RemoveFirstEntryFromPool(IMG_UINT32 ui32CPUCacheFlags)
 	}
 
 	_PagePoolLock();
-	if (list_empty(psPoolHead))
+	if (list_empty(psPoolHead) ||
+		(bFlush && g_ui32ZeroPageEntries == 0))
 	{
 		_PagePoolUnlock();
 		return NULL;
 	}
 
 	PVR_ASSERT(g_ui32PagePoolEntryCount > 0);
-	psPagePoolEntry = list_first_entry(psPoolHead, LinuxPagePoolEntry, sPagePoolItem);
+	if (bFlush) {
+		psPagePoolEntry = list_first_entry(psPoolHead, LinuxPagePoolEntry, sPagePoolItem);
+		if (!psPagePoolEntry->bPageZero) {
+			/* we don't have zero pages at this list */
+			_PagePoolUnlock();
+			return NULL;
+		}
+	} else {
+		psPagePoolEntry = list_entry(psPoolHead->prev, LinuxPagePoolEntry, sPagePoolItem);
+	}
 	_RemoveEntryFromPoolUnlocked(psPagePoolEntry);
 	psPage = psPagePoolEntry->psPage;
 	_LinuxPagePoolEntryFree(psPagePoolEntry);
@@ -708,7 +745,7 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 
 	if (uiOrder == 0)
 	{
-		psPage = _RemoveFirstEntryFromPool(ui32CPUCacheFlags);
+		psPage = _RemoveFirstEntryFromPool(ui32CPUCacheFlags, bFlush);
 		if (psPage != IMG_NULL)
 		{
 			bFromPagePool = IMG_TRUE;
@@ -819,7 +856,6 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 			PVR_DPF((PVR_DBG_ERROR, "physmem_osmem_linux.c: OS refused the memory allocation for the pages.  Did you ask for too much?"));
 			eError = PVRSRV_ERROR_PMR_FAILED_TO_ALLOC_PAGES;
 		}
-
 #endif
 	}
 	if(IMG_NULL == (*ppsPage = psPage)){
@@ -1294,13 +1330,13 @@ PMRAcquireKernelMappingDataOSMem(PMR_IMPL_PRIVDATA pvPriv,
 						   psOSPageArrayData->uiNumPages,
 						   -1,
 						   prot);
-
-	if (((IMG_VOID *)pvAddress) == IMG_NULL)
+	if (pvAddress == IMG_NULL)
 	{
-		return PVRSRV_ERROR_FAILED_TO_MAP_KERNELVIRTUAL;
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto e0;
 	}
 
-#endif	/* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) */
+#endif /* defined(CONFIG_GENERIC_ALLOCATOR) && defined(CONFIG_X86) */
 
     *ppvKernelAddressOut = pvAddress + uiOffset;
     *phHandleOut = pvAddress;

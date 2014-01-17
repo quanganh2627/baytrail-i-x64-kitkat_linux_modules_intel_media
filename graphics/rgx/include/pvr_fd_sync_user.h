@@ -106,6 +106,7 @@ PVRSRV_ERROR PVRFDSyncOpen(int *piSyncFd);
 PVRSRV_ERROR PVRFDSyncClose(int iSyncFd);
 
 PVRSRV_ERROR PVRFDSyncWaitFence(int iFenceFd);
+PVRSRV_ERROR PVRFDSyncCheckFence(int iFenceFd);
 
 PVRSRV_ERROR PVRFDSyncMergeFences(const char *pcszName,
 								  int iFenceFd1,

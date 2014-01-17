@@ -1,6 +1,5 @@
 /*************************************************************************/ /*!
-@File           ion_sys_private.h
-@Title          System-specific private data for ion support code
+@Title          RGX Core BVNC 1.32.4.19
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -40,12 +39,34 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#include <linux/ion.h>
+#ifndef _RGXCORE_KM_1_32_4_19_H_
+#define _RGXCORE_KM_1_32_4_19_H_
 
-typedef struct
-{
-	ion_phys_addr_t uiHeapBase;
-	size_t uiHeapSize;
-	IMG_UINT32 ui32IonPhysHeapID;
-	IMG_CPU_PHYADDR sPCIAddrRangeStart;
-} ION_TC_PRIVATE_DATA;
+/***** Automatically generated file (11/21/2013 4:21:19 PM): Do not edit manually ********************/
+/***** Timestamp:  (11/21/2013 4:21:19 PM)************************************************************/
+/***** CS: @2615289 ******************************************************************/
+
+
+/******************************************************************************
+ * BVNC = 1.32.4.19 
+ *****************************************************************************/
+#define RGX_BVNC_KM_B 1
+#define RGX_BVNC_KM_V 32
+#define RGX_BVNC_KM_N 4
+#define RGX_BVNC_KM_C 19
+
+/******************************************************************************
+ * Errata 
+ *****************************************************************************/
+
+#define FIX_HW_BRN_38344
+
+
+ 
+/******************************************************************************
+ * Enhancements 
+ *****************************************************************************/
+
+
+
+#endif /* _RGXCORE_KM_1_32_4_19_H_ */
