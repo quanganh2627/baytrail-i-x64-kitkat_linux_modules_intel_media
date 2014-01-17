@@ -1851,9 +1851,11 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 		intelhaddata->audio_reg_base = 0x69000;
 		intelhaddata->ops = &had_ops_v1;
 	} else{
-		intelhaddata->hw_silence = 0;
-		intelhaddata->audio_reg_base = 0x69000;
-		intelhaddata->ops = &had_ops_v1;
+		/* FIXME ValleyView 2*/
+		intelhaddata->hw_silence = 1;
+		/* PIPE B is used for HDMI*/
+		intelhaddata->audio_reg_base = 0x65800;
+		intelhaddata->ops = &had_ops_v2;
 	}
 	return retval;
 err:
