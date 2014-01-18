@@ -1836,13 +1836,17 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 		goto free_hadstream;
 	}
 	if (INTEL_MID_BOARD(1, PHONE, BYT) ||
-		 INTEL_MID_BOARD(1, TABLET, BYT)) {
+		INTEL_MID_BOARD(1, TABLET, BYT) ||
+		INTEL_MID_BOARD(1, PHONE, CHT) ||
+		INTEL_MID_BOARD(1, TABLET, CHT)) {
 		intelhaddata->hw_silence = 1;
 		/* PIPE B is used for HDMI*/
 		intelhaddata->audio_reg_base = 0x65800;
 		intelhaddata->ops = &had_ops_v2;
 	} else if (INTEL_MID_BOARD(1, PHONE, MRFL) ||
-		 INTEL_MID_BOARD(1, TABLET, MRFL)) {
+			INTEL_MID_BOARD(1, TABLET, MRFL) ||
+			INTEL_MID_BOARD(1, PHONE, MOFD) ||
+			INTEL_MID_BOARD(1, TABLET, MOFD)) {
 		intelhaddata->hw_silence = 1;
 		intelhaddata->audio_reg_base = 0x69000;
 		intelhaddata->ops = &had_ops_v1;
@@ -1919,6 +1923,7 @@ const struct dev_pm_ops had_pm_ops = {
 
 static const struct acpi_device_id had_acpi_ids[] = {
 	{ "HAD0F28", 0 },
+	{ "HAD022A8", 0 },
 	{},
 };
 MODULE_DEVICE_TABLE(acpi, had_acpi_ids);

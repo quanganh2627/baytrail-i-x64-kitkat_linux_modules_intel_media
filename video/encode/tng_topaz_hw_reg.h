@@ -2034,7 +2034,6 @@ enum drm_tng_topaz_cmd {
 	MTX_CMDID_SW_LEAVE_LOWPOWER = 0x7c,
 	MTX_CMDID_SW_ENTER_LOWPOWER = 0x7e,
 	MTX_CMDID_SW_NEW_CODEC = 0x7f,
-	MTX_CMDID_SW_UPDATE_MTX_CONTEXT = 0x80
 };
 
 /* codecs topaz supports,shared with user space driver */
@@ -2169,8 +2168,6 @@ static inline char *cmd_to_string(int cmd_id)
 		return "MTX_CMDID_PROVIDE_CODED_BUFFER";
 	case MTX_CMDID_NULL:
 		return "MTX_CMDID_NULL";
-	case MTX_CMDID_SW_UPDATE_MTX_CONTEXT:
-		return "MTX_CMDID_SW_UPDATE_MTX_CONTEXT";
 	default:
 		DRM_ERROR("Command ID: %08x\n", cmd_id);
 		return "Undefined command";
@@ -2314,7 +2311,7 @@ int tng_topaz_power_up(
 
 int tng_topaz_power_off(struct drm_device *dev);
 
-int Is_Mrfld_B0();
+int Is_Secure_Fw();
 
 #define SHIFT_WB_PRODUCER       (0)
 #define MASK_WB_PRODUCER	\

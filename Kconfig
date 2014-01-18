@@ -377,3 +377,15 @@ config DRM_VXD_BYT
        select DRM_TTM
        help
          Choose this option if you want to enable VXD decoding for Baylake platform
+
+config MOOREFIELD
+	bool "Build option for the Moorefield platform"
+	depends on DRM_INTEL_HANDSET
+	default n
+	help
+	  For the GFX block of TNG/ANN, its power islands' power on/off sequences are:
+	  1. Power on:  SLC_LDO -> SLC -> Sidekick -> Rascal/Dust;
+	  2. Power off: Rascal/Dust -> Sidekick -> SLC -> SLC_LDO;
+	  So we should follow the sequence, and VED/VEC/VSP power islands just depend
+	  on the SLC power island.
+	  And it would distinguish the Display Class implementation.

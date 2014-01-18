@@ -170,7 +170,7 @@ static IMG_UINT32 g_ui32PagePoolEntryCount = 0;
 	yet (we can't mix uncached and write-combined) we have to disable the pool
 	feature by forcing it to zero pages
 */
-static IMG_UINT32 g_ui32PagePoolMaxEntries = 0;
+static IMG_UINT32 g_ui32PagePoolMaxEntries = PVR_LINUX_PYSMEM_MAX_POOL_PAGES;
 #else
 static IMG_UINT32 g_ui32PagePoolMaxEntries = PVR_LINUX_PYSMEM_MAX_POOL_PAGES;
 #endif
@@ -696,7 +696,6 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 			 unsigned int gfp_flags,
 			 IMG_BOOL bFlush,
 			 IMG_UINT32 uiOrder,
-			 IMG_BOOL *pbUnsetMemoryType,
 			 struct page **ppsPage)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;
@@ -706,7 +705,6 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 #endif
 	struct page *psPage = IMG_NULL;
 
-	*pbUnsetMemoryType = IMG_FALSE;
 
 	if (uiOrder == 0)
 	{
@@ -749,7 +747,6 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 								 __free_pages(psPage, uiOrder);
 								 psPage = IMG_NULL;
 							}
-							*pbUnsetMemoryType = IMG_TRUE;
 							break;
 
 					case PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE:
@@ -760,7 +757,6 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 								 __free_pages(psPage, uiOrder);
 								psPage = IMG_NULL;
 							}
-							*pbUnsetMemoryType = IMG_TRUE;
 							break;
 
 					case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
@@ -918,6 +914,13 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
         gfp_flags |= __GFP_ZERO;
     }
 
+    psPageArrayData->bUnsetMemoryType = IMG_FALSE;
+    if(ui32CPUCacheFlags == PVRSRV_MEMALLOCFLAG_CPU_UNCACHED
+		||ui32CPUCacheFlags == PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE)
+    {
+         psPageArrayData->bUnsetMemoryType = IMG_TRUE;
+    }
+
     /* Allocate pages one at a time.  Note that the _device_ memory
        page size may be different from the _host_ cpu page size - we
        have a concept of a minimum contiguity requirement, which must
@@ -938,7 +941,6 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 							  gfp_flags,
 							  psPageArrayData->bZero,
 							  uiOrder,
-							  &psPageArrayData->bUnsetMemoryType,
 							  &ppsPageArray[uiPageIndex]);
 
         if (eError != PVRSRV_OK)
@@ -948,7 +950,7 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
                      uiPageIndex,
                      psPageArrayData->uiNumPages,
                      PVRSRVGetErrorStringKM(eError)));
-            for(--uiPageIndex;uiPageIndex < psPageArrayData->uiNumPages;--uiPageIndex)
+            for(--uiPageIndex;(IMG_INT32)uiPageIndex >= 0;--uiPageIndex)
             {
 				_FreeOSPage(ui32CPUCacheFlags,
 							uiOrder,

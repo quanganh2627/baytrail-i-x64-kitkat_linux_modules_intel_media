@@ -110,13 +110,20 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/cmi_cmd.o \
 	$(DISPLAYDIR)/sharp5_cmd.o \
 	$(DISPLAYDIR)/sharp25x16_vid.o \
-	$(DISPLAYDIR)/dc_callbacks.o \
 	$(DISPLAYDIR)/ospm/pwr_mgmt.o \
-	$(DISPLAYDIR)/ospm/gfx_ospm.o \
+    $(DISPLAYDIR)/ospm/gfx_ospm_ann.o \
 	$(DISPLAYDIR)/ospm/gfx_rtpm.o \
 	$(DISPLAYDIR)/ospm/dc_ospm.o \
 	$(DISPLAYDIR)/ospm/video_ospm.o \
 	$(DISPLAYDIR)/ospm/early_suspend.o
+
+ifeq ($(CONFIG_MOOREFIELD),y)
+$(DRIVER_NAME)-objs += \
+	$(DISPLAYDIR)/mofd_dc_callbacks.o
+else
+$(DRIVER_NAME)-objs += \
+	$(DISPLAYDIR)/dc_callbacks.o
+endif
 
 ifeq ($(CONFIG_SUPPORT_HDMI),y)
 # Platform independent library

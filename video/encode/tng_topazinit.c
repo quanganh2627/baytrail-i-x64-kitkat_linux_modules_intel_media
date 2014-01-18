@@ -20,7 +20,7 @@
  * more details.
  *
  * You should have received a copy of the GNU General Public License along with
- * this program; if not, write to the Free Software Foundation, Inc.,
+ * this program; if not, write to the Free Software Foundation, Inc.
  * 51 Franklin St - Fifth Floor, Boston, MA 02110-1301 USA.
  *
  **************************************************************************/
@@ -60,6 +60,7 @@
 
 #define FW_NAME_A0 "topazhp_fw.bin"
 #define FW_NAME_B0 "topazhp_fw_b0.bin"
+#define FW_NAME_ANN "ann_a0_signed_vec_key0.bin"
 
 #ifdef CONFIG_DX_SEP54
 extern int sepapp_image_verify(u8 *addr, ssize_t size, u32 key_index, u32 magic_num);
@@ -652,7 +653,7 @@ void tng_powerdown_topaz(struct work_struct *work)
 	int32_t ret = 0;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Task start\n");
-	if (Is_Mrfld_B0()) {
+	if (Is_Secure_Fw()) {
 		ret = tng_topaz_query_queue(dev);
 		if (ret == 0) {
 			ret = tng_topaz_power_off(dev);
@@ -947,6 +948,13 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 #endif
 	/* # get firmware */
 	ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
+	if (IS_TNG_B0(dev))
+		ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
+	else if (IS_ANN_A0(dev))
+		ret = request_firmware(&raw, FW_NAME_ANN, &dev->pdev->dev);
+	else
+		DRM_ERROR("VEC secure fw: bad platform\n");
+
 	if (ret) {
 		DRM_ERROR("TOPAZ: Request firmware failed: %d\n", ret);
 		return ret;
@@ -1026,6 +1034,7 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	PSB_DEBUG_TOPAZ("imr6 RAC 0x9a = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9a));
 	PSB_DEBUG_TOPAZ("imr6 WAC 0x9b = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9b));
 	PSB_DEBUG_TOPAZ("vec FW power PM0 = 0x%x\n", intel_mid_msgbus_read32(0x04, 0x34));
+	ret = 0;
 #endif
 #endif
 

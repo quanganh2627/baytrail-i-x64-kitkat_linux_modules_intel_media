@@ -128,7 +128,9 @@ static inline int wait_for_gen_fifo_empty(struct mdfld_dsi_pkg_sender *sender,
 	}
 
 	DRM_ERROR("fifo is NOT empty 0x%08x\n", REG_READ(gen_fifo_stat_reg));
-	debug_dbi_hang(sender);
+	if (!IS_ANN_A0(dev))
+		debug_dbi_hang(sender);
+
 	sender->status = MDFLD_DSI_CONTROL_ABNORMAL;
 	return -EIO;
 }
@@ -787,6 +789,9 @@ static int mdfld_dbi_cb_init(struct mdfld_dsi_pkg_sender *sender,
 		return -ENOMEM;
 	}
 
+	if (IS_ANN_A0(dev))
+		memset(virt_addr, 0x0, 0x800);
+
 	sender->dbi_cb_phy = phy;
 	sender->dbi_cb_addr = virt_addr;
 
@@ -1350,8 +1355,10 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 		if (!retry) {
 			DRM_ERROR("DBI FIFO timeout, drop frame\n");
 			mutex_unlock(&sender->lock);
-			debug_dbi_hang(sender);
-			panic("DBI FIFO timeout, drop frame\n");
+			if (!IS_ANN_A0(dev)) {
+				debug_dbi_hang(sender);
+				panic("DBI FIFO timeout, drop frame\n");
+			}
 			return 0;
 		}
 
