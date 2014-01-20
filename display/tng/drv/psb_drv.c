@@ -1334,6 +1334,7 @@ static int psb_driver_unload(struct drm_device *dev)
 
 	if (dev_priv) {
 		destroy_workqueue(dev_priv->vsync_wq);
+		destroy_workqueue(dev_priv->power_wq);
 
 		/* psb_watchdog_takedown(dev_priv); */
 		psb_do_takedown(dev);
@@ -1802,6 +1803,13 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	dev_priv->vsync_wq = alloc_workqueue("vsync_wq", WQ_UNBOUND, 1);
 	if (!dev_priv->vsync_wq) {
+		DRM_ERROR("failed to create vsync workqueue\n");
+		ret = -ENOMEM;
+		goto out_err;
+	}
+
+	dev_priv->power_wq = alloc_ordered_workqueue("power_wq", WQ_HIGHPRI);
+	if (!dev_priv->power_wq) {
 		DRM_ERROR("failed to create vsync workqueue\n");
 		ret = -ENOMEM;
 		goto out_err;

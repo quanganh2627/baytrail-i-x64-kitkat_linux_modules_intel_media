@@ -33,6 +33,7 @@
 #include "dc_server.h"
 #include "dc_mrfld.h"
 #include "pwr_mgmt.h"
+#include "psb_drv.h"
 
 #if !defined(SUPPORT_DRM)
 #error "SUPPORT_DRM must be set"
@@ -51,6 +52,11 @@ static DC_MRFLD_DEVICE *gpsDevice;
 /*DC plane asks for 64 bytes alignment*/
 #define DC_MRFLD_STRIDE_ALIGN 64
 #define DC_MRFLD_STRIDE_ALIGN_MASK (DC_MRFLD_STRIDE_ALIGN - 1)
+
+struct power_off_req {
+	struct delayed_work work;
+	u32 power_off_islands;
+};
 
 static IMG_PIXFMT DC_MRFLD_Supported_PixelFormats[] = {
 	/*supported RGB formats*/
@@ -1618,10 +1624,28 @@ int DC_MRFLD_Enable_Plane(int type, int index, u32 ctx)
 	return err;
 }
 
+void display_power_work(struct work_struct *work)
+{
+	struct power_off_req *req = container_of(work,
+				struct power_off_req, work.work);
+
+	mutex_lock(&gpsDevice->sFlipQueueLock);
+	mutex_lock(&gpsDevice->sMappingLock);
+
+	_Disable_ExtraPowerIslands(gpsDevice, req->power_off_islands);
+
+	mutex_unlock(&gpsDevice->sMappingLock);
+	mutex_unlock(&gpsDevice->sFlipQueueLock);
+
+	kfree(req);
+}
+
 int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 {
 	int err = 0;
 	IMG_INT32 *ui32ActivePlanes;
+	struct power_off_req *req;
+	struct drm_psb_private *dev_priv = gpsDevice->psDrmDevice->dev_private;
 	IMG_UINT32 uiExtraPowerIslands = 0;
 
 	if (type <= DC_UNKNOWN_PLANE || type >= DC_PLANE_MAX) {
@@ -1633,6 +1657,13 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 		DRM_ERROR("Invalid plane index %d\n", index);
 		return -EINVAL;
 	}
+
+	req = kzalloc(sizeof(*req), GFP_KERNEL);
+	if (!req) {
+		DRM_ERROR("fail to alloc power_off_req\n");
+		return -ENOMEM;
+	}
+	INIT_DELAYED_WORK(&req->work, display_power_work);
 
 	/*acquire lock*/
 	mutex_lock(&gpsDevice->sFlipQueueLock);
@@ -1655,8 +1686,12 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 
 		/* power off extra power islands if required */
 		uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[type][index];
-		_Disable_ExtraPowerIslands(gpsDevice,
-					uiExtraPowerIslands);
+		if (uiExtraPowerIslands) {
+			req->power_off_islands = uiExtraPowerIslands;
+
+			queue_delayed_work(dev_priv->power_wq,
+					   &req->work, msecs_to_jiffies(32));
+		}
 		/* update plane pipe mapping */
 		_Update_PlanePipeMapping(gpsDevice, type, index, -1);
 	}
