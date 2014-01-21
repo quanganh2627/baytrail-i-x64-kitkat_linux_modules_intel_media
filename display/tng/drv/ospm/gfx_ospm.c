@@ -508,7 +508,10 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 		/* soc.gfx_wrapper.gbypassenable_sw = 1 */
 		reg = 0x160854 - GFX_WRAPPER_OFFSET;
 		data = WRAPPER_REG_READ(reg);
-		data |= 0x100; /*Bypass SLC for VEC*/
+		if (IS_TNG_B0(dev))
+			data |= 0x101; /*Disable Bypass SLC for VED on Merfld PR2 B0*/
+		else
+			data |= 0x100; /*Bypass SLC for VEC*/
 		WRAPPER_REG_WRITE(reg, data);
 	}
 
