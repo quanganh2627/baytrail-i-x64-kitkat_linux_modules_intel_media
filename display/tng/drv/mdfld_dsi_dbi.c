@@ -517,9 +517,6 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		REG_WRITE(DSPDCNTR, 0x0);
 		REG_WRITE(DSPECNTR, 0x0);
 		REG_WRITE(DSPFCNTR, 0x0);
-		REG_WRITE(PIPEACONF, 0x01000000);
-		REG_WRITE(PIPEBCONF, 0x01000000);
-		REG_WRITE(PIPECCONF, 0x01000000);
 
 		power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
 	}
