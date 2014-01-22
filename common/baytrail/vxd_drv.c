@@ -178,10 +178,7 @@ struct psb_fpriv *psb_fpriv(struct drm_file *file_priv)
 struct drm_psb_private *psb_priv(struct drm_device *dev)
 {
 	struct drm_i915_private *i915_dev_priv = dev->dev_private;
-	if (i915_dev_priv)
-		return i915_dev_priv->vxd_priv;
-	else
-		return NULL;
+	return i915_dev_priv->vxd_priv;
 }
 
 int vxd_release(struct inode *inode, struct file *filp)
