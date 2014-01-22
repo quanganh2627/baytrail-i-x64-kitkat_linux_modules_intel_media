@@ -31,6 +31,7 @@
 #include <linux/devfreq.h>
 #include <ospm/gfx_freq.h>
 #include <dfrgx_utilstats.h>
+#include <rgxdf.h>
 #include "dev_freq_debug.h"
 #include "df_rgx_defs.h"
 #include "df_rgx_burst.h"
@@ -164,6 +165,14 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	freq_code = gpu_freq_mhz_to_code(freq_mhz, &freq_mhz_quantized);
 
 	if ((bfdata->bf_freq_mhz_rlzd != freq_mhz_quantized) || bfdata->b_resumed ) {
+		int gfx_pcs_result = 0;
+
+		gfx_pcs_result = RGXPreClockSpeed();
+		if (!gfx_pcs_result) {
+			DFRGX_DPF(DFRGX_DEBUG_HIGH,
+				"%s: Could not perform pre-clock-speed change\n",
+				__func__);
+		}
 		sts = gpu_freq_set_from_code(freq_code);
 		if (sts < 0) {
 			DFRGX_DPF(DFRGX_DEBUG_MED,
@@ -172,11 +181,15 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 			goto out;
 		} else {
 			bfdata->bf_freq_mhz_rlzd = sts;
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: freq MHz(requested, realized) = %d, %lu\n",
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: freq MHz(requested, realized) = %u, %lu\n",
 				__func__, freq_mhz_quantized,
 				bfdata->bf_freq_mhz_rlzd);
 			bfdata->b_resumed = 0;
 		}
+
+		/* Inform gfx driver that clock speed changed*/
+		if(!RGXUpdateClockSpeed((bfdata->bf_freq_mhz_rlzd * 1000000)))
+			RGXPostClockSpeed();
 
 		if (df) {
 
