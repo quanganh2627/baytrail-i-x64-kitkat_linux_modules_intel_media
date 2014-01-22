@@ -35,6 +35,7 @@
 #include <linux/module.h>
 #include <asm/uaccess.h>
 #include <linux/intel_mid_pm.h>
+#include <asm/intel_mid_pcihelpers.h>
 
 extern int drm_psb_trap_pagefaults;
 
@@ -330,14 +331,7 @@ u32 intel_mid_msgbus_read32_vxd(u8 port, u32 addr)
 		((addr & 0xff) << 8) | PCI_ROOT_MSGBUS_DWORD_ENABLE;
 	cmdext = addr & 0xffffff00;
 
-	if (cmdext) {
-		/* This resets to 0 automatically, no need to write 0 */
-		pci_write_config_dword(pci_root, PCI_ROOT_MSGBUS_CTRL_EXT_REG,
-					cmdext);
-	}
-
-	pci_write_config_dword(pci_root, PCI_ROOT_MSGBUS_CTRL_REG, cmd);
-	pci_read_config_dword(pci_root, PCI_ROOT_MSGBUS_DATA_REG, &data);
+	data = intel_mid_msgbus_read32_raw_ext(cmd, cmdext);
 
 	return data;
 }
@@ -352,15 +346,7 @@ void intel_mid_msgbus_write32_vxd(u8 port, u32 addr, u32 data)
 		((addr & 0xFF) << 8) | PCI_ROOT_MSGBUS_DWORD_ENABLE;
 	cmdext = addr & 0xffffff00;
 
-	pci_write_config_dword(pci_root, PCI_ROOT_MSGBUS_DATA_REG, data);
-
-	if (cmdext) {
-		/* This resets to 0 automatically, no need to write 0 */
-		pci_write_config_dword(pci_root, PCI_ROOT_MSGBUS_CTRL_EXT_REG,
-			cmdext);
-	}
-
-	pci_write_config_dword(pci_root, PCI_ROOT_MSGBUS_CTRL_REG, cmd);
+	intel_mid_msgbus_write32_raw_ext(cmd, cmdext, data);
 }
 
 static int __init vxd_driver_load()

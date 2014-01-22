@@ -52,7 +52,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sync_server.h"
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-#include <linux/version.h>
 #include <linux/file.h>
 #include <linux/seq_file.h>
 #include <linux/version.h>
@@ -311,17 +310,12 @@ PVRSRV_ERROR _SCPCommandReady(SCP_COMMAND *psCommand)
 
 	for (i = 0; i < psCommand->ui32SyncCount; i++)
 	{
-		if (!psCommand->pasSCPSyncData)
-				continue;
-
 		SCP_SYNC_DATA *psSCPSyncData = &psCommand->pasSCPSyncData[i];
 
 		/*
 			If the same sync is used in concurrent command we can skip the check
 		*/
-		if (psSCPSyncData &&
-					(psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE) &&
-					(psSCPSyncData->psSync))
+		if (psSCPSyncData->ui32Flags & SCP_SYNC_DATA_FENCE)
 		{
 			if (!ServerSyncFenceIsMeet(psSCPSyncData->psSync, psSCPSyncData->ui32Fence))
 			{

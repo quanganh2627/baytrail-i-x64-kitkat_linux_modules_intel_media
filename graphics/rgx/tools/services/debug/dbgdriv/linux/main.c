@@ -75,10 +75,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvrmodule.h"
 #include "pvr_uaccess.h"
 
-#if defined(LDM_PLATFORM) || defined(LDM_PCI) || defined(LDM_DEVICE_CLASS)
-#define PVR_LDM_DEVICE_CLASS
-#endif
-
 #if defined(SUPPORT_DRM)
 
 #include "pvr_drm_shared.h"
@@ -89,9 +85,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define DRVNAME "dbgdrv"
 MODULE_SUPPORTED_DEVICE(DRVNAME);
 
-#if defined(PVR_LDM_DEVICE_CLASS)
 static struct class *psDbgDrvClass;
-#endif /* defined(PVR_LDM_DEVICE_CLASS) */
 
 static int AssignedMajorNumber = 0;
 
@@ -123,6 +117,16 @@ static struct file_operations dbgdrv_fops =
 
 #endif  /* defined(SUPPORT_DRM) */
 
+/* Outward temp buffer used by ICOTL handler allocated once and grows as needed.
+ * This optimisation means the debug driver performs less vmallocs/vfrees
+ * reducing the chance of kernel Vmalloc space exhaustion.
+ * but is not multi-threaded optimised as it now uses a mutex to protect this
+ * shared buffer serialising buffer reads. However the PDump client is not
+ * multi-threaded at the moment.
+ */
+static IMG_CHAR*  g_outTmpBuf = IMG_NULL;
+static IMG_UINT32 g_outTmpBufSize = 64*PAGE_SIZE;
+
 IMG_VOID DBGDrvGetServiceTable(IMG_VOID **fn_table);
 
 IMG_VOID DBGDrvGetServiceTable(IMG_VOID **fn_table)
@@ -138,11 +142,15 @@ void dbgdrv_cleanup(void)
 void cleanup_module(void)
 #endif
 {
+	if (g_outTmpBuf)
+	{
+		vfree(g_outTmpBuf);
+		g_outTmpBuf = IMG_NULL;
+	}
+
 #if !defined(SUPPORT_DRM)
-#if defined(PVR_LDM_DEVICE_CLASS)
 	device_destroy(psDbgDrvClass, MKDEV(AssignedMajorNumber, 0));
 	class_destroy(psDbgDrvClass);
-#endif
 	unregister_chrdev(AssignedMajorNumber, DRVNAME);
 #endif /* !defined(SUPPORT_DRM) */
 #if defined(SUPPORT_DBGDRV_EVENT_OBJECTS)
@@ -158,7 +166,7 @@ IMG_INT dbgdrv_init(void)
 int init_module(void)
 #endif
 {
-#if defined(PVR_LDM_DEVICE_CLASS) && !defined(SUPPORT_DRM)
+#if !defined(SUPPORT_DRM)
 	struct device *psDev;
 #endif
 
@@ -190,7 +198,6 @@ int init_module(void)
 		goto ErrDestroyEventObjects;
 	}
 
-#if defined(PVR_LDM_DEVICE_CLASS)
 	/*
 	 * This code (using GPL symbols) facilitates automatic device
 	 * node creation on platforms with udev (or similar).
@@ -210,7 +217,6 @@ int init_module(void)
 								__func__, PTR_ERR(psDev)));
 		goto ErrDestroyClass;
 	}
-#endif /* defined(PVR_LDM_DEVICE_CLASS) */
 #endif /* !defined(SUPPORT_DRM) */
 
 	return 0;
@@ -220,12 +226,10 @@ ErrDestroyEventObjects:
 #if defined(SUPPORT_DBGDRV_EVENT_OBJECTS)
 	HostDestroyEventObjects();
 #endif
-#if defined(PVR_LDM_DEVICE_CLASS)
 ErrUnregisterCharDev:
 	unregister_chrdev(AssignedMajorNumber, DRVNAME);
 ErrDestroyClass:
 	class_destroy(psDbgDrvClass);
-#endif /* defined(PVR_LDM_DEVICE_CLASS) */
 	return err;
 #endif /* !defined(SUPPORT_DRM) */
 }
@@ -269,36 +273,43 @@ long dbgdrv_ioctl(struct file *file, unsigned int ioctlCmd, unsigned long arg)
 		IMG_UINT32 *pui32BytesCopied = (IMG_UINT32 *)out;
 		DBG_IN_READ *psReadInParams = (DBG_IN_READ *)in;
 		PDBG_STREAM psStream;
-		IMG_CHAR *ui8Tmp;
-
-		ui8Tmp = vmalloc(psReadInParams->ui32OutBufferSize);
-
-		if (!ui8Tmp)
-		{
-			goto init_failed;
-		}
 
 		psStream = SID2PStream(psReadInParams->hStream);
 		if (!psStream)
 		{
-			vfree(ui8Tmp);
 			goto init_failed;
 		}
 
-		*pui32BytesCopied = ExtDBGDrivRead(psStream,
+		HostAquireMutex(g_pvAPIMutex);
+
+		if ((g_outTmpBuf == IMG_NULL) || (psReadInParams->ui32OutBufferSize > g_outTmpBufSize))
+		{
+			if (psReadInParams->ui32OutBufferSize > g_outTmpBufSize)
+			{
+				g_outTmpBufSize = psReadInParams->ui32OutBufferSize;
+			}
+			g_outTmpBuf = vmalloc(g_outTmpBufSize);
+			if (!g_outTmpBuf)
+			{
+				HostReleaseMutex(g_pvAPIMutex);
+				goto init_failed;
+			}
+		}
+
+		*pui32BytesCopied = DBGDrivRead(psStream,
 										   psReadInParams->bReadInitBuffer,
 										   psReadInParams->ui32OutBufferSize,
-										   ui8Tmp);
+										   g_outTmpBuf);
 
 		if (pvr_copy_to_user(psReadInParams->u.pui8OutBuffer,
-						ui8Tmp,
+						g_outTmpBuf,
 						*pui32BytesCopied) != 0)
 		{
-			vfree(ui8Tmp);
+			HostReleaseMutex(g_pvAPIMutex);
 			goto init_failed;
 		}
 
-		vfree(ui8Tmp);
+		HostReleaseMutex(g_pvAPIMutex);
 	}
 	else
 	{

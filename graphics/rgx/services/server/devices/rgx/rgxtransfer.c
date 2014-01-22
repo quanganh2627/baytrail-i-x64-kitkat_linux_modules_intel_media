@@ -584,8 +584,12 @@ PVRSRV_ERROR PVRSRVRGXSubmitTransferKM(RGX_SERVER_TQ_CONTEXT	*psTransferContext,
 			IMG_UINT32 *pui32UpdateValues;
 
 			/*
-				
-*/
+				FIXME:
+				We can't be taking the server sync operations here as we
+				have no way to undo them should the acquire fail.
+				If client/local syncs where used here would that remove the
+				issue?
+			*/
 			eError = PVRFDSyncQueryFencesKM(ui32NumFenceFDs,
 											paui32FenceFDs,
 											IMG_TRUE,

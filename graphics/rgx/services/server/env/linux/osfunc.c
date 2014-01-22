@@ -44,6 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <asm/io.h>
 #include <asm/page.h>
 #include <asm/div64.h>
+#include <asm/tlbflush.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
 #include <linux/hugetlb.h> 
@@ -87,9 +88,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_debug.h"
 #include "driverlock.h"
 #include "process_stats.h"
-#include "mutils.h"
-
-#include <genalloc.h>
 
 #if defined(SUPPORT_SYSTEM_INTERRUPT_HANDLING)
 #include "syscommon.h"
@@ -1345,7 +1343,6 @@ DEFINE_MUTEX(sTimerStructLock);
 #else
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39))
 /* The lock is used to control access to sTimers */
-/* PRQA S 0671,0685 1 */ /* C99 macro not understood by QAC */
 static spinlock_t sTimerStructLock = SPIN_LOCK_UNLOCKED;
 #else
 static DEFINE_SPINLOCK(sTimerStructLock);
@@ -1466,7 +1463,6 @@ IMG_HANDLE OSAddTimer(PFN_TIMER_FUNC pfnTimerFunc, IMG_VOID *pvData, IMG_UINT32 
     init_timer(&psTimerCBData->sTimer);
     
     /* setup timer object */
-    /* PRQA S 0307,0563 1 */ /* ignore warning about inconpartible ptr casting */
     psTimerCBData->sTimer.function = (IMG_VOID *)OSTimerCallbackWrapper;
     psTimerCBData->sTimer.data = (IMG_UINTPTR_T)psTimerCBData;
     

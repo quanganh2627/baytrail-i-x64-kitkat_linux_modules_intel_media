@@ -64,8 +64,8 @@ enum GFX_ISLAND_STATUS {
 static int (*pSuspend_func)(void) = NULL;
 static int (*pResume_func)(void) = NULL;
 
-int is_tng_b0 = 0;
-EXPORT_SYMBOL(is_tng_b0);
+int is_tng_a0 = 0;
+EXPORT_SYMBOL(is_tng_a0);
 
 /**
   * gpu_freq_code_to_mhz() - Given frequency as a code (as defined for *_PM1
@@ -478,8 +478,8 @@ static bool ospm_rscd_power_down(struct drm_device *dev,
 void ospm_rscd_init(struct drm_device *dev,
 		struct ospm_power_island *p_island)
 {
-	if (IS_TNG_B0(dev))
-		is_tng_b0 = 1;
+	if (IS_TNG_A0(dev))
+		is_tng_a0 = 1;
 
 	PSB_DEBUG_PM("%s\n", __func__);
 	p_island->p_funcs->power_up = ospm_rscd_power_up;
@@ -663,8 +663,8 @@ static bool ospm_slc_power_down(struct drm_device *dev,
 void ospm_slc_init(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
-	if (IS_TNG_B0(dev))
-		is_tng_b0 = 1;
+	if (IS_TNG_A0(dev))
+		is_tng_a0 = 1;
 
 	PSB_DEBUG_PM("%s\n", __func__);
 	p_island->p_funcs->power_up = ospm_slc_power_up;
@@ -726,8 +726,8 @@ static bool ospm_slc_ldo_power_down(struct drm_device *dev,
 void ospm_slc_ldo_init(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
-	if (IS_TNG_B0(dev))
-		is_tng_b0 = 1;
+	if (IS_TNG_A0(dev))
+		is_tng_a0 = 1;
 
 	PSB_DEBUG_PM("%s\n", __func__);
 	p_island->p_funcs->power_up = ospm_slc_ldo_power_up;

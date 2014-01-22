@@ -163,7 +163,7 @@ IMG_IMPORT IMG_VOID IMG_CALLCONV PVRSRVDebugAssertFail(const IMG_CHAR *pszFile,
 #endif /* defined(PVRSRV_NEED_PVR_ASSERT)*/
 
 #if defined(__KLOCWORK__)
-	#define PVR_DBG_BREAK do { abort(); } while 0
+	#define PVR_DBG_BREAK do { abort(); } while (0)
 #else
 	#if defined (WIN32)
 		#define PVR_DBG_BREAK __debugbreak();   /*!< Implementation of PVR_DBG_BREAK for (non-WinCE) Win32 */

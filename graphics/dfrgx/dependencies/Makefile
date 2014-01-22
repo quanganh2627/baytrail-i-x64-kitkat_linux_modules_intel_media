@@ -8,4 +8,4 @@ INCLUDES_RGX += \
 	-Idrivers/external_drivers/intel_media/graphics/rgx/hwdefs \
 	-Idrivers/external_drivers/intel_media/graphics/rgx/hwdefs/km \
 	-Idrivers/external_drivers/intel_media/graphics/rgx/services/system/rgx_nohw \
-	-Idrivers/external_drivers/intel_media/graphics/rgx/services/server/devices/rgx
+	-Idrivers/external_drivers/intel_media/graphics/rgx/services/3rdparty/intel_devfreq

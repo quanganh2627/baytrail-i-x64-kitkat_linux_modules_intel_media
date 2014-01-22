@@ -87,7 +87,7 @@ struct dispmgr_command_hdr {
 	unsigned int module;	/* module to receive the command */
 	unsigned int cmd;	/* command from Userspace */
 	unsigned int data_size;	/* data size of command_data in number of bytes */
-	void *data;		/* command data */
+	uint64_t  data  __attribute__ ((__packed__));             /* command data */
 };
 
 void dispmgr_start(struct drm_device *dev);

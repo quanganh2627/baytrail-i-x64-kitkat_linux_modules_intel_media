@@ -27,7 +27,7 @@
 #include "df_rgx_defs.h"
 #include "dev_freq_debug.h"
 
-extern int is_tng_b0;
+extern int is_tng_a0;
 
 struct gpu_freq_thresholds aGovernorProfile[] = {
 							{25, 45},	/* low, high thresholds for Performance governor */
@@ -47,7 +47,7 @@ unsigned int df_rgx_is_valid_freq(unsigned long int freq)
 	int i;
 	int aSize = NUMBER_OF_LEVELS;
 
-	if(is_tng_b0)
+	if(!is_tng_a0)
 		aSize = NUMBER_OF_LEVELS_B0;
 
 	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s freq: %d\n", __func__, freq);
@@ -79,7 +79,7 @@ int df_rgx_get_util_record_index_by_freq(unsigned long freq)
 	int n_levels = NUMBER_OF_LEVELS;
 	int i ;
 
-	if(is_tng_b0)
+	if(!is_tng_a0)
 		n_levels = NUMBER_OF_LEVELS_B0;
 
 	for(i = 0; i < n_levels; i++)
@@ -110,7 +110,7 @@ unsigned int df_rgx_request_burst(struct df_rgx_data_s *pdfrgx_data, int util_pe
 	unsigned int burst = DFRGX_NO_BURST_REQ;
 	int n_levels = NUMBER_OF_LEVELS;
 
-	if(is_tng_b0)
+	if(!is_tng_a0)
 		n_levels = NUMBER_OF_LEVELS_B0;
 
 	new_index = df_rgx_get_util_record_index_by_freq(freq);

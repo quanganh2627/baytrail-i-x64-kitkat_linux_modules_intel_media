@@ -675,7 +675,8 @@ struct drm_psb_stolen_memory_arg {
 #define SPRITE_UPDATE_POSITION          (0x00000004UL)
 #define SPRITE_UPDATE_SIZE              (0x00000008UL)
 #define SPRITE_UPDATE_WAIT_VBLANK       (0X00000010UL)
-#define SPRITE_UPDATE_ALL               (0x0000001fUL)
+#define SPRITE_UPDATE_CONSTALPHA        (0x00000020UL)
+#define SPRITE_UPDATE_ALL               (0x0000003fUL)
 
 /*vsync operation*/
 #define VSYNC_ENABLE                    (1 << 0)
@@ -1156,7 +1157,8 @@ typedef enum intel_dc_plane_types {
 #define SPRITE_UPDATE_POSITION          (0x00000004UL)
 #define SPRITE_UPDATE_SIZE              (0x00000008UL)
 #define SPRITE_UPDATE_WAIT_VBLANK       (0X00000010UL)
-#define SPRITE_UPDATE_ALL               (0x0000001fUL)
+#define SPRITE_UPDATE_CONSTALPHA        (0x00000020UL)
+#define SPRITE_UPDATE_ALL               (0x0000003fUL)
 #define MRFLD_PRIMARY_COUNT             3
 
 typedef struct intel_dc_overlay_ctx {

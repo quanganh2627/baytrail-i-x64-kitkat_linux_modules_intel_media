@@ -300,16 +300,18 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 	IMG_UINT32				ui32Remainder;
 	RGXFWIF_GPU_UTIL_STATS	sRet;
 	PVRSRV_DEV_POWER_STATE	ePowerState;
+	PVRSRV_ERROR            eError;
 
 	sRet.ui32GpuStatActive	= 0;
 	sRet.ui32GpuStatBlocked	= 0;
 	sRet.ui32GpuStatIdle	= 0;
 	sRet.bPoweredOn			= IMG_FALSE;
 
+	/* take the power lock as we issue an OSReadHWReg64 below */
 	PVRSRVForcedPowerLock();
 
 	PVRSRVGetDevicePowerState(psDeviceNode->sDevId.ui32DeviceIndex, &ePowerState);
-	if (ePowerState != PVRSRV_DEV_POWER_STATE_ON)
+    if (ePowerState != PVRSRV_DEV_POWER_STATE_ON)
 	{
 		PVRSRVPowerUnlock();
 		return sRet;
@@ -328,13 +330,13 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 			/* current sample is valid - let's calculate when it was sampled in host timeline */
 
 			IMG_UINT32 psDVFSHistClock = 
-				psDevInfo->psGpuDVFSHistory->aui32DVFSClockCB[RGXFWIF_GPU_UTIL_FWCB_ENTRY_ID(ui64FWCbEntryCurrent)];
+					psDevInfo->psGpuDVFSHistory->aui32DVFSClockCB[RGXFWIF_GPU_UTIL_FWCB_ENTRY_ID(ui64FWCbEntryCurrent)];
 			IMG_UINT64 ui64Period;
 
 			if (psDVFSHistClock < 256)
 			{
 				/* DVFS frequency is 0 in DVFS history entry, which means that 
-				   system layer doesn't define core clock frequency */
+						system layer doesn't define core clock frequency */
 				ui32StatCumulative = 0;
 				break;
 			}
@@ -342,7 +344,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 			if (RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(ui64FWCbEntryCurrent) > ui64CurrentCRTimer)
 			{
 				/* CR timer value of current FW CB entry should always be smaller than in the next entry in the CB. 
-				   If it's greater then we have a FW CB overlap. */
+				  If it's greater then we have a FW CB overlap. */
 				break;
 			}
 
@@ -350,12 +352,12 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 			ui64Period = ui64CurrentCRTimer - RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(ui64FWCbEntryCurrent);
 			/* Scale the difference to microseconds */
 			ui64Period = OSDivide64((ui64Period * 1000000), (psDVFSHistClock / 256), &ui32Remainder);
-
+		
 			/* Update "now" to CR Timer of current entry */
 			ui64CurrentCRTimer = RGXFWIF_GPU_UTIL_FWCB_ENTRY_TIMER(ui64FWCbEntryCurrent);
 
 			/* If calculated period goes beyond the time window that we want to look at to calculate stats,
-			   cut it down to this window */
+				cut it down to this window */
 			if (((IMG_UINT64)ui32StatCumulative + ui64Period) > (IMG_UINT64)RGXFWIF_GPU_STATS_WINDOW_SIZE_US)
 			{
 				ui64Period = RGXFWIF_GPU_STATS_WINDOW_SIZE_US - ui32StatCumulative;
@@ -390,6 +392,10 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 	/* break if we wrapped up the CB or we have already calculated the whole window */
 	while ((ui32WOffSample != ui32WOffSampleSaved) && (ui32StatCumulative < RGXFWIF_GPU_STATS_WINDOW_SIZE_US));
 
+	// INTEL TO REVIEW
+	// DDK1.3@271... put the power unlock before the stats update.
+	PVRSRVPowerUnlock();
+
 	if (ui32StatCumulative)
 	{
 		/* Update stats */
@@ -399,7 +405,8 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 		sRet.bPoweredOn			= IMG_TRUE;
 	}
 
-	PVRSRVPowerUnlock();
+	// Moved upwards
+	//PVRSRVPowerUnlock();
 
 	return sRet;
 }

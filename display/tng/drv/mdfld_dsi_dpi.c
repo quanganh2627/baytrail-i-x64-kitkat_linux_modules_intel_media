@@ -205,12 +205,8 @@ static void __dpi_set_properties(struct mdfld_dsi_config *dsi_config,
 {
 	struct mdfld_dsi_hw_registers *regs;
 	struct mdfld_dsi_hw_context *ctx;
-	struct drm_psb_private *dev_priv;
 	struct drm_device *dev;
 	int offset = 0;
-
-	if (!dsi_config)
-		return -EINVAL;
 
 	regs = &dsi_config->regs;
 	ctx = &dsi_config->dsi_hw_context;
@@ -252,12 +248,11 @@ static void __dpi_set_properties(struct mdfld_dsi_config *dsi_config,
 
 }
 
-static int __dpi_enable_port(struct mdfld_dsi_config *dsi_config,
+static int __dpi_config_port(struct mdfld_dsi_config *dsi_config,
 			struct panel_funcs *p_funcs, enum enum_ports port)
 {
 	struct mdfld_dsi_hw_registers *regs;
 	struct mdfld_dsi_hw_context *ctx;
-	struct drm_psb_private *dev_priv;
 	struct drm_device *dev;
 	int offset = 0;
 
@@ -282,21 +277,6 @@ static int __dpi_enable_port(struct mdfld_dsi_config *dsi_config,
 		offset = 0x1000;
 	REG_WRITE(regs->mipi_reg + offset, (ctx->mipi | BIT16));
 
-	/**
-	 * Different panel may have different ways to have
-	 * drvIC initialized. Support it!
-	 */
-	if (p_funcs && p_funcs->drv_ic_init &&
-			(port == PORT_A))
-		if (p_funcs->drv_ic_init(dsi_config))
-			return -EAGAIN;
-
-    /*Enable MIPI Port*/
-	REG_WRITE(regs->mipi_reg + offset, (ctx->mipi | BIT31));
-
-	if (port == PORT_C)
-		offset = 0x800;
-	REG_WRITE(regs->dpi_control_reg + offset, BIT1);
 	return 0;
 }
 
@@ -317,6 +297,7 @@ static int __dpi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 	int err = 0;
 	u32 guit_val = 0;
 	u32 power_island = 0;
+	int offset = 0;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -452,7 +433,7 @@ reset_recovery:
 		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
 	}
 
-	if (__dpi_enable_port(dsi_config, p_funcs, PORT_A) != 0) {
+	if (__dpi_config_port(dsi_config, p_funcs, PORT_A) != 0) {
 		if (!reset_count) {
 				err = -EAGAIN;
 				goto power_on_err;
@@ -462,9 +443,37 @@ reset_recovery:
 	}
 	if (is_dual_dsi(dev)) {
 		__dpi_set_properties(dsi_config, PORT_C);
-		__dpi_enable_port(dsi_config, p_funcs, PORT_C);
+		__dpi_config_port(dsi_config, p_funcs, PORT_C);
 	}
 
+	/**
+	 * Different panel may have different ways to have
+	 * drvIC initialized. Support it!
+	 */
+	if (p_funcs && p_funcs->drv_ic_init) {
+		if (p_funcs->drv_ic_init(dsi_config)) {
+			if (!reset_count) {
+				err = -EAGAIN;
+				goto power_on_err;
+			}
+
+			DRM_ERROR("Failed to init dsi controller, reset it!\n");
+			goto reset_recovery;
+		}
+	}
+
+	/*Enable MIPI Port A*/
+	offset = 0x0;
+	REG_WRITE(regs->mipi_reg + offset, (ctx->mipi | BIT31));
+
+	REG_WRITE(regs->dpi_control_reg + offset, BIT1);
+	if (is_dual_dsi(dev)) {
+		/*Enable MIPI Port C*/
+		offset = 0x1000;
+		REG_WRITE(regs->mipi_reg + offset, (ctx->mipi | BIT31));
+		offset = 0x800;
+		REG_WRITE(regs->dpi_control_reg + offset, BIT1);
+	}
 	/**
 	 * Different panel may have different ways to have
 	 * panel turned on. Support it!
@@ -480,7 +489,6 @@ reset_recovery:
 	val &= ~0x000c0000;
 	val |= BIT31;
 	REG_WRITE(regs->pipeconf_reg, val);
-
 	/*Wait for pipe enabling,when timing generator
 	  is wroking */
 	if (REG_READ(regs->mipi_reg) & BIT31) {
@@ -505,6 +513,8 @@ reset_recovery:
 	} else {
 		DRM_ERROR("Failed to set panel brightness\n");
 	}
+	if (p_funcs && p_funcs->drv_set_panel_mode)
+		p_funcs->drv_set_panel_mode(dsi_config);
 
 	psb_enable_vblank(dev, dsi_config->pipe);
 	return err;

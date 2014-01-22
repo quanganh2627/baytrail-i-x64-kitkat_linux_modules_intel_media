@@ -42,6 +42,7 @@
 #include "dc_ospm.h"
 #include "video_ospm.h"
 #include "early_suspend.h"
+#include "early_suspend_sysfs.h"
 
 
 struct _ospm_data_ *g_ospm_data;
@@ -540,6 +541,7 @@ void ospm_power_init(struct drm_device *dev)
 	/* register early_suspend runtime pm */
 	intel_media_early_suspend_init(dev);
 #endif
+	intel_media_early_suspend_sysfs_init(dev);
 
 	rtpm_init(dev);
 out_err:
@@ -562,6 +564,8 @@ void ospm_power_uninit(void)
 	/* un-init early suspend */
 	intel_media_early_suspend_uninit();
 #endif
+	intel_media_early_suspend_sysfs_uninit(gpDrmDevice);
+
 	/* Do we need to turn off all islands? */
 	power_island_put(OSPM_ALL_ISLANDS);
 
@@ -579,9 +583,6 @@ void ospm_power_uninit(void)
 bool ospm_power_suspend(void)
 {
 	PSB_DEBUG_PM("%s\n", __func__);
-	/* Asking RGX to power off */
-	if (!PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_OFF))
-	        return false;
 
 	return true;
 }
@@ -594,10 +595,6 @@ bool ospm_power_suspend(void)
 void ospm_power_resume(void)
 {
 	PSB_DEBUG_PM("%s\n", __func__);
-
-	/* restore Graphics State */
-	PVRSRVRGXSetPowerState(g_ospm_data->dev, OSPM_POWER_ON);
-
 }
 
 /* FIXME: hkpatel */

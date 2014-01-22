@@ -40,8 +40,6 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#if defined(SUPPORT_GPUTRACE_EVENTS)
-
 #include "pvrsrv_error.h"
 #include "srvkm.h"
 #include "pvr_debug.h"
@@ -401,4 +399,6 @@ IMG_VOID PVRGpuTraceDeInit(IMG_VOID)
 }
 
 
-#endif
+/******************************************************************************
+ End of file (pvr_gputrace.c)
+******************************************************************************/

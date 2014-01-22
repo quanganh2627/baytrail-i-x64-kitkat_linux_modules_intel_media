@@ -109,7 +109,7 @@ typedef RGXFWIF_DEV_VIRTADDR	PRGXFWIF_CLEANUP_CTL;
 #endif /* RGX_FIRMWARE */
 
 
-/* */
+/* FIXME PRGXFWIF_UFO_ADDR and RGXFWIF_UFO should move back into rgx_fwif_client.h */
 typedef struct _RGXFWIF_UFO_
 {
 	PRGXFWIF_UFO_ADDR	puiAddrUFO;

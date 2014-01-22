@@ -161,7 +161,7 @@ PVRSRV_ERROR PVRSRVConnectionConnect(IMG_PVOID *ppvPrivData, IMG_PVOID pvOSData)
 		PVR_DPF((PVR_DBG_ERROR, "PVRSRVConnectionConnect: Couldn't register with the resource manager"));
 		goto failure;
 	}
-
+	
 	/* Allocate process statistics */
 #if defined(PVRSRV_ENABLE_PROCESS_STATS)
 	eError = PVRSRVStatsRegisterProcess(&psConnection->hProcessStats);

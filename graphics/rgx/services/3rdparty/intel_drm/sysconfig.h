@@ -43,6 +43,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "pvrsrv_device.h"
 #include "rgxdevice.h"
+#include "rgxsysinfo.h"
 
 #if !defined(__SYSCCONFIG_H__)
 #define __SYSCCONFIG_H__
@@ -88,7 +89,7 @@ static PVRSRV_DEVICE_CONFIG sDevices[] =
 		.pszName                = "RGX",
 
 		/* Device setup information */
-		.sRegsCpuPBase.uiAddr   = { 0 },
+		.sRegsCpuPBase          = { 0 },
 		.ui32RegsSize           = 0,
 		.ui32IRQ                = 0,
 		.bIRQIsShared           = IMG_TRUE,

@@ -62,6 +62,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define RGX_HWBRN37200_HEAP_ID					9				/*!< RGX HWBRN37200 */
 #define RGX_DOPPLER_HEAP_ID					14				/*!< Doppler Heap ID */
 
+/* FIXME: work out what this ought to be.  In the old days it was
+   typically bigger than it needed to be.  Is the correct thing
+   "max + 1" ?? */
 #define RGX_MAX_HEAP_ID     	(RGX_DOPPLER_HEAP_ID + 1)		/*!< Max Valid Heap ID */
 
 /*
