@@ -274,6 +274,11 @@ struct psb_video_ctx {
 	struct ttm_buffer_object *mtx_ctx_bo;
 	struct ttm_bo_kmap_obj mtx_ctx_kmap;
 	uint32_t setv_addr;
+	struct ttm_buffer_object *cir_input_ctrl_bo;
+	struct ttm_bo_kmap_obj cir_input_ctrl_kmap;
+	uint32_t *cir_input_ctrl_addr;
+	uint32_t pseudo_rand_seed;
+	int32_t last_cir_index;
 	/* Save state registers */
 	uint32_t *mtx_reg;
 	uint32_t *bias_reg;
