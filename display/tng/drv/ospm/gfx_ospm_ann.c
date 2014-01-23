@@ -423,8 +423,8 @@ static bool ospm_rscd_power_up(struct drm_device *dev,
 	 * to indicate that it is done with processing is lost. RGX
 	 * island would then remain ON.
 	 */
-//	psb_irq_preinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
-//	psb_irq_postinstall_islands(dev,OSPM_GRAPHICS_ISLAND);
+	psb_irq_preinstall_islands(dev, OSPM_GRAPHICS_ISLAND);
+	psb_irq_postinstall_islands(dev, OSPM_GRAPHICS_ISLAND);
 
 	return !ret;
 }
@@ -458,8 +458,8 @@ static bool ospm_rscd_power_down(struct drm_device *dev,
 	 * kind of a no-op but still better coding to turn of IRQs for
 	 * devices/ components that are turned off
 	 */
-//	psb_irq_uninstall_islands(dev,OSPM_GRAPHICS_ISLAND);
-//	synchronize_irq(dev->pdev->irq);
+	psb_irq_uninstall_islands(dev, OSPM_GRAPHICS_ISLAND);
+	synchronize_irq(dev->pdev->irq);
 
 	/* power down every thing */
 	ret = GFX_POWER_DOWN(PMU_RSCD);
