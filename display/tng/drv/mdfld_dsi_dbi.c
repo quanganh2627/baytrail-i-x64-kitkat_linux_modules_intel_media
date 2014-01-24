@@ -321,7 +321,7 @@ static void __dbi_set_properties(struct mdfld_dsi_config *dsi_config,
 	REG_WRITE(regs->high_low_switch_count_reg + offset,
 		ctx->high_low_switch_count);
 	REG_WRITE(regs->init_count_reg + offset, ctx->init_count);
-	REG_WRITE(regs->eot_disable_reg + offset, ctx->eot_disable);
+	REG_WRITE(regs->eot_disable_reg + offset, (REG_READ(regs->eot_disable_reg) & ~DSI_EOT_DISABLE_MASK) | (ctx->eot_disable & DSI_EOT_DISABLE_MASK));
 	REG_WRITE(regs->lp_byteclk_reg + offset, ctx->lp_byteclk);
 	REG_WRITE(regs->clk_lane_switch_time_cnt_reg + offset,
 		ctx->clk_lane_switch_time_cnt);

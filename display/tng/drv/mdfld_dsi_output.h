@@ -69,6 +69,7 @@
 #define MIPIA_VIDEO_MODE_FORMAT_REG			0xb058
 #define MIPIA_EOT_DISABLE_REG				0xb05c
 #define CLOCK_STOP					(0x1 << 1)
+#define DSI_EOT_DISABLE_MASK                            (0xff)
 
 #define MIPIA_LP_BYTECLK_REG				0xb060
 #define MIPIA_LP_GEN_DATA_REG				0xb064
