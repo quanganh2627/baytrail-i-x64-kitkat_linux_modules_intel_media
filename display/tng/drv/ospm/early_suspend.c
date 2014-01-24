@@ -45,6 +45,8 @@ static void gfx_early_suspend(struct early_suspend *h)
 
 	PSB_DEBUG_PM("%s\n", __func__);
 
+	flush_workqueue(dev_priv->power_wq);
+
 	/* protect early_suspend with dpms and mode config */
 	mutex_lock(&dev->mode_config.mutex);
 

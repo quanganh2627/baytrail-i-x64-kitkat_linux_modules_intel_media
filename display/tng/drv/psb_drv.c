@@ -1332,9 +1332,10 @@ static int psb_driver_unload(struct drm_device *dev)
 	if (drm_psb_no_fb == 0)
 		psb_modeset_cleanup(dev);
 
-	destroy_workqueue(dev_priv->vsync_wq);
-
 	if (dev_priv) {
+		destroy_workqueue(dev_priv->vsync_wq);
+		destroy_workqueue(dev_priv->power_wq);
+
 		/* psb_watchdog_takedown(dev_priv); */
 		psb_do_takedown(dev);
 
@@ -1807,6 +1808,13 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 		goto out_err;
 	}
 
+	dev_priv->power_wq = alloc_ordered_workqueue("power_wq", WQ_HIGHPRI);
+	if (!dev_priv->power_wq) {
+		DRM_ERROR("failed to create vsync workqueue\n");
+		ret = -ENOMEM;
+		goto out_err;
+	}
+
 	if (drm_psb_no_fb == 0) {
 		psb_modeset_init(dev);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35))
@@ -1866,7 +1874,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	*/
 	dpst_init(dev, 5, 1);
 
-	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
+	if (!is_dual_dsi(dev))
+		mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:

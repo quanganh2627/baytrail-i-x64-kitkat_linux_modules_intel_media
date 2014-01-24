@@ -439,11 +439,11 @@ int dpst_disable(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	uint32_t * arg = data;
 	struct backlight_device bd;
-	dev_priv->blc_adj2 = *arg;
 
 	if(!dev_priv)
 		return 0;
 
+	dev_priv->blc_adj2 = *arg;
 
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
 	bd.props.brightness = psb_get_brightness(&bd);

@@ -849,7 +849,6 @@ static inline int process_pkg_list(struct mdfld_dsi_pkg_sender *sender)
 	while (!list_empty(&sender->pkg_list)) {
 		pkg = list_first_entry(&sender->pkg_list,
 				struct mdfld_dsi_pkg, entry);
-
 		ret = send_pkg(sender, pkg);
 
 		if (ret) {
@@ -1322,6 +1321,9 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 	u8 *pSendparam = NULL;
 	int err = 0;
 	u32 fifo_sr;
+	int i;
+	int loop_num = 1;
+	int offset = 0;
 
 	if (!sender) {
 		DRM_ERROR("Invalid parameter\n");
@@ -1349,52 +1351,62 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 		 * if not sleep the drv and wait for it to become empty.
 		 * The MIPI frame done interrupt will wake up the drv.
 		 */
-		if (IS_TNG_B0(dev)) {
-			retry = wait_event_interruptible_timeout(dev_priv->eof_wait,
-			  (REG_READ(sender->mipi_gen_fifo_stat_reg) & BIT27),
-			    msecs_to_jiffies(MDFLD_DSI_DBI_FIFO_TIMEOUT));
-			mutex_lock(&sender->lock);
-		} else {
-			mutex_lock(&sender->lock);
+		if (is_dual_dsi(dev))
+			loop_num = 2;
+		mutex_lock(&sender->lock);
+		for(i = 0; i < loop_num; i++) {
+			if (i != 0)
+				offset = 0x800;
+
+			if (IS_TNG_B0(dev)) {
+				retry = wait_event_interruptible_timeout(dev_priv->eof_wait,
+				  (REG_READ(sender->mipi_gen_fifo_stat_reg) & BIT27),
+				    msecs_to_jiffies(MDFLD_DSI_DBI_FIFO_TIMEOUT));
+			} else {
+				retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
+				while (retry && !(REG_READ(sender->mipi_gen_fifo_stat_reg + offset) & BIT27)) {
+					udelay(500);
+					retry--;
+				}
+			}
+
+			/*if DBI FIFO timeout, drop this frame*/
+			if (!retry) {
+				DRM_ERROR("DBI FIFO timeout, drop frame\n");
+				mutex_unlock(&sender->lock);
+				if (!IS_ANN_A0(dev)) {
+					debug_dbi_hang(sender);
+					panic("DBI FIFO timeout, drop frame\n");
+				}
+				return 0;
+			}
+
+			if (i != 0)
+				sender->work_for_slave_panel = true;
+
+			/*wait for generic fifo*/
+			if (REG_READ(HS_LS_DBI_ENABLE_REG + offset) & BIT0)
+				wait_for_lp_fifos_empty(sender);
+			else
+				wait_for_hs_fifos_empty(sender);
+			sender->work_for_slave_panel = false;
+
+			/*record the last screen update timestamp*/
+			if (i == 0) {
+				atomic64_set(&sender->last_screen_update,
+					atomic64_read(&sender->te_seq));
+				*(cb + (index++)) = write_mem_start;
+			}
+
+			REG_WRITE(sender->mipi_cmd_len_reg + offset, 1);
+			REG_WRITE(sender->mipi_cmd_addr_reg + offset, cb_phy | BIT0 | BIT1);
+
 			retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
-			while (retry && !(REG_READ(sender->mipi_gen_fifo_stat_reg) & BIT27)) {
-				udelay(500);
+			while (retry && (REG_READ(sender->mipi_cmd_addr_reg + offset) & BIT0)) {
+				udelay(1);
 				retry--;
 			}
 		}
-
-		/*if DBI FIFO timeout, drop this frame*/
-		if (!retry) {
-			DRM_ERROR("DBI FIFO timeout, drop frame\n");
-			mutex_unlock(&sender->lock);
-			if (!IS_ANN_A0(dev)) {
-				debug_dbi_hang(sender);
-				panic("DBI FIFO timeout, drop frame\n");
-			}
-			return 0;
-		}
-
-		/*wait for generic fifo*/
-		if (REG_READ(HS_LS_DBI_ENABLE_REG) & BIT0)
-			wait_for_lp_fifos_empty(sender);
-		else
-			wait_for_hs_fifos_empty(sender);
-
-		/*record the last screen update timestamp*/
-		atomic64_set(&sender->last_screen_update,
-			atomic64_read(&sender->te_seq));
-
-		*(cb + (index++)) = write_mem_start;
-
-		REG_WRITE(sender->mipi_cmd_len_reg, 1);
-		REG_WRITE(sender->mipi_cmd_addr_reg, cb_phy | BIT0 | BIT1);
-
-		retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
-		while (retry && (REG_READ(sender->mipi_cmd_addr_reg) & BIT0)) {
-			udelay(1);
-			retry--;
-		}
-
 		mutex_unlock(&sender->lock);
 		return 0;
 	}

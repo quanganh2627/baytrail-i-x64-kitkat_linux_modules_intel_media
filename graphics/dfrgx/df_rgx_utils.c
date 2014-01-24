@@ -50,7 +50,7 @@ unsigned int df_rgx_is_valid_freq(unsigned long int freq)
 	if(!is_tng_a0)
 		aSize = NUMBER_OF_LEVELS_B0;
 
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s freq: %d\n", __func__, freq);
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s freq: %lu\n", __func__, freq);
 
 	for(i = 0; i < aSize; i++)
 	{
@@ -61,7 +61,7 @@ unsigned int df_rgx_is_valid_freq(unsigned long int freq)
 		}
 	}
 
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s valid: %d\n", __func__,
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s valid: %u\n", __func__,
 			valid);
 
 	return valid;
