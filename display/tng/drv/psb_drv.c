@@ -76,6 +76,9 @@
 #include "mrfld_clock.h"
 #include "mdfld_debugfs.h"
 
+/* MaxFifo/ S0i1-Display */
+#include "dc_maxfifo.h"
+
 #define KEEP_UNUSED_CODE 0
 #define KEEP_UNUSED_CODE_S3D 0
 
@@ -2178,12 +2181,22 @@ static int psb_idle_ioctl(struct drm_device *dev, void *data,
 
 	switch (ctrl->cmd) {
 	case IDLE_CTRL_ENABLE:
+		PSB_DEBUG_PM("IDLE_CTRL_ENABLE\n");
+		enable_repeat_frame_intr(dev);
 		break;
 	case IDLE_CTRL_DISABLE:
+		PSB_DEBUG_PM("IDLE_CTRL_DISABLE\n");
+		exit_maxfifo_mode(dev);
+		disable_repeat_frame_intr(dev);
 		break;
 	case IDLE_CTRL_ENTER:
+		PSB_DEBUG_PM("IDLE_CTRL_ENTER\n");
+		enter_maxfifo_mode(dev);
 		break;
 	case IDLE_CTRL_EXIT:
+		PSB_DEBUG_PM("IDLE_CTRL_EXIT\n");
+		exit_maxfifo_mode(dev);
+		enable_repeat_frame_intr(dev);
 		break;
 	default:
 		DRM_ERROR("%s: invalid command.\n", __func__);

@@ -404,6 +404,11 @@ typedef enum {
 	MDFLD_DSI_ENCODER_DPI,
 } mdfld_dsi_encoder_t;
 
+typedef enum {
+	MDFLD_PIPE_A = 0,
+	MDFLD_PIPE_B,
+	MDFLD_PIPE_C,
+} mdfld_pipe_num;
 
 struct drm_psb_private {
 	/*
@@ -568,6 +573,12 @@ struct drm_psb_private {
 	uint8_t panel_desc;
 	bool early_suspended;
 	struct wake_lock ospm_wake_lock;
+
+	/*
+	 *MAXFIFO/ S0i1-Display info
+	 */
+	void * dc_maxfifo_info;
+
 
 	/*
 	 * Sizes info
@@ -1158,6 +1169,9 @@ extern int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 extern int mdfld_enable_te(struct drm_device *dev, int pipe);
 extern int mdfld_recover_te(struct drm_device *dev, int pipe);
 extern void mdfld_disable_te(struct drm_device *dev, int pipe);
+extern int mrfl_enable_repeat_frame_intr(struct drm_device *dev,
+					int idle_frame_count);
+extern void mrfl_disable_repeat_frame_intr(struct drm_device *dev);
 extern int mdfld_irq_enable_hdmi_audio(struct drm_device *dev);
 extern int mdfld_irq_disable_hdmi_audio(struct drm_device *dev);
 extern void psb_te_timer_func(unsigned long data);
