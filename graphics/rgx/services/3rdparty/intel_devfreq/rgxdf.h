@@ -57,7 +57,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  @Return   int  : 1 if device is powered on, 0 if not
 
 ******************************************************************************/
-int RGXAcquireIsDevicePowered(void);
+int rgx_is_device_powered(void);
 
 /*!
 ******************************************************************************

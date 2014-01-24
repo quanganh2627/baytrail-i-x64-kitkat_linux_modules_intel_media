@@ -65,6 +65,7 @@
  *  See files under /sys/class/devfreq/dfrgx .
  */
 
+#include <linux/kernel.h>
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
@@ -96,7 +97,7 @@
  */
 #define DF_RGX_POLLING_INTERVAL_MS 50
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 /**
  * Potential governors:
  *     #define GOVERNOR_TO_USE "performance"
@@ -186,8 +187,8 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 {
 	struct platform_device	*pdev;
 	struct busfreq_data	*bfdata;
-	struct df_rgx_data_s 	*pdfrgx_data;
-	struct devfreq       	*df;
+	struct df_rgx_data_s	*pdfrgx_data;
+	struct devfreq		*df;
 	unsigned long desired_freq = 0;
 	int ret = 0;
 	int adjust_curfreq = 0;
@@ -197,8 +198,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 	pdev = container_of(dev, struct platform_device, dev);
 	bfdata = platform_get_drvdata(pdev);
 
-	if(bfdata && bfdata->devfreq)
-	{
+	if (bfdata && bfdata->devfreq) {
 		int gpu_defer_req = 0;
 		df = bfdata->devfreq;
 		pdfrgx_data = &bfdata->g_dfrgx_data;
@@ -208,56 +208,60 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 		desired_freq = *p_freq;
 
 		/* Governor changed, will be updated after updatedevfreq() */
-		if (strncmp(df->governor->name, bfdata->prev_governor, DEVFREQ_NAME_LEN))
-		{
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Governor changed, prev : %s, current : %s!\n",
-				__func__, bfdata->prev_governor, df->governor->name);
+		if (strncmp(df->governor->name,
+			bfdata->prev_governor, DEVFREQ_NAME_LEN)) {
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Governor changed,"
+				" prev : %s, current : %s!\n",
+				__func__,
+				bfdata->prev_governor,
+				df->governor->name);
 
-			if(dfrgx_burst_is_enabled(pdfrgx_data))
+			if (dfrgx_burst_is_enabled(pdfrgx_data))
 				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
 
 			df_rgx_set_governor_profile(df->governor->name, pdfrgx_data);
 			strncpy(bfdata->prev_governor, df->governor->name, DEVFREQ_NAME_LEN);
 
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Governors should be the same now, prev : %s, current : %s!\n",
-					__func__, bfdata->prev_governor, df->governor->name);
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: Governors should be "
+					"the same now, prev : %s, current : %s!\n",
+					__func__,
+					bfdata->prev_governor,
+					df->governor->name);
 
 			set_freq = 1;
-		}
-		/* Min freq changed*/
-		else if(df->min_freq != pdfrgx_data->g_freq_mhz_min){
+		} else if (df->min_freq != pdfrgx_data->g_freq_mhz_min) {
 			int new_index = -1;
 
-			if(dfrgx_burst_is_enabled(pdfrgx_data))
+			if (dfrgx_burst_is_enabled(pdfrgx_data))
 				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
 
 			new_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
-			if(new_index > -1){
+			if (new_index > -1) {
 				mutex_lock(&pdfrgx_data->g_mutex_sts);
 				pdfrgx_data->g_freq_mhz_min = df->min_freq;
 				bfdata->gbp_cooldv_latest_freq_min = df->min_freq;
 				pdfrgx_data->g_min_freq_index = new_index;
 				mutex_unlock(&pdfrgx_data->g_mutex_sts);
 			}
-				DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Min freq changed!, prev_freq %lu, min_freq %lu \n",
-					__func__, df->previous_freq, df->min_freq);
 
-			if(df->previous_freq < df->min_freq)
-			{
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Min freq changed!,"
+					" prev_freq %u, min_freq %u\n",
+					__func__,
+					df->previous_freq,
+					df->min_freq);
+
+			if (df->previous_freq < df->min_freq) {
 				desired_freq = df->min_freq;
 				adjust_curfreq = 1;
 			}
-		}
-		/* Max freq changed*/
-		else if(df->max_freq != pdfrgx_data->g_freq_mhz_max){
-
+		} else if (df->max_freq != pdfrgx_data->g_freq_mhz_max) {
 			int new_index = -1;
 
-			if(dfrgx_burst_is_enabled(pdfrgx_data))
+			if (dfrgx_burst_is_enabled(pdfrgx_data))
 				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
 
 			new_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
-			if(new_index > -1){
+			if (new_index > -1) {
 				mutex_lock(&pdfrgx_data->g_mutex_sts);
 				pdfrgx_data->g_freq_mhz_max = df->max_freq;
 				bfdata->gbp_cooldv_latest_freq_max = df->max_freq;
@@ -265,66 +269,69 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 				mutex_unlock(&pdfrgx_data->g_mutex_sts);
 			}
 
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Max freq changed!, prev_freq %lu, max_freq %lu\n",
-				__func__, df->previous_freq, df->max_freq);
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Max freq changed!,"
+				" prev_freq %u, max_freq %u\n",
+				__func__,
+				df->previous_freq,
+				df->max_freq);
 
-			if(df->previous_freq > df->max_freq)
-			{
+			if (df->previous_freq > df->max_freq) {
 				desired_freq = df->max_freq;
 				adjust_curfreq  = 1;
 			}
-		}
-		/* return if is a simple_ondemand request, we have our own dynamic frequency scaling*/
-		else if(!strncmp(df->governor->name, "simple_ondemand", DEVFREQ_NAME_LEN)){
+		} else if (!strncmp(df->governor->name,
+				"simple_ondemand", DEVFREQ_NAME_LEN)) {
 			*p_freq = df->previous_freq;
 			goto out;
 		}
 
 		/* set_freq changed on userspace governor*/
-		if(!strncmp(df->governor->name, "userspace", DEVFREQ_NAME_LEN)){
+		if (!strncmp(df->governor->name, "userspace", DEVFREQ_NAME_LEN)) {
 			/* update userspace freq*/
 			struct userspace_gov_data *data = df->data;
 
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:userspace governor, desired %lu, data->user_frequency %lu, input_freq = %lu \n",
-				__func__, desired_freq,data->user_frequency, *p_freq);
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:userspace governor,"
+				" desired %u, data->user_frequency %u, input_freq = %u\n",
+				__func__,
+				desired_freq,
+				data->user_frequency,
+				*p_freq);
 
 			data->valid = 1;
 			data->user_frequency = desired_freq;
 			set_freq = 1;
 		}
 
-		if(adjust_curfreq)
+		if (adjust_curfreq)
 			set_freq = 1;
 
-		if(set_freq)
-		{
+		if (set_freq) {
 			/* Freq will be reflected once GPU is back on*/
-			if(!df_rgx_is_active()){
+			if (!df_rgx_is_active()) {
 				bfdata->bf_desired_freq = desired_freq;
 				*p_freq = desired_freq;
 				gpu_defer_req = 1;
-			}
-			else {
+			} else {
 				ret = df_rgx_set_freq_khz(bfdata, desired_freq);
-				if (ret > 0){
+				if (ret > 0) {
 					*p_freq = ret;
 					ret = 0;
 				}
 			}
-		}
-		else {
+		} else {
 			*p_freq = df->previous_freq;
 		}
 
-		if( (!strncmp(df->governor->name, "simple_ondemand", DEVFREQ_NAME_LEN) && !dfrgx_burst_is_enabled(&bfdata->g_dfrgx_data)) 
-			|| gpu_defer_req )
+		if ((!strncmp(df->governor->name,
+				"simple_ondemand", DEVFREQ_NAME_LEN)
+			&& !dfrgx_burst_is_enabled(&bfdata->g_dfrgx_data))
+			|| gpu_defer_req)
 			dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 1);
 	}
 
 out:
 	return ret;
 }
-
 
 /**
  * df_rgx_bus_get_dev_status() - Update current status, including:
@@ -351,7 +358,6 @@ static int df_rgx_bus_get_dev_status(struct device *dev,
 	return 0;
 }
 
-
 /**
  * tcd_get_max_state() - thermal cooling device callback get_max_state.
  * @tcd: Thermal cooling device structure.
@@ -368,7 +374,6 @@ static int tcd_get_max_state(struct thermal_cooling_device *tcd,
 
 	return 0;
 }
-
 
 /**
  * tcd_get_cur_state() - thermal cooling device callback get_cur_state.
@@ -388,9 +393,9 @@ static int tcd_get_cur_state(struct thermal_cooling_device *tcd,
 	return 0;
 }
 
-
 /**
- * tcd_set_cur_state() - thermal cooling device callback set_cur_state.
+ * tcd_set_cur_state() - thermal cooling
+ * device callback set_cur_state.
  * @tcd: Thermal cooling device structure.
  * @cs: Input state.
  *
@@ -411,33 +416,35 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 		cs = THERMAL_COOLING_DEVICE_MAX_STATE - 1;
 
 	/*If different state*/
-	if(bfdata->gbp_cooldv_state_cur != cs)
-	{
+	if (bfdata->gbp_cooldv_state_cur != cs) {
 		int new_index = -1;
 
 		mutex_lock(&bfdata->lock);
 
-		/* Dynamic turbo is not enabled so try to change the state */
-		if(!bfdata->g_dfrgx_data.g_enable)
-		{
+		/* Dynamic turbo is not enabled so try
+		* to change the state
+		*/
+		if (!bfdata->g_dfrgx_data.g_enable) {
 
-			if(!df_rgx_is_active()) {
+			if (!df_rgx_is_active()) {
 				mutex_unlock(&bfdata->lock);
 				return -EBUSY;
 			}
 
-			/* If thermal state is specified explicitely then suspend burst/unburst thread
-			* because the user needs the GPU to run at specific frequency/thermal state level
+			/* If thermal state is specified explicitely
+			* then suspend burst/unburst thread
+			* because the user needs the GPU to run
+			* at specific frequency/thermal state level
 			*/
 
-			ret = df_rgx_set_freq_khz(bfdata, bfdata->gpudata[cs].freq_limit);
-			if (ret <= 0) {
-				mutex_unlock(&bfdata->lock);
+			ret = df_rgx_set_freq_khz(bfdata,
+				bfdata->gpudata[cs].freq_limit);
+			if (ret <= 0)
 				return ret;
-			}
-		}
-		/* In this case we want to limit the max_freq to the thermal state limit*/
-		else {
+		} else {
+			/* In this case we want to limit the max_freq
+			* to the thermal state limit
+			*/
 			int b_update_freq = 0;
 			df = bfdata->devfreq;
 
@@ -464,7 +471,7 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 
 				new_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
 
-				if(new_index > -1){
+				if (new_index > -1) {
 					bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
 					bfdata->g_dfrgx_data.g_max_freq_index = new_index;
 				}
@@ -493,7 +500,8 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 }
 
 /**
- * tcd_get_available_states() - thermal cooling device callback get_available_states.
+ * tcd_get_available_states() - thermal cooling device
+ * callback get_available_states.
  * @tcd: Thermal cooling device structure.
  * @pcs: Pointer to char through which output values are stored.
  *
@@ -507,20 +515,23 @@ static int tcd_get_available_states(struct thermal_cooling_device *tcd,
 	int ret = 0;
 
 	if (!is_tng_a0) {
-	ret = sprintf(buf, "%lu %lu %lu %lu %lu %lu %lu %lu\n", aAvailableStateFreq[0].freq,
-			 aAvailableStateFreq[1].freq,
-			 aAvailableStateFreq[2].freq,
-			 aAvailableStateFreq[3].freq,
-			 aAvailableStateFreq[4].freq,
-			 aAvailableStateFreq[5].freq,
-			 aAvailableStateFreq[6].freq,
-			 aAvailableStateFreq[7].freq);
-	}
-	else{
-	ret = sprintf(buf, "%lu %lu %lu %lu\n", aAvailableStateFreq[0].freq,
-			 aAvailableStateFreq[1].freq,
-			 aAvailableStateFreq[2].freq,
-			 aAvailableStateFreq[3].freq);
+	ret = scnprintf(buf, PAGE_SIZE,
+			"%lu %lu %lu %lu %lu %lu %lu %lu\n",
+			a_available_state_freq[0].freq,
+			a_available_state_freq[1].freq,
+			a_available_state_freq[2].freq,
+			a_available_state_freq[3].freq,
+			a_available_state_freq[4].freq,
+			a_available_state_freq[5].freq,
+			a_available_state_freq[6].freq,
+			a_available_state_freq[7].freq);
+	} else {
+		ret = scnprintf(buf, PAGE_SIZE,
+			"%lu %lu %lu %lu\n",
+			a_available_state_freq[0].freq,
+			a_available_state_freq[1].freq,
+			a_available_state_freq[2].freq,
+			a_available_state_freq[3].freq);
 	}
 
 	return ret;
@@ -528,7 +539,8 @@ static int tcd_get_available_states(struct thermal_cooling_device *tcd,
 
 #if defined(THERMAL_DEBUG)
 /**
- * tcd_get_force_state_override() - thermal cooling device callback get_force_state_override.
+ * tcd_get_force_state_override() - thermal cooling
+ * device callback get_force_state_override.
  * @tcd: Thermal cooling device structure.
  * @pcs: Pointer to char through which output values are stored.
  *
@@ -541,14 +553,17 @@ static int tcd_get_force_state_override(struct thermal_cooling_device *tcd,
 {
 	struct busfreq_data *bfdata = (struct busfreq_data *) tcd->devdata;
 
-	return sprintf(buf, "%lu %lu %lu %lu\n", bfdata->gpudata[0].freq_limit,
-			 bfdata->gpudata[1].freq_limit,
-			 bfdata->gpudata[2].freq_limit,
-			 bfdata->gpudata[3].freq_limit);
+	return scnprintf(buf, PAGE_SIZE,
+			"%lu %lu %lu %lu\n",
+			bfdata->gpudata[0].freq_limit,
+			bfdata->gpudata[1].freq_limit,
+			bfdata->gpudata[2].freq_limit,
+			bfdata->gpudata[3].freq_limit);
 }
 
 /**
- * tcd_set_force_state_override() - thermal cooling device callback set_force_state_override.
+ * tcd_set_force_state_override() - thermal cooling device
+ * callback set_force_state_override.
  * @tcd: Thermal cooling device structure.
  * @pcs: Pointer to char containing the input values.
  *
@@ -578,22 +593,17 @@ static int tcd_set_force_state_override(struct thermal_cooling_device *tcd,
 			freqs[2],
 			freqs[3]);
 
-	for(i = 0; (i < THERMAL_COOLING_DEVICE_MAX_STATE) &&
+	for (i = 0; (i < THERMAL_COOLING_DEVICE_MAX_STATE) &&
 				df_rgx_is_valid_freq(freqs[i]) &&
-				prev_freq >= freqs[i]; i++)
-	{
+				prev_freq >= freqs[i]; i++) {
 		prev_freq = freqs[i];
 	}
 
-	if(i < THERMAL_COOLING_DEVICE_MAX_STATE)
-	{
+	if (i < THERMAL_COOLING_DEVICE_MAX_STATE)
 		return -EINVAL;
-	}
 
-	for(i = 0; i < THERMAL_COOLING_DEVICE_MAX_STATE; i++)
-	{
+	for (i = 0; i < THERMAL_COOLING_DEVICE_MAX_STATE; i++)
 		bfdata->gpudata[i].freq_limit = freqs[i];
-	}
 
 	return 0;
 }
@@ -690,7 +700,7 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	busfreq_mon_reset(bfdata);
 
 	df = devfreq_add_device(dev, &df_rgx_devfreq_profile,
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0))
 					   GOVERNOR_TO_USE, NULL);
 #else
 					   &GOVERNOR_TO_USE, NULL);
@@ -712,9 +722,8 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		/*On TNG_B0 We will use 457KHZ and 533KHZ as turbo*/
 		df->min_freq = DFRGX_FREQ_457_MHZ;
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX;
-		start = sizeof(aAvailableStateFreq)/sizeof(aAvailableStateFreq[0]);
-	}
-	else{
+		start = sizeof(a_available_state_freq)/sizeof(a_available_state_freq[0]);
+	} else {
 		df->min_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX_INITIAL;
 		start = THERMAL_COOLING_DEVICE_MAX_STATE;
@@ -734,33 +743,38 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 			.get_cur_state = tcd_get_cur_state,
 			.set_cur_state = tcd_set_cur_state,
 #if defined(THERMAL_DEBUG)
-			.get_force_state_override = tcd_get_force_state_override,
-			.set_force_state_override = tcd_set_force_state_override,
+			.get_force_state_override =
+				tcd_get_force_state_override,
+			.set_force_state_override =
+				tcd_set_force_state_override,
 #else
 			.get_force_state_override = NULL,
 			.set_force_state_override = NULL,
 #endif
-			.get_available_states = tcd_get_available_states,
+			.get_available_states =
+				tcd_get_available_states,
 		};
 		struct thermal_cooling_device *tcdhdl;
 
 		/**
-		  * Example: Thermal zone "type"s and temps milli-deg-C.
-		  * These are just examples and are not specific to our usage.
-		  *   type              temp
-		  *   --------          -------
-		  *   skin0             15944
-		  *   skin1             22407
-		  *   msicdie           37672
-		  *
-		  * See /sys/class/thermal/thermal_zone<i>
-		  * See /sys/class/thermal/cooling_device<i>
-		  */
+		* Example: Thermal zone "type"s and temps milli-deg-C.
+		* These are just examples and are not specific
+		*to our usage.
+		*   type              temp
+		*   --------          -------
+		*   skin0             15944
+		*   skin1             22407
+		*   msicdie           37672
+		*
+		* See /sys/class/thermal/thermal_zone<i>
+		* See /sys/class/thermal/cooling_device<i>
+		*/
 
 		tcdhdl = thermal_cooling_device_register(
 			(char *) tcd_type, bfdata, &tcd_ops);
 		if (IS_ERR(tcdhdl)) {
-			DFRGX_DPF(DFRGX_DEBUG_HIGH, "Cooling device registration failed: %ld\n",
+			DFRGX_DPF(DFRGX_DEBUG_HIGH, "Cooling device"
+				" registration failed: %ld\n",
 				-PTR_ERR(tcdhdl));
 			sts = PTR_ERR(tcdhdl);
 			goto err_001;
@@ -793,20 +807,25 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 
 	bfdata->g_dfrgx_data.bus_freq_data = bfdata;
 	bfdata->g_dfrgx_data.g_enable = mprm_enable;
-	bfdata->g_dfrgx_data.gpu_utilization_record_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
-	bfdata->g_dfrgx_data.g_min_freq_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
+	bfdata->g_dfrgx_data.gpu_utilization_record_index = 
+		df_rgx_get_util_record_index_by_freq(df->min_freq);
+	bfdata->g_dfrgx_data.g_min_freq_index = 
+		df_rgx_get_util_record_index_by_freq(df->min_freq);
 	bfdata->g_dfrgx_data.g_freq_mhz_min = df->min_freq;
-	bfdata->g_dfrgx_data.g_max_freq_index = df_rgx_get_util_record_index_by_freq(df->max_freq);
+	bfdata->g_dfrgx_data.g_max_freq_index =
+		df_rgx_get_util_record_index_by_freq(df->max_freq);
 	bfdata->g_dfrgx_data.g_freq_mhz_max = df->max_freq;
 	bfdata->gbp_cooldv_latest_freq_min = df->min_freq;
 	bfdata->gbp_cooldv_latest_freq_max = df->max_freq;
 
-	df_rgx_set_governor_profile(df->governor->name, &bfdata->g_dfrgx_data);
+	df_rgx_set_governor_profile(df->governor->name,
+			&bfdata->g_dfrgx_data);
 
 	error = dfrgx_burst_init(&bfdata->g_dfrgx_data);
 
-	if(error){
-		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: dfrgx_burst_init failed!, no utilization data\n", __func__);
+	if (error) {
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: dfrgx_burst_init failed!"
+		", no utilization data\n", __func__);
 		sts = -1;
 		goto err_002;
 	}
@@ -908,11 +927,8 @@ static int __init df_rgx_busfreq_init(void)
 		return -ENODEV;
 	}
 
-	gpu_freq_set_suspend_func(&df_rgx_suspend);
-
-	gpu_freq_set_resume_func(&df_rgx_resume);
-
-	DFRGX_DPF(DFRGX_DEBUG_HIGH,"%s: %s: starting\n", DF_RGX_NAME_DRIVER, __func__);
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: %s: starting\n",
+		DF_RGX_NAME_DRIVER, __func__);
 
 	pdev = df_rgx_busfreq_device_create();
 	if (IS_ERR(pdev))
@@ -924,7 +940,8 @@ static int __init df_rgx_busfreq_init(void)
 
 	ret = platform_driver_register(&df_rgx_busfreq_driver);
 
-	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: %s: success\n", DF_RGX_NAME_DRIVER, __func__);
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: %s: success\n",
+		DF_RGX_NAME_DRIVER, __func__);
 
 	return ret;
 }

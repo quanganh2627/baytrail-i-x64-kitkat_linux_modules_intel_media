@@ -98,7 +98,7 @@ static PVRSRV_DEVICE_NODE* RGXGetDeviceNode()
 	return pDevNode;
 }
 
-int RGXAcquireIsDevicePowered(void)
+int rgx_is_device_powered(void)
 {
 
 	PVRSRV_DEVICE_NODE* psDeviceNode = RGXGetDeviceNode();
@@ -110,7 +110,7 @@ int RGXAcquireIsDevicePowered(void)
 
 	return isPowered;
 }
-EXPORT_SYMBOL(RGXAcquireIsDevicePowered);
+EXPORT_SYMBOL(rgx_is_device_powered);
 
 unsigned int RGXUpdateClockSpeed(unsigned int ui32ClockSpeed)
 {

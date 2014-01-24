@@ -61,9 +61,6 @@ enum GFX_ISLAND_STATUS {
 	POWER_OFF,		/* Powered off or Power gated.*/
 };
 
-static int (*pSuspend_func)(void) = NULL;
-static int (*pResume_func)(void) = NULL;
-
 int is_tng_a0 = 0;
 EXPORT_SYMBOL(is_tng_a0);
 
@@ -369,20 +366,6 @@ int gpu_freq_mhz_to_code(int freq_mhz_in, int *p_freq_out)
 }
 EXPORT_SYMBOL(gpu_freq_mhz_to_code);
 
-void gpu_freq_set_suspend_func(int (*suspend_func)(void))
-{
-	pSuspend_func = suspend_func;
-	PSB_DEBUG_PM("OSPM: suspend \n");
-}
-EXPORT_SYMBOL(gpu_freq_set_suspend_func);
-
-void gpu_freq_set_resume_func(int (*resume_func)(void))
-{
-	pResume_func = resume_func;
-	PSB_DEBUG_PM("OSPM: Resume \n");
-}
-EXPORT_SYMBOL(gpu_freq_set_resume_func);
-
 /***********************************************************
  * All Graphics Island
  ***********************************************************/
@@ -397,15 +380,6 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
 	bool ret;
-	int error = 0;
-
-	if(pResume_func){
-		error = (*pResume_func)();
-		if(error){
-			PSB_DEBUG_PM("OSPM: Could not resume DFRGX");
-			return false;
-		}
-	}
 
 	PSB_DEBUG_PM("Pre-power-up status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
@@ -439,17 +413,8 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
 	bool ret;
-	int error = 0;
 
 	PSB_DEBUG_PM("OSPM: ospm_gfx_power_down \n");
-
-	if(pSuspend_func){
-	error = (*pSuspend_func)();
-		if(error){
-			PSB_DEBUG_PM("OSPM :Could not suspend DFRGX");
-			return false;
-		}
-	}
 
 	PSB_DEBUG_PM("Pre-power-off Status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
