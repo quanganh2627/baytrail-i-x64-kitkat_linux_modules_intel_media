@@ -1268,16 +1268,25 @@ static int psb_do_init(struct drm_device *dev)
 	dev_priv->sizes.ta_mem_size = 0;
 
 	/* TT region managed by TTM. */
-	if (!ttm_bo_init_mm(bdev, TTM_PL_TT,
-			    pg->gatt_pages -
-			    (pg->gtt_video_start >> PAGE_SHIFT)
-			    )) {
+	if (IS_ANN_A0(dev)) {
+		if (!ttm_bo_init_mm(bdev, TTM_PL_TT,
+				pg->vram_stolen_size >> PAGE_SHIFT)) {
 
-		dev_priv->have_tt = 1;
-		dev_priv->sizes.tt_size =
-		    (tt_pages << PAGE_SHIFT) / (1024 * 1024) / 2;
+			dev_priv->have_tt = 1;
+			dev_priv->sizes.tt_size =
+				pg->vram_stolen_size / (1024 * 1024) / 2;
+		}
+	} else {
+		if (!ttm_bo_init_mm(bdev, TTM_PL_TT,
+				    pg->gatt_pages -
+				    (pg->gtt_video_start >> PAGE_SHIFT)
+				    )) {
+
+			dev_priv->have_tt = 1;
+			dev_priv->sizes.tt_size =
+			    (tt_pages << PAGE_SHIFT) / (1024 * 1024) / 2;
+		}
 	}
-
 	if (!ttm_bo_init_mm(bdev,
 			    DRM_PSB_MEM_MMU,
 			    PSB_MEM_IMR_START >> PAGE_SHIFT)) {
@@ -1385,6 +1394,8 @@ static int psb_driver_unload(struct drm_device *dev)
 #endif
 		if (IS_MRFLD(dev))
 			mrfld_gtt_takedown(dev_priv->pg, 1);
+		else if (IS_ANN_A0(dev))
+			mofd_gtt_takedown(dev_priv->pg, 1);
 		else
 			psb_gtt_takedown(dev_priv->pg, 1);
 
@@ -1673,6 +1684,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	if (IS_MRFLD(dev))
 		ret = mrfld_gtt_init(dev_priv->pg, 0);
+	else if (IS_ANN_A0(dev))
+		ret = mofd_gtt_init(dev_priv->pg, 0);
 	else
 		ret = psb_gtt_init(dev_priv->pg, 0);
 
@@ -1703,7 +1716,10 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	    (pg->gatt_pages) : PSB_TT_PRIV0_PLIMIT;
 
 	/* CI/RAR use the lower half of TT. */
-	pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
+	if (IS_ANN_A0(dev))
+		pg->gtt_video_start = 0;
+	else
+		pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
 	pg->rar_start = pg->gtt_video_start;
 
 	/*
