@@ -961,6 +961,7 @@ struct drm_psb_private {
 	struct work_struct hdmi_audio_wq;
 	struct work_struct hdmi_audio_underrun_wq;
 	struct work_struct hdmi_audio_bufferdone_wq;
+	struct tasklet_struct hdmi_audio_bufferdone_tasklet;
 	atomic_t hotplug_wq_done;
 	int timer_available;
 
@@ -1155,6 +1156,7 @@ extern void mdfld_vsync_event_work(struct work_struct *work);
 #ifdef CONFIG_SUPPORT_HDMI
 void hdmi_do_audio_underrun_wq(struct work_struct *work);
 void hdmi_do_audio_bufferdone_wq(struct work_struct *work);
+void hdmi_audio_bufferdone_tasklet_func(unsigned long data);
 #endif
 extern u32 intel_vblank_count(struct drm_device *dev, int pipe);
 

@@ -242,6 +242,21 @@ void hdmi_do_audio_bufferdone_wq(struct work_struct *work)
 		(*dev_priv->mdfld_had_event_callbacks)
 		    (HAD_EVENT_AUDIO_BUFFER_DONE, dev_priv->had_pvt_data);
 }
+
+/**
+ * Display controller tasklet entry function for pipe hdmi audio buffer done.
+ *
+ */
+
+void hdmi_audio_bufferdone_tasklet_func(unsigned long data)
+{
+	struct drm_psb_private *dev_priv = (struct drm_psb_private *)data;
+
+	if (dev_priv->mdfld_had_event_callbacks)
+		(*dev_priv->mdfld_had_event_callbacks)
+		    (HAD_EVENT_AUDIO_BUFFER_DONE, dev_priv->had_pvt_data);
+}
+
 #endif
 
 void psb_te_timer_func(unsigned long data)
@@ -394,7 +409,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 			schedule_work(&dev_priv->hdmi_audio_underrun_wq);
 
 		if (pipe_stat_val & PIPE_HDMI_AUDIO_BUFFER_DONE_STATUS)
-			schedule_work(&dev_priv->hdmi_audio_bufferdone_wq);
+			tasklet_schedule(&dev_priv->hdmi_audio_bufferdone_tasklet);
 	}
 #endif
 }

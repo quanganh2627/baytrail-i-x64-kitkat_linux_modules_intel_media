@@ -1455,6 +1455,9 @@ static int psb_driver_unload(struct drm_device *dev)
 		if (dev_priv->has_global)
 			psb_ttm_global_release(dev_priv);
 
+		tasklet_kill(&dev_priv->hdmi_audio_bufferdone_tasklet);
+
+
 		kfree(dev_priv);
 		dev->dev_private = NULL;
 	}
@@ -1877,6 +1880,9 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	INIT_WORK(&dev_priv->hdmi_audio_wq, hdmi_do_audio_wq);
 	INIT_WORK(&dev_priv->hdmi_audio_underrun_wq, hdmi_do_audio_underrun_wq);
 	INIT_WORK(&dev_priv->hdmi_audio_bufferdone_wq, hdmi_do_audio_bufferdone_wq);
+	tasklet_init(&dev_priv->hdmi_audio_bufferdone_tasklet,
+		     hdmi_audio_bufferdone_tasklet_func,
+		     (unsigned long)dev_priv);
 #endif
 
 	/*Intel drm driver load is done, continue doing pvr load */
