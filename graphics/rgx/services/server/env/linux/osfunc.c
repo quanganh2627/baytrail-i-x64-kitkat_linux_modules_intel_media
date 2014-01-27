@@ -1937,10 +1937,77 @@ IMG_VOID PVROSFuncDeInit(IMG_VOID)
 #endif
 }
 
-static IMG_BOOL gbDoRelease = IMG_TRUE;
-IMG_VOID OSSetReleasePVRLock(IMG_VOID){ gbDoRelease = IMG_TRUE; }
-IMG_VOID OSSetKeepPVRLock(IMG_VOID) { gbDoRelease = IMG_FALSE;}
-IMG_BOOL OSGetReleasePVRLock(IMG_VOID){ return gbDoRelease;}
+/* protect the release table */
+static PVRSRV_LINUX_MUTEX _doReleasesLock;
+/* assume 32 is enough */
+#define _MAX_SLOT 32
+static IMG_UINT32 _doReleases[_MAX_SLOT] = {0};
+/* every entry's format: pid | (true/false) */
+#define _GET_PID_IN_ENTRY(entry) ((pid_t)((entry) >> 1))
+#define _IS_RELEASE_LOCK(entry) (((entry) & 1) == 1)
+#define _FORM_ENTRY(pid, is_release) ((IMG_UINT32)((((pid) << 1)) | ((is_release) & 1)))
+
+IMG_VOID
+OSSetReleasePVRLock(IMG_VOID)
+{
+	int i;
+
+	LinuxLockMutex(&_doReleasesLock);
+	for (i = 0; i < _MAX_SLOT; i++) {
+		/* find a free slot */
+		if ((_GET_PID_IN_ENTRY(_doReleases[i]) == task_pid_nr(current)) ||
+			_doReleases[i] == 0) {
+			_doReleases[i] = _FORM_ENTRY(task_pid_nr(current), 1);
+			break;
+		}
+		if (i + 1 == _MAX_SLOT) {
+			PVR_DPF((PVR_DBG_ERROR, "%s: no free slot !!!", __func__));
+		}
+	}
+	LinuxUnLockMutex(&_doReleasesLock);
+}
+
+IMG_VOID
+OSSetKeepPVRLock(IMG_VOID)
+{
+	int i;
+
+	LinuxLockMutex(&_doReleasesLock);
+	for (i = 0; i < _MAX_SLOT; i++) {
+		/* find a free slot */
+		if ((_GET_PID_IN_ENTRY(_doReleases[i]) == task_pid_nr(current)) ||
+			_doReleases[i] == 0) {
+			_doReleases[i] = _FORM_ENTRY(task_pid_nr(current), 0);
+			break;
+		}
+		if (i + 1 == _MAX_SLOT) {
+			PVR_DPF((PVR_DBG_ERROR, "%s: no free slot !!!", __func__));
+		}
+	}
+	LinuxUnLockMutex(&_doReleasesLock);
+}
+
+IMG_BOOL
+OSGetReleasePVRLock(IMG_VOID)
+{
+	IMG_BOOL is_release;
+	int i;
+
+	LinuxLockMutex(&_doReleasesLock);
+	for (i = 0; i < _MAX_SLOT; i++) {
+		/* find a free slot */
+		if (_GET_PID_IN_ENTRY(_doReleases[i]) == task_pid_nr(current)) {
+			is_release = _IS_RELEASE_LOCK(_doReleases[i]);
+			break;
+		}
+		if (i + 1 == _MAX_SLOT) {
+			PVR_DPF((PVR_DBG_ERROR, "%s: can't find in release table!!!", __func__));
+		}
+	}
+	LinuxUnLockMutex(&_doReleasesLock);
+
+	return is_release;
+}
 
 IMG_VOID OSDumpStack(IMG_VOID)
 {

@@ -81,12 +81,12 @@ IMG_VOID LinuxLockMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 #if defined(LINUX_DEBUG_MUTEX_CALLS)
     if (&gPVRSRVLock == psPVRSRVMutex)
     {
-    	PVR_TRACE(("LinuxLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, current->pid));
+    	PVR_TRACE(("LinuxLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, task_pid_nr(current)));
     }
 #endif
 
     mutex_lock(&psPVRSRVMutex->sMutex);
-    psPVRSRVMutex->hHeldBy = current->pid;
+    psPVRSRVMutex->hHeldBy = task_pid_nr(current);
 }
 
 PVRSRV_ERROR LinuxLockMutexInterruptible(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
@@ -94,7 +94,7 @@ PVRSRV_ERROR LinuxLockMutexInterruptible(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 #if defined(LINUX_DEBUG_MUTEX_CALLS)
     if (&gPVRSRVLock == psPVRSRVMutex)
     {
-    	PVR_TRACE(("LinuxLockMutexInterruptible %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, current->pid));
+    	PVR_TRACE(("LinuxLockMutexInterruptible %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, task_pid_nr(current)));
     }
 #endif
 
@@ -104,7 +104,7 @@ PVRSRV_ERROR LinuxLockMutexInterruptible(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
     }
     else
     {
-    	psPVRSRVMutex->hHeldBy = current->pid;
+    	psPVRSRVMutex->hHeldBy = task_pid_nr(current);
         return PVRSRV_OK;
     }
 }
@@ -114,13 +114,13 @@ IMG_INT32 LinuxTryLockMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 #if defined(LINUX_DEBUG_MUTEX_CALLS)
     if (&gPVRSRVLock == psPVRSRVMutex)
     {
-    	PVR_TRACE(("LinuxTryLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, current->pid));
+    	PVR_TRACE(("LinuxTryLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, task_pid_nr(current)));
     }
 #endif
 
 	if (mutex_trylock(&psPVRSRVMutex->sMutex) == 1)
 	{
-    	psPVRSRVMutex->hHeldBy = current->pid;
+    	psPVRSRVMutex->hHeldBy = task_pid_nr(current);
         return 1;
 	}
 	else
@@ -134,7 +134,7 @@ IMG_VOID LinuxUnLockMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 #if defined(LINUX_DEBUG_MUTEX_CALLS)
    if (&gPVRSRVLock == psPVRSRVMutex)
    {
-    	PVR_TRACE(("LinuxUnLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, current->pid));
+    	PVR_TRACE(("LinuxUnLockMutex %p: %d (current:%d)", psPVRSRVMutex, psPVRSRVMutex->hHeldBy, task_pid_nr(current)));
    }
 #endif
 
@@ -158,7 +158,7 @@ IMG_BOOL LinuxIsLockedMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 
 IMG_BOOL LinuxIsLockedByMeMutex(PVRSRV_LINUX_MUTEX *psPVRSRVMutex)
 {
-    return (psPVRSRVMutex->hHeldBy == current->pid);
+    return (psPVRSRVMutex->hHeldBy == task_pid_nr(current));
 }
 
 
