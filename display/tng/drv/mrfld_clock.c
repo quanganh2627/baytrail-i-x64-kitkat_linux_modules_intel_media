@@ -352,10 +352,6 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 			clock.p1 = 3;
 			clk_n = 1;
 			clock.m = 162;
-		} else {
-			clock.p1 = 5;
-			clk_n = 1;
-			clock.m = 130;
 		}
 	}
 

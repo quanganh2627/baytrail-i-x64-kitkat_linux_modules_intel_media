@@ -504,12 +504,19 @@ static int mrfld_crtc_mode_set(struct drm_crtc *crtc,
 
 	PSB_DEBUG_ENTRY("pipe = 0x%x\n", pipe);
 	if (pipe != 1) {
+		int clk;
+
 		if (pipe == 0)
 			dsi_config = dev_priv->dsi_configs[0];
 		else if (pipe == 2)
 			dsi_config = dev_priv->dsi_configs[1];
 
-		mrfld_setup_pll(dev, pipe, adjusted_mode->clock);
+		if (dsi_config->lane_count)
+			clk = adjusted_mode->clock / dsi_config->lane_count;
+		else
+			clk = adjusted_mode->clock;
+
+		mrfld_setup_pll(dev, pipe, clk);
 
 		return mdfld_crtc_dsi_mode_set(crtc, dsi_config, mode,
 				adjusted_mode, x, y, old_fb);
