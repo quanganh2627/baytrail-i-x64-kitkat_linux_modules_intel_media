@@ -1658,13 +1658,6 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 		return -EINVAL;
 	}
 
-	req = kzalloc(sizeof(*req), GFP_KERNEL);
-	if (!req) {
-		DRM_ERROR("fail to alloc power_off_req\n");
-		return -ENOMEM;
-	}
-	INIT_DELAYED_WORK(&req->work, display_power_work);
-
 	/*acquire lock*/
 	mutex_lock(&gpsDevice->sFlipQueueLock);
 
@@ -1687,11 +1680,19 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 		/* power off extra power islands if required */
 		uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[type][index];
 		if (uiExtraPowerIslands) {
+			req = kzalloc(sizeof(*req), GFP_KERNEL);
+			if (!req) {
+				DRM_ERROR("fail to alloc power_off_req\n");
+				goto out_mapping;
+			}
+			INIT_DELAYED_WORK(&req->work, display_power_work);
+
 			req->power_off_islands = uiExtraPowerIslands;
 
 			queue_delayed_work(dev_priv->power_wq,
 					   &req->work, msecs_to_jiffies(32));
 		}
+out_mapping:
 		/* update plane pipe mapping */
 		_Update_PlanePipeMapping(gpsDevice, type, index, -1);
 	}
