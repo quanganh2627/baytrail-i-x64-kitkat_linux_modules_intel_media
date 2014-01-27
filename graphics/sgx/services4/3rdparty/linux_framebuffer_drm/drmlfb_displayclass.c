@@ -163,17 +163,79 @@ static inline void MRSTFBFlipComplete(MRSTLFB_SWAPCHAIN *psSwapChain, MRSTLFB_VS
 		dev_priv->pvr_ops->OSScheduleMISR2();
 }
 
+static int MRSTLFBCopyOverlayBuf(struct drm_device *dev,
+				struct intel_overlay_context *context)
+{
+	void *addr;
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	int index = dev_priv->overlay_buf_index;
+
+	mutex_lock(&dev_priv->ov_ctrl_lock);
+	addr = dev_priv->overlay_kmap[index].virtual;
+	memcpy(addr, dev_priv->ov_ctrl_blk + context->index,
+			sizeof(struct overlay_ctrl_blk));
+	mutex_unlock(&dev_priv->ov_ctrl_lock);
+
+	return 0;
+}
+
+static u32 MRSTLFBSetupOvadd(struct drm_device *dev,
+			struct intel_overlay_context *context)
+{
+	int ret;
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct ttm_buffer_object *bo;
+	int buf_index = dev_priv->overlay_buf_index;
+	u32 ovadd = 0;
+
+	bo = dev_priv->overlay_backbuf[dev_priv->overlay_buf_index];
+	ret = MRSTLFBCopyOverlayBuf(dev, context);
+	if (ret)
+		return 0;
+
+	ovadd |= context->pipe;
+	ovadd |= 1;
+	ovadd |= bo->offset & 0x0fffffff;
+
+	dev_priv->overlay_buf_index = (buf_index + 1) % OVERLAY_BACKBUF_NUM;
+
+	return ovadd;
+}
+
+static int MRSTLFBWaitOverlayFlip(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	int retry = 80;
+
+	if (BIT31 & PSB_RVDC32(OV_DOVASTA))
+		return 0;
+
+	while (--retry) {
+		if (BIT31 & PSB_RVDC32(OV_DOVASTA))
+			break;
+		usleep_range(500, 600);
+	}
+
+	if (retry == 0) {
+		DRM_DEBUG("%s: timeout wait for overlay flip\n", __func__);
+		return -ETIMEDOUT;
+	}
+
+	return 0;
+}
+
 static void MRSTLFBFlipOverlay(MRSTLFB_DEVINFO *psDevInfo,
 			struct intel_overlay_context *psContext, u32 pipe_mask)
 {
 	struct drm_device *dev;
 	struct drm_psb_private *dev_priv;
 	u32 ovadd_reg = OV_OVADD;
+	u32 ovadd;
 	u32 uDspCntr = 0;
+	int overlay_pipe = (psContext->pipe >> 6) & 0x3;
 
 	dev = psDevInfo->psDrmDevice;
-	dev_priv =
-		(struct drm_psb_private *)psDevInfo->psDrmDevice->dev_private;
+	dev_priv = psDevInfo->psDrmDevice->dev_private;
 
 	/* DRM_INFO("%s: flip 0x%x, index %d, pipe 0x%x\n", __func__,
 		psContext->ovadd, psContext->index, psContext->pipe);
@@ -183,16 +245,17 @@ static void MRSTLFBFlipOverlay(MRSTLFB_DEVINFO *psDevInfo,
 	else if (psContext->index > 1)
 		return;
 
-	psContext->ovadd |= psContext->pipe;
-	psContext->ovadd |= 1;
-
-	PSB_WVDC32(psContext->ovadd, ovadd_reg);
+	ovadd = MRSTLFBSetupOvadd(dev, psContext);
+	if (ovadd == 0)
+		return;
+	if (!(is_cmd_mode_panel(dev) && overlay_pipe == 0))
+		MRSTLFBWaitOverlayFlip(dev);
+	PSB_WVDC32(ovadd, ovadd_reg);
 
 	/* If overlay enabled while display plane doesn't,
 	 * disable display plane explicitly */
 	/* A pipe */
-	if (((psContext->pipe >> 6) & 0x3) == 0x00 &&
-		!(pipe_mask & (1 << 0))) {
+	if (overlay_pipe == 0 && !(pipe_mask & (1 << 0))) {
 		/* WA: this is workaround to blank sprite instead of
 		* disabling sprite plane. As we find that it causes
 		* overlay update always to be failure when disable and
@@ -212,8 +275,7 @@ static void MRSTLFBFlipOverlay(MRSTLFB_DEVINFO *psDevInfo,
 			//PSB_WVDC32(0, DSPASURF);
 		}
 #endif
-	} else if (((psContext->pipe >> 6) & 0x3) == 0x2 &&
-		!(pipe_mask & (1 << 1))) {
+	} else if (overlay_pipe == 2 && !(pipe_mask & (1 << 1))) {
 		uDspCntr = PSB_RVDC32(DSPACNTR + 0x1000);
 		if (uDspCntr & DISPLAY_PLANE_ENABLE) {
 			uDspCntr &= ~DISPLAY_PLANE_ENABLE;
@@ -221,8 +283,7 @@ static void MRSTLFBFlipOverlay(MRSTLFB_DEVINFO *psDevInfo,
 			/* Set displayB constant alpha to 0 when disable it */
 			PSB_WVDC32(1 << 31, DSPBSURF + 0xC);
 		}
-	} else if (((psContext->pipe >> 6) & 0x3) == 0x1 &&
-		!(pipe_mask & (1 << 2))) {
+	} else if (overlay_pipe == 1 && !(pipe_mask & (1 << 2))) {
 		uDspCntr = PSB_RVDC32(DSPACNTR + 0x2000);
 		if (uDspCntr & DISPLAY_PLANE_ENABLE) {
 			uDspCntr &= ~DISPLAY_PLANE_ENABLE;
@@ -1864,9 +1925,7 @@ static IMG_BOOL ProcessFlip2(IMG_HANDLE hCmdCookie,
 
 	if (contextlocked)
 		mdfld_dsi_dsr_forbid_locked(dsi_config);
-#ifdef CONFIG_PF450CL
-	/* do nothing */
-#else
+
         /*widi play video always use fake vsync in hwc.
          *video mode panel ,mipi on and have some flip cmd,
          *but mipi vblank interrupt disable,flip cmd can not
@@ -1874,7 +1933,6 @@ static IMG_BOOL ProcessFlip2(IMG_HANDLE hCmdCookie,
         */
 	if (dev_priv->exit_idle && (dsi_config->type == MDFLD_DSI_ENCODER_DPI))
 		dev_priv->exit_idle(dev, MDFLD_DSR_2D_3D, NULL, true);
-#endif /* end CONFIG_PF450CL */
 
 	/* wait for previous frame finished, otherwise
 	 * if waiting at sending command, it will occupy CPU resource.

@@ -3078,7 +3078,7 @@ static void overlay_wait_flip(struct drm_device *dev)
 
 fliped:
 	if (!retry)
-		DRM_ERROR("OVADD flip timeout!\n");
+		DRM_DEBUG("OVADD flip timeout!\n");
 }
 
 /*wait for vblank*/
