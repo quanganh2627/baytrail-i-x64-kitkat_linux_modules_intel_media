@@ -514,6 +514,14 @@ reset_recovery:
 			err = -EAGAIN;
 			goto power_on_err;
 		}
+
+	if (IS_ANN_A0(dev)) {
+		REG_WRITE(regs->ddl1_reg, ctx->ddl1);
+		REG_WRITE(regs->ddl2_reg, ctx->ddl2);
+		REG_WRITE(regs->ddl3_reg, ctx->ddl3);
+		REG_WRITE(regs->ddl4_reg, ctx->ddl4);
+	}
+
 	/*Enable pipe*/
 	val = ctx->pipeconf;
 	val &= ~0x000c0000;
@@ -1032,6 +1040,7 @@ void mdfld_dsi_dpi_mode_set(struct drm_encoder *encoder,
         }
 
 	__mdfld_dsi_dpi_set_timing(dsi_config, mode, adjusted_mode);
+	mdfld_dsi_set_drain_latency(encoder, adjusted_mode);
 }
 
 static

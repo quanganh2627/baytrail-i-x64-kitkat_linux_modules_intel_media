@@ -636,6 +636,13 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 			REG_READ(regs->device_ready_reg + offset) | DSI_DEVICE_READY);
 	}
 
+	if (IS_ANN_A0(dev)) {
+		REG_WRITE(regs->ddl1_reg, ctx->ddl1);
+		REG_WRITE(regs->ddl2_reg, ctx->ddl2);
+		REG_WRITE(regs->ddl3_reg, ctx->ddl3);
+		REG_WRITE(regs->ddl4_reg, ctx->ddl4);
+	}
+
 	/*Enable pipe*/
 	val = ctx->pipeconf;
 	val &= ~0x000c0000;
@@ -1040,6 +1047,7 @@ void mdfld_generic_dsi_dbi_mode_set(struct drm_encoder *encoder,
 		struct drm_display_mode *mode,
 		struct drm_display_mode *adjusted_mode)
 {
+	mdfld_dsi_set_drain_latency(encoder, adjusted_mode);
 	return;
 }
 

@@ -36,6 +36,12 @@
 #include "mdfld_dsi_esd.h"
 #include "mdfld_dsi_dbi_dsr.h"
 
+#define ACTUAL_DRAIN_RATE_7x12 75
+#define ACTUAL_DRAIN_RATE_10x19 150
+#define ACTUAL_DRAIN_RATE_25x16 300
+#define HDMI_SPRITE_DEADLINE 0x8D
+#define HDMI_OVERLAY_DEADLINE 0xA4
+
 #define KEEP_UNUSED_CODE 0
 
 #define MDFLD_DSI_BRIGHTNESS_MAX_LEVEL 100
@@ -647,6 +653,10 @@ static int mdfld_dsi_regs_init(struct mdfld_dsi_config *dsi_config,
 
 	regs->ovaadd_reg = OV_OVADD;
 	regs->ovcadd_reg = OVC_OVADD;
+	regs->ddl1_reg = DDL1;
+	regs->ddl2_reg = DDL2;
+	regs->ddl3_reg = DDL3;
+	regs->ddl4_reg = DDL4;
 
 	if (pipe == 0) {
 		regs->dspcntr_reg = DSPACNTR;
@@ -1049,4 +1059,43 @@ dsi_init_err0:
 		kfree(dsi_connector);
 
 	return -EIO;
+}
+
+void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
+		struct drm_display_mode *mode)
+{
+	int drain_rate = 0;
+	u8 value;
+	struct mdfld_dsi_encoder *dsi_encoder = MDFLD_DSI_ENCODER(encoder);
+	struct mdfld_dsi_config *dsi_config =
+		mdfld_dsi_encoder_get_config(dsi_encoder);
+
+	struct mdfld_dsi_hw_context *ctx;
+
+	if (!dsi_config) {
+                DRM_ERROR("Invalid parameters\n");
+                return;
+        }
+
+	ctx = &dsi_config->dsi_hw_context;
+	if (dsi_config->pipe == 0) {
+		mutex_lock(&dsi_config->context_lock);
+		if ((mode->hdisplay == 720) && (mode->vdisplay == 1280))
+			drain_rate = ACTUAL_DRAIN_RATE_7x12;
+		else if ((mode->hdisplay == 1080) && (mode->vdisplay == 1920))
+			drain_rate = ACTUAL_DRAIN_RATE_10x19;
+		else if ((mode->hdisplay == 2560) && (mode->vdisplay == 1600))
+			drain_rate = ACTUAL_DRAIN_RATE_25x16;
+		if (drain_rate != 0) {
+			value = ((64 * 32 / drain_rate) & 0xFF) | 0x80;
+			ctx->ddl1 = value | (HDMI_SPRITE_DEADLINE << 8) |
+					(value << 24);
+			ctx->ddl2 = value | (HDMI_OVERLAY_DEADLINE << 8);
+			ctx->ddl3 = 0;
+			ctx->ddl4 = value | (value << 8);
+		}
+		mutex_unlock(&dsi_config->context_lock);
+	}
+
+	return;
 }
