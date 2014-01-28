@@ -1957,6 +1957,12 @@ IMG_VOID OSReleaseBridgeLock(IMG_VOID)
 	LinuxUnLockMutex(&gPVRSRVLock);
 }
 
+IMG_BOOL
+OSTryAcquireBridgeLock(IMG_VOID)
+{
+	return LinuxTryLockMutex(&gPVRSRVLock);
+}
+
 
 /*************************************************************************/ /*!
 @Function       OSCreateStatisticEntry
