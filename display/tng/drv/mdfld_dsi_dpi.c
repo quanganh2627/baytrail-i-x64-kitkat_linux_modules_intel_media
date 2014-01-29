@@ -525,7 +525,11 @@ reset_recovery:
 	/*Enable pipe*/
 	val = ctx->pipeconf;
 	val &= ~0x000c0000;
-	val |= BIT31;
+	/**
+	 * Frame Start occurs on third HBLANK
+	 * after the start of VBLANK
+	 */
+	val |= BIT31 | BIT28;
 	REG_WRITE(regs->pipeconf_reg, val);
 	/*Wait for pipe enabling,when timing generator
 	  is wroking */
