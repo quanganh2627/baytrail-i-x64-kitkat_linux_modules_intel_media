@@ -213,6 +213,8 @@ int vsp_init(struct drm_device *dev)
 
 	vsp_priv->vp8_cmd_num = 0;
 
+	vsp_priv->next_frame_cmd = NULL;
+
 	spin_lock_init(&vsp_priv->lock);
 	mutex_init(&vsp_priv->vsp_mutex);
 

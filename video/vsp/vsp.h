@@ -276,6 +276,9 @@ struct vsp_private {
 	 * */
 	int vp8_cmd_num;
 	int context_vp8_id;
+
+	struct vss_command_t seq_cmd;
+	struct vss_command_t *next_frame_cmd;
 };
 
 extern int vsp_init(struct drm_device *dev);
