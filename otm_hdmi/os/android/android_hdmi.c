@@ -907,9 +907,7 @@ static int android_hdmi_add_cea_edid_modes(void *context,
 						mode_entry->flags |= DRM_MODE_FLAG_PAR16_9;
 					break;
 			}
-
-			/* restore flag */
-			newmode->flags = saved_flags;
+			drm_mode_destroy(connector->dev, newmode);
 		}
 	}
 

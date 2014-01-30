@@ -386,24 +386,29 @@ static bool __ips_hdmi_get_divider_selector(
 			int *m1, int *m2,
 			int *n, int *p1, int *p2)
 {
-	int i;
+	int i, matched_idx = 0;
+	uint32_t min_diff = 0xffffffff, curr_diff;
 
-	for (i = 0; i < NUM_SELECTOR_LIST; i++) {
-		if (dclk <=
-			data_rate_divider_selector_list[i].target_data_rate) {
-			*real_dclk =
-			data_rate_divider_selector_list[i].target_data_rate;
-			*m1 = data_rate_divider_selector_list[i].m1;
-			*m2 = data_rate_divider_selector_list[i].m2;
-			*n = data_rate_divider_selector_list[i].n;
-			*p1 = data_rate_divider_selector_list[i].p1;
-			*p2 = data_rate_divider_selector_list[i].p2;
-			return true;
-		}
+	if (dclk > data_rate_divider_selector_list[NUM_SELECTOR_LIST - 1].target_data_rate ||
+			dclk < data_rate_divider_selector_list[0].target_data_rate ) {
+		pr_err("Could not find supported mode\n");
+		return false;
 	}
 
-	pr_err("Could not find supported mode\n");
-	return false;
+	for (i = 0; i < NUM_SELECTOR_LIST; i++) {
+		curr_diff = abs(dclk - data_rate_divider_selector_list[i].target_data_rate);
+		if (min_diff > curr_diff) {
+			min_diff = curr_diff;
+			matched_idx = i;
+		}
+	}
+	*m1 = data_rate_divider_selector_list[matched_idx].m1;
+	*m2 = data_rate_divider_selector_list[matched_idx].m2;
+	*n = data_rate_divider_selector_list[matched_idx].n;
+	*p1 = data_rate_divider_selector_list[matched_idx].p1;
+	*p2 = data_rate_divider_selector_list[matched_idx].p2;
+	*real_dclk = data_rate_divider_selector_list[matched_idx].target_data_rate;
+	return true;
 }
 
 /**
