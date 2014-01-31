@@ -229,7 +229,9 @@ void mdfld_dsi_jdi25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_config)
 
 	/*setup mipi port configuration*/
 	hw_ctx->mipi = MIPI_PORT_EN | PASS_FROM_SPHY_TO_AFE |
-		3 | dsi_config->lane_config;
+		dsi_config->lane_config |
+		DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE;
+
 }
 
 static int mdfld_dsi_jdi25x16_detect(struct mdfld_dsi_config *dsi_config)
@@ -399,7 +401,7 @@ static struct drm_display_mode *jdi25x16_vid_get_config_mode(void)
 	mode->hdisplay = 2560;
 
 	mode->hsync_start = mode->hdisplay + 8;
-	mode->hsync_end = mode->hsync_start + 40;
+	mode->hsync_end = mode->hsync_start + 20;
 	mode->htotal = mode->hsync_end + 32;
 
 	mode->vdisplay = 1600;

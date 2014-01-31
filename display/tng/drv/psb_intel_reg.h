@@ -850,6 +850,8 @@ struct dpst_guardband {
 #define MIPIA_2LANE_MIPIC_2LANE	0x2
 #define TE_TRIGGER_DSI_PROTOCOL	(1 << 2)
 #define TE_TRIGGER_GPIO_PIN		(1 << 3)
+#define DUAL_LINK_ENABLE		(1 << 1)
+#define DUAL_LINK_CAPABLE		(1)
 #define MIPI_TE_COUNT			0x61194
 
 /* #define PP_CONTROL	0x61204 */

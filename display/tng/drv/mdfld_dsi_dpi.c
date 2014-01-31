@@ -87,7 +87,7 @@ int mdfld_dsi_dpi_timing_calculation(struct drm_device *dev,
 		dpi_timing->hsync_count = pclk_hsync;
 		dpi_timing->hbp_count = pclk_hbp;
 		dpi_timing->hfp_count = pclk_hfp;
-		dpi_timing->hactive_count = pclk_hactive;
+		dpi_timing->hactive_count = pclk_hactive / 2;
 		dpi_timing->vsync_count = pclk_vsync;
 		dpi_timing->vbp_count = pclk_vbp;
 		dpi_timing->vfp_count = pclk_vfp;
@@ -495,7 +495,6 @@ reset_recovery:
 	/*Enable MIPI Port A*/
 	offset = 0x0;
 	REG_WRITE(regs->mipi_reg + offset, (ctx->mipi | BIT31));
-
 	REG_WRITE(regs->dpi_control_reg + offset, BIT1);
 	if (is_dual_dsi(dev)) {
 		/*Enable MIPI Port C*/

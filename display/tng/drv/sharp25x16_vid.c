@@ -132,7 +132,8 @@ void mdfld_dsi_sharp25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_confi
 
 	/*setup mipi port configuration*/
 	hw_ctx->mipi = MIPI_PORT_EN | PASS_FROM_SPHY_TO_AFE |
-		dsi_config->lane_config | 3;
+		dsi_config->lane_config |
+		DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE;
 }
 
 static int mdfld_dsi_sharp25x16_detect(struct mdfld_dsi_config *dsi_config)
@@ -288,14 +289,14 @@ static struct drm_display_mode *sharp25x16_vid_get_config_mode(void)
 
 	mode->hdisplay = 2560;
 
-	mode->hsync_start = mode->hdisplay + 48;
-	mode->hsync_end = mode->hsync_start + 32;
-	mode->htotal = mode->hsync_end + 80;
+	mode->hsync_start = mode->hdisplay + 8;
+	mode->hsync_end = mode->hsync_start + 30;
+	mode->htotal = mode->hsync_end + 32;
 
 	mode->vdisplay = 1600;
-	mode->vsync_start = mode->vdisplay + 3;
-	mode->vsync_end = mode->vsync_start + 33;
-	mode->vtotal = mode->vsync_end + 10;
+	mode->vsync_start = mode->vdisplay + 12;
+	mode->vsync_end = mode->vsync_start + 4;
+	mode->vtotal = mode->vsync_end + 4;
 
 	mode->vrefresh = 60;
 	mode->clock =  mode->vrefresh * mode->vtotal *

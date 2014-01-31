@@ -349,9 +349,9 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 				clock.m = 120;
 			}
 		} else if (is_dual_dsi(dev)) {
-			clock.p1 = 2;
+			clock.p1 = 3;
 			clk_n = 1;
-			clock.m = 104;
+			clock.m = 162;
 		} else {
 			clock.p1 = 5;
 			clk_n = 1;
