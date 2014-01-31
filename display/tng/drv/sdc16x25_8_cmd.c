@@ -387,7 +387,10 @@ static void sdc16x25_8_cmd_get_panel_info(int pipe, struct panel_info *pi)
 		pi->height_mm = 181;
 	}
 }
-
+static bool sdc16x25_8_cmd_need_180_rotation()
+{
+	return true;
+}
 void sdc16x25_8_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 {
 	if (!dev || !p_funcs) {
@@ -409,5 +412,7 @@ void sdc16x25_8_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 		sdc16x25_8_cmd_set_brightness;
 	p_funcs->exit_deep_standby =
 		sdc16x25_8_cmd_exit_deep_standby;
+	p_funcs->need_180_rotation =
+		sdc16x25_8_cmd_need_180_rotation;
 
 }

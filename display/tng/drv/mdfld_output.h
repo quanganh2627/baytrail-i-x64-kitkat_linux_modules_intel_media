@@ -99,6 +99,7 @@ struct panel_funcs {
 	int (*set_brightness)(struct mdfld_dsi_config *dsi_config, int level);
 	int (*drv_ic_init)(struct mdfld_dsi_config *dsi_config);
 	int (*drv_set_panel_mode)(struct mdfld_dsi_config *dsi_config);
+	bool (*need_180_rotation)();
 };
 
 struct intel_mid_panel_list {
