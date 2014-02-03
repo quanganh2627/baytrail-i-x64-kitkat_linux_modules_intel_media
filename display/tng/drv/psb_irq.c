@@ -849,8 +849,8 @@ void psb_disable_vblank(struct drm_device *dev, int pipe)
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 
-	mid_disable_pipe_event(dev_priv, pipe);
 	psb_disable_pipestat(dev_priv, pipe, PIPE_VBLANK_INTERRUPT_ENABLE);
+	mid_disable_pipe_event(dev_priv, pipe);
 
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 	PSB_DEBUG_ENTRY("%s: Disabled VBlank for pipe %d\n", __func__, pipe);
