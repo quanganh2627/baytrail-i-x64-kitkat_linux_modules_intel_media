@@ -357,11 +357,17 @@ void intel_mid_msgbus_write32_vxd(u8 port, u32 addr, u32 data)
 
 static int __init vxd_driver_load()
 {
-	struct drm_i915_private *i915_dev_priv = i915_drm_dev->dev_private;
+	struct drm_i915_private *i915_dev_priv;
 	struct drm_psb_private *dev_priv;
 	struct ttm_bo_device *bdev;
 	int ret = -ENOMEM;
 	uint32_t pwr_sts;
+
+	/* Check if DRM device is loaded first */
+	if (!i915_drm_dev)
+		return -ENODEV;
+
+	i915_dev_priv = i915_drm_dev->dev_private;
 
 	dev_priv = kzalloc(sizeof(*dev_priv), GFP_KERNEL);
 	if (dev_priv == NULL)
