@@ -105,7 +105,6 @@ typedef struct {
 	/*context configure queue*/
 	struct list_head sFlipQueues[MAX_PIPE_NUM];
 	IMG_BOOL bFlipEnabled[MAX_PIPE_NUM];
-	IMG_BOOL bNewFlipUpdated[MAX_PIPE_NUM];
 
 	/* lock for plane pipe mapping */
 	struct mutex sMappingLock;
