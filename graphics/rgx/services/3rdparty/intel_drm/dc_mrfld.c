@@ -663,45 +663,31 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 	 *    a work queue between surface composer and our kernel display class
 	 *    driver, if the flip work wasn't scheduled on time and the released
 	 *    displaying buffer was dequeued by a client and being rendered
-	 *    then tearing might happen on the screen. To prevent this corner
-	 *    case, need to release pre flip until new flip updated in driver.
+	 *    then tearing might happen on the screen.
 	 */
-	gpsDevice->bNewFlipUpdated[iPipe] = IMG_FALSE;
-
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
 	{
 		eFlipState = psFlip->eFlipStates[iPipe];
-		if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
-			gpsDevice->bNewFlipUpdated[iPipe] = IMG_TRUE;
-			break;
-		}
-	}
+		if (eFlipState == DC_MRFLD_FLIP_DISPLAYED) {
+			/* done with this flip item, disable vsync now*/
+			DCCBDisableVSyncInterrupt(psDrmDev, iPipe);
 
-	if (gpsDevice->bNewFlipUpdated[iPipe]) {
-		list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
-		{
-			eFlipState = psFlip->eFlipStates[iPipe];
-			if (eFlipState == DC_MRFLD_FLIP_DISPLAYED) {
-				/*remove this entry from flip queue, decrease refCount*/
-				list_del(&psFlip->sFlips[iPipe]);
+			if (iPipe != DC_PIPE_B)
+				DCCBDsrAllow(psDrmDev, iPipe);
 
-				if (!(--psFlip->uiRefCount)) {
-					/*retire all buffers possessed by this flip*/
-					DCDisplayConfigurationRetired(
-							psFlip->hConfigData);
-					/* free it */
-					kfree(psFlip);
-				}
-			} else if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
-				psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DISPLAYED;
+			/*remove this entry from flip queue, decrease refCount*/
+			list_del(&psFlip->sFlips[iPipe]);
 
-				/* done with this flip item, disable vsync now*/
-				DCCBDisableVSyncInterrupt(psDrmDev, iPipe);
-
-				if (iPipe != DC_PIPE_B)
-					DCCBDsrAllow(psDrmDev, iPipe);
-				break;
+			if (!(--psFlip->uiRefCount)) {
+				/*retire all buffers possessed by this flip*/
+				DCDisplayConfigurationRetired(
+						psFlip->hConfigData);
+				/* free it */
+				kfree(psFlip);
 			}
+		} else if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
+			psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DISPLAYED;
+			break;
 		}
 	}
 
@@ -1503,7 +1489,7 @@ void DCUnAttachPipe(uint32_t iPipe)
 	/* complete the flips*/
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe]) {
 
-		if (psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_DC_UPDATED) {
+		if (psFlip->eFlipStates[iPipe] != DC_MRFLD_FLIP_QUEUED) {
 			/* Put pipe's vsync which has been enabled. */
 			DCCBDisableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe);
 
