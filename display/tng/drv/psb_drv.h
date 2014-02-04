@@ -907,6 +907,10 @@ struct drm_psb_private {
 	void (*dsi_prePowerState) (struct drm_device * dev);
 	void (*dsi_postPowerState) (struct drm_device * dev);
 
+	/* RGX IRQ handler function and data */
+	int (*pfn_rgxIrqHandler) (void * prgx_irqData);
+	void * prgx_irqData;
+
 	/* DPST Register Save */
 	uint32_t saveHISTOGRAM_INT_CONTROL_REG;
 	uint32_t saveHISTOGRAM_LOGIC_CONTROL_REG;

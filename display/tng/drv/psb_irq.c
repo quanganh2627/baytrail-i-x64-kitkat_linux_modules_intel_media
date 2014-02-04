@@ -44,7 +44,7 @@
 
 #define KEEP_UNUSED_CODE 0
 
-
+extern struct drm_device *gpDrmDevice;
 extern int drm_psb_smart_vsync;
 /*
  * inline functions
@@ -433,6 +433,27 @@ static void psb_vdc_interrupt(struct drm_device *dev, uint32_t vdc_stat)
 	}
 }
 
+/**
+ * Registration function for RGX irq handler
+ * When we get a RGX irq, we call the handler function
+ * We do not want RGX to register their own irq_handler
+ * since they would be getting interrupted for all
+ * gunit interrupts (display controller, video encoder,
+ * video decoder etc)
+ * This is because we just have a single PCI device for
+ * all of "graphics".
+ */
+
+int register_rgx_irq_handler(int (*pfn_rgxIrqHandler) (void *), void * pData)
+{
+	if (gpDrmDevice){
+		struct drm_psb_private *dev_priv =
+		    (struct drm_psb_private *)gpDrmDevice->dev_private;
+		dev_priv->pfn_rgxIrqHandler = pfn_rgxIrqHandler;
+		dev_priv->prgx_irqData = pData;
+	}
+}
+
 irqreturn_t psb_irq_handler(DRM_IRQ_ARGS)
 {
 	struct drm_device *dev = (struct drm_device *)arg;
@@ -500,8 +521,10 @@ irqreturn_t psb_irq_handler(DRM_IRQ_ARGS)
 #endif
 
 	if (sgx_int) {
-		if (PVRSRVInterrupt(dev) != 0)
-			handled = 1;
+		if (dev_priv->pfn_rgxIrqHandler){
+			handled = dev_priv->pfn_rgxIrqHandler(
+					dev_priv->prgx_irqData) ? 1 : 0;
+		}
 	}
 
 	PSB_WVDC32(vdc_stat, PSB_INT_IDENTITY_R);
