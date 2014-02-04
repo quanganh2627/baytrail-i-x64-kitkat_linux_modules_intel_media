@@ -1874,12 +1874,17 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 		goto err;
 	}
 	if (INTEL_MID_BOARD(1, PHONE, BYT) ||
-		INTEL_MID_BOARD(1, TABLET, BYT) ||
-		INTEL_MID_BOARD(1, PHONE, CHT) ||
-		INTEL_MID_BOARD(1, TABLET, CHT)) {
+		INTEL_MID_BOARD(1, TABLET, BYT)) {
 		intelhaddata->hw_silence = 1;
 		/* PIPE B is used for HDMI*/
 		intelhaddata->audio_reg_base = 0x65800;
+		intelhaddata->ops = &had_ops_v2;
+		version = "v2";
+	} else if (INTEL_MID_BOARD(1, PHONE, CHT) ||
+			INTEL_MID_BOARD(1, TABLET, CHT)) {
+		intelhaddata->hw_silence = 1;
+		/* PIPE C is used for HDMI*/
+		intelhaddata->audio_reg_base = 0x65900;
 		intelhaddata->ops = &had_ops_v2;
 		version = "v2";
 	} else if (INTEL_MID_BOARD(1, PHONE, MRFL) ||
