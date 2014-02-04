@@ -44,6 +44,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <drm/drmP.h>
 #include "img_types.h"
 #include "pwr_mgmt.h"
+#include "psb_irq.h"
 #include "pvrsrv_device.h"
 #include "syscommon.h"
 #include "sysconfig.h"
@@ -263,6 +264,27 @@ static PVRSRV_ERROR SysDevicePostPowerState(
 
 	return PVRSRV_OK;
 }
+
+
+PVRSRV_ERROR SysInstallDeviceLISR(IMG_UINT32 ui32IRQ,
+				  IMG_BOOL bShared,
+				  IMG_CHAR *pszName,
+				  PFN_LISR pfnLISR,
+				  IMG_PVOID pvData,
+				  IMG_HANDLE *phLISRData)
+{
+	register_rgx_irq_handler(pfnLISR, pvData);
+	return PVRSRV_OK;
+
+}
+
+PVRSRV_ERROR SysUninstallDeviceLISR(IMG_HANDLE hLISRData)
+{
+	register_rgx_irq_handler(IMG_NULL, IMG_NULL);
+	return PVRSRV_OK;
+
+}
+
 
 /******************************************************************************
  End of file (sysconfig.c)

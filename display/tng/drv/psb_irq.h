@@ -50,4 +50,5 @@ extern int intel_get_vblank_timestamp(struct drm_device *dev, int pipe,
 extern int intel_get_crtc_scanoutpos(struct drm_device *dev, int pipe,
 		int *vpos, int *hpos);
 
+int register_rgx_irq_handler(int (*pfn_rgxIrqHandler) (void *), void * pData);
 #endif				//_SYSIRQ_H_
