@@ -76,14 +76,14 @@
 #include <asm/intel-mid.h>
 #include "pwr_mgmt.h"
 
-/* Implementation of the Merrifield specific PCI driver for receiving
+/* Implementation of the Moorefield specific PCI driver for receiving
  * Hotplug and other device status signals.
- * In Merrifield platform, the HPD and OCP signals are delivered to the
+ * In Moorefield platform, the HPD and OCP signals are delivered to the
  * display sub-system using the TI TPD Companion chip.
  */
 
 /* Constants */
-#define PS_HDMI_HPD_PCI_DRIVER_NAME "Merrifield HDMI HPD Driver"
+#define PS_HDMI_HPD_PCI_DRIVER_NAME "Moorefield HDMI HPD Driver"
 
 /* Globals */
 static hdmi_context_t *g_context = NULL;
@@ -97,11 +97,11 @@ static hdmi_context_t *g_context = NULL;
 #define PS_MSIC_LS_EN_GPIO_PIN 177
 #define PS_MSIC_HPD_GPIO_PIN_NAME "HDMI_HPD"
 #define PS_MSIC_LS_EN_GPIO_PIN_NAME "HDMI_LS_EN"
-#define PS_MSIC_CPD_HPD_GPIO_PIN 0x7F
 
-/* For Merrifield, it is required that SW pull up or pull down the
+
+/* For Moorefield, it is required that SW pull up or pull down the
  * LS_OE GPIO pin based on cable status. This is needed before
- * performing any EDID read operation on Merrifield.
+ * performing any EDID read operation on Moorefield.
  */
 static void __ps_gpio_configure_edid_read(void)
 {
@@ -124,7 +124,6 @@ static void __ps_gpio_configure_edid_read(void)
 		gpio_set_value(ctx->gpio_ls_en_pin, 0);
 	else
 		gpio_set_value(ctx->gpio_ls_en_pin, 1);
-
 	pr_debug("%s: MSIC_LS_OE pin = %d (%d)\n", __func__,
 		 gpio_get_value(ctx->gpio_ls_en_pin), new_pin_value);
 }
@@ -172,7 +171,7 @@ otm_hdmi_ret_t ps_hdmi_pci_dev_init(void *context, struct pci_dev *pdev)
 	g_context = ctx;
 	ctx->is_connected_overridden = true;
 
-	/* Handle Merrifield specific GPIO configuration
+	/* Handle Moorefield specific GPIO configuration
 	 * to enable EDID reads
 	 */
 	ctx->gpio_hpd_pin = get_gpio_by_name(PS_MSIC_HPD_GPIO_PIN_NAME);
@@ -205,7 +204,6 @@ otm_hdmi_ret_t ps_hdmi_pci_dev_init(void *context, struct pci_dev *pdev)
 
 	/* Set the GPIO based on cable status */
 	__ps_gpio_configure_edid_read();
-
 exit:
 	return rc;
 }
@@ -259,10 +257,21 @@ bool ps_hdmi_enable_hpd(bool enable)
 {
 	pr_debug("Entered %s: %s\n", __func__, enable ? "enable" : "disable");
 
+	u8 pin = 0;
+	/* see ShadyCove PMIC spec and board schema */
+	if (INTEL_MID_BOARD(2, PHONE, MOFD, MP, PRO) ||
+		INTEL_MID_BOARD(2, PHONE, MOFD, MP, ENG)){
+		/* VV board uses GPIO1 for CT_CP_HPD */
+		pin = 0x7f;
+	} else {
+		/* PRx uses GPIO0 for CT_CP_HPD */
+		pin = 0x7e;
+	}
+
 	if (enable)
-		intel_scu_ipc_iowrite8(PS_MSIC_CPD_HPD_GPIO_PIN, 0x31);
+		intel_scu_ipc_iowrite8(pin, 0x31);
 	else
-		intel_scu_ipc_iowrite8(PS_MSIC_CPD_HPD_GPIO_PIN, 0x30);
+		intel_scu_ipc_iowrite8(pin, 0x30);
 	return true;
 }
 
@@ -309,9 +318,9 @@ bool ps_hdmi_get_cable_status(void *context)
 		return false;
 
 	/* Read HDMI cable status from GPIO */
-	/* For Merrifield, it is required that SW pull up or pull down the
+	/* For Moorefield, it is required that SW pull up or pull down the
 	 * LS_OE GPIO pin based on cable status. This is needed before
-	 * performing any EDID read operation on Merrifield.
+	 * performing any EDID read operation on Moorefield.
 	 */
 	__ps_gpio_configure_edid_read();
 
@@ -454,7 +463,7 @@ static int ps_hdmi_hpd_probe(struct pci_dev *pdev,
 		goto exit3;
 	}
 
-	/* This is unused on Merrifield platform, since we use GPIO */
+	/* This is unused on Moorefield platform, since we use GPIO */
 	ctx->dev.irq_io_address = 0;
 
 	result = request_threaded_irq(ctx->irq_number, ps_hdmi_irq_handler,

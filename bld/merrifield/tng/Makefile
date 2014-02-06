@@ -151,8 +151,16 @@ $(DRIVER_NAME)-objs += \
 $(DRIVER_NAME)-objs += \
 	$(OTM_HDMI_SRC)/ipil/specific/mfld/ips_hdmi.o \
 	$(OTM_HDMI_SRC)/ipil/specific/mrfld/ips_hdcp.o \
-	$(OTM_HDMI_SRC)/ipil/specific/mrfld/ips_hdmi_priv.o \
+	$(OTM_HDMI_SRC)/ipil/specific/mrfld/ips_hdmi_priv.o
+
+ifeq ($(CONFIG_MOOREFIELD),y)
+$(DRIVER_NAME)-objs += \
+	$(OTM_HDMI_SRC)/pil/specific/mofd/ps_hdmi.o
+else
+$(DRIVER_NAME)-objs += \
 	$(OTM_HDMI_SRC)/pil/specific/mrfld/ps_hdmi.o
+endif
+
 endif
 
 $(DRIVER_NAME)-objs += \
