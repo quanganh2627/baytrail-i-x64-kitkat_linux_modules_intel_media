@@ -54,7 +54,7 @@ static DEFINE_MUTEX(had_mutex);
 /*standard module options for ALSA. This module supports only one card*/
 static int hdmi_card_index = SNDRV_DEFAULT_IDX1;
 static char *hdmi_card_id = SNDRV_DEFAULT_STR1;
-static struct snd_intelhad *had_data;
+struct snd_intelhad *had_data;
 
 module_param(hdmi_card_index, int, 0444);
 MODULE_PARM_DESC(hdmi_card_index,
@@ -1765,6 +1765,7 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 	struct had_callback_ops ops_cb;
 	struct snd_intelhad *intelhaddata;
 	struct had_pvt_data *had_stream;
+	char *version = NULL; /* HDMI ops/Register set version.*/
 
 	pr_debug("Enter %s\n", __func__);
 
@@ -1880,6 +1881,7 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 		/* PIPE B is used for HDMI*/
 		intelhaddata->audio_reg_base = 0x65800;
 		intelhaddata->ops = &had_ops_v2;
+		version = "v2";
 	} else if (INTEL_MID_BOARD(1, PHONE, MRFL) ||
 			INTEL_MID_BOARD(1, TABLET, MRFL) ||
 			INTEL_MID_BOARD(1, PHONE, MOFD) ||
@@ -1887,11 +1889,14 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 		intelhaddata->hw_silence = 1;
 		intelhaddata->audio_reg_base = 0x69000;
 		intelhaddata->ops = &had_ops_v1;
+		version = "v1";
 	} else{
 		intelhaddata->hw_silence = 0;
 		intelhaddata->audio_reg_base = 0x69000;
 		intelhaddata->ops = &had_ops_v1;
+		version = "v1";
 	}
+	had_debugfs_init(intelhaddata, version);
 	return retval;
 
 err:
@@ -1937,6 +1942,7 @@ static int hdmi_audio_remove(struct platform_device *devptr)
 		had_set_caps(HAD_SET_DISABLE_AUDIO, NULL);
 	}
 	snd_card_free(intelhaddata->card);
+	had_debugfs_exit(intelhaddata);
 	kfree(intelhaddata->private_data);
 	kfree(intelhaddata);
 	return 0;
