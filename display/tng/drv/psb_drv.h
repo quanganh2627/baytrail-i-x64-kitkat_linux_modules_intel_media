@@ -321,6 +321,8 @@ enum enum_ports {
 #define PSB_PMPOLICY_POWERDOWN		2
 #define PSB_PMPOLICY_HWIDLE		3
 #define PSB_PMPOLICY_SUSPEND_HWIDLE	4
+#define PSB_PMPOLICY_FORCE_PM		5
+
 
 #define PSB_CGPOLICY_ON		0
 #define PSB_CGPOLICY_GFXCG_DIS		1
@@ -408,6 +410,7 @@ struct drm_psb_private {
 	struct mdfld_dsi_config *dsi_configs[2];
 
 	struct workqueue_struct *vsync_wq;
+	struct workqueue_struct *power_wq;
 
 	struct work_struct te_work;
 	int te_pipe;
@@ -958,6 +961,7 @@ struct drm_psb_private {
 	struct work_struct hdmi_audio_wq;
 	struct work_struct hdmi_audio_underrun_wq;
 	struct work_struct hdmi_audio_bufferdone_wq;
+	struct tasklet_struct hdmi_audio_bufferdone_tasklet;
 	atomic_t hotplug_wq_done;
 	int timer_available;
 
@@ -1152,6 +1156,7 @@ extern void mdfld_vsync_event_work(struct work_struct *work);
 #ifdef CONFIG_SUPPORT_HDMI
 void hdmi_do_audio_underrun_wq(struct work_struct *work);
 void hdmi_do_audio_bufferdone_wq(struct work_struct *work);
+void hdmi_audio_bufferdone_tasklet_func(unsigned long data);
 #endif
 extern u32 intel_vblank_count(struct drm_device *dev, int pipe);
 

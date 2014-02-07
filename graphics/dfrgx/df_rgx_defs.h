@@ -154,6 +154,7 @@ struct busfreq_data {
 	unsigned long int     bf_freq_mhz_rlzd;
 	unsigned long int     bf_prev_freq_rlzd;
 	unsigned long int     bf_desired_freq;
+	unsigned int	      b_resumed;
 	char		      prev_governor[DEVFREQ_NAME_LEN + 1];
 
 	struct thermal_cooling_device *gbp_cooldv_hdl;
@@ -161,8 +162,8 @@ struct busfreq_data {
 	int                   gbp_cooldv_state_prev;
 	int                   gbp_cooldv_state_highest;
 	int                   gbp_cooldv_state_override;
-	unsigned int	      gbp_cooldv_init_freq_max;
-	unsigned int	      gbp_cooldv_init_freq_min;
+	unsigned int	      gbp_cooldv_latest_freq_max;
+	unsigned int	      gbp_cooldv_latest_freq_min;
 	struct gpu_data	      gpudata[THERMAL_COOLING_DEVICE_MAX_STATE];
 };
 

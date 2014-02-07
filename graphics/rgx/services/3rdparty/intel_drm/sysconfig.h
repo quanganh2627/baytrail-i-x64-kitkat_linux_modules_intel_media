@@ -151,7 +151,7 @@ static PVRSRV_SYSTEM_CONFIG sSysConfig = {
 	.ui32BIFTilingHeapCount = IMG_ARR_NUM_ELEMS(gauiBIFTilingHeapXStrides),
 
 	/* no cache snooping */
-	.eCacheSnoopingMode = PVRSRV_SYSTEM_SNOOP_NONE,
+	.eCacheSnoopingMode = PVRSRV_SYSTEM_SNOOP_CPU_ONLY,
 };
 
 #define VENDOR_ID_MERRIFIELD        0x8086

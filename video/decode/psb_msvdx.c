@@ -52,11 +52,12 @@
 #endif
 
 static void psb_msvdx_fw_error_detected(struct drm_device *dev, uint32_t fence, uint32_t flags);
+static struct psb_video_ctx* psb_msvdx_find_ctx(struct drm_psb_private *dev_priv, uint32_t fence);
 static int psb_msvdx_send(struct drm_device *dev, void *cmd,
 			  unsigned long cmd_size, struct psb_video_ctx* msvdx_ctx);
 static void psb_msvdx_set_tile(struct drm_device *dev,
 				unsigned long msvdx_tile);
-static int psb_msvdx_protected_frame_finished(struct drm_psb_private *dev_priv, uint32_t fence);
+static int psb_msvdx_protected_frame_finished(struct drm_psb_private *dev_priv, struct psb_video_ctx* pos, uint32_t fence);
 int psb_msvdx_dequeue_send(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
@@ -1000,6 +1001,7 @@ loop: /* just for coding style check */
 		uint32_t fence, flags;
 		struct fw_completed_msg *completed_msg =
 					(struct fw_completed_msg *)buf;
+		struct psb_video_ctx *msvdx_ctx;
 
 		PSB_DEBUG_GENERAL("MSVDX: MSGID_CMD_COMPLETED:"
 			" - Fence: %08x - flags: %08x - vdebcr: %08x"
@@ -1020,9 +1022,14 @@ loop: /* just for coding style check */
 
 		psb_fence_handler(dev, PSB_ENGINE_DECODE);
 
+		msvdx_ctx = psb_msvdx_find_ctx(dev_priv, fence);
 #ifdef CONFIG_SLICE_HEADER_PARSING
-		frame_finished = psb_msvdx_protected_frame_finished(dev_priv, fence);
+		frame_finished = psb_msvdx_protected_frame_finished(dev_priv, msvdx_ctx, fence);
 #endif
+		if (unlikely(!msvdx_ctx)) {
+			PSB_DEBUG_GENERAL("abnormal complete msg\n");
+			cmd_complete = 0;
+		}
 
 		if (flags & FW_VA_RENDER_HOST_INT) {
 			/*Now send the next command from the msvdx cmd queue */
@@ -1156,12 +1163,6 @@ loop: /* just for coding style check */
 		msvdx_ec_ctx->cur_frame_info->fw_status = 1;
 		msvdx_priv->cur_msvdx_ec_ctx = msvdx_ec_ctx;
 
-		if (IS_MRFLD(dev)) {
-		/* try to unblock rendec */
-			PSB_WMSVDX32(0, MSVDX_CMDS_END_SLICE_PICTURE_OFFSET);
-			PSB_WMSVDX32(1, MSVDX_CMDS_END_SLICE_PICTURE_OFFSET);
-			break;
-		}
 		/*do error concealment with hw*/
 		schedule_work(&msvdx_priv->ec_work);
 		break;
@@ -1694,30 +1695,38 @@ int psb_allocate_term_buf(struct drm_device *dev,
 	return 0;
 }
 
-int psb_msvdx_protected_frame_finished(struct drm_psb_private *dev_priv, uint32_t fence)
+static int psb_msvdx_protected_frame_finished(struct drm_psb_private *dev_priv, struct psb_video_ctx *pos, uint32_t fence)
 {
-	struct psb_video_ctx *pos, *n;
-	unsigned long irq_flags;
-	int find_ctx = 0;
+	int is_protected = 0;
 
-	spin_lock(&dev_priv->video_ctx_lock);
-	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
-		if (pos->cur_sequence == fence && pos->slice_extract_flag) {
-			find_ctx = 1;
-			break;
-		}
-	}
-	spin_unlock(&dev_priv->video_ctx_lock);
-	PSB_DEBUG_GENERAL("find_ctx %d, fence 0x%08x\n", find_ctx, fence);
-	/* No ctx find, possibily clear content, return 0 */
-	if (!find_ctx)
+	if (unlikely(!pos))
 		return 1;
+
+	if (!pos->slice_extract_flag)
+		return 1;
+
 	PSB_DEBUG_GENERAL("end_frame_seq, 0x%08x\n", pos->frame_end_seq);
 	if (pos->frame_end_seq == (fence & ~0xf))
 		return 1;
 	return 0;
 }
 #endif
+
+static struct psb_video_ctx* psb_msvdx_find_ctx(struct drm_psb_private *dev_priv, uint32_t fence)
+{
+	struct psb_video_ctx *pos, *n;
+
+	spin_lock(&dev_priv->video_ctx_lock);
+	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
+		if (pos->cur_sequence == fence) {
+			spin_unlock(&dev_priv->video_ctx_lock);
+			return pos;
+		}
+	}
+	spin_unlock(&dev_priv->video_ctx_lock);
+
+	return NULL;
+}
 
 static void psb_msvdx_fw_error_detected(struct drm_device *dev, uint32_t fence, uint32_t flags)
 {

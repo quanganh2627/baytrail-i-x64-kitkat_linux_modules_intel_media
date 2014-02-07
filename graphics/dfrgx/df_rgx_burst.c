@@ -31,6 +31,7 @@
 #include <linux/devfreq.h>
 #include <ospm/gfx_freq.h>
 #include <dfrgx_utilstats.h>
+#include <rgxdf.h>
 #include "dev_freq_debug.h"
 #include "df_rgx_defs.h"
 #include "df_rgx_burst.h"
@@ -154,9 +155,6 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	else
 		freq_limited = freq_req;
 
-	if (df && (freq_limited ==  bfdata->bf_prev_freq_rlzd))
-		return  bfdata->bf_prev_freq_rlzd;
-
 	freq_mhz = freq_limited / 1000;
 
 	mutex_lock(&bfdata->lock);
@@ -166,11 +164,19 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 
 	freq_code = gpu_freq_mhz_to_code(freq_mhz, &freq_mhz_quantized);
 
-	if (bfdata->bf_freq_mhz_rlzd != freq_mhz_quantized) {
+	if ((bfdata->bf_freq_mhz_rlzd != freq_mhz_quantized) || bfdata->b_resumed ) {
+		int gfx_pcs_result = 0;
+
+		gfx_pcs_result = RGXPreClockSpeed();
+		if (!gfx_pcs_result) {
+			DFRGX_DPF(DFRGX_DEBUG_HIGH,
+				"%s: Could not perform pre-clock-speed change\n",
+				__func__);
+		}
 		sts = gpu_freq_set_from_code(freq_code);
 		if (sts < 0) {
 			DFRGX_DPF(DFRGX_DEBUG_MED,
-				"%s: error (%d) from gpu_freq_set_from_code for %uMHz\n",
+				"%s: error (%d) from gpu_freq_set_from_code for %dMHz\n",
 				__func__, sts, freq_mhz_quantized);
 			goto out;
 		} else {
@@ -178,7 +184,12 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: freq MHz(requested, realized) = %u, %lu\n",
 				__func__, freq_mhz_quantized,
 				bfdata->bf_freq_mhz_rlzd);
+			bfdata->b_resumed = 0;
 		}
+
+		/* Inform gfx driver that clock speed changed*/
+		if(!RGXUpdateClockSpeed((bfdata->bf_freq_mhz_rlzd * 1000000)))
+			RGXPostClockSpeed();
 
 		if (df) {
 
@@ -287,7 +298,7 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s * g_dfrgx, struct gpu_uti
 
 			if (ret <= 0)
 			{
-				DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Failed to burst/unburst at : %l !\n",
+				DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Failed to burst/unburst at : %lu !\n",
 				__func__,aAvailableStateFreq[g_dfrgx->gpu_utilization_record_index].freq);
 
 			}
@@ -343,11 +354,11 @@ static int df_rgx_action(struct df_rgx_data_s * g_dfrgx)
 
 
 	/* This will happen when min or max freq are modified or using userpace governor*/
-	if(g_dfrgx->bus_freq_data->bf_desired_freq != g_dfrgx->bus_freq_data->bf_prev_freq_rlzd && g_dfrgx->bus_freq_data->bf_desired_freq)
+	if(g_dfrgx->bus_freq_data->bf_desired_freq)
 	{
 		int ret = 0;
 
-		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: desiredfreq: %u, prevrlzd %u, prevfreq %u !\n",
+		DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: desiredfreq: %lu, prevrlzd %lu, prevfreq %lu !\n",
 			__func__,g_dfrgx->bus_freq_data->bf_desired_freq, g_dfrgx->bus_freq_data->bf_prev_freq_rlzd, 
 			g_dfrgx->bus_freq_data->devfreq->previous_freq);
 
@@ -356,7 +367,7 @@ static int df_rgx_action(struct df_rgx_data_s * g_dfrgx)
 
 		if (ret <= 0)
 		{
-			DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Failed to set at : %l !\n",
+			DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Failed to set at : %lu !\n",
 			__func__,g_dfrgx->bus_freq_data->bf_desired_freq);
 		}
 		/*freq was changed and We don't need this thread working for now, so let it be disabled*/
@@ -623,8 +634,10 @@ static int dfrgx_burst_resume(struct df_rgx_data_s *g_dfrgx)
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: resume!\n",
 				__func__);
 
-
 	g_dfrgx->g_suspended = 0;
+	
+	/*Need to update the freq after coming back from D0i3/S0i3*/
+	g_dfrgx->bus_freq_data->b_resumed = 1;
 
 	//smp_wmb();
 

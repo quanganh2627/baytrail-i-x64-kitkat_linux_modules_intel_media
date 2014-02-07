@@ -448,7 +448,14 @@ PVRSyncReleaseSyncPrim(struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel)
 		return IMG_TRUE;
 	}
 
-	OSAcquireBridgeLock();
+	/*
+	 * we try to acquire bridge lock, but not wait for it because of deadlock
+	 * between bridge_lock and notify_rwsema
+	 */
+	if (!OSTryAcquireBridgeLock()) {
+		PVRSyncAddToDeferFreeList(psSyncKernel);
+		return IMG_TRUE;
+	}
 
 	if (   !ServerSyncFenceIsMeet(psSyncKernel->psSync, psSyncKernel->ui32SyncValue)
 		|| (psSyncKernel->psCleanUpSync && !ServerSyncFenceIsMeet(psSyncKernel->psCleanUpSync, psSyncKernel->ui32CleanUpValue)))

@@ -142,7 +142,6 @@ static const u32 mrfld_m_converts[] = {
 	103, 51, 25, 12, 262, 387, 193, 96, 48, 280,	/* 161 - 170 */
 	396, 198, 99, 305, 152, 76, 294, 403, 457, 228,	/* 171 - 180 */
 };
-
 static const struct mrst_limit_t *mrfld_limit(struct drm_device *dev, int pipe)
 {
 	const struct mrst_limit_t *limit = NULL;
@@ -342,6 +341,10 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 				clock.p1 = 3;
 				clk_n = 1;
 				clock.m = 125;
+			} else if (get_panel_type(dev, pipe) == SHARP_25x16_CMD) {
+				clock.p1 = 3;
+				clk_n = 1;
+				clock.m = 137;
 			} else {
 				clock.p1 = 4;
 				clk_n = 1;

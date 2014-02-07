@@ -110,9 +110,9 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/cmi_cmd.o \
 	$(DISPLAYDIR)/sharp5_cmd.o \
 	$(DISPLAYDIR)/sharp25x16_vid.o \
+	$(DISPLAYDIR)/sharp25x16_cmd.o \
 	$(DISPLAYDIR)/jdi25x16_vid.o \
 	$(DISPLAYDIR)/ospm/pwr_mgmt.o \
-    $(DISPLAYDIR)/ospm/gfx_ospm_ann.o \
 	$(DISPLAYDIR)/ospm/gfx_rtpm.o \
 	$(DISPLAYDIR)/ospm/dc_ospm.o \
 	$(DISPLAYDIR)/ospm/video_ospm.o \
@@ -121,9 +121,11 @@ $(DRIVER_NAME)-objs += \
 
 ifeq ($(CONFIG_MOOREFIELD),y)
 $(DRIVER_NAME)-objs += \
+	$(DISPLAYDIR)/ospm/gfx_ospm_ann.o \
 	$(DISPLAYDIR)/mofd_dc_callbacks.o
 else
 $(DRIVER_NAME)-objs += \
+	$(DISPLAYDIR)/ospm/gfx_ospm.o \
 	$(DISPLAYDIR)/dc_callbacks.o
 endif
 

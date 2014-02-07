@@ -628,6 +628,7 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 				}
 				else
 				{
+					psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
 
 					eError = RGXStop(psDevInfo);
 					if (eError != PVRSRV_OK)
@@ -635,7 +636,6 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 						PVR_DPF((PVR_DBG_ERROR,"RGXPrePowerState: RGXStop failed (%s)", PVRSRVGetErrorStringKM(eError)));
 						eError = PVRSRV_ERROR_DEVICE_POWER_CHANGE_FAILURE;
 					}
-					psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
 					
 					/*Report dfrgx We have the device OFF*/
 					dfrgx_interface_power_state_set(0);
