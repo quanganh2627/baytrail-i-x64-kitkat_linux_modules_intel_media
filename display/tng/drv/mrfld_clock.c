@@ -484,6 +484,9 @@ void enable_HFPLL(struct drm_device *dev)
 			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
 					pll_select | _DSI_CCK_PLL_SELECT);
 			ctrl_reg5 |= (1 << 7) | 0xF;
+
+			if (get_panel_type(dev, 0) == SHARP_10x19_CMD)
+				ctrl_reg5 = 0x1f87;
 			intel_mid_msgbus_write32(CCK_PORT,
 					FUSE_OVERRIDE_FREQ_CNTRL_REG5,
 					ctrl_reg5);
