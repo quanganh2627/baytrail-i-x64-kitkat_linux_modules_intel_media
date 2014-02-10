@@ -442,16 +442,12 @@ static int psbfb_create(struct psb_fbdev *fbdev,
 	 * is 608x1024(64 bits align), or the information between android
 	 * and Linux frame buffer is not consistent.
 	 */
-#if 0
+
 	if (get_panel_type(dev, 0) == TMD_6X10_VID)
 		mode_cmd.width = sizes->surface_width - 200;
 	else
 		mode_cmd.width = sizes->surface_width;
 	mode_cmd.height = sizes->surface_height;
-#else
-	mode_cmd.width = 720;
-	mode_cmd.height = 1280;
-#endif
 
 	mode_cmd.pitches[0] = mode_cmd.width * (sizes->surface_bpp >> 3);
 
