@@ -46,10 +46,9 @@
 #define HAD_MIN_CHANNEL		2
 #define HAD_MAX_CHANNEL		8
 #define HAD_NUM_OF_RING_BUFS	4
-#define HAD_MIN_RATE		32000
-#define HAD_MAX_RATE		192000
-/* Assume 48KHz, 8channel, 25msec period */
-#define HAD_MAX_BUFFER		(150*1024)
+
+/* Assume 192KHz, 8channel, 25msec period */
+#define HAD_MAX_BUFFER		(600*1024)
 #define HAD_MIN_BUFFER		(32*1024)
 #define HAD_MAX_PERIODS		4
 #define HAD_MIN_PERIODS		4
@@ -60,13 +59,16 @@
 /* TODO: Add own tlv when channel map is ported for user space */
 #define USE_ALSA_DEFAULT_TLV
 
-#define AUD_SAMPLE_RATE_32	HAD_MIN_RATE
+#define AUD_SAMPLE_RATE_32	32000
 #define AUD_SAMPLE_RATE_44_1	44100
 #define AUD_SAMPLE_RATE_48	48000
 #define AUD_SAMPLE_RATE_88_2	88200
 #define AUD_SAMPLE_RATE_96	96000
 #define AUD_SAMPLE_RATE_176_4	176400
-#define AUD_SAMPLE_RATE_192	HAD_MAX_RATE
+#define AUD_SAMPLE_RATE_192	192000
+
+#define HAD_MIN_RATE		AUD_SAMPLE_RATE_32
+#define HAD_MAX_RATE		AUD_SAMPLE_RATE_192
 
 #define DRIVER_NAME		"intelmid_hdmi_audio"
 #define DIS_SAMPLE_RATE_25_2	25200
