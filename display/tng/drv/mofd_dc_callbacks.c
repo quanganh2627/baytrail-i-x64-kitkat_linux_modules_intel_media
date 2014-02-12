@@ -445,6 +445,7 @@ int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
 		_OverlayWaitFlip(dev, ovstat_reg, index, pipe);
 		power_island_put(power_islands);
 	}
+	return 0;
 }
 
 int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
