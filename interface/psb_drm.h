@@ -879,6 +879,19 @@ typedef struct drm_psb_msvdx_decode_status {
 	struct psb_msvdx_mb_region mb_regions[MAX_SLICES_PER_PICTURE];
 } drm_psb_msvdx_decode_status_t;
 
+
+enum {
+	IDLE_CTRL_ENABLE = 0,
+	IDLE_CTRL_DISABLE,
+	IDLE_CTRL_ENTER,
+	IDLE_CTRL_EXIT
+};
+
+struct drm_psb_idle_ctrl {
+	uint32_t cmd;
+	uint32_t value;
+};
+
 /* Controlling the kernel modesetting buffers */
 
 #define DRM_PSB_KMS_OFF                 0x00
@@ -958,9 +971,14 @@ typedef struct drm_psb_msvdx_decode_status {
 /* GET DC INFO IOCTLS */
 #define DRM_PSB_GET_DC_INFO             0x37
 
+/* Panel type query, 0: command mode, 1: video mode */
+#define DRM_PSB_PANEL_QUERY             0x38
+
+/* IDLE IOCTL*/
+#define DRM_PSB_IDLE_CTRL               0x39
 
 /****BEGIN HDMI TEST IOCTLS ****/
-#define DRM_PSB_HDMITEST                0x38
+#define DRM_PSB_HDMITEST                0x3A
 
 /* read an hdmi test register */
 #define HT_READ                         1

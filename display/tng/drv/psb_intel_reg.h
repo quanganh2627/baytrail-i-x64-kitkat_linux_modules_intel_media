@@ -533,6 +533,10 @@ struct dpst_guardband {
 #define DSPFW5			0x70054
 #define DSPFW6			0x70058
 #define DSPFW7			0x70070
+#define DDL1			0x70060
+#define DDL2			0x70064
+#define DDL3			0x70068
+#define DDL4			0x7006C
 #define DSPCHICKENBIT		0x70400
 #define DSPACNTR		0x70180
 #define DSPBCNTR		0x71180

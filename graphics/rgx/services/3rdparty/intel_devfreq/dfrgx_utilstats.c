@@ -44,26 +44,22 @@
 #define DFRGX_HWPERF_DEBUG 0
 
 #if (defined DFRGX_HWPERF_DEBUG) && DFRGX_HWPERF_DEBUG
-#define DFRGX_DEBUG_MSG(string)                      printk(DFRGX_HWPERF_ALERT string, __func__)
-#define DFRGX_DEBUG_MSG_1(string, var1)              printk(DFRGX_HWPERF_ALERT string, __func__, var1)
-#define DFRGX_DEBUG_MSG_2(string, var1, var2)        printk(DFRGX_HWPERF_ALERT string, __func__, var1, var2)
-#define DFRGX_DEBUG_MSG_3(string, var1, var2, var3)  printk(DFRGX_HWPERF_ALERT string, __func__, var1, var2, var3)
+#define DFRGX_DEBUG_MSG(string)				printk(DFRGX_HWPERF_ALERT string, __func__)
+#define DFRGX_DEBUG_MSG_1(string, var1)			printk(DFRGX_HWPERF_ALERT string, __func__, var1)
+#define DFRGX_DEBUG_MSG_2(string, var1, var2)		printk(DFRGX_HWPERF_ALERT string, __func__, var1, var2)
+#define DFRGX_DEBUG_MSG_3(string, var1, var2, var3)	printk(DFRGX_HWPERF_ALERT string, __func__, var1, var2, var3)
 #else
-#define DFRGX_DEBUG_MSG(string)                      
-#define DFRGX_DEBUG_MSG_1(string, var1)              
-#define DFRGX_DEBUG_MSG_2(string, var1, var2)        
-#define DFRGX_DEBUG_MSG_3(string, var1, var2, var3)  
+#define DFRGX_DEBUG_MSG(string)
+#define DFRGX_DEBUG_MSG_1(string, var1)
+#define DFRGX_DEBUG_MSG_2(string, var1, var2)
+#define DFRGX_DEBUG_MSG_3(string, var1, var2, var3)
 #endif
 
-typedef struct _DFRGX_HWPERF_OBJ_
-{
-	PVRSRV_DEVICE_NODE *pDevNode;
-	PVRSRV_RGXDEV_INFO *pRGXDevInfo;
-	IMG_HANDLE hHWPerfPollingThread;
-	IMG_BOOL bPollingThreadRun;
+typedef struct _DFRGX_HWPERF_OBJ_ {
+	PVRSRV_DEVICE_NODE *pdev_node;
+	PVRSRV_RGXDEV_INFO *prgx_dev_info;
 	unsigned int is_device_acquired;
-} DFRGX_HWPERF_OBJ; 
-
+} DFRGX_HWPERF_OBJ;
 
 static DFRGX_HWPERF_OBJ *pDFRGX_Obj = NULL;
 
@@ -73,98 +69,87 @@ static DFRGX_HWPERF_OBJ *pDFRGX_Obj = NULL;
 
 static unsigned int gpu_rgx_acquire_device(void){
 
-	PVRSRV_DEVICE_IDENTIFIER *pDeviceList = IMG_NULL;
-	IMG_HANDLE hDevCookie = IMG_NULL;
-	IMG_UINT32 numDevices = 0;
+	PVRSRV_DEVICE_IDENTIFIER *pdevice_list = IMG_NULL;
+	IMG_HANDLE h_dev_cookie = IMG_NULL;
+	IMG_UINT32 num_devices = 0;
 	unsigned int error = DFRGX_HWPERF_OK;
-	IMG_UINT32 rgxIndex = IMG_UINT32_MAX;
+	IMG_UINT32 rgx_index = IMG_UINT32_MAX;
 	int i = 0;
 
-	pDeviceList = kzalloc(PVRSRV_MAX_DEVICES * sizeof(PVRSRV_DEVICE_IDENTIFIER), GFP_KERNEL);
-	if (!pDeviceList)
-	{
+	pdevice_list = kzalloc(PVRSRV_MAX_DEVICES * sizeof(PVRSRV_DEVICE_IDENTIFIER), GFP_KERNEL);
+	if (!pdevice_list) {
 		error = PVRSRV_ERROR_OUT_OF_MEMORY;
 		goto go_out;
 	}
 
-		
-	if(pDFRGX_Obj != NULL){
+	if (pDFRGX_Obj != NULL) {
 		/* Enumerate active devices */
-		error = PVRSRVEnumerateDevicesKM(&numDevices, pDeviceList);
-		if(error || !pDeviceList){
+		error = PVRSRVEnumerateDevicesKM(&num_devices, pdevice_list);
+		if (error || !pdevice_list) {
 
-			DFRGX_DEBUG_MSG_1("%s: PVRSRVEnumarateDevicesKM failed %d \n", error);
+			DFRGX_DEBUG_MSG_1("%s: PVRSRVEnumarateDevicesKM failed %d\n", error);
 			goto go_free;
 		}
 
-	      
-		DFRGX_DEBUG_MSG_1("%s: Num Devices : %d \n", numDevices);
+		DFRGX_DEBUG_MSG_1("%s: Num Devices : %d \n", num_devices);
 
-	
-		for(i =0; i < numDevices; i++){
+		for (i = 0; i < num_devices; i++) {
+			DFRGX_DEBUG_MSG_2("%s: Index %d:  Device %d:\n", 
+				i, pdevice_list[i].eDeviceType);
 
-			DFRGX_DEBUG_MSG_2("%s: Index %d:  Device %d: \n", 
-				i, pDeviceList[i].eDeviceType);
-
-			if(  pDeviceList[i].eDeviceType == PVRSRV_DEVICE_TYPE_RGX){
-				rgxIndex = i;
-			}	
+			if (pdevice_list[i].eDeviceType == PVRSRV_DEVICE_TYPE_RGX) {
+				rgx_index = i;
+				break;
+			}
 		}
 
-		if(rgxIndex == IMG_UINT32_MAX){
+		if (rgx_index == IMG_UINT32_MAX) {
 			error = PVRSRV_ERROR_INIT_FAILURE;
 			goto go_free;
 		}
 
 		/* Now we have to acquire the node to work with, RGX device required*/
-		error = PVRSRVAcquireDeviceDataKM (rgxIndex, PVRSRV_DEVICE_TYPE_RGX, &hDevCookie);
-		if(error){
+		error = PVRSRVAcquireDeviceDataKM(rgx_index, PVRSRV_DEVICE_TYPE_RGX, &h_dev_cookie);
+		if (error) {
 
 			DFRGX_DEBUG_MSG_1("%s: PVRSRVEnumarateDevicesKM failed %d \n", error);
-			
 			goto go_free;
 		}
-	
-		pDFRGX_Obj->pDevNode = (PVRSRV_DEVICE_NODE*)hDevCookie;
-			
+
+		pDFRGX_Obj->pdev_node = (PVRSRV_DEVICE_NODE*)h_dev_cookie;
 		DFRGX_DEBUG_MSG_2("%s: Acquired Device node name: %s, Device type: %d \n", 
-			pDFRGX_Obj->pDevNode->szRAName, pDFRGX_Obj->pDevNode->sDevId.eDeviceType);
-		
-	
-	}
-	else{
+			pDFRGX_Obj->pdev_node->szRAName, pDFRGX_Obj->pdev_node->sDevId.eDeviceType);
+	} else {
 
 		DFRGX_DEBUG_MSG_2("%s: Device node already acquired: %s, Device type: %d \n",
-			pDFRGX_Obj->pDevNode->szRAName, pDFRGX_Obj->pDevNode->sDevId.eDeviceType);
-
+			pDFRGX_Obj->pdev_node->szRAName, pDFRGX_Obj->pdev_node->sDevId.eDeviceType);
 	}
 
-	
 go_free:
-	kfree(pDeviceList);
+	kfree(pdevice_list);
 go_out:
-	return error;	
-	
+	return error;
 }
 
 unsigned int gpu_rgx_get_util_stats(void* pvData)
 {
-	RGXFWIF_GPU_UTIL_STATS*	pUtilStats = (RGXFWIF_GPU_UTIL_STATS*)pvData;
+	RGXFWIF_GPU_UTIL_STATS*	putil_stats = (RGXFWIF_GPU_UTIL_STATS*)pvData;
 	RGXFWIF_GPU_UTIL_STATS utils;
 
-	if(!pDFRGX_Obj || !pDFRGX_Obj->pRGXDevInfo ||
-	!pDFRGX_Obj->pRGXDevInfo->pfnGetGpuUtilStats || !pDFRGX_Obj->pDevNode)
+	if (!pDFRGX_Obj || !pDFRGX_Obj->prgx_dev_info ||
+		!pDFRGX_Obj->prgx_dev_info->pfnGetGpuUtilStats ||
+		!pDFRGX_Obj->pdev_node)
 		return 0;
 
-	utils = pDFRGX_Obj->pRGXDevInfo->pfnGetGpuUtilStats(pDFRGX_Obj->pDevNode);
+	utils = pDFRGX_Obj->prgx_dev_info->pfnGetGpuUtilStats(pDFRGX_Obj->pdev_node);
 
-	pUtilStats->bPoweredOn = utils.bPoweredOn;
-	pUtilStats->ui32GpuStatActive = utils.ui32GpuStatActive;
-	pUtilStats->ui32GpuStatBlocked = utils.ui32GpuStatBlocked;
-	pUtilStats->ui32GpuStatIdle = utils.ui32GpuStatIdle;
+	putil_stats->bPoweredOn = utils.bPoweredOn;
+	putil_stats->ui32GpuStatActive = utils.ui32GpuStatActive;
+	putil_stats->ui32GpuStatBlocked = utils.ui32GpuStatBlocked;
+	putil_stats->ui32GpuStatIdle = utils.ui32GpuStatIdle;
 
-	return pUtilStats->bPoweredOn;
-	
+	return putil_stats->bPoweredOn;
+
 }
 EXPORT_SYMBOL(gpu_rgx_get_util_stats);
 
@@ -172,25 +157,24 @@ unsigned int gpu_rgx_utilstats_init_obj(void){
 
 	unsigned int error = DFRGX_HWPERF_OK;
 	
-	if(pDFRGX_Obj){
+	if (pDFRGX_Obj) {
 		DFRGX_DEBUG_MSG("%s: pDFRGX Object already initialized! \n");
 		goto go_out;
 	}
-	
+
 	pDFRGX_Obj = kzalloc(sizeof(DFRGX_HWPERF_OBJ), GFP_KERNEL);
-	if (!pDFRGX_Obj)
-	{
+	if (!pDFRGX_Obj) {
 		error = PVRSRV_ERROR_OUT_OF_MEMORY;
 		goto go_out;
 	}
-	
+
 	error = gpu_rgx_acquire_device();
-	if(error){
+	if (error) {
 		DFRGX_DEBUG_MSG_1("%s: gpu_rgx_acquire_device failed %d \n", error);
 		goto go_free_obj;
 	}
-	
-	pDFRGX_Obj->pRGXDevInfo = (PVRSRV_RGXDEV_INFO*)pDFRGX_Obj->pDevNode->pvDevice;
+
+	pDFRGX_Obj->prgx_dev_info = (PVRSRV_RGXDEV_INFO*)pDFRGX_Obj->pdev_node->pvDevice;
 go_out:
 	return error;
 go_free_obj:
@@ -202,10 +186,10 @@ EXPORT_SYMBOL(gpu_rgx_utilstats_init_obj);
 
 unsigned int gpu_rgx_utilstats_deinit_obj(void){
 
-	if(!pDFRGX_Obj){	
+	if (!pDFRGX_Obj) {
 		return 0;
 	}
-	
+
 	kfree(pDFRGX_Obj);
 	pDFRGX_Obj = NULL;
 	return 0;

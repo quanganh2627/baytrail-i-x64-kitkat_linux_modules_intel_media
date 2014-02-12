@@ -122,36 +122,37 @@ err_out:
 
 static void sharp5_cmd_controller_init(struct mdfld_dsi_config *dsi_config)
 {
-	struct mdfld_dsi_hw_context *hw_ctx = &dsi_config->dsi_hw_context;
+	struct mdfld_dsi_hw_context *hw_ctx =
+				&dsi_config->dsi_hw_context;
 
 	PSB_DEBUG_ENTRY("\n");
 
-	/* reconfig lane configuration */
+	/*reconfig lane configuration*/
 	dsi_config->lane_count = 4;
 	dsi_config->lane_config = MDFLD_DSI_DATA_LANE_4_0;
 	hw_ctx->cck_div = 1;
 	hw_ctx->pll_bypass_mode = 0;
 
-	/* properties for 800MHz dotclock, 4 data lanes */
-	hw_ctx->mipi_control = 0x18;
-	hw_ctx->intr_en = 0xffffffff;
-	hw_ctx->hs_tx_timeout = 0x00ffffff;
-	hw_ctx->lp_rx_timeout = 0x00ffffff;
+	hw_ctx->mipi_control = 0x0;
+	hw_ctx->intr_en = 0xFFFFFFFF;
+	hw_ctx->hs_tx_timeout = 0xFFFFFF;
+	hw_ctx->lp_rx_timeout = 0xFFFFFF;
 	hw_ctx->device_reset_timer = 0xffff;
 	hw_ctx->turn_around_timeout = 0x14;
-	hw_ctx->high_low_switch_count = 0x2c;
-	hw_ctx->clk_lane_switch_time_cnt =  0x2e0016;
+	hw_ctx->high_low_switch_count = 0x2B;
+	hw_ctx->clk_lane_switch_time_cnt =  0x2b0014;
 	hw_ctx->lp_byteclk = 0x6;
 	hw_ctx->dphy_param = 0x2a18681f;
-	hw_ctx->eot_disable = 0x1;
+	hw_ctx->eot_disable = 0x0;
 	hw_ctx->init_count = 0xf0;
-	hw_ctx->dbi_bw_ctrl = 0x820;
+	hw_ctx->dbi_bw_ctrl = 1100;
 	hw_ctx->hs_ls_dbi_enable = 0x0;
-	hw_ctx->dsi_func_prg = (DBI_DATA_WIDTH_OPT2 << 13) |
-			       dsi_config->lane_count;
+	hw_ctx->dsi_func_prg = ((DBI_DATA_WIDTH_OPT2 << 13) |
+				dsi_config->lane_count);
 
-	hw_ctx->mipi = SEL_FLOPPED_HSTX	| PASS_FROM_SPHY_TO_AFE |
-		       BANDGAP_CHICKEN_BIT /*| TE_TRIGGER_GPIO_PIN */;
+	hw_ctx->mipi = PASS_FROM_SPHY_TO_AFE |
+			BANDGAP_CHICKEN_BIT |
+		TE_TRIGGER_GPIO_PIN;
 	hw_ctx->video_mode_format = 0xf;
 }
 

@@ -239,6 +239,12 @@ struct mdfld_dsi_hw_context {
 	u32 sprite_dspstride;
 	u32 sprite_dsplinoff;
 
+	/*Drain Latency*/
+	u32 ddl1;
+	u32 ddl2;
+	u32 ddl3;
+	u32 ddl4;
+
 	/*overlay*/
 	u32 ovaadd;
 	u32 ovcadd;
@@ -335,6 +341,12 @@ struct mdfld_dsi_hw_registers {
 	u32 dsplinoff_reg;
 	u32 dsppos_reg;
 	u32 dspstride_reg;
+
+	/*Drain Latency*/
+	u32 ddl1_reg;
+	u32 ddl2_reg;
+	u32 ddl3_reg;
+	u32 ddl4_reg;
 
 	/*overlay*/
 	u32 ovaadd_reg;
@@ -559,5 +571,6 @@ extern int mdfld_dsi_get_power_mode(struct mdfld_dsi_config *dsi_config,
 		u8 transmission);
 
 extern mdfld_dsi_encoder_t is_panel_vid_or_cmd(struct drm_device *dev);
-
+extern void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
+		struct drm_display_mode *mode);
 #endif /*__MDFLD_DSI_OUTPUT_H__*/
