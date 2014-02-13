@@ -300,7 +300,7 @@ static bool vec_power_up(struct drm_device *dev,
 		drm_vec_force_up_freq = 0;
 		freq_code = freq_max;
 	} else {
-		if (freq_max > drm_vec_force_up_freq)
+		if (freq_max < drm_vec_force_up_freq)
 			freq_code = drm_vec_force_up_freq;
 		else
 			freq_code = freq_max;
