@@ -400,19 +400,30 @@ static void _OverlayWaitFlip(struct drm_device *dev, u32 ovstat_reg,
 			int index, int pipe)
 {
 	int retry;
+	int ret = -EBUSY;
 
 	/* HDMI pipe can run as low as 24Hz */
 	retry = 600;
 	if (pipe != 1) {
-		/* 60HZ for MIPI */
-		retry = 200;
+		retry = 200;  /* 60HZ for MIPI */
+		DCCBDsrForbid(dev, pipe);
 	}
-
+	/**
+	 * make sure overlay command buffer
+	 * was copied before updating the system
+	 * overlay command buffer.
+	 */
 	while (--retry) {
+		if (pipe != 1 && ret == -EBUSY) {
+			ret = DCCBUpdateDbiPanel(dev, pipe);
+		}
 		if (BIT31 & PSB_RVDC32(ovstat_reg))
 			break;
 		udelay(100);
 	}
+
+	if (pipe != 1)
+		DCCBDsrAllow(dev, pipe);
 
 	if (!retry)
 		DRM_ERROR("OVADD %d flip timeout on pipe %d!\n", index, pipe);
@@ -421,9 +432,9 @@ static void _OverlayWaitFlip(struct drm_device *dev, u32 ovstat_reg,
 int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
 			int index)
 {
-	u32 power_islands = OSPM_DISPLAY_A;
+	u32 ovadd_reg = OV_OVADD;
 	u32 ovstat_reg = OV_DOVASTA;
-	int retry;
+	u32 power_islands = OSPM_DISPLAY_A;
 	int pipe;
 
 	if (index != 0 && index != 1) {
@@ -432,6 +443,7 @@ int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
 	}
 
 	if (index) {
+		ovadd_reg = OVC_OVADD;
 		ovstat_reg = OVC_DOVCSTA;
 		power_islands |= OSPM_DISPLAY_C;
 	}
@@ -439,10 +451,11 @@ int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
 	pipe = _GetPipeFromOvadd(ctx);
 
 	if (power_island_get(power_islands)) {
-		/*need make sure disable operation was done*/
-		//_OverlayWaitFlip(dev, ovstat_reg, index, pipe);
-		//_OverlayWaitVblank(dev, pipe);
+		PSB_WVDC32(ctx, ovadd_reg);
+
+		/*wait for overlay flipped*/
 		_OverlayWaitFlip(dev, ovstat_reg, index, pipe);
+
 		power_island_put(power_islands);
 	}
 	return 0;
