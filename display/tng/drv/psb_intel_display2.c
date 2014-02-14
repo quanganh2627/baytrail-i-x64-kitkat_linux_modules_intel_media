@@ -1183,9 +1183,6 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	if (get_panel_type(dev, 0) == TMD_6X10_VID)
 		ctx->dspsize = ((mode->crtc_vdisplay - 1) << 16) |
 		    (mode->crtc_hdisplay - 200 - 1);
-	else if (is_dual_dsi(dev))
-		ctx->dspsize = ((mode->crtc_vdisplay - 1) << 16) |
-		    (mode->crtc_hdisplay / 2 - 1);
 	else
 		ctx->dspsize = ((mode->crtc_vdisplay - 1) << 16) |
 		    (mode->crtc_hdisplay - 1);

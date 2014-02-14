@@ -140,7 +140,8 @@ void sharp25x16_cmd_controller_init(
 	hw_ctx->dsi_func_prg = ((DBI_DATA_WIDTH_OPT2 << 13) |
 				dsi_config->lane_count);
 
-	hw_ctx->mipi = SEL_FLOPPED_HSTX	| PASS_FROM_SPHY_TO_AFE | 3;
+	hw_ctx->mipi = SEL_FLOPPED_HSTX	| PASS_FROM_SPHY_TO_AFE |
+		DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE;
 	hw_ctx->video_mode_format = 0xf;
 
 }

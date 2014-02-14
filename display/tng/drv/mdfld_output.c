@@ -37,7 +37,7 @@
 #include "displays/jdi_cmd.h"
 #include "displays/cmi_vid.h"
 #include "displays/cmi_cmd.h"
-#include "displays/sharp5_cmd.h"
+#include "displays/sharp10x19_cmd.h"
 #include "displays/sharp25x16_vid.h"
 #include "displays/sharp25x16_cmd.h"
 #include "displays/jdi25x16_vid.h"
@@ -49,7 +49,8 @@ static struct intel_mid_panel_list panel_list[] = {
 	{JDI_7x12_CMD, MDFLD_DSI_ENCODER_DBI, jdi_cmd_init},
 	{CMI_7x12_VID, MDFLD_DSI_ENCODER_DPI, cmi_vid_init},
 	{CMI_7x12_CMD, MDFLD_DSI_ENCODER_DBI, cmi_cmd_init},
-	{SHARP_10x19_CMD, MDFLD_DSI_ENCODER_DBI, sharp5_cmd_init},
+	{SHARP_10x19_CMD, MDFLD_DSI_ENCODER_DBI, sharp10x19_cmd_init},
+	{SHARP_10x19_DUAL_CMD, MDFLD_DSI_ENCODER_DBI, sharp10x19_cmd_init},
 	{SHARP_25x16_VID, MDFLD_DSI_ENCODER_DPI, sharp25x16_vid_init},
 	{SHARP_25x16_CMD, MDFLD_DSI_ENCODER_DBI, sharp25x16_cmd_init},
 	{JDI_25x16_VID, MDFLD_DSI_ENCODER_DPI, jdi25x16_vid_init},
@@ -67,7 +68,15 @@ bool is_dual_dsi(struct drm_device *dev)
 {
 	if ((get_panel_type(dev, 0) == SHARP_25x16_VID) ||
 		(get_panel_type(dev, 0) == SHARP_25x16_CMD) ||
+		(get_panel_type(dev, 0) == SHARP_10x19_DUAL_CMD) ||
 		(get_panel_type(dev, 0) == JDI_25x16_VID))
+		return true;
+	else return false;
+}
+
+bool is_dual_panel(struct drm_device *dev)
+{
+	if (get_panel_type(dev, 0) == SHARP_10x19_DUAL_CMD)
 		return true;
 	else return false;
 }

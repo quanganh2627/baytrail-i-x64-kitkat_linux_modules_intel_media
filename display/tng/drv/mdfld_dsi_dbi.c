@@ -370,7 +370,10 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		return -EAGAIN;
 
 	if (is_dual_dsi(dev)) {
-		intel_mid_msgbus_write32(CCK_PORT, 0x68, 0x682);
+		intel_mid_msgbus_write32(CCK_PORT,
+			FUSE_OVERRIDE_FREQ_CNTRL_REG5,
+			CKESC_GATE_EN | CKDP1X_GATE_EN |
+			DISPLAY_FRE_EN | 0x2);
 		/* Disable PLL*/
 		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
 		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
@@ -416,6 +419,10 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 						ctx->dpll | guit_val);
 	} else {
 		/* Disable PLL*/
+		intel_mid_msgbus_write32(CCK_PORT,
+			FUSE_OVERRIDE_FREQ_CNTRL_REG5,
+			CKESC_GATE_EN | CKDP1X_GATE_EN |
+			DISPLAY_FRE_EN | 0x2);
 		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
 		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
 		intel_mid_msgbus_write32(CCK_PORT,
@@ -423,11 +430,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 					_DSI_LDO_EN);
 
 		if (IS_ANN_A0(dev)) {
-			if (get_panel_type(dev, dsi_config->pipe) == JDI_7x12_CMD)
-				intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0x177);
-			else
-				intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
-
+			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
 			guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
 			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
 					((guit_val & ~_P1_POST_DIV_MASK) |

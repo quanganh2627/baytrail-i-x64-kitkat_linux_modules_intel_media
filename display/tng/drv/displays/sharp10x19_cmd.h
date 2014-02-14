@@ -25,8 +25,8 @@
 */
 
 
-#ifndef SHARP5_CMD_H
-#define SHARP5_CMD_H
+#ifndef SHARP10x19_CMD_H
+#define SHARP10x19_CMD_H
 
 #include <drm/drmP.h>
 #include <drm/drm.h>
@@ -37,5 +37,5 @@
 #include "mdfld_dsi_dpi.h"
 #include "mdfld_dsi_pkg_sender.h"
 
-void sharp5_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs);
+void sharp10x19_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs);
 #endif

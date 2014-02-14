@@ -332,27 +332,37 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 	 * calculate them according to the DSI PLL HAS spec.
 	 */
 	if (pipe != 1) {
-		if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
-			if (get_panel_type(dev, pipe) == JDI_7x12_CMD) {
-				clock.p1 = 4;
-				clk_n = 1;
-				clock.m = 142;
-			} else if ((get_panel_type(dev, pipe) == SHARP_10x19_CMD) ||
-				(get_panel_type(dev, pipe) == SHARP_25x16_CMD))
-			{
+		switch(get_panel_type(dev, pipe)) {
+		case SHARP_10x19_CMD:
+		case SHARP_25x16_CMD:
 				clock.p1 = 3;
-				clk_n = 1;
 				clock.m = 137;
-			} else {
+				break;
+		case SHARP_10x19_DUAL_CMD:
+				clock.p1 = 3;
+				clock.m = 125;
+				break;
+		case CMI_7x12_CMD:
 				clock.p1 = 4;
-				clk_n = 1;
 				clock.m = 120;
-			}
-		} else if (is_dual_dsi(dev)) {
-			clock.p1 = 3;
-			clk_n = 1;
-			clock.m = 162;
+				break;
+		case SHARP_10x19_VID:
+		case JDI_25x16_VID:
+				clock.p1 = 3;
+				clock.m = 162;
+				break;
+		case JDI_7x12_VID:
+				clock.p1 = 5;
+				clk_n = 1;
+				clock.m = 130;
+				break;
+		default:
+			/* for JDI_7x12_CMD */
+				clock.p1 = 4;
+				clock.m = 142;
+				break;
 		}
+		clk_n = 1;
 	}
 
 	if (!ok) {
