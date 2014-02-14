@@ -696,6 +696,7 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 			psDevInfo->psRGXFWIfGpuUtilFWCb->aui64CB[RGXFWIF_GPU_UTIL_FWCB_SIZE-1] = 
 				RGXFWIF_GPU_UTIL_FWCB_STATE_RESERVED << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT;
 
+			psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
 			/*
 				Run the RGX init script.
 			*/
