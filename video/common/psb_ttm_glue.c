@@ -433,7 +433,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 		if (ctx_type & VA_RT_FORMAT_PROTECTED) {
 			video_ctx->slice_extract_flag = 1;
 			video_ctx->frame_boundary = 1;
-			video_ctx->frame_end_seq = 0;
+			video_ctx->frame_end_seq = 0xffffffff;
 		}
 #endif
 		video_ctx->filp = file_priv->filp;
