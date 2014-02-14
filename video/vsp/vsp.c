@@ -643,19 +643,17 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			VSP_DEBUG("set context and new vsp FRC context\n");
 		} else if (cur_cmd->type == Vss_Sys_STATE_BUF_COMMAND) {
 			VSP_DEBUG("set context and new vsp VP8 context\n");
-			/* store the fd of 2 vp8 encoding processes */
-			vsp_priv->vp8_filp[vsp_priv->context_vp8_id] = priv->filp;
-			vsp_priv->context_vp8_id++;
-			if (vsp_priv->context_vp8_id > 1)
-				vsp_priv->context_vp8_id = 0;
 
 			cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
 			cur_cmd->type = VssGenInitializeContext;
-			if (priv->filp == vsp_priv->vp8_filp[0])
+			if (priv->filp == vsp_priv->vp8_filp[0]) {
 				cur_cmd->buffer = 1;
-
-			if (priv->filp == vsp_priv->vp8_filp[1])
+			} else if (priv->filp == vsp_priv->vp8_filp[1]) {
 				cur_cmd->buffer = 2;
+			} else {
+				DRM_ERROR("got the wrong context_id and exit\n");
+				return -1;
+			}
 
 			cur_cmd->size = VSP_APP_ID_VP8_ENC;
 			cur_cmd->buffer_id = 0;
@@ -673,10 +671,14 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			/* set 1st VP8 process context_vp8_id=1 *
 			 * set 2nd VP8 process context_vp8_id=2 *
 			 * */
-			if (priv->filp == vsp_priv->vp8_filp[0])
+			if (priv->filp == vsp_priv->vp8_filp[0]) {
 				cur_cmd->context = 1;
-			else if (priv->filp == vsp_priv->vp8_filp[1])
+			} else if (priv->filp == vsp_priv->vp8_filp[1]) {
 				cur_cmd->context = 2;
+			} else {
+				DRM_ERROR("got the wrong context_id and exit\n");
+				return -1;
+			}
 
 			pic_bo_vp8 =
 				ttm_buffer_object_lookup(tfile,
@@ -713,10 +715,14 @@ static int vsp_prehandle_command(struct drm_file *priv,
 		}
 
 		if (cur_cmd->type == VssVp8encSetSequenceParametersCommand) {
-			if (priv->filp == vsp_priv->vp8_filp[0])
+			if (priv->filp == vsp_priv->vp8_filp[0]) {
 				cur_cmd->context = 1;
-			else if (priv->filp == vsp_priv->vp8_filp[1])
+			} else if (priv->filp == vsp_priv->vp8_filp[1]) {
 				cur_cmd->context = 2;
+			} else {
+				DRM_ERROR("got the wrong context_id and exit\n");
+				return -1;
+			}
 
 			memcpy(&vsp_priv->seq_cmd, cur_cmd, sizeof(struct vss_command_t));
 		}
@@ -1006,7 +1012,7 @@ bool vsp_fence_poll(struct drm_device *dev)
 	return false;
 }
 
-int vsp_new_context(struct drm_device *dev, int ctx_type)
+int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
@@ -1024,12 +1030,22 @@ int vsp_new_context(struct drm_device *dev, int ctx_type)
 	}
 
 	vsp_priv->context_num++;
-
 	if (VAEntrypointEncSlice == ctx_type) {
 		vsp_priv->context_vp8_num++;
 		if (vsp_priv->context_vp8_num > 2) {
-			DRM_ERROR("Only support dual vp8 encoding!\n");
+			DRM_ERROR("VSP: Only support dual vp8 encoding!\n");
+			return vsp_priv->context_vp8_num;
 		}
+
+		/* store the fd of 2 vp8 encoding processes */
+		if (vsp_priv->vp8_filp[0] == NULL) {
+			vsp_priv->vp8_filp[0] = filp;
+		} else if (vsp_priv->vp8_filp[1] == NULL) {
+			vsp_priv->vp8_filp[1] = filp;
+		} else {
+			DRM_ERROR("VSP: The current 2 vp8 contexts have not been removed\n");
+		}
+
 		return vsp_priv->context_vp8_num;
 	}
 
@@ -1059,6 +1075,11 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 
 	if (vsp_priv->ctrl == NULL) {
 		vsp_priv->context_num--;
+		if (filp == vsp_priv->vp8_filp[0])
+			vsp_priv->vp8_filp[0] = NULL;
+		else
+			vsp_priv->vp8_filp[1] = NULL;
+
 		if (VAEntrypointEncSlice == ctx_type) {
 			vsp_priv->context_vp8_num--;
 		}
@@ -1077,7 +1098,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 			VSP_DEBUG("The VSP is on suspend, send resume!\n");
 		}
 
-		VSP_DEBUG("VP8 send the last command here to destroy context buffer\n ");
+		VSP_DEBUG("VP8 send the last command here to destroy context buffer\n");
 		cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
 
 		cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
@@ -1091,8 +1112,10 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		/* judge which vp8 process should be remove context */
 		if (filp == vsp_priv->vp8_filp[0]) {
 			cur_cmd->buffer = 1;
+			vsp_priv->vp8_filp[0] = NULL;
 		} else if (filp == vsp_priv->vp8_filp[1]) {
 			cur_cmd->buffer = 2;
+			vsp_priv->vp8_filp[1] = NULL;
 		} else {
 			VSP_DEBUG("support dual VP8 encoding at most\n");
 		}
@@ -1606,11 +1629,11 @@ static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
 	cmd_wr = vsp_priv->ctrl->cmd_wr;
 	VSP_DEBUG("cmd_rd=%d, cmd_wr=%d\n", cmd_rd, cmd_wr);
 
-	/* save next frame commands after error response */
-	vsp_priv->next_frame_cmd = vsp_priv->cmd_queue + (cmd_rd + 1) % VSP_CMD_QUEUE_SIZE;
+	/* move back command queue's read index */
+	vsp_priv->ctrl->cmd_rd = (vsp_priv->ctrl->cmd_rd + VSP_CMD_QUEUE_SIZE - 3) % VSP_CMD_QUEUE_SIZE;
 
 	VSP_DEBUG("send destroy context buffer command\n");
-	cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
+	cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_rd % VSP_CMD_QUEUE_SIZE;
 
 	cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
 	cur_cmd->type = VssGenDestroyContext;
@@ -1621,10 +1644,8 @@ static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
 	cur_cmd->reserved7 = 0;
 	cur_cmd->buffer = context;
 
-	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
-
 	VSP_DEBUG("send create context buffer command\n");
-	cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
+	cur_cmd = vsp_priv->cmd_queue + (vsp_priv->ctrl->cmd_rd + 1) % VSP_CMD_QUEUE_SIZE;
 	cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
 	cur_cmd->type = VssGenInitializeContext;
 	cur_cmd->buffer = context;
@@ -1634,10 +1655,8 @@ static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
 	cur_cmd->reserved6 = 0;
 	cur_cmd->reserved7 = 0;
 
-	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
-
 	VSP_DEBUG("send seq cmd again\n");
-	cur_cell_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
+	cur_cell_cmd = vsp_priv->cmd_queue + (vsp_priv->ctrl->cmd_rd + 2) % VSP_CMD_QUEUE_SIZE;
 
 	memcpy(cur_cell_cmd, &vsp_priv->seq_cmd, sizeof(struct vss_command_t));
 	VSP_DEBUG("cmd: %.8x %.8x %.8x %.8x %.8x %.8x\n",
@@ -1645,19 +1664,5 @@ static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
 		   cur_cell_cmd->buffer, cur_cell_cmd->size,
 		   cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
 	VSP_DEBUG("send %.8x cmd to VSP\n", cur_cell_cmd->type);
-
-	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
-
-	VSP_DEBUG("send encode frame commands from next frame\n");
-	cur_cell_cmd = vsp_priv->cmd_queue + (cmd_rd + 1) % VSP_CMD_QUEUE_SIZE;
-
-	memcpy(cur_cell_cmd, vsp_priv->next_frame_cmd, sizeof(struct vss_command_t));
-	VSP_DEBUG("cmd: %.8x %.8x %.8x %.8x %.8x %.8x\n",
-		   cur_cell_cmd->context, cur_cell_cmd->type,
-		   cur_cell_cmd->buffer, cur_cell_cmd->size,
-		   cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
-	VSP_DEBUG("send %.8x cmd to VSP\n", cur_cell_cmd->type);
-
-	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
 }
 

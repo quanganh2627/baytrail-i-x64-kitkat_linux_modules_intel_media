@@ -95,7 +95,6 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->coded_buf = NULL;
 
 	vsp_priv->context_num = 0;
-	vsp_priv->context_vp8_id = 0;
 	atomic_set(&dev_priv->vsp_mmu_invaldc, 0);
 
 	dev_priv->vsp_private = vsp_priv;
@@ -212,8 +211,6 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->context_vp8_num = 0;
 
 	vsp_priv->vp8_cmd_num = 0;
-
-	vsp_priv->next_frame_cmd = NULL;
 
 	spin_lock_init(&vsp_priv->lock);
 	mutex_init(&vsp_priv->vsp_mutex);
