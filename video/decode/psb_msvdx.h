@@ -273,6 +273,7 @@ struct psb_msvdx_cmd_queue {
 	void *cmd;
 	unsigned long cmd_size;
 	uint32_t sequence;
+	uint32_t fence_flag;
 	uint32_t msvdx_tile;
 	uint32_t host_be_opp_enabled;
 	uint32_t deblock_cmd_offset;
