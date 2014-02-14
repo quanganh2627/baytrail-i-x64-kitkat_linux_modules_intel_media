@@ -1431,16 +1431,33 @@ void mdfld_reset_panel_handler_work(struct work_struct *work)
 	if (p_funcs) {
 		mutex_lock(&dsi_config->context_lock);
 
-		DRM_INFO("Starts ESD panel reset\n");
-		if (__dbi_panel_power_off(dsi_config, p_funcs)) {
+		if (!dsi_config->dsi_hw_context.panel_on) {
+			DRM_INFO("don't reset panel when panel is off\n");
 			mutex_unlock(&dsi_config->context_lock);
 			return;
 		}
+
+		DRM_INFO("Starts ESD panel reset\n");
+		/*
+		 * since panel is in abnormal state,
+		 * we do a power off/on first
+		 */
+		power_island_put(OSPM_DISPLAY_A |
+				 OSPM_DISPLAY_C |
+				 OSPM_DISPLAY_MIO);
+		power_island_get(OSPM_DISPLAY_A |
+				 OSPM_DISPLAY_C |
+				 OSPM_DISPLAY_MIO);
+
+		if (__dbi_panel_power_off(dsi_config, p_funcs))
+			DRM_INFO("failed to power off dbi panel\n");
+
 		if (get_panel_type(dev, 0) == JDI_7x12_CMD)
 			if (p_funcs && p_funcs->reset)
 				p_funcs->reset(dsi_config);
 
 		if (__dbi_panel_power_on(dsi_config, p_funcs)) {
+			DRM_ERROR("failed to power on dbi panel\n");
 			mutex_unlock(&dsi_config->context_lock);
 			return;
 		}

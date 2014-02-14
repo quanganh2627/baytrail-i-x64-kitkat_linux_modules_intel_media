@@ -2970,7 +2970,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					DRM_ERROR("%s: fail to get pipe %d vsync\n",
 							__func__, pipe);
 
-					if (!IS_ANN_A0(dev)) {
+					if (!IS_ANN_A0(dev) &&
+					    dsi_config->dsi_hw_context.panel_on) {
 						if ((pipe != 1) && (is_panel_vid_or_cmd(dev) ==
 									MDFLD_DSI_ENCODER_DBI))
 							schedule_work(&dev_priv->reset_panel_work);
