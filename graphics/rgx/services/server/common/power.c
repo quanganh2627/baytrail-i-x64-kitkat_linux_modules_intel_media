@@ -800,15 +800,13 @@ PVRSRV_ERROR PVRSRVDevicePreClockSpeedChange(IMG_UINT32	ui32DeviceIndex,
 
 	do
 	{
-		if (bIdleDevice)
+
+		/* This mutex is released in PVRSRVDevicePostClockSpeedChange. */
+		eError = PVRSRVPowerLock();
+		if (eError != PVRSRV_OK)
 		{
-			/* This mutex is released in PVRSRVDevicePostClockSpeedChange. */
-			eError = PVRSRVPowerLock();
-			if (eError != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_ERROR,	"PVRSRVDevicePreClockSpeedChange : failed to acquire lock, error:0x%x", eError));
-				return eError;
-			}
+			PVR_DPF((PVR_DBG_ERROR,	"PVRSRVDevicePreClockSpeedChange : failed to acquire lock, error:0x%x", eError));
+			return eError;
 		}
 
 		if (psPowerDevice && psPowerDevice->pfnPostClockSpeedChange)
@@ -829,17 +827,15 @@ PVRSRV_ERROR PVRSRVDevicePreClockSpeedChange(IMG_UINT32	ui32DeviceIndex,
 						"PVRSRVDevicePreClockSpeedChange : Device %u denied transition to IDLE",
 						ui32DeviceIndex));
 		
-				if (bIdleDevice)
-				{
-					PVRSRVPowerUnlock();
-					OSSleepms(1);
-				}
+
+				PVRSRVPowerUnlock();
+				OSSleepms(1);
 			}
 		}
 	}
 	while (eError == PVRSRV_ERROR_DEVICE_POWER_CHANGE_DENIED);
 
-	if (bIdleDevice && eError != PVRSRV_OK)
+	if (eError != PVRSRV_OK)
 	{
 		PVRSRVPowerUnlock();
 	}
@@ -894,11 +890,9 @@ IMG_VOID PVRSRVDevicePostClockSpeedChange(IMG_UINT32	ui32DeviceIndex,
 	}
 
 
-	if (bIdleDevice)
-	{
-		/* This mutex was acquired in PVRSRVDevicePreClockSpeedChange. */
-		PVRSRVPowerUnlock();
-	}
+	/* This mutex was acquired in PVRSRVDevicePreClockSpeedChange. */
+	PVRSRVPowerUnlock();
+
 }
 
 /******************************************************************************
