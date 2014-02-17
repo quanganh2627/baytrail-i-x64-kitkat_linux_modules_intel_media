@@ -2224,6 +2224,13 @@ PVRSRV_ERROR RGXSendCommandRaw(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 	
 	PVR_ASSERT(ui32CmdSize == psKCCBCtl->ui32CmdSize);
 
+	if (!OSLockIsLocked(PVRSRVGetPVRSRVData()->hPowerLock))
+	{
+		PVR_DPF((PVR_DBG_ERROR, "RGXSendCommandRaw called without power lock held!"));
+		PVR_ASSERT(OSLockIsLocked(PVRSRVGetPVRSRVData()->hPowerLock));
+	}
+ 
+
 	/*
 	 * Acquire a slot in the CCB.
 	 */ 
@@ -2705,7 +2712,7 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 					bPDumpContinuous ? PDUMP_FLAGS_CONTINUOUS:0);
 #endif
 
-	for(;;)
+
 	{
 		RGXFWIF_CCB_CTL  *psKCCBCtl = psDevInfo->apsKernelCCBCtl[eDM];
 		IMG_UINT32       ui32CurrentQueueLength = (psKCCBCtl->ui32WrapMask+1 +
@@ -2713,7 +2720,7 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 												   psKCCBCtl->ui32ReadOffset) & psKCCBCtl->ui32WrapMask;
 		IMG_UINT32       ui32MaxRetries;
 
-		for (ui32MaxRetries = ui32CurrentQueueLength + 1;
+		for (ui32MaxRetries = (ui32CurrentQueueLength + 1) * 3;
 			 ui32MaxRetries > 0;
 			 ui32MaxRetries--)
 		{
@@ -2733,11 +2740,7 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 			PVR_DPF((PVR_DBG_ERROR,"RGXScheduleCommandAndWait: PVRSRVWaitForValueKM timed out. Dump debug information."));
 
 			PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
-			continue;
-		}
-		else
-		{
-			break;
+			PVR_ASSERT(eError != PVRSRV_ERROR_TIMEOUT);
 		}
 
 	}
