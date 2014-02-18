@@ -2642,6 +2642,7 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 	PVRSRV_ERROR		eError = PVRSRV_OK;
 	PVRSRV_DEVICE_NODE *psDeviceNode = psDevInfo->psDeviceNode;
 	RGXFWIF_KCCB_CMD	sCmdSyncPrim;
+	IMG_UINT32 count = 0;
 
 	/* Ensure RGX is powered up before kicking MTS */
 	eError = PVRSRVPowerLock();
@@ -2730,9 +2731,31 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 
 		if (eError == PVRSRV_ERROR_TIMEOUT)
 		{
+			count++;
 			PVR_DPF((PVR_DBG_ERROR,"RGXScheduleCommandAndWait: PVRSRVWaitForValueKM timed out. Dump debug information."));
 
 			PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
+			
+			if (count == 2)
+			{
+				/* submit the sync primitive to the kernel CCB again*/
+				PVR_DPF((PVR_DBG_ERROR,"Resending Sync Command"));
+
+				eError = RGXSendCommandRaw(psDevInfo,
+								eDM,
+								&sCmdSyncPrim,
+								sizeof(RGXFWIF_KCCB_CMD),
+								bPDumpContinuous  ? PDUMP_FLAGS_CONTINUOUS:0);
+				if (eError != PVRSRV_OK)
+				{
+					PVR_DPF((PVR_DBG_ERROR,"RGXScheduleCommandAndWait: Failed to schedule Kernel SyncPrim with error (%u)", eError));
+					goto _RGXSendCommandRaw_Exit;
+				}
+			}
+			if (count > 2)
+			{
+				PVR_DPF((PVR_DBG_ERROR,"Recorvery from RGXWaitForFWOp Failed, looping "));
+			}
 			continue;
 		}
 		else
