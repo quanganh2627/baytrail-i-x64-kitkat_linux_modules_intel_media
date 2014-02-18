@@ -458,6 +458,9 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 				dfrgx_burst_set_enable(&bfdata->g_dfrgx_data, 0);
 				df->max_freq = bfdata->gpudata[cs].freq_limit;
 
+				if (df->previous_freq > df->max_freq)
+					b_update_freq = 1;
+
 				if (bfdata->gpudata[cs].freq_limit < df->min_freq) {
 					df->min_freq = bfdata->gpudata[cs].freq_limit;
 					new_index = df_rgx_get_util_record_index_by_freq(df->min_freq);
@@ -486,7 +489,6 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 				bfdata->b_need_freq_update = 1;
 				mutex_unlock(&bfdata->lock);
 			}
-
 		}
 
 		bfdata->gbp_cooldv_state_prev = bfdata->gbp_cooldv_state_cur;
