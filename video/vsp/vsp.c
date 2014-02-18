@@ -70,6 +70,8 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 				struct ttm_buffer_object *pic_param_bo,
 				struct ttm_buffer_object *coded_buf_bo);
 
+static void vp8_error_response(struct drm_psb_private *dev_priv, int context);
+
 static inline void psb_clflush(void *addr)
 {
 	__asm__ __volatile__("wbinvd ");
@@ -86,6 +88,8 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 	struct vss_response_t *msg;
 	uint32_t sequence;
 	uint32_t status;
+	struct vss_command_t *cur_cell_cmd, *cur_cmd;
+	unsigned int cmd_rd, cmd_wr;
 
 	idx = 0;
 	sequence = vsp_priv->current_sequence;
@@ -114,6 +118,11 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 				  msg->size, msg->vss_cc);
 			handle_error_response(msg->buffer & 0xFFFF,
 					msg->buffer >> 16);
+
+			if (msg->context != 0) {
+				vp8_error_response(dev_priv, msg->context);
+			}
+
 			ret = false;
 			break;
 
@@ -644,6 +653,7 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			cur_cmd->type = VssGenInitializeContext;
 			if (priv->filp == vsp_priv->vp8_filp[0])
 				cur_cmd->buffer = 1;
+
 			if (priv->filp == vsp_priv->vp8_filp[1])
 				cur_cmd->buffer = 2;
 
@@ -707,6 +717,8 @@ static int vsp_prehandle_command(struct drm_file *priv,
 				cur_cmd->context = 1;
 			else if (priv->filp == vsp_priv->vp8_filp[1])
 				cur_cmd->context = 2;
+
+			memcpy(&vsp_priv->seq_cmd, cur_cmd, sizeof(struct vss_command_t));
 		}
 
 		cmd_size -= sizeof(*cur_cmd);
@@ -1584,4 +1596,68 @@ void handle_error_response(unsigned int error_type, unsigned int cmd_type)
 
 }
 
+static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
+{
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+	struct vss_command_t *cur_cell_cmd, *cur_cmd;
+	unsigned int cmd_rd, cmd_wr;
+
+	cmd_rd = vsp_priv->ctrl->cmd_rd;
+	cmd_wr = vsp_priv->ctrl->cmd_wr;
+	VSP_DEBUG("cmd_rd=%d, cmd_wr=%d\n", cmd_rd, cmd_wr);
+
+	/* save next frame commands after error response */
+	vsp_priv->next_frame_cmd = vsp_priv->cmd_queue + (cmd_rd + 1) % VSP_CMD_QUEUE_SIZE;
+
+	VSP_DEBUG("send destroy context buffer command\n");
+	cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
+
+	cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
+	cur_cmd->type = VssGenDestroyContext;
+	cur_cmd->size = 0;
+	cur_cmd->buffer_id = 0;
+	cur_cmd->irq = 0;
+	cur_cmd->reserved6 = 0;
+	cur_cmd->reserved7 = 0;
+	cur_cmd->buffer = context;
+
+	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
+
+	VSP_DEBUG("send create context buffer command\n");
+	cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
+	cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
+	cur_cmd->type = VssGenInitializeContext;
+	cur_cmd->buffer = context;
+	cur_cmd->size = VSP_APP_ID_VP8_ENC;
+	cur_cmd->buffer_id = 0;
+	cur_cmd->irq = 0;
+	cur_cmd->reserved6 = 0;
+	cur_cmd->reserved7 = 0;
+
+	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
+
+	VSP_DEBUG("send seq cmd again\n");
+	cur_cell_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
+
+	memcpy(cur_cell_cmd, &vsp_priv->seq_cmd, sizeof(struct vss_command_t));
+	VSP_DEBUG("cmd: %.8x %.8x %.8x %.8x %.8x %.8x\n",
+		   cur_cell_cmd->context, cur_cell_cmd->type,
+		   cur_cell_cmd->buffer, cur_cell_cmd->size,
+		   cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
+	VSP_DEBUG("send %.8x cmd to VSP\n", cur_cell_cmd->type);
+
+	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
+
+	VSP_DEBUG("send encode frame commands from next frame\n");
+	cur_cell_cmd = vsp_priv->cmd_queue + (cmd_rd + 1) % VSP_CMD_QUEUE_SIZE;
+
+	memcpy(cur_cell_cmd, vsp_priv->next_frame_cmd, sizeof(struct vss_command_t));
+	VSP_DEBUG("cmd: %.8x %.8x %.8x %.8x %.8x %.8x\n",
+		   cur_cell_cmd->context, cur_cell_cmd->type,
+		   cur_cell_cmd->buffer, cur_cell_cmd->size,
+		   cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
+	VSP_DEBUG("send %.8x cmd to VSP\n", cur_cell_cmd->type);
+
+	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
+}
 
