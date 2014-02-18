@@ -275,10 +275,8 @@ struct vsp_private {
 	 * save VssVp8encEncodeFrameCommand cmd numbers *
 	 * */
 	int vp8_cmd_num;
-	int context_vp8_id;
 
 	struct vss_command_t seq_cmd;
-	struct vss_command_t *next_frame_cmd;
 };
 
 extern int vsp_init(struct drm_device *dev);
@@ -303,7 +301,7 @@ extern int vsp_cmdbuf_vpp(struct drm_file *priv,
 
 extern bool vsp_fence_poll(struct drm_device *dev);
 
-extern int vsp_new_context(struct drm_device *dev, int ctx_type);
+extern int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type);
 extern void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type);
 extern uint32_t psb_get_default_pd_addr(struct psb_mmu_driver *driver);
 
