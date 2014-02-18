@@ -828,6 +828,8 @@ PVRSRV_ERROR RGXPreClockSpeedChange (IMG_HANDLE				hDevHandle,
 			/* Populate DVFS history entry */
 			psDevInfo->psGpuDVFSHistory->aui32DVFSClockCB[psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId] = 0;
 		}
+	} else {
+		eError = PVRSRV_ERROR_UNKNOWN_POWER_STATE;
 	}
 
 	return eError;
