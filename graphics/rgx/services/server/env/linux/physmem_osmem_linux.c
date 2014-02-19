@@ -858,6 +858,46 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 		}
 #endif
 	}
+   else
+   {
+       /*
+           The kernel will zero the page for us when we allocate it, but if it
+           comes from the pool then we must do this ourselves.
+       */
+       if (psPage != IMG_NULL  &&  gfp_flags & __GFP_ZERO)
+       {
+           pvPageVAddr = kmap(psPage);
+           memset(pvPageVAddr, 0, PAGE_SIZE);
+
+#if defined (__arm__) || defined (__metag__)
+           if (ui32CPUCacheFlags != PVRSRV_MEMALLOCFLAG_CPU_CACHED)
+           {
+               IMG_CPU_PHYADDR sCPUPhysAddrStart, sCPUPhysAddrEnd;
+
+               sCPUPhysAddrStart.uiAddr = page_to_phys(psPage);
+               sCPUPhysAddrEnd.uiAddr = sCPUPhysAddrStart.uiAddr + PAGE_SIZE;
+
+               if (bFlush)
+               {
+                   OSFlushCPUCacheRangeKM(pvPageVAddr,
+                                               pvPageVAddr + PAGE_SIZE,
+                                               sCPUPhysAddrStart,
+                                               sCPUPhysAddrEnd);
+               }
+               else
+               {
+                   OSInvalidateCPUCacheRangeKM(pvPageVAddr,
+                                               pvPageVAddr + PAGE_SIZE,
+                                               sCPUPhysAddrStart,
+                                               sCPUPhysAddrEnd);
+               }
+           }
+#endif
+
+           kunmap(psPage);
+       }
+   }
+
 	if(IMG_NULL == (*ppsPage = psPage)){
 		return PVRSRV_ERROR_OUT_OF_MEMORY; 
 	}
