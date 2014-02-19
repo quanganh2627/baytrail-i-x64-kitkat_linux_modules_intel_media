@@ -277,6 +277,9 @@ struct vsp_private {
 	int vp8_cmd_num;
 
 	struct vss_command_t seq_cmd;
+
+	/* to save the last sequence */
+	uint32_t last_sequence;
 };
 
 extern int vsp_init(struct drm_device *dev);

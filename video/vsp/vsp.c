@@ -70,7 +70,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 				struct ttm_buffer_object *pic_param_bo,
 				struct ttm_buffer_object *coded_buf_bo);
 
-static void vp8_error_response(struct drm_psb_private *dev_priv, int context);
+static int  vp8_error_response(struct drm_psb_private *dev_priv, int context);
 
 static inline void psb_clflush(void *addr)
 {
@@ -119,8 +119,11 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			handle_error_response(msg->buffer & 0xFFFF,
 					msg->buffer >> 16);
 
-			if (msg->context != 0) {
-				vp8_error_response(dev_priv, msg->context);
+			cmd_rd = vsp_priv->ctrl->cmd_rd;
+			cmd_wr = vsp_priv->ctrl->cmd_wr;
+
+			if (msg->context != 0 && cmd_wr == cmd_rd) {
+				sequence =vp8_error_response(dev_priv, msg->context);
 			}
 
 			ret = false;
@@ -971,6 +974,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 		VSP_DEBUG("vp8 fence sequence %x at output pic %x\n",
 			  fence->sequence);
 		pic_param->input_frame.surface_id = fence->sequence;
+		vsp_priv->last_sequence = fence->sequence;
 
 		ttm_fence_object_unref(&fence);
 	} else {
@@ -1612,28 +1616,32 @@ void handle_error_response(unsigned int error_type, unsigned int cmd_type)
 	case VssInitFailure_VP8:
 		check_invalid_cmd_type(cmd_type);
 		DRM_ERROR("VSP: Init Failure\n");
+		break;
+	case VssCorruptFrame:
+		DRM_ERROR("VSP: Coded Frame is corrupted\n");
+		break;
+	case VssContextMustBeDestroyed_VP8:
+		DRM_ERROR("VSP: context must be destroyed and new context is created\n");
+		break;
 	default:
 		DRM_ERROR("VSP: Unknown error, code %x\n", error_type);
 		break;
 	}
-
 }
 
-static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
+static int vp8_error_response(struct drm_psb_private *dev_priv, int context)
 {
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	struct vss_command_t *cur_cell_cmd, *cur_cmd;
 	unsigned int cmd_rd, cmd_wr;
+	int sequence;
 
 	cmd_rd = vsp_priv->ctrl->cmd_rd;
 	cmd_wr = vsp_priv->ctrl->cmd_wr;
 	VSP_DEBUG("cmd_rd=%d, cmd_wr=%d\n", cmd_rd, cmd_wr);
 
-	/* move back command queue's read index */
-	vsp_priv->ctrl->cmd_rd = (vsp_priv->ctrl->cmd_rd + VSP_CMD_QUEUE_SIZE - 3) % VSP_CMD_QUEUE_SIZE;
-
 	VSP_DEBUG("send destroy context buffer command\n");
-	cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_rd % VSP_CMD_QUEUE_SIZE;
+	cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
 
 	cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
 	cur_cmd->type = VssGenDestroyContext;
@@ -1645,7 +1653,7 @@ static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
 	cur_cmd->buffer = context;
 
 	VSP_DEBUG("send create context buffer command\n");
-	cur_cmd = vsp_priv->cmd_queue + (vsp_priv->ctrl->cmd_rd + 1) % VSP_CMD_QUEUE_SIZE;
+	cur_cmd = vsp_priv->cmd_queue + (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
 	cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
 	cur_cmd->type = VssGenInitializeContext;
 	cur_cmd->buffer = context;
@@ -1656,7 +1664,7 @@ static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
 	cur_cmd->reserved7 = 0;
 
 	VSP_DEBUG("send seq cmd again\n");
-	cur_cell_cmd = vsp_priv->cmd_queue + (vsp_priv->ctrl->cmd_rd + 2) % VSP_CMD_QUEUE_SIZE;
+	cur_cell_cmd = vsp_priv->cmd_queue + (vsp_priv->ctrl->cmd_wr + 2) % VSP_CMD_QUEUE_SIZE;
 
 	memcpy(cur_cell_cmd, &vsp_priv->seq_cmd, sizeof(struct vss_command_t));
 	VSP_DEBUG("cmd: %.8x %.8x %.8x %.8x %.8x %.8x\n",
@@ -1664,5 +1672,11 @@ static void vp8_error_response(struct drm_psb_private *dev_priv, int context)
 		   cur_cell_cmd->buffer, cur_cell_cmd->size,
 		   cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
 	VSP_DEBUG("send %.8x cmd to VSP\n", cur_cell_cmd->type);
+
+	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + VSP_CMD_QUEUE_SIZE + 3) % VSP_CMD_QUEUE_SIZE;
+
+	sequence = vsp_priv->last_sequence;
+
+	return sequence;
 }
 

@@ -219,7 +219,9 @@ enum VssStatus {
 	VssInvalidDdrAddress          = 0x8005,
 	VssInvalidSequenceParameters_VP8 = 0x1,
 	VssInvalidPictureParameters_VP8  = 0x2,
-	VssInitFailure_VP8               = 0x5
+	VssContextMustBeDestroyed_VP8    = 0x3,
+	VssInitFailure_VP8               = 0x5,
+	VssCorruptFrame                  = 0x6
 };
 
 enum FrcResponseType {
@@ -297,7 +299,7 @@ struct vsp_secure_boot_header {
 	unsigned int boot_start_reg;
 };
 
-#define VSP_MULTI_APP_MAGIC_NR 0xb10b0004
+#define VSP_MULTI_APP_MAGIC_NR 0xb10b0005
 /*
  * Note: application index/id 0 is reserved.
  * So the maximum number of applications is one less than listed here.
@@ -570,6 +572,11 @@ struct VssVp8encSequenceParameterBuffer {
 	uint32_t cyclic_intra_refresh;
 	uint32_t concatenate_partitions;
 	uint32_t recon_buffer_mode;
+	uint32_t ts_number_layers;
+	uint32_t ts_target_bitrate[3];
+	uint32_t ts_rate_decimator[3];
+	uint32_t ts_periodicity;
+	uint32_t ts_layer_id[32];
 	struct VssProcPictureVP8 ref_frame_buffers[4];
 };
 
