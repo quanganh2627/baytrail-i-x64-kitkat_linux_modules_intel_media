@@ -2911,6 +2911,15 @@ static void overlay_wait_vblank(struct drm_device *dev, uint32_t ovadd)
 }
 #endif /* if KEEP_UNUSED_CODE */
 
+static void vsync_state_dump(struct drm_device *dev, int pipe)
+{
+	DRM_INFO("vblank_refcount = %u\n", atomic_read(&dev->vblank_refcount[pipe]));
+	DRM_INFO("vblank_enabled = %d\n", dev->vblank_enabled[pipe]);
+	DRM_INFO("vblank_count = %u\n", drm_vblank_count(dev, pipe));
+	DRM_INFO("PIPECONF = 0x%08x\n", pipe ? REG_READ(PIPEBCONF) : REG_READ(PIPEACONF));
+	DRM_INFO("PIPESTAT = 0x%08x\n\n", pipe ? REG_READ(PIPEBSTAT) : REG_READ(PIPEASTAT));
+}
+
 static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv)
 {
@@ -2964,8 +2973,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
 				if (ret) {
-					DRM_ERROR("%s: fail to get pipe %d vsync\n",
-							__func__, pipe);
+					DRM_ERROR("fail to get vsync on pipe %d, ret %d\n", pipe, ret);
+					vsync_state_dump(dev, pipe);
 
 					if (!IS_ANN_A0(dev)) {
 						if (pipe != 1 &&
