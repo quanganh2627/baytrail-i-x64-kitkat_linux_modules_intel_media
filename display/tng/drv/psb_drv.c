@@ -3862,35 +3862,6 @@ static void psb_remove(struct pci_dev *pdev)
 	drm_put_dev(dev);
 }
 
-static void psb_shutdown(struct pci_dev *pdev)
-{
-	struct drm_device *dev = pci_get_drvdata(pdev);
-	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct drm_encoder *encoder;
-	struct drm_encoder_helper_funcs *enc_funcs;
-
-	if (dev_priv->early_suspended)
-		return;
-
-	mutex_lock(&dev->mode_config.mutex);
-
-	/*
-	 * We borrow the early_suspended to avoid entering flip path after
-	 * shutdown is called
-	 */
-	dev_priv->early_suspended = true;
-
-	/* wait for the previous flip to be finished */
-	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
-		enc_funcs = encoder->helper_private;
-		if (!drm_helper_encoder_in_use(encoder))
-			continue;
-		if (enc_funcs && enc_funcs->save)
-			enc_funcs->save(encoder);
-	}
-	mutex_unlock(&dev->mode_config.mutex);
-}
-
 static int psb_proc_init(struct drm_minor *minor)
 {
 #ifdef CONFIG_SUPPORT_HDMI
@@ -4155,7 +4126,6 @@ static struct pci_driver psb_pci_driver = {
 #ifdef CONFIG_PM
 	.driver.pm = &psb_pm_ops,
 #endif
-	.shutdown = psb_shutdown
 };
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
