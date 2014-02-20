@@ -359,18 +359,11 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	bool is_iomem;
 	uint32_t invalid_mmu = 0;
 	struct file *filp = priv->filp;
+	bool need_power_put = 0;
 
 	ret = mutex_lock_interruptible(&vsp_priv->vsp_mutex);
 	if (unlikely(ret != 0))
 		return -EFAULT;
-
-	if (vsp_priv->vsp_state == VSP_STATE_IDLE)
-		ospm_apm_power_down_vsp(dev);
-
-	if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
-		ret = -EBUSY;
-		goto out_err;
-	}
 
 	/* check if mmu should be invalidated */
 	invalid_mmu = atomic_cmpxchg(&dev_priv->vsp_mmu_invaldc, 1, 0);
@@ -390,7 +383,7 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 			  cmd_buffer->acc_size);
 		vsp_priv->vsp_cmd_num = 0;
 		ret = -EFAULT;
-		goto out_err1;
+		goto out_err;
 	}
 
 	VSP_DEBUG("map command first\n");
@@ -399,7 +392,7 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	if (ret) {
 		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
 		vsp_priv->vsp_cmd_num = 0;
-		goto out_err1;
+		goto out_err;
 	}
 
 	cmd_start = (unsigned char *) ttm_kmap_obj_virtual(&cmd_kmap,
@@ -412,11 +405,34 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	if (ret)
 		goto out;
 
+	if (time_after(jiffies, vsp_priv->cmd_submit_time + HZ * 50 / 1000)) {
+		DRM_ERROR(" will be force to flush cmd due to jiffies\n");
+		vsp_priv->force_flush_cmd = 1;
+	}
+
+	if (drm_vsp_vpp_batch_cmd == 0)
+		vsp_priv->force_flush_cmd = 1;
+
+	if (vsp_priv->vsp_state == VSP_STATE_IDLE)
+		ospm_apm_power_down_vsp(dev);
+
+	if (vsp_priv->acc_num_cmd >= 1 || vsp_priv->force_flush_cmd != 0
+	    || vsp_priv->delayed_burst_cnt > 0) {
+		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
+			ret = -EBUSY;
+			goto out_err1;
+		}
+		need_power_put = 1;
+	}
+
 	VSP_DEBUG("will submit command\n");
 	ret = vsp_submit_cmdbuf(dev, filp, cmd_start, arg->cmdbuf_size);
 	if (ret)
-		goto out;
+		goto out_err1;
 
+out_err1:
+	if (need_power_put)
+		power_island_put(OSPM_VIDEO_VPP_ISLAND);
 out:
 	ttm_bo_kunmap(&cmd_kmap);
 
@@ -426,8 +442,6 @@ out:
 	spin_unlock(&cmd_buffer->bdev->fence_lock);
 
 	vsp_priv->vsp_cmd_num = 0;
-out_err1:
-	power_island_put(OSPM_VIDEO_VPP_ISLAND);
 out_err:
 	mutex_unlock(&vsp_priv->vsp_mutex);
 
@@ -448,21 +462,23 @@ int vsp_submit_cmdbuf(struct drm_device *dev,
 		DRM_ERROR("The VSP is hang abnormally!");
 		return -EFAULT;
 	}
+	if (vsp_priv->acc_num_cmd >= 1 || vsp_priv->force_flush_cmd != 0
+	    || vsp_priv->delayed_burst_cnt > 0) {
+		/* consider to invalidate/flush MMU */
+		if (vsp_priv->vsp_state == VSP_STATE_DOWN) {
+			VSP_DEBUG("needs reset\n");
 
-	/* consider to invalidate/flush MMU */
-	if (vsp_priv->vsp_state == VSP_STATE_DOWN) {
-		VSP_DEBUG("needs reset\n");
-
-		if (vsp_reset(dev_priv)) {
-			ret = -EBUSY;
-			DRM_ERROR("VSP: failed to reset\n");
-			return ret;
+			if (vsp_reset(dev_priv)) {
+				ret = -EBUSY;
+				DRM_ERROR("VSP: failed to reset\n");
+				return ret;
+			}
 		}
-	}
 
-	if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
-		ret = vsp_resume_function(dev_priv);
-		VSP_DEBUG("The VSP is on suspend, send resume!\n");
+		if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
+			ret = vsp_resume_function(dev_priv);
+			VSP_DEBUG("The VSP is on suspend, send resume!\n");
+		}
 	}
 
 	/* submit command to HW */
@@ -501,13 +517,11 @@ int vsp_send_command(struct drm_device *dev,
 
 
 	/* if the VSP in suspend, update the saved config info */
-#if 0
 	if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
 		VSP_DEBUG("In suspend, need update saved cmd_wr!\n");
 		vsp_priv->ctrl = (struct vsp_ctrl_reg *)
 				 &(vsp_priv->saved_config_regs[2]);
 	}
-#endif
 
 	while (cmd_size) {
 		rd = vsp_priv->ctrl->cmd_rd;
@@ -515,6 +529,7 @@ int vsp_send_command(struct drm_device *dev,
 
 		remaining_space = rd >= wr + 1 ? rd - wr - 1 :
 			VSP_CMD_QUEUE_SIZE - (wr + 1 - rd) ;
+		remaining_space -= vsp_priv->acc_num_cmd;
 
 		VSP_DEBUG("VSP: rd %d, wr %d, remaining_space %d, ",
 			  rd, wr, remaining_space);
@@ -536,7 +551,7 @@ int vsp_send_command(struct drm_device *dev,
 			continue;
 		}
 
-		for (cmd_idx = 0; cmd_idx < remaining_space;) {
+		for (cmd_idx = vsp_priv->acc_num_cmd; cmd_idx < remaining_space;) {
 			VSP_DEBUG("current cmd type %x\n", cur_cmd->type);
 			if (cur_cmd->type == VspFencePictureParamCommand) {
 				VSP_DEBUG("skip VspFencePictureParamCommand");
@@ -571,6 +586,7 @@ int vsp_send_command(struct drm_device *dev,
 				cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
 			VSP_DEBUG("send %.8x cmd to VSP",
 					cur_cell_cmd->type);
+
 			num_cmd++;
 			cur_cmd++;
 			cmd_size -= sizeof(*cur_cmd);
@@ -586,9 +602,23 @@ int vsp_send_command(struct drm_device *dev,
 out:
 	/* update write index */
 	VSP_DEBUG("%d cmd will send to VSP!\n", num_cmd);
+	if (vsp_priv->delayed_burst_cnt > 0)
+		--vsp_priv->delayed_burst_cnt;
 
-	vsp_priv->ctrl->cmd_wr =
-		(vsp_priv->ctrl->cmd_wr + num_cmd) % VSP_CMD_QUEUE_SIZE;
+	vsp_priv->cmd_submit_time = jiffies;
+
+	vsp_priv->acc_num_cmd += num_cmd;
+	if (vsp_priv->acc_num_cmd > 1 || vsp_priv->force_flush_cmd != 0 ||
+	    vsp_priv->delayed_burst_cnt > 0) {
+		vsp_priv->ctrl->cmd_wr =
+			(vsp_priv->ctrl->cmd_wr + vsp_priv->acc_num_cmd) %
+			VSP_CMD_QUEUE_SIZE;
+		vsp_priv->acc_num_cmd = 0;
+		vsp_priv->force_flush_cmd = 0;
+		cancel_delayed_work(&vsp_priv->vsp_cmd_submit_check_wq);
+	} else {
+		schedule_delayed_work(&vsp_priv->vsp_cmd_submit_check_wq, HZ);
+	}
 
 	return 0;
 }
@@ -731,6 +761,10 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			memcpy(&vsp_priv->seq_cmd, cur_cmd, sizeof(struct vss_command_t));
 		}
 
+		/* for VP8, directly submit without delay */
+		if (cur_cmd->context != 0)
+			vsp_priv->force_flush_cmd = 1;
+
 		cmd_size -= sizeof(*cur_cmd);
 		cur_cmd++;
 	}
@@ -750,6 +784,8 @@ static int vsp_prehandle_command(struct drm_file *priv,
 		list_for_each_entry_safe(pos, next, validate_list, head) {
 			ttm_bo_unreserve(pos->bo);
 		}
+
+		vsp_priv->force_flush_cmd = 1;
 
 		VSP_DEBUG("no fence for this command\n");
 		goto out;
@@ -783,6 +819,9 @@ int vsp_fence_surfaces(struct drm_file *priv,
 	struct list_head surf_list, tmp_list;
 	struct ttm_validate_buffer *pos, *next, *cur_valid_buf;
 	struct ttm_object_file *tfile = BCVideoGetPriv(priv)->tfile;
+	struct drm_device *dev = priv->minor->dev;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 
 	INIT_LIST_HEAD(&surf_list);
 	INIT_LIST_HEAD(&tmp_list);
@@ -801,6 +840,9 @@ int vsp_fence_surfaces(struct drm_file *priv,
 
 	output_surf_num = pic_param->num_output_pictures;
 	VSP_DEBUG("output surf num %d\n", output_surf_num);
+
+	if (output_surf_num == 0)
+		vsp_priv->force_flush_cmd = 1;
 
 	/* create surface fence*/
 	for (idx = 0; idx < output_surf_num - 1; ++idx) {
@@ -1061,6 +1103,9 @@ int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		ret = -1;
 	}
 
+	vsp_priv->force_flush_cmd = 0;
+	vsp_priv->acc_num_cmd = 0;
+	vsp_priv->delayed_burst_cnt = 90;
 	return ret;
 }
 
@@ -1325,6 +1370,47 @@ void vsp_irq_task(struct work_struct *work)
 	}
 	mutex_unlock(&vsp_priv->vsp_mutex);
 
+	return;
+}
+
+void vsp_cmd_submit_check(struct work_struct *work)
+{
+	struct vsp_private *vsp_priv =
+		container_of(work, struct vsp_private, vsp_cmd_submit_check_wq.work);
+	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
+	uint32_t power_up_try_count;
+
+	if (!vsp_priv)
+		return;
+
+	dev = vsp_priv->dev;
+	dev_priv = dev->dev_private;
+
+	mutex_lock(&vsp_priv->vsp_mutex);
+
+	if (vsp_priv->acc_num_cmd > 0) {
+		power_up_try_count = 10;
+		while (power_up_try_count--)
+			if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == true)
+				break;
+		if (power_up_try_count <= 0) {
+			DRM_ERROR("failed to send remaining command");
+			goto out;
+		}
+
+		vsp_resume_function(dev_priv);
+
+		vsp_priv->ctrl->cmd_wr =
+			(vsp_priv->ctrl->cmd_wr + vsp_priv->acc_num_cmd) % VSP_CMD_QUEUE_SIZE;
+		vsp_priv->acc_num_cmd = 0;
+		vsp_priv->force_flush_cmd = 0;
+
+		power_island_put(OSPM_VIDEO_VPP_ISLAND);
+	}
+
+out:
+	mutex_unlock(&vsp_priv->vsp_mutex);
 	return;
 }
 

@@ -219,6 +219,8 @@ int vsp_init(struct drm_device *dev)
 			&psb_powerdown_vsp);
 	INIT_DELAYED_WORK(&vsp_priv->vsp_irq_wq,
 			&vsp_irq_task);
+	INIT_DELAYED_WORK(&vsp_priv->vsp_cmd_submit_check_wq,
+			&vsp_cmd_submit_check);
 
 	return 0;
 out_clean:

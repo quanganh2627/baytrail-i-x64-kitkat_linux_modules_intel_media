@@ -285,6 +285,13 @@ struct vsp_private {
 
 	/* to save the last sequence */
 	uint32_t last_sequence;
+
+	/* VPP pnp usage */
+	unsigned long cmd_submit_time;
+	int acc_num_cmd;
+	int force_flush_cmd;
+	int delayed_burst_cnt;
+	struct delayed_work vsp_cmd_submit_check_wq;
 };
 
 extern int vsp_init(struct drm_device *dev);
@@ -325,6 +332,7 @@ extern int psb_vsp_dump_info(struct drm_psb_private *dev_priv);
 
 extern void psb_powerdown_vsp(struct work_struct *work);
 extern void vsp_irq_task(struct work_struct *work);
+extern void vsp_cmd_submit_check(struct work_struct *work);
 
 static inline
 unsigned int vsp_is_idle(struct drm_psb_private *dev_priv,
