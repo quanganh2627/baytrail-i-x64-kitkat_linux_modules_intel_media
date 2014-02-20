@@ -181,11 +181,18 @@ otm_hdmi_ret_t ps_hdmi_pci_dev_init(void *context, struct pci_dev *pdev)
 				PS_MSIC_HPD_GPIO_PIN);
 	}
 
-	ctx->gpio_ls_en_pin = get_gpio_by_name(PS_MSIC_LS_EN_GPIO_PIN_NAME);
-	if (-1 == ctx->gpio_ls_en_pin) {
+	if (INTEL_MID_BOARD(2, PHONE, MOFD, MP, PRO) ||
+		INTEL_MID_BOARD(2, PHONE, MOFD, MP, ENG)) {
+		/* VV board uses GPIO pin 192 for Level shifter HDMI_LS_EN */
+		ctx->gpio_ls_en_pin = get_gpio_by_name(PS_MSIC_LS_EN_GPIO_PIN_NAME);
+		if (-1 == ctx->gpio_ls_en_pin) {
+			ctx->gpio_ls_en_pin = PS_MSIC_LS_EN_GPIO_PIN;
+			pr_debug("get_gpio_by_name failed! Use default pin %d\n",
+					PS_MSIC_LS_EN_GPIO_PIN);
+		}
+	} else {
+		/* PRh uses GPIO pin 177 for Level shifter HDMI_LS_EN */
 		ctx->gpio_ls_en_pin = PS_MSIC_LS_EN_GPIO_PIN;
-		pr_debug("get_gpio_by_name failed! Use default pin %d\n",
-				PS_MSIC_LS_EN_GPIO_PIN);
 	}
 
 	if (gpio_request(ctx->gpio_ls_en_pin, "HDMI_LS_EN")) {
