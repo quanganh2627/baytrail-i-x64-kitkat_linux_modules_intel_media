@@ -433,8 +433,8 @@ static void jdi25x16_vid_get_panel_info(int pipe, struct panel_info *pi)
 		return;
 
 	if (pipe == 0) {
-		pi->width_mm = PANEL_4DOT3_WIDTH;
-		pi->height_mm = PANEL_4DOT3_HEIGHT;
+		pi->width_mm = 192;
+		pi->height_mm = 120;
 	}
 
 	return;

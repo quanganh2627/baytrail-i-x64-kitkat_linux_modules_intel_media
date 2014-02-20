@@ -322,8 +322,8 @@ static void sharp25x16_vid_get_panel_info(int pipe, struct panel_info *pi)
 		return;
 
 	if (pipe == 0) {
-		pi->width_mm = 228;
-		pi->height_mm = 148;
+		pi->width_mm = 217;
+		pi->height_mm = 136;
 	}
 
 	return;

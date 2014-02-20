@@ -449,8 +449,8 @@ static void jdi_vid_get_panel_info(int pipe, struct panel_info *pi)
 		return;
 
 	if (pipe == 0) {
-		pi->width_mm = JDI_PANEL_WIDTH;
-		pi->height_mm = JDI_PANEL_HEIGHT;
+		pi->width_mm = 56;
+		pi->height_mm = 99;
 	}
 
 	return;

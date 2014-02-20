@@ -186,8 +186,6 @@ int sharp25x16_cmd_power_on(
 		__func__, __LINE__);
 		goto power_err;
 	}
-//	usleep_range(20000, 20100);
-
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 			set_pixel_format, 0x77, 1,
 			MDFLD_DSI_SEND_PACKAGE);
@@ -260,8 +258,6 @@ static int sharp25x16_cmd_power_off(
 		__func__, __LINE__);
 		goto power_off_err;
 	}
-//	usleep_range(20000, 20100);
-
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 			enter_sleep_mode, 0, 0,
 			MDFLD_DSI_SEND_PACKAGE);
@@ -271,7 +267,6 @@ static int sharp25x16_cmd_power_off(
 		goto power_off_err;
 	}
 
-//	usleep_range(1000, 1500);
 	return 0;
 power_off_err:
 	err = -EIO;
@@ -352,8 +347,8 @@ void sharp25x16_cmd_get_panel_info(int pipe,
 	PSB_DEBUG_ENTRY("\n");
 
 	if (pipe == 0) {
-		pi->width_mm = PANEL_4DOT3_WIDTH;
-		pi->height_mm = PANEL_4DOT3_HEIGHT;
+		pi->width_mm = 217;
+		pi->height_mm = 136;
 	}
 }
 

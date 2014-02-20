@@ -610,8 +610,8 @@ void jdi_cmd_get_panel_info(int pipe,
 	PSB_DEBUG_ENTRY("\n");
 
 	if (pipe == 0) {
-		pi->width_mm = PANEL_4DOT3_WIDTH;
-		pi->height_mm = PANEL_4DOT3_HEIGHT;
+		pi->width_mm = 56;
+		pi->height_mm = 99;
 	}
 }
 
