@@ -875,22 +875,26 @@ bool otm_hdmi_power_rails_off(void)
 }
 
 /* turn HDMI power islands on */
-bool otm_hdmi_power_islands_on()
+bool otm_hdmi_power_islands_on(void)
 {
-	return ps_hdmi_power_islands_on();
-}
+	hdmi_context_t *ctx = g_context;
 
-/* turn HDMI power islands on */
-bool otm_hdmi_hdcp_power_islands_on()
-{
-	return ps_hdmi_hdcp_power_islands_on();
+	if (ctx && ctx->islands_powered_on == false) {
+		ctx->islands_powered_on = true;
+		return ps_hdmi_power_islands_on();
+	}
+	return true;
 }
-
 
 /* turn HDMI power islands off */
-void otm_hdmi_power_islands_off()
+void otm_hdmi_power_islands_off(void)
 {
-	ps_hdmi_power_islands_off();
+	hdmi_context_t *ctx = g_context;
+
+	if (ctx && ctx->islands_powered_on == true) {
+		ctx->islands_powered_on = false;
+		ps_hdmi_power_islands_off();
+	}
 }
 
 /* enable/disable IRQ and CPD_HPD */

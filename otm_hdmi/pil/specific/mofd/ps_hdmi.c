@@ -286,23 +286,14 @@ bool ps_hdmi_power_islands_on()
 {
 	/* power on display island C to use overlay C and sprite D planes */
 	return ospm_power_using_hw_begin(
-			OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI | OSPM_DISPLAY_C,
+			OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI,
 			OSPM_UHB_FORCE_POWER_ON);
 }
-
-bool ps_hdmi_hdcp_power_islands_on()
-{
-	/* power on display island C to use overlay C and sprite D planes */
-	return ospm_power_using_hw_begin(
-			OSPM_DISPLAY_B | OSPM_DISPLAY_HDMI | OSPM_DISPLAY_C,
-			OSPM_UHB_FORCE_POWER_ON);
-}
-
 
 void ps_hdmi_power_islands_off()
 {
 	ospm_power_using_hw_end(
-		OSPM_DISPLAY_HDMI | OSPM_DISPLAY_B | OSPM_DISPLAY_C);
+		OSPM_DISPLAY_HDMI | OSPM_DISPLAY_B);
 }
 
 void ps_hdmi_vblank_control(struct drm_device *dev, bool on)
