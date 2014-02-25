@@ -319,7 +319,8 @@ out_unlock:
 static int psb_validate_buffer_list(struct drm_file *file_priv,
 				    uint32_t fence_class,
 				    struct psb_context *context,
-				    int *po_correct)
+				    int *po_correct,
+				    struct psb_mmu_driver *psb_mmu)
 {
 	struct psb_validate_buffer *item;
 	struct ttm_buffer_object *bo;
@@ -368,6 +369,14 @@ static int psb_validate_buffer_list(struct drm_file *file_priv,
 		 * this function is called in reserve */
 		if (unlikely(ret != 0))
 			goto out_err;
+
+#ifndef CONFIG_DRM_VXD_BYT
+		if ((item->req.unfence_flag & PSB_MEM_CLFLUSH)) {
+			ret = psb_ttm_bo_clflush(psb_mmu, bo);
+			if (unlikely(!ret))
+				PSB_DEBUG_WARN("clflush bo fail\n");
+		}
+#endif
 
 		fence_types |= cur_fence_type;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0))
@@ -729,7 +738,7 @@ void psb_fence_or_sync(struct drm_file *file_priv,
 		struct psb_validate_buffer *vbuf =
 			container_of(entry, struct psb_validate_buffer,
 				     base);
-		if (vbuf->req.unfence_flag) {
+		if (vbuf->req.unfence_flag & PSB_NOT_FENCE) {
 			list_del(&entry->head);
 			ttm_bo_unreserve_locked(entry->bo);
 			ttm_bo_unref(&entry->bo);
@@ -847,6 +856,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 	struct ttm_buffer_object *cmd_buffer = NULL;
 	struct psb_ttm_fence_rep fence_arg;
 	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct psb_mmu_driver *mmu = NULL;
 	struct msvdx_private *msvdx_priv = NULL;
 #ifdef SUPPORT_VSP
 	struct vsp_private *vsp_priv = NULL;
@@ -857,6 +867,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 	unsigned long irq_flags;
 	if (dev_priv == NULL)
 		return -EINVAL;
+	mmu = dev_priv->mmu;
 	msvdx_priv = dev_priv->msvdx_private;
 
 #if defined(MERRIFIELD)
@@ -975,7 +986,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 
 	engine = arg->engine;
 	ret = psb_validate_buffer_list(file_priv, engine,
-				       context, &po_correct);
+				       context, &po_correct, mmu);
 	if (unlikely(ret != 0))
 		goto out_err3;
 

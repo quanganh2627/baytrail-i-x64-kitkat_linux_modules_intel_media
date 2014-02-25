@@ -186,6 +186,9 @@ union drm_psb_extension_arg {
 	struct drm_psb_extension_rep rep;
 };
 
+#define PSB_NOT_FENCE                (1 << 0)
+#define PSB_MEM_CLFLUSH                (1 << 1)
+
 struct psb_validate_req {
 	uint64_t set_flags;
 	uint64_t clear_flags;

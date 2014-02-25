@@ -189,6 +189,8 @@ extern void psb_mmu_mirror_gtt(struct psb_mmu_pd *pd, uint32_t mmu_offset,
 extern int psb_mmu_virtual_to_pfn(struct psb_mmu_pd *pd, uint32_t virtual,
 				  unsigned long *pfn);
 #endif
+int psb_ttm_bo_clflush(struct psb_mmu_driver *mmu,
+			struct ttm_buffer_object *bo);
 
 
 /* Currently defined profiles */
