@@ -379,12 +379,12 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 		}
 	}
 
+	/*disable unused primary planes*/
+	_Disable_Unused_Primarys(gpsDevice);
+
 	/*setup plane zorder config*/
 	if (psSurfCustom)
 		_Setup_ZOrder(gpsDevice, &psSurfCustom->zorder, iPipe);
-
-	/*disable unused primary planes*/
-	_Disable_Unused_Primarys(gpsDevice);
 
 	psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DC_UPDATED;
 
