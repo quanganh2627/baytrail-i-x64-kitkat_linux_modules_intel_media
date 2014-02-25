@@ -245,7 +245,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 			}
 
 			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Min freq changed!,"
-					" prev_freq %u, min_freq %u\n",
+					" prev_freq %lu, min_freq %lu\n",
 					__func__,
 					df->previous_freq,
 					df->min_freq);
@@ -270,7 +270,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 			}
 
 			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:Max freq changed!,"
-				" prev_freq %u, max_freq %u\n",
+				" prev_freq %lu, max_freq %lu\n",
 				__func__,
 				df->previous_freq,
 				df->max_freq);
@@ -291,7 +291,7 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 			struct userspace_gov_data *data = df->data;
 
 			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s:userspace governor,"
-				" desired %u, data->user_frequency %u, input_freq = %u\n",
+				" desired %lu, data->user_frequency %lu, input_freq = %lu\n",
 				__func__,
 				desired_freq,
 				data->user_frequency,
