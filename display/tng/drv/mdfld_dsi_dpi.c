@@ -327,57 +327,6 @@ reset_recovery:
 	if (p_funcs && p_funcs->reset)
 		p_funcs->reset(dsi_config);
 
-	if (!is_dual_dsi(dev)) {
-		/* Disable PLL*/
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, _DSI_LDO_EN);
-
-		/* Program PLL */
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
-
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-		                ((guit_val & ~_P1_POST_DIV_MASK) |
-		                 (ctx->dpll & _P1_POST_DIV_MASK)));
-		ctx->dpll |= DPLL_VCO_ENABLE;
-		ctx->dpll &= ~_DSI_LDO_EN;
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, ctx->dpll);
-	} else {
-		intel_mid_msgbus_write32(CCK_PORT, 0x68, 0x682);
-		/* Disable PLL*/
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT,
-					DSI_PLL_CTRL_REG,
-					_DSI_LDO_EN);
-		/* Program PLL */
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-				((guit_val & ~_P1_POST_DIV_MASK) |
-				 (ctx->dpll & _P1_POST_DIV_MASK)));
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		ctx->dpll |= DPLL_VCO_ENABLE;
-		ctx->dpll &= ~(_DSI_LDO_EN |
-			       _CLK_EN_CCK_DSI0 | _CLK_EN_CCK_DSI1 |
-			       _DSI_MUX_SEL_CCK_DSI1 | _DSI_MUX_SEL_CCK_DSI0);
-		ctx->dpll |= _CLK_EN_PLL_DSI0 | _CLK_EN_PLL_DSI1;
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, ctx->dpll);
-	}
-	/* Wait for DSI PLL lock */
-	retry = 10000;
-	guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-	while (((guit_val & _DSI_PLL_LOCK) != _DSI_PLL_LOCK) && (--retry)) {
-		udelay(3);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		if (retry == 0) {
-			DRM_ERROR("DSI PLL fails to lock\n");
-			err = -EAGAIN;
-			goto power_on_err;
-		}
-	}
-
 	/*
 	 * Wait for DSI PLL locked on pipe, and only need to poll status of pipe
 	 * A as both MIPI pipes share the same DSI PLL.
@@ -681,11 +630,6 @@ static int __dpi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 		__dpi_enter_ulps_locked(dsi_config, offset);
 		offset = 0x0;
 	}
-
-	/* Disable DSI PLL */
-	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-	guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, _DSI_LDO_EN);
 
 power_off_err:
 	power_island = pipe_to_island(dsi_config->pipe);
