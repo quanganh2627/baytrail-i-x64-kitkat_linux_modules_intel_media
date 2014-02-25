@@ -736,8 +736,8 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 
 	/* Thermal freq-state mapping after characterization */
 	bfdata->gpudata[0].freq_limit = DFRGX_FREQ_533_MHZ;
-	bfdata->gpudata[1].freq_limit = DFRGX_FREQ_400_MHZ;
-	bfdata->gpudata[2].freq_limit = DFRGX_FREQ_320_MHZ;
+	bfdata->gpudata[1].freq_limit = DFRGX_FREQ_457_MHZ;
+	bfdata->gpudata[2].freq_limit = DFRGX_FREQ_200_MHZ;
 	bfdata->gpudata[3].freq_limit = DFRGX_FREQ_200_MHZ;
 
 	{
