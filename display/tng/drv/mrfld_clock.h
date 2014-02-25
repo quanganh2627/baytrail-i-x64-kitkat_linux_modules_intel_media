@@ -74,5 +74,7 @@ struct mrst_clock_t {
 };
 
 void enable_HFPLL(struct drm_device *dev);
+bool enable_DSIPLL(struct drm_device *dev);
+bool disable_DSIPLL(struct drm_device *dev);
 
 #endif

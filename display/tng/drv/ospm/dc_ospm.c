@@ -259,6 +259,11 @@ static bool mio_power_up(struct drm_device *dev,
 {
 	bool ret = false;
 
+	if (!enable_DSIPLL(dev)){
+		DRM_ERROR("Not Powering up MIO since DSI PLL could not be locked");
+		return ret;
+	}
+
 	if (IS_TNG_A0(dev))
 	{
 		sb_write_packet(true);
@@ -294,6 +299,10 @@ static bool mio_power_down(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
 	bool ret;
+	if (!disable_DSIPLL(dev)){
+		DRM_ERROR("Skipping MIO power down ad DSI PLL could not be unlocked\n");
+		return false;
+	}
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	ret = pmu_nc_set_power_state(PMU_MIO, OSPM_ISLAND_DOWN, MIO_SS_PM);

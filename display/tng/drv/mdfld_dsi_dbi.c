@@ -369,108 +369,6 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	if (!power_island_get(power_island))
 		return -EAGAIN;
 
-	if (is_dual_dsi(dev)) {
-		intel_mid_msgbus_write32(CCK_PORT,
-			FUSE_OVERRIDE_FREQ_CNTRL_REG5,
-			CKESC_GATE_EN | CKDP1X_GATE_EN |
-			DISPLAY_FRE_EN | 0x2);
-		/* Disable PLL*/
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT,
-					DSI_PLL_CTRL_REG,
-					_DSI_LDO_EN);
-		/* Program PLL */
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-				((guit_val & ~_P1_POST_DIV_MASK) |
-				 (ctx->dpll & _P1_POST_DIV_MASK)));
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		ctx->dpll |= DPLL_VCO_ENABLE;
-		ctx->dpll &= ~(_DSI_LDO_EN |
-			       _CLK_EN_CCK_DSI0 | _CLK_EN_CCK_DSI1 |
-			       _DSI_MUX_SEL_CCK_DSI1 | _DSI_MUX_SEL_CCK_DSI0);
-		ctx->dpll |= _CLK_EN_PLL_DSI0 | _CLK_EN_PLL_DSI1;
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, ctx->dpll);
-	} else if (dev_priv->bUseHFPLL) {
-		/* Disable PLL*/
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT,
-						DSI_PLL_CTRL_REG,
-						guit_val | _DSI_LDO_EN);
-
-		/* Program PLL */
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
-
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-				((guit_val & ~_P1_POST_DIV_MASK) |
-				 (ctx->dpll & _P1_POST_DIV_MASK)));
-
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		guit_val &= ~_DSI_LDO_EN;
-
-		ctx->dpll |= DPLL_VCO_ENABLE| _DSI_CCK_PLL_SELECT;
-		ctx->dpll &= ~_DSI_LDO_EN;
-
-		intel_mid_msgbus_write32(CCK_PORT,
-						DSI_PLL_CTRL_REG,
-						ctx->dpll | guit_val);
-	} else {
-		/* Disable PLL*/
-		intel_mid_msgbus_write32(CCK_PORT,
-			FUSE_OVERRIDE_FREQ_CNTRL_REG5,
-			CKESC_GATE_EN | CKDP1X_GATE_EN |
-			DISPLAY_FRE_EN | 0x2);
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		intel_mid_msgbus_write32(CCK_PORT,
-					DSI_PLL_CTRL_REG,
-					_DSI_LDO_EN);
-
-		if (IS_ANN_A0(dev)) {
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
-			guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-					((guit_val & ~_P1_POST_DIV_MASK) |
-					 (ctx->dpll & _P1_POST_DIV_MASK)));
-			guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-
-			ctx->dpll |= DPLL_VCO_ENABLE;
-			ctx->dpll &= ~(_DSI_LDO_EN |
-					_CLK_EN_CCK_DSI0 | _CLK_EN_CCK_DSI1 |
-					_DSI_MUX_SEL_CCK_DSI1 | _DSI_MUX_SEL_CCK_DSI0);
-			ctx->dpll |= _CLK_EN_PLL_DSI0 | _CLK_EN_PLL_DSI1;
-		} else {
-			/* Program PLL */
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
-
-			guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG,
-					((guit_val & ~_P1_POST_DIV_MASK) |
-					 (ctx->dpll & _P1_POST_DIV_MASK)));
-
-			ctx->dpll |= DPLL_VCO_ENABLE;
-			ctx->dpll &= ~_DSI_LDO_EN;
-		}
-
-		intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, ctx->dpll);
-	}
-
-	/* Wait for DSI PLL lock */
-	retry = 10000;
-	guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-	while (((guit_val & _DSI_PLL_LOCK) != _DSI_PLL_LOCK) && (--retry)) {
-		udelay(3);
-		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-		if (retry == 0) {
-			DRM_ERROR("DSI PLL fails to lock\n");
-			err = -EAGAIN;
-			goto power_on_err;
-		}
-	}
-
 	/*
 	 * Wait for DSI PLL locked on pipe, and only need to poll status of pipe
 	 * A as both MIPI pipes share the same DSI PLL.
@@ -823,22 +721,6 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 		}
 	}
 	if (!is_dual_dsi(dev)) {
-		/*Disable DSI PLL*/
-		pipe0_enabled = (REG_READ(PIPEACONF) & BIT31) ? 1 : 0;
-		pipe2_enabled = (REG_READ(PIPECCONF) & BIT31) ? 1 : 0;
-
-		if (!pipe0_enabled && !pipe2_enabled) {
-			u32 val;
-
-			/* Disable PLL*/
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-
-			val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-			val &= ~DPLL_VCO_ENABLE;
-			val |= _DSI_LDO_EN;
-			val &= ~_CLK_EN_MASK;
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
-		}
 		/*enter ULPS*/
 		__dbi_enter_ulps_locked(dsi_config, offset);
 	} else {
@@ -866,22 +748,6 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 		__dbi_enter_ulps_locked(dsi_config, offset);
 		offset = 0x0;
 
-		/*Disable DSI PLL*/
-		pipe0_enabled = (REG_READ(PIPEACONF) & BIT31) ? 1 : 0;
-		pipe2_enabled = (REG_READ(PIPECCONF) & BIT31) ? 1 : 0;
-
-		if (!pipe0_enabled && !pipe2_enabled) {
-			u32 val;
-
-			/* Disable PLL*/
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
-
-			val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
-			val &= ~DPLL_VCO_ENABLE;
-			val |= _DSI_LDO_EN;
-			val &= ~_CLK_EN_MASK;
-			intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
-		}
 	}
 power_off_err:
 

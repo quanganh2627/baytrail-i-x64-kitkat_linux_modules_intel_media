@@ -387,7 +387,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 		pll &= ~_DSI_MUX_SEL_CCK_DSI0;
 	}
 
-	if (is_mipi2) {
+	if (is_mipi2 || is_dual_dsi(dev)) {
 		/* Enable DSI PLL clocks for DSI1 rather than CCK. */
 		pll |= _CLK_EN_PLL_DSI1;
 		pll &= ~_CLK_EN_CCK_DSI1;
@@ -404,7 +404,6 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 	if (pipe != 1) {
 		ctx->dpll = pll;
 		ctx->fp = fp;
-
 		mutex_unlock(&dsi_config->context_lock);
 	}
 }
@@ -497,4 +496,103 @@ void enable_HFPLL(struct drm_device *dev)
 					FUSE_OVERRIDE_FREQ_CNTRL_REG5,
 					ctrl_reg5);
 	}
+}
+
+bool enable_DSIPLL(struct drm_device *dev)
+{
+	DRM_DRIVER_PRIVATE_T *dev_priv = dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_context *ctx = NULL;
+	u32 guit_val = 0x0;
+	u32 retry;
+
+	if (!dev_priv)
+		goto err_out;
+	dsi_config = dev_priv->dsi_configs[0];
+	if (!dsi_config)
+		goto err_out;
+	ctx = &dsi_config->dsi_hw_context;
+
+	if (IS_ANN_A0(dev))
+		intel_mid_msgbus_write32(CCK_PORT, FUSE_OVERRIDE_FREQ_CNTRL_REG5,
+			CKESC_GATE_EN | CKDP1X_GATE_EN | DISPLAY_FRE_EN | 0x2);
+
+	/* Prepare DSI  PLL register before enabling */
+	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
+	guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+	guit_val &= ~(DPLL_VCO_ENABLE | _DSI_LDO_EN
+			|_CLK_EN_MASK | _DSI_MUX_SEL_CCK_DSI0 | _DSI_MUX_SEL_CCK_DSI1);
+	intel_mid_msgbus_write32(CCK_PORT,
+					DSI_PLL_CTRL_REG, guit_val);
+	udelay(1);
+	/* Program PLL */
+
+	/*first set up the dpll and fp variables
+	 * dpll - will contain the following information
+	 *      - the clock source - DSI vs HFH vs LFH PLL
+	 * 	- what clocks should be running DSI0, DSI1
+	 *      - and the divisor.
+	 *
+	 */
+
+	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, ctx->fp);
+	guit_val &= ~_P1_POST_DIV_MASK;	/*clear the divisor bit*/
+	/* the ctx->dpll contains the divisor that we need to use as well as which clocks
+	 * need to start up */
+	guit_val |= ctx->dpll;
+	guit_val &= ~_DSI_LDO_EN;	/* We want to clear the LDO enable when programming*/
+	guit_val |=  DPLL_VCO_ENABLE;	/* Enable the DSI PLL */
+
+	/* For the CD clock (clock used by Display controller), we need to set
+	 * the DSI_CCK_PLL_SELECT bit (bit 11). This should already be set. But
+	 * setting it just in case
+	 */
+	if (dev_priv->bUseHFPLL)
+		guit_val |= _DSI_CCK_PLL_SELECT;
+
+	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, guit_val);
+
+	/* Wait for DSI PLL lock */
+	retry = 10000;
+	guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+	while (((guit_val & _DSI_PLL_LOCK) != _DSI_PLL_LOCK) && (--retry)) {
+		udelay(3);
+		guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+		if (!retry%1000)
+			DRM_ERROR("DSI PLL taking too long to lock"
+				"- retry count=%d\n", 10000-retry);
+	}
+	if (retry == 0) {
+		DRM_ERROR("DSI PLL fails to lock\n");
+		return false;
+	}
+
+	return true;
+err_out:
+	return false;
+
+}
+
+bool disable_DSIPLL(struct drm_device * dev)
+{
+	u32 val, guit_val, retry;
+
+	/* Disable PLL*/
+	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
+
+	val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+	val &= ~_CLK_EN_MASK;
+	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
+	udelay(1);
+	val &= ~DPLL_VCO_ENABLE;
+	val |= _DSI_LDO_EN;
+	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_CTRL_REG, val);
+	udelay(1);
+
+	guit_val = intel_mid_msgbus_read32(CCK_PORT, DSI_PLL_CTRL_REG);
+	if ((guit_val & _DSI_PLL_LOCK) == _DSI_PLL_LOCK ) {
+		DRM_ERROR("DSI PLL fails to Unlock\n");
+		return false;
+	}
+	return true;
 }
