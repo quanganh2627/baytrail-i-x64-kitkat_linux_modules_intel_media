@@ -54,6 +54,7 @@ enum {
 	MTX_MSGID_HOST_BE_OPP,
 #ifdef CONFIG_SLICE_HEADER_PARSING
 	MTX_MSGID_SLICE_HEADER_EXTRACT = 0x87,
+	MTX_MSGID_MODULAR_SLICE_HEADER_EXTRACT = 0x88,
 #endif
 	/*! Sent by the mtx firmware to itself.
 	 */
@@ -327,7 +328,10 @@ struct fw_slice_header_extract_msg {
 
 	union {
 		struct {
-			uint32_t expected_pps_id:16;
+			uint32_t expected_pps_id:8;
+			uint32_t nalu_header_unit_type:5;
+			uint32_t nalu_header_ref_idc:2;
+			uint32_t nalu_header_reserved:1;
 			uint32_t continue_parse_flag:1;
 			uint32_t frame_mbs_only_flag:1;
 			uint32_t pic_order_present_flag:1;
