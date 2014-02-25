@@ -810,8 +810,6 @@ int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx)
 		goto error_init_obj;
 	}
 
-	g_dfrgx->g_suspended = 0;
-
 	if (g_dfrgx->g_enable) {
 		hrt_start(g_dfrgx);
 		sts = df_rgx_create_worker_thread(g_dfrgx);
@@ -827,6 +825,10 @@ int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx)
 	}
 
 	g_dfrgx->g_initialized = 1;
+
+	/* Initialize to suspended state */
+	/* Allows system to enter sleep states while charging */
+	dfrgx_burst_suspend(g_dfrgx);
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s:gpu burst mode initialization"
 				" -- done!\n",
