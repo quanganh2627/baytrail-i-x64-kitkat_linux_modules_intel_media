@@ -319,9 +319,11 @@ static int psb_msvdx_map_command(struct drm_device *dev,
 
 #ifdef CONFIG_SLICE_HEADER_PARSING
 		/* VA_MSGID_NALU_EXTRACT start */
-		case MTX_MSGID_SLICE_HEADER_EXTRACT: {
+		case MTX_MSGID_SLICE_HEADER_EXTRACT:
+		case MTX_MSGID_MODULAR_SLICE_HEADER_EXTRACT: {
 			struct fw_slice_header_extract_msg *extract_msg =
 				(struct fw_slice_header_extract_msg *)cmd;
+
 			PSB_DEBUG_MSVDX("send slice extract message.\n");
 
 			extract_msg->header.bits.msg_fence = sequence;
