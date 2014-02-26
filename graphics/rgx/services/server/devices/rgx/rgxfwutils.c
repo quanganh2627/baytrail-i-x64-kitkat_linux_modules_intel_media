@@ -2387,10 +2387,6 @@ static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 	IMG_BOOL			   bGPUHasWorkWaiting;
 	PVRSRV_DEV_POWER_STATE ePowerState;
 
-	/* If RGX is not powered on, don't continue */
-	if (!PVRSRVIsDevicePowered(psDeviceNode->sDevId.ui32DeviceIndex))
-		return;
-
 	/* Ensure RGX is powered up before kicking MTS */
 	eError = PVRSRVPowerLock();
 	if (eError != PVRSRV_OK) 
