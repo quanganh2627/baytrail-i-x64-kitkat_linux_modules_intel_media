@@ -382,7 +382,7 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to allocate prim server sync (%s)",
 				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_data;
+		goto err_free_kernel_sync_prim;
 	}
 
 	eError = PVRSRVServerSyncGetStatusKM(1, &psSyncData->psSyncKernel->psSync,
@@ -393,7 +393,7 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to get status of prim server sync (%s)",
 				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_data;
+		goto err_free_server_sync;
 	}
 
 	eError = PVRSRVServerSyncQueueHWOpKM(psSyncData->psSyncKernel->psSync,
@@ -404,7 +404,7 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to queue prim server sync hw operation (%s)",
 				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_data;
+		goto err_free_server_sync;
 	}
 
 	psSyncData->psSyncKernel->psCleanUpSync = IMG_NULL;
@@ -414,6 +414,12 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 
 err_out:
 	return psPVRPt;
+
+err_free_server_sync:
+	PVRSRVServerSyncFreeKM(psSyncData->psSyncKernel->psSync);
+
+err_free_kernel_sync_prim:
+	OSFreeMem(psSyncData->psSyncKernel);
 
 err_free_data:
 	OSFreeMem(psSyncData);
@@ -500,12 +506,15 @@ static void PVRSyncFreeSync(struct sync_pt *psPt)
 		_debugInfoPt(psPt));
 
     /* Only free on the last reference */
-    if (atomic_dec_return(&psPVRPt->psSyncData->sRefCount) != 0)
-        return;
+	if (psPVRPt->psSyncData) {
+		if (atomic_dec_return(&psPVRPt->psSyncData->sRefCount) != 0)
+			return;
 
-	if(PVRSyncReleaseSyncPrim(psPVRPt->psSyncData->psSyncKernel))
-		queue_work(gsPVRSync.psWorkQueue, &gsPVRSync.sWork);
-	OSFreeMem(psPVRPt->psSyncData);
+		if(PVRSyncReleaseSyncPrim(psPVRPt->psSyncData->psSyncKernel))
+			queue_work(gsPVRSync.psWorkQueue, &gsPVRSync.sWork);
+		OSFreeMem(psPVRPt->psSyncData);
+		psPVRPt->psSyncData = IMG_NULL;
+	}
 }
 
 static struct sync_timeline_ops gsPVR_SYNC_TIMELINE_ops =
