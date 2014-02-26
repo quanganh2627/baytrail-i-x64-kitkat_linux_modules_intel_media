@@ -168,16 +168,19 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 		int gfx_pcs_result = 0;
 
 		gfx_pcs_result = RGXPreClockSpeed();
-		if (!gfx_pcs_result) {
+		if (gfx_pcs_result) {
 			DFRGX_DPF(DFRGX_DEBUG_HIGH,
 				"%s: Could not perform pre-clock-speed change\n",
 				__func__);
+			sts = -EBUSY;
+			goto out;
 		}
 		sts = gpu_freq_set_from_code(freq_code);
 		if (sts < 0) {
 			DFRGX_DPF(DFRGX_DEBUG_MED,
 				"%s: error (%d) from gpu_freq_set_from_code for %dMHz\n",
 				__func__, sts, freq_mhz_quantized);
+			RGXPostClockSpeed();
 			goto out;
 		} else {
 			bfdata->bf_freq_mhz_rlzd = sts;

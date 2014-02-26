@@ -188,6 +188,7 @@ int vxd_release(struct inode *inode, struct file *filp)
 	struct psb_fpriv *psb_fp;
 	struct drm_psb_private *dev_priv;
 	struct msvdx_private *msvdx_priv;
+	int i;
 
 	file_priv = (struct drm_file *)filp->private_data;
 	i915_file_priv = file_priv->driver_priv;
@@ -206,7 +207,15 @@ int vxd_release(struct inode *inode, struct file *filp)
 		       MAX_DECODE_BUFFERS);
 	}
 #endif
-
+#ifdef CONFIG_VIDEO_MRFLD_EC
+	for (i = 0; i < PSB_MAX_EC_INSTANCE; i++) {
+		if (msvdx_priv->msvdx_ec_ctx[i]->tfile == psb_fp->tfile) {
+			msvdx_priv->msvdx_ec_ctx[i]->tfile = NULL;
+			msvdx_priv->msvdx_ec_ctx[i]->context_id = 0;
+			msvdx_priv->msvdx_ec_ctx[i]->fence = PSB_MSVDX_INVALID_FENCE;
+		}
+	}
+#endif
 	ttm_object_file_release(&psb_fp->tfile);
 	kfree(psb_fp);
 
