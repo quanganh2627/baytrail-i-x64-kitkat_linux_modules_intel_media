@@ -389,10 +389,6 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	/*disable unused primary planes*/
 	_Disable_Unused_Primarys(gpsDevice);
 
-	/* Issue "write_mem_start" for command mode panel. */
-	if (iPipe != DC_PIPE_B)
-		DCCBUpdateDbiPanel(gpsDevice->psDrmDevice, iPipe);
-
 	psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DC_UPDATED;
 
 	bUpdated = IMG_TRUE;
@@ -468,6 +464,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 	IMG_UINT32 uiNumBuffers;
 	int type, index, pipe;
 	int i, j;
+	bool send_wms = false;
 
 	if (!gpsDevice || !psFlip) {
 		DRM_ERROR("%s: Invalid Flip\n", __func__);
@@ -568,13 +565,16 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 				/* don't queue it, if failed to update DC*/
 				if (!_Do_Flip(psFlip,i))
 					continue;
+				else if (i != DC_PIPE_B)
+					send_wms = true;
 			}
+
+			/*increase refCount*/
+			psFlip->uiRefCount++;
 
 			INIT_LIST_HEAD(&psFlip->sFlips[i]);
 			list_add_tail(&psFlip->sFlips[i],
 					&gpsDevice->sFlipQueues[i]);
-			/*increase refCount*/
-			psFlip->uiRefCount++;
 		}
 	}
 
@@ -583,6 +583,16 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 		DCDisplayConfigurationRetired(psFlip->hConfigData);
 		/* free it */
 		kfree(psFlip);
+	}
+
+	if (send_wms) {
+		mutex_unlock(&gpsDevice->sFlipQueueLock);
+		DCCBWaitForDbiFifoEmpty(gpsDevice->psDrmDevice, DC_PIPE_A);
+		mutex_lock(&gpsDevice->sFlipQueueLock);
+
+
+		/* Issue "write_mem_start" for command mode panel. */
+		DCCBUpdateDbiPanel(gpsDevice->psDrmDevice, DC_PIPE_A);
 	}
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
@@ -707,6 +717,13 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 				/* free it */
 				kfree(psNextFlip);
 			}
+		} else if (iPipe == DC_PIPE_A) {
+			mutex_unlock(&gpsDevice->sFlipQueueLock);
+			DCCBWaitForDbiFifoEmpty(gpsDevice->psDrmDevice,
+						DC_PIPE_A);
+			mutex_lock(&gpsDevice->sFlipQueueLock);
+
+			DCCBUpdateDbiPanel(gpsDevice->psDrmDevice, iPipe);
 		}
 	}
 
