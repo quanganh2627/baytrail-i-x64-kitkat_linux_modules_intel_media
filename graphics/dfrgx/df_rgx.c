@@ -309,9 +309,6 @@ static int df_rgx_bus_target(struct device *dev, unsigned long *p_freq,
 			/* Freq will be reflected once GPU is back on*/
 			if (!df_rgx_is_active()) {
 				bfdata->bf_desired_freq = desired_freq;
-				mutex_lock(&bfdata->lock);
-				bfdata->b_need_freq_update = 1;
-				mutex_unlock(&bfdata->lock);
 				*p_freq = desired_freq;
 				gpu_defer_req = 1;
 			} else {
@@ -422,12 +419,15 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 	if (bfdata->gbp_cooldv_state_cur != cs) {
 		int new_index = -1;
 
+		mutex_lock(&bfdata->lock);
+
 		/* Dynamic turbo is not enabled so try
 		* to change the state
 		*/
 		if (!bfdata->g_dfrgx_data.g_enable) {
 
-			if(!df_rgx_is_active()) {
+			if (!df_rgx_is_active()) {
+				mutex_unlock(&bfdata->lock);
 				return -EBUSY;
 			}
 
@@ -485,14 +485,12 @@ static int tcd_set_cur_state(struct thermal_cooling_device *tcd,
 			if (b_update_freq) {
 				/* Pick the min freq this time*/
 				bfdata->bf_desired_freq = df->min_freq;
-				mutex_lock(&bfdata->lock);
-				bfdata->b_need_freq_update = 1;
-				mutex_unlock(&bfdata->lock);
 			}
 		}
 
 		bfdata->gbp_cooldv_state_prev = bfdata->gbp_cooldv_state_cur;
 		bfdata->gbp_cooldv_state_cur = cs;
+		mutex_unlock(&bfdata->lock);
 
 		DFRGX_DPF(DFRGX_DEBUG_HIGH, "Thermal state changed from %d to %d\n",
 				bfdata->gbp_cooldv_state_prev,
@@ -792,6 +790,23 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		goto err_002;
 	}
 
+	/*Set the initial frequency at 457MHZ in B0/ 200MHZ otherwise*/
+	{
+		int ret = 0;
+		if (!df_rgx_is_active()) {
+				/*Change the freq once it is active*/
+				bfdata->bf_desired_freq = df->min_freq;
+			}
+			else {
+				ret = df_rgx_set_freq_khz(bfdata, df->min_freq);
+				if (ret < 0) {
+					DFRGX_DPF(DFRGX_DEBUG_HIGH,
+						"%s: could not initialize freq: %0x error\n",
+						__func__, ret);
+				}
+			}
+	}
+
 	bfdata->g_dfrgx_data.bus_freq_data = bfdata;
 	bfdata->g_dfrgx_data.g_enable = mprm_enable;
 	bfdata->g_dfrgx_data.gpu_utilization_record_index = 
@@ -815,25 +830,6 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 		", no utilization data\n", __func__);
 		sts = -1;
 		goto err_002;
-	}
-
-	/*Set the initial frequency at 457MHZ in B0/ 200MHZ otherwise*/
-	{
-		int ret = 0;
-		if (!df_rgx_is_active()) {
-				/*Change the freq once it is active*/
-				bfdata->bf_desired_freq = df->min_freq;
-				mutex_lock(&bfdata->lock);
-				bfdata->b_need_freq_update = 1;
-				mutex_unlock(&bfdata->lock);
-		} else {
-			ret = df_rgx_set_freq_khz(bfdata, df->min_freq);
-			if (ret < 0) {
-				DFRGX_DPF(DFRGX_DEBUG_HIGH,
-					"%s: could not initialize freq: %0x error\n",
-					__func__, ret);
-			}
-		}
 	}
 
 	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: success\n", __func__);

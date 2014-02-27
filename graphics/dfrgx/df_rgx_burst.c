@@ -189,7 +189,6 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 				__func__, freq_mhz_quantized,
 				bfdata->bf_freq_mhz_rlzd);
 			bfdata->b_resumed = 0;
-			bfdata->b_need_freq_update = 0;
 		}
 
 		/*
@@ -297,6 +296,8 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s *g_dfrgx,
 		DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: Average Active: %d !\n",
 		__func__, average_active_util);
 
+		mutex_lock(&g_dfrgx->g_mutex_sts);
+
 		burst = df_rgx_request_burst(g_dfrgx, average_active_util);
 
 		if (burst == DFRGX_NO_BURST_REQ) {
@@ -313,6 +314,7 @@ static void dfrgx_add_sample_data(struct df_rgx_data_s *g_dfrgx,
 			}
 		}
 
+		mutex_unlock(&g_dfrgx->g_mutex_sts);
 	}
 }
 
@@ -357,7 +359,7 @@ static int df_rgx_action(struct df_rgx_data_s *g_dfrgx)
 	}
 
 	/* This will happen when min or max freq are modified or using userpace governor*/
-	if(g_dfrgx->bus_freq_data->bf_desired_freq && g_dfrgx->bus_freq_data->b_need_freq_update)
+	if(g_dfrgx->bus_freq_data->bf_desired_freq)
 	{
 		int ret = 0;
 
@@ -594,7 +596,6 @@ static enum hrtimer_restart hrt_event_processor(struct hrtimer *hrthdl)
  */
 static int dfrgx_burst_resume(struct df_rgx_data_s *g_dfrgx)
 {
-
 	if (!g_dfrgx || !g_dfrgx->g_initialized || !g_dfrgx->g_enable)
 		return 0;
 
@@ -604,11 +605,11 @@ static int dfrgx_burst_resume(struct df_rgx_data_s *g_dfrgx)
 	g_dfrgx->g_suspended = 0;
 	
 	/*Need to update the freq after coming back from D0i3/S0i3*/
-	mutex_lock(&g_dfrgx->bus_freq_data->lock);
 	g_dfrgx->bus_freq_data->b_resumed = 1;
-	g_dfrgx->bus_freq_data->b_need_freq_update = 1;
-	mutex_unlock(&g_dfrgx->bus_freq_data->lock);
 
+	//smp_wmb();
+
+	//mutex_lock(&g_dfrgx->g_mutex_sts);
 	hrt_start(g_dfrgx);
 
 	return 0;
