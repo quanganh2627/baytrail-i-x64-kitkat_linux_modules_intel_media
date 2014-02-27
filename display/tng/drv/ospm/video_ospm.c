@@ -261,6 +261,9 @@ static u32 vec_get_max_freq(struct drm_device *dev)
 	} else if (pci_device == 0x1182) {
 		max_freq = IP_FREQ_266_67;
 		PSB_DEBUG_PM("vec 1182 maximum freq is 400\n");
+	} else if (pci_device == 0x1480) {
+		max_freq = IP_FREQ_400_00;
+		PSB_DEBUG_PM("vec 1480 maximum freq is 400\n");
 	} else {
 		DRM_ERROR("invalid pci device id %x\n", pci_device);
 	}
@@ -291,10 +294,7 @@ static bool vec_power_up(struct drm_device *dev,
 		return false;
 	}
 
-	if (IS_TNG_B0(dev))
-		freq_max = vec_get_max_freq(dev);
-	else
-		freq_max = IP_FREQ_320_00;
+	freq_max = vec_get_max_freq(dev);
 
 	if (drm_vec_force_up_freq < 0) {
 		drm_vec_force_up_freq = 0;
