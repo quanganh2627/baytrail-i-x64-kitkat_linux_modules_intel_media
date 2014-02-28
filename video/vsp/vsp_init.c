@@ -306,6 +306,8 @@ void vsp_disableirq(struct drm_device *dev)
 	return;
 }
 
+extern struct soft_platform_id spid;
+
 int vsp_init_fw(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
@@ -320,18 +322,39 @@ int vsp_init_fw(struct drm_device *dev)
 	unsigned char *imr_ptr;
 	unsigned int vrl_header_size = 736;
 	const unsigned long vsp_magic_num = 0x50535624;
+	const int FW_NAME_LEN = 30;
+	char fw_name[FW_NAME_LEN];
+	int name_ret;
 
 	PSB_DEBUG_GENERAL("read firmware into buffer\n");
 
-	/* read firmware img */
-	VSP_DEBUG("load vsp fw\n");
-	if (IS_ANN_A0(dev))
-		ret = request_firmware(&raw, FW_NAME_ANN, &dev->pdev->dev);
-	else if (IS_TNG_B0(dev))
-		ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
-	else {
-		DRM_ERROR("VSP secure fw: bad platform\n");
-		raw = NULL;
+	name_ret = snprintf(fw_name, FW_NAME_LEN, "vsp.bin.%04x.%04x",
+		 (int)spid.platform_family_id, (int)spid.hardware_id);
+	if (name_ret > FW_NAME_LEN) {
+		DRM_ERROR("failed to get fw name, ret %d vs expect %d\n",
+			  name_ret, FW_NAME_LEN);
+		/* no way */
+		return -1;
+	}
+
+	/* try load with spid first */
+	ret = request_firmware(&raw, fw_name, &dev->pdev->dev);
+	if (ret < 0 || raw == NULL) {
+		VSP_DEBUG("failed to load fw: %s, try to load different fw\n",
+			fw_name);
+
+		/* read firmware img */
+		VSP_DEBUG("load vsp fw\n");
+		if (IS_ANN_A0(dev))
+			ret = request_firmware(&raw, FW_NAME_ANN,
+					       &dev->pdev->dev);
+		else if (IS_TNG_B0(dev))
+			ret = request_firmware(&raw, FW_NAME_B0,
+					       &dev->pdev->dev);
+		else {
+			DRM_ERROR("VSP secure fw: bad platform\n");
+			raw = NULL;
+		}
 	}
 
 	if (ret < 0 || raw == NULL) {
