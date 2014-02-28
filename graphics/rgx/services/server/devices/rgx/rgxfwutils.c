@@ -2378,10 +2378,14 @@ IMG_VOID RGXScheduleProcessQueuesKM(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle)
 ******************************************************************************/
 static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 {
-	PVRSRV_DEVICE_NODE *psDeviceNode = (PVRSRV_DEVICE_NODE*) pvData;
-	PVRSRV_RGXDEV_INFO *psDevInfo = psDeviceNode->pvDevice;
-	RGXFWIF_DM			eDM;
-	PVRSRV_ERROR		eError;
+	PVRSRV_DEVICE_NODE	   *psDeviceNode = (PVRSRV_DEVICE_NODE*) pvData;
+	PVRSRV_RGXDEV_INFO	   *psDevInfo = psDeviceNode->pvDevice;
+	RGXFWIF_DM			   eDM;
+	PVRSRV_ERROR		   eError;
+	RGXFWIF_GPU_UTIL_FWCB  *psUtilFWCb = psDevInfo->psRGXFWIfGpuUtilFWCb;
+	IMG_UINT64			   ui64FWCbEntryCurrent;
+	IMG_BOOL			   bGPUHasWorkWaiting;
+	PVRSRV_DEV_POWER_STATE ePowerState;
 
 	/* Ensure RGX is powered up before kicking MTS */
 	eError = PVRSRVPowerLock();
@@ -2390,6 +2394,18 @@ static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 		PVR_DPF((PVR_DBG_WARNING, "RGXScheduleProcessQueuesKM: failed to acquire powerlock (%s)",
 					PVRSRVGetErrorStringKM(eError)));
 
+		return;
+	}
+
+	ui64FWCbEntryCurrent = psUtilFWCb->aui64CB[(psUtilFWCb->ui32WriteOffset - 1) & RGXFWIF_GPU_UTIL_FWCB_MASK];
+	bGPUHasWorkWaiting = (RGXFWIF_GPU_UTIL_FWCB_ENTRY_STATE(ui64FWCbEntryCurrent) == RGXFWIF_GPU_UTIL_FWCB_STATE_BLOCKED);
+
+	eError = PVRSRVGetDevicePowerState(psDeviceNode->sDevId.ui32DeviceIndex, &ePowerState);
+
+	/* Check whether it's worth waking up the GPU */
+	if ((eError == PVRSRV_OK) && (ePowerState == PVRSRV_DEV_POWER_STATE_OFF) && !bGPUHasWorkWaiting)
+	{
+		PVRSRVPowerUnlock();
 		return;
 	}
 
