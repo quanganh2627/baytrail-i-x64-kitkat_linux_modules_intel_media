@@ -631,6 +631,8 @@ void msvdx_init_test(struct drm_device *dev)
 #define PSB_MSVDX_FW_SIZE (84 * 1024 + 296 + 728)
 #define PSB_VEDSSPM0_OFF_STATE 0xb000003
 
+extern struct soft_platform_id spid;
+
 int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 {
 	struct firmware *fw = NULL;
@@ -642,6 +644,9 @@ int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 	const unsigned long tng_magic_num = 0x44455624;
 	int pwr_mask = 0;
 	int ret = 0;
+	const int FW_NAME_LEN = 30;
+	char fw_name[FW_NAME_LEN];
+	int name_ret;
 
 
 	imrl = intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,
@@ -659,7 +664,25 @@ int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 		return 1;
 		}
 	 */
-	rc = request_firmware(&fw, name, &dev->pdev->dev);
+
+	name_ret = snprintf(fw_name, FW_NAME_LEN, "msvdx.bin.%04x.%04x",
+		 (int)spid.platform_family_id, (int)spid.hardware_id);
+	if (name_ret > FW_NAME_LEN) {
+		DRM_ERROR("failed to get fw name, ret %d vs expect %d\n",
+			  name_ret, FW_NAME_LEN);
+		/* no way */
+		return -1;
+	}
+
+	/* try load with spid first */
+	rc = request_firmware(&fw, fw_name, &dev->pdev->dev);
+	if (fw == NULL || rc < 0) {
+		DRM_INFO("failed to load fw: %s, try to load different fw\n",
+			fw_name);
+
+		rc = request_firmware(&fw, name, &dev->pdev->dev);
+	}
+
 	if (fw == NULL || rc < 0) {
 		DRM_ERROR("MSVDX: %s request_firmware failed: Reason %d\n",
 				name, rc);
