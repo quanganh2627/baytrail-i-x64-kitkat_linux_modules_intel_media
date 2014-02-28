@@ -256,6 +256,7 @@ static int mdfld_dsi_jdi25x16_power_on(struct mdfld_dsi_config *dsi_config)
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
 	int err;
+	int i;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -263,23 +264,31 @@ static int mdfld_dsi_jdi25x16_power_on(struct mdfld_dsi_config *dsi_config)
 		DRM_ERROR("Failed to get DSI packet sender\n");
 		return -EINVAL;
 	}
-	/* Sleep Out */
-	err = mdfld_dsi_send_mcs_short_hs(sender, exit_sleep_mode, 0, 0,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Exit Sleep Mode\n", __func__, __LINE__);
-		goto power_on_err;
+	for (i = 0; i < 2; i++) {
+		if (i == 0)
+			sender->work_for_slave_panel = false;
+		else
+			sender->work_for_slave_panel = true;
+		/* Sleep Out */
+		err = mdfld_dsi_send_mcs_short_hs(sender, exit_sleep_mode, 0, 0,
+				MDFLD_DSI_SEND_PACKAGE);
+		if (err) {
+			DRM_ERROR("%s: %d: Exit Sleep Mode\n", __func__, __LINE__);
+			goto power_on_err;
+		}
+		msleep(100);
+		/* Send TURN_ON packet */
+		err = mdfld_dsi_send_dpi_spk_pkg_hs(sender, MDFLD_DSI_DPI_SPK_TURN_ON);
+		if (err) {
+			DRM_ERROR("Failed to send turn on packet\n");
+			goto power_on_err;
+		}
 	}
-	msleep(100);
-	/* Send TURN_ON packet */
-	err = mdfld_dsi_send_dpi_spk_pkg_hs(sender, MDFLD_DSI_DPI_SPK_TURN_ON);
-	if (err) {
-		DRM_ERROR("Failed to send turn on packet\n");
-		goto power_on_err;
-	}
+	sender->work_for_slave_panel = false;
 	return 0;
 
 power_on_err:
+	sender->work_for_slave_panel = false;
 	err = -EIO;
 	return err;
 }
@@ -307,6 +316,7 @@ static int mdfld_dsi_jdi25x16_power_off(struct mdfld_dsi_config *dsi_config)
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
 	int err;
+	int i;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -314,34 +324,40 @@ static int mdfld_dsi_jdi25x16_power_off(struct mdfld_dsi_config *dsi_config)
 		DRM_ERROR("Failed to get DSI packet sender\n");
 		return -EINVAL;
 	}
-
-	/*send SHUT_DOWN packet */
-	err = mdfld_dsi_send_dpi_spk_pkg_hs(sender,
-			MDFLD_DSI_DPI_SPK_SHUT_DOWN);
-	if (err) {
-		DRM_ERROR("Failed to send turn off packet\n");
-		goto power_off_err;
+	for (i = 0; i < 2; i++) {
+		if (i == 0)
+			sender->work_for_slave_panel = false;
+		else
+			sender->work_for_slave_panel = true;
+		/*send SHUT_DOWN packet */
+		err = mdfld_dsi_send_dpi_spk_pkg_hs(sender,
+				MDFLD_DSI_DPI_SPK_SHUT_DOWN);
+		if (err) {
+			DRM_ERROR("Failed to send turn off packet\n");
+			goto power_off_err;
+		}
+		/* Set Display off */
+		err = mdfld_dsi_send_mcs_short_hs(sender, set_display_off, 0, 0,
+				MDFLD_DSI_SEND_PACKAGE);
+		if (err) {
+			DRM_ERROR("%s: %d: Set Display On\n", __func__, __LINE__);
+			goto power_off_err;
+		}
+		msleep(20);
+		/* Sleep In */
+		err = mdfld_dsi_send_mcs_short_hs(sender, enter_sleep_mode, 0, 0,
+				MDFLD_DSI_SEND_PACKAGE);
+		if (err) {
+			DRM_ERROR("%s: %d: Exit Sleep Mode\n", __func__, __LINE__);
+			goto power_off_err;
+		}
 	}
-
-	/* Set Display off */
-	err = mdfld_dsi_send_mcs_short_hs(sender, set_display_off, 0, 0,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Display On\n", __func__, __LINE__);
-		goto power_off_err;
-	}
-	msleep(20);
-	/* Sleep In */
-	err = mdfld_dsi_send_mcs_short_hs(sender, enter_sleep_mode, 0, 0,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Exit Sleep Mode\n", __func__, __LINE__);
-		goto power_off_err;
-	}
+	sender->work_for_slave_panel = false;
 	msleep(80);
 	return 0;
 
 power_off_err:
+	sender->work_for_slave_panel = false;
 	err = -EIO;
 	return err;
 }
