@@ -1047,11 +1047,10 @@ int psb_msvdx_uninit(struct drm_device *dev)
 #ifdef CONFIG_VIDEO_MRFLD
 		device_remove_file(&dev->pdev->dev, &dev_attr_ved_freq_scaling);
 #endif
+		tasklet_kill(&msvdx_priv->msvdx_tasklet);
 		kfree(msvdx_priv);
 		dev_priv->msvdx_private = NULL;
 	}
-
-	tasklet_kill(&msvdx_priv->msvdx_tasklet);
 
 	return 0;
 }

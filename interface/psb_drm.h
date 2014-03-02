@@ -872,9 +872,9 @@ struct psb_gtt_mapping_arg {
 };
 
 struct drm_psb_getpageaddrs_arg {
-	uint32_t handle;
-	unsigned long *page_addrs;
-	unsigned long gtt_offset;
+	uint64_t handle;
+	uint64_t page_addrs;
+	uint64_t gtt_offset;
 };
 
 

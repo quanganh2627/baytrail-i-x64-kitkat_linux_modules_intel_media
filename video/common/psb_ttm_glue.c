@@ -227,7 +227,7 @@ int psb_getpageaddrs_ioctl(struct drm_device *dev, void *data,
 	struct ttm_tt *ttm;
 	struct page **tt_pages;
 	unsigned long i, num_pages;
-	unsigned long *p = arg->page_addrs;
+	unsigned long *p;
 
 	bo = ttm_buffer_object_lookup(psb_fpriv(file_priv)->tfile,
 				      arg->handle);
@@ -239,13 +239,20 @@ int psb_getpageaddrs_ioctl(struct drm_device *dev, void *data,
 	arg->gtt_offset = bo->offset;
 	ttm = bo->ttm;
 	num_pages = ttm->num_pages;
+	p = kzalloc(num_pages * sizeof(unsigned long), GFP_KERNEL);
+	if (unlikely(p == NULL))
+		return -ENOMEM;
+
 	tt_pages = ttm->pages;
 
 	for (i = 0; i < num_pages; i++)
 		p[i] = (unsigned long)page_to_phys(tt_pages[i]);
 
-	ttm_bo_unref(&bo);
+	copy_to_user((void __user *)((unsigned long)arg->page_addrs),
+		     p, sizeof(unsigned long) * num_pages);
 
+	ttm_bo_unref(&bo);
+	kfree(p);
 	return 0;
 }
 

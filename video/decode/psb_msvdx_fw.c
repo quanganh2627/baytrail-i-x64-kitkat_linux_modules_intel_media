@@ -447,6 +447,15 @@ static int msvdx_get_fw_bo(struct drm_device *dev,
 		return 1;
 	}
 
+	/* there is 4 byte split between text and data,
+	 * also there is 4 byte guard after data */
+	if (((struct msvdx_fw *)ptr)->text_size + 8 +
+		((struct msvdx_fw *)ptr)->data_size >
+		msvdx_priv->mtx_mem_size) {
+		DRM_ERROR("MSVDX: fw size is bigger than mtx_mem_size.\n");
+		return 1;
+	}
+
 	rc = ttm_bo_kmap(msvdx_priv->fw, 0, (msvdx_priv->fw)->num_pages, &tmp_kmap);
 	if (rc) {
 		PSB_DEBUG_GENERAL("drm_bo_kmap failed: %d\n", rc);
