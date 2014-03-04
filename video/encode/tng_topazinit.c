@@ -1045,7 +1045,7 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	PSB_DEBUG_TOPAZ("imr6 RAC 0x9a = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9a));
 	PSB_DEBUG_TOPAZ("imr6 WAC 0x9b = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9b));
 #endif
-	ret = sepapp_image_verify(imr6l_addr, fw_size, 0, tng_magic_num);
+	ret = sepapp_image_verify(imr6l_addr, fw_size, 15, tng_magic_num);
 	if (ret) {
 		DRM_ERROR("failed to verify vec firmware ret %x\n", ret);
 		ret = -1;
