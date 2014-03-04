@@ -201,7 +201,7 @@ static int mrfl_pwr_cmd_gfx(u32 gfx_mask, int new_state)
 				apply_TNG_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
 
 			/* ANN A0 workarounds */
-			if (IS_ANN_A0(dev))
+			if (IS_ANN(dev))
 				apply_ANN_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
 		}
 
@@ -613,7 +613,7 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 
 	ret = GFX_POWER_UP(PMU_SLC);
 
-	if (!ret && IS_ANN_A0(dev))
+	if (!ret && IS_ANN(dev))
 		apply_ANN_A0_workarounds(OSPM_GRAPHICS_ISLAND, 1);
 
 	PSB_DEBUG_PM("Post-power-up status = 0x%08x\n",

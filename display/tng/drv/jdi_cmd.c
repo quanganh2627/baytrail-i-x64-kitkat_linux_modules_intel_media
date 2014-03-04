@@ -99,7 +99,7 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		goto ic_init_err;
 	}
 
-	if (!IS_ANN_A0(dev)) {
+	if (!IS_ANN(dev)) {
 		err = mdfld_dsi_send_mcs_short_hs(sender,
 				write_cabc_min_bright, 51, 1,
 				MDFLD_DSI_SEND_PACKAGE);
@@ -233,7 +233,7 @@ void jdi_cmd_controller_init(
 	hw_ctx->cck_div = 1;
 	hw_ctx->pll_bypass_mode = 0;
 
-	if (IS_ANN_A0(dev)) {
+	if (IS_ANN(dev)) {
 		hw_ctx->mipi_control = 0x18;
 		hw_ctx->intr_en = 0xFFFFFFFF;
 		hw_ctx->hs_tx_timeout = 0xFFFFFF;

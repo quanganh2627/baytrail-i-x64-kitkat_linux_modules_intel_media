@@ -180,7 +180,7 @@ int mdfld_dsi_dsr_update_panel_fb(struct mdfld_dsi_config *dsi_config)
 
 	dsr = dsi_config->dsr;
 
-	if (!IS_ANN_A0(dev)) {
+	if (!IS_ANN(dev)) {
 		/*if no dsr attached, return 0*/
 		if (!dsr)
 			return 0;

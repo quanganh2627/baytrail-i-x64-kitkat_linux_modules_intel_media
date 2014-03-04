@@ -1113,12 +1113,12 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 	dev_priv->panel_id = PanelID;
 	dev_priv->mipi_encoder_type = is_panel_vid_or_cmd(dev_priv->dev);
 
-	if (is_dual_dsi(dev) && IS_ANN_A0(dev)) {
+	if (is_dual_dsi(dev) && IS_ANN(dev)) {
 		dev_priv->bUseHFPLL = false;
 		dev_priv->bRereadZero = false;
-	} else if (IS_TNG_B0(dev) || IS_ANN_A0(dev)) {
+	} else if (IS_TNG_B0(dev) || IS_ANN(dev)) {
 		if (dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DBI) {
-			if (IS_ANN_A0(dev))
+			if (IS_ANN(dev))
 				dev_priv->bUseHFPLL = false;
 			else {
 				dev_priv->bUseHFPLL = true;
@@ -2976,7 +2976,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					DRM_ERROR("fail to get vsync on pipe %d, ret %d\n", pipe, ret);
 					vsync_state_dump(dev, pipe);
 
-					if (!IS_ANN_A0(dev)) {
+					if (!IS_ANN(dev)) {
 						if (pipe != 1 &&
 							is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI &&
 							dsi_config &&
@@ -2997,7 +2997,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			return ret;
 		}
 
-		if (!IS_ANN_A0(dev)) {
+		if (!IS_ANN(dev)) {
 			if (arg->vsync_operation_mask & VSYNC_ENABLE) {
 				if (dev_priv->vsync_enabled[pipe]) {
 					DRM_ERROR("%s: vsync has been enabled on pipe %d",

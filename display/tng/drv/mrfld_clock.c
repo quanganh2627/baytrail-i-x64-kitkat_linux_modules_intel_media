@@ -513,7 +513,7 @@ bool enable_DSIPLL(struct drm_device *dev)
 		goto err_out;
 	ctx = &dsi_config->dsi_hw_context;
 
-	if (IS_ANN_A0(dev))
+	if (IS_ANN(dev))
 		intel_mid_msgbus_write32(CCK_PORT, FUSE_OVERRIDE_FREQ_CNTRL_REG5,
 			CKESC_GATE_EN | CKDP1X_GATE_EN | DISPLAY_FRE_EN | 0x2);
 

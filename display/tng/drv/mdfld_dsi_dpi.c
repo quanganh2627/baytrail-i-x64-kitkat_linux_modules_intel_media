@@ -343,7 +343,7 @@ reset_recovery:
 		}
 	}
 
-	if (IS_ANN_A0(dev)) {
+	if (IS_ANN(dev)) {
 		/* FIXME: reset the DC registers for ANN A0 */
 		power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
 
@@ -463,7 +463,7 @@ reset_recovery:
 			goto power_on_err;
 		}
 
-	if (IS_ANN_A0(dev)) {
+	if (IS_ANN(dev)) {
 		REG_WRITE(regs->ddl1_reg, ctx->ddl1);
 		REG_WRITE(regs->ddl2_reg, ctx->ddl2);
 		REG_WRITE(regs->ddl3_reg, ctx->ddl3);

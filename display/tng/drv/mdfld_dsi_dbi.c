@@ -110,7 +110,7 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 
 	/* if mode setting on-going, back off */
 
-	if (!IS_ANN_A0(dev)) {
+	if (!IS_ANN(dev)) {
 		if ((dbi_output->mode_flags & MODE_SETTING_ON_GOING) ||
 				(psb_crtc && (psb_crtc->mode_flags & MODE_SETTING_ON_GOING)) ||
 				!(dbi_output->mode_flags & MODE_SETTING_ENCODER_DONE))
@@ -134,7 +134,7 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 	   !(REG_READ(pipeconf_reg) & DISPLAY_PLANE_ENABLE))
 		return;
 
-	if (!IS_ANN_A0(dev)) {
+	if (!IS_ANN(dev)) {
 		/* refresh plane changes */
 
 		REG_WRITE(dsplinoff_reg, REG_READ(dsplinoff_reg));
@@ -385,7 +385,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		}
 	}
 
-	if (IS_ANN_A0(dev)) {
+	if (IS_ANN(dev)) {
 		/* FIXME: reset the DC registers for ANN A0 */
 		power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
 
@@ -468,7 +468,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(regs->dsppos_reg, ctx->dsppos);
 	REG_WRITE(regs->dspstride_reg, ctx->dspstride);
 
-	if (!IS_ANN_A0(dev)) {
+	if (!IS_ANN(dev)) {
 		/*restore color_coef (chrome) */
 		for (i = 0; i < 6; i++)
 			REG_WRITE(regs->color_coef_reg + (i<<2), ctx->color_coef[i]);
@@ -537,7 +537,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 			REG_READ(regs->device_ready_reg + offset) | DSI_DEVICE_READY);
 	}
 
-	if (IS_ANN_A0(dev)) {
+	if (IS_ANN(dev)) {
 		REG_WRITE(regs->ddl1_reg, ctx->ddl1);
 		REG_WRITE(regs->ddl2_reg, ctx->ddl2);
 		REG_WRITE(regs->ddl3_reg, ctx->ddl3);
@@ -637,7 +637,7 @@ reset_recovery:
 	dbi_outputs = dsr_info->dbi_outputs;
 	dbi_output = dsi_config->pipe ? dbi_outputs[1] : dbi_outputs[0];
 
-	if (!IS_ANN_A0(dev))
+	if (!IS_ANN(dev))
 		intel_dsi_dbi_update_fb(dbi_output);
 
 	/**
@@ -663,7 +663,7 @@ reset_recovery:
 		sender->work_for_slave_panel = false;
 	}
 
-	if (IS_ANN_A0(dev))
+	if (IS_ANN(dev))
 		intel_dsi_dbi_update_fb(dbi_output);
 
 power_on_err:
