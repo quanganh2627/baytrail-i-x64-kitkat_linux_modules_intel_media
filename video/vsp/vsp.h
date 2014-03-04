@@ -82,6 +82,9 @@
 #define VSP_FIRMWARE_MEM_ALIGNMENT 4096
 /* #define VP8_ENC_DEBUG 1 */
 
+#define MAX_VP8_CONTEXT_NUM 2
+#define MAX_VPP_CONTEXT_NUM 1
+
 static const unsigned int vsp_processor_base[] = {
 				SP0_SP_REG_BASE,
 				SP1_SP_REG_BASE,
@@ -264,11 +267,13 @@ struct vsp_private {
 	void *coded_buf;
 	struct ttm_bo_kmap_obj coded_buf_kmap;
 	struct ttm_buffer_object *coded_buf_bo;
-	int context_num;
 
 	/* For VP8 dual encoding */
 	struct file *vp8_filp[2];
 	int context_vp8_num;
+
+	/* The context number of VPP */
+	int context_vpp_num;
 
 	/*
 	 * to fix problem when CTRL+C vp8 encoding *

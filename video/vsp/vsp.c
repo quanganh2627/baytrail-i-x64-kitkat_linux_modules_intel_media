@@ -1020,6 +1020,7 @@ int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+	int ret = 0;
 
 	dev_priv = dev->dev_private;
 	if (dev_priv == NULL) {
@@ -1033,12 +1034,11 @@ int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		return -1;
 	}
 
-	vsp_priv->context_num++;
 	if (VAEntrypointEncSlice == ctx_type) {
 		vsp_priv->context_vp8_num++;
-		if (vsp_priv->context_vp8_num > 2) {
+		if (vsp_priv->context_vp8_num > MAX_VP8_CONTEXT_NUM) {
 			DRM_ERROR("VSP: Only support dual vp8 encoding!\n");
-			return vsp_priv->context_vp8_num;
+			return -1;
 		}
 
 		/* store the fd of 2 vp8 encoding processes */
@@ -1049,11 +1049,18 @@ int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		} else {
 			DRM_ERROR("VSP: The current 2 vp8 contexts have not been removed\n");
 		}
-
-		return vsp_priv->context_vp8_num;
+	} else if (ctx_type == VAEntrypointVideoProc) {
+		vsp_priv->context_vpp_num++;
+		if (vsp_priv->context_vpp_num > MAX_VPP_CONTEXT_NUM) {
+			DRM_ERROR("VSP: Only support one VPP stream!\n");
+			ret = -1;
+		}
+	} else {
+		DRM_ERROR("VSP: couldn't support the context %x\n", ctx_type);
+		ret = -1;
 	}
 
-	return vsp_priv->context_num;
+	return ret;
 }
 
 void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
@@ -1078,15 +1085,16 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	}
 
 	if (vsp_priv->ctrl == NULL) {
-		vsp_priv->context_num--;
 		if (filp == vsp_priv->vp8_filp[0])
 			vsp_priv->vp8_filp[0] = NULL;
 		else
 			vsp_priv->vp8_filp[1] = NULL;
 
-		if (VAEntrypointEncSlice == ctx_type) {
+		if (VAEntrypointEncSlice == ctx_type)
 			vsp_priv->context_vp8_num--;
-		}
+		else if (ctx_type == VAEntrypointVideoProc)
+			if (vsp_priv->context_vpp_num > 0)
+				vsp_priv->context_vpp_num--;
 		return;
 	}
 
@@ -1143,11 +1151,11 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		}
 
 		vsp_priv->context_vp8_num--;
-	}
+	} else if (ctx_type == VAEntrypointVideoProc)
+		vsp_priv->context_vpp_num--;
 
-	vsp_priv->context_num--;
-
-	if (vsp_priv->context_num >= 1) {
+	/* Return if there is any context is running */
+	if (vsp_priv->context_vp8_num > 0 || vsp_priv->context_vpp_num > 0) {
 		return;
 	}
 
