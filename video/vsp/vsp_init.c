@@ -345,7 +345,7 @@ int vsp_init_fw(struct drm_device *dev)
 
 		/* read firmware img */
 		VSP_DEBUG("load vsp fw\n");
-		if (IS_ANN_A0(dev))
+		if (IS_MOFD(dev))
 			ret = request_firmware(&raw, FW_NAME_ANN,
 					       &dev->pdev->dev);
 		else if (IS_TNG_B0(dev))

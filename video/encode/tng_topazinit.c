@@ -972,7 +972,7 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 		if (IS_TNG_B0(dev))
 			ret = request_firmware(&raw, FW_NAME_B0,
 					       &dev->pdev->dev);
-		else if (IS_ANN_A0(dev))
+		else if (IS_MOFD(dev))
 			ret = request_firmware(&raw, FW_NAME_ANN,
 					       &dev->pdev->dev);
 		else
