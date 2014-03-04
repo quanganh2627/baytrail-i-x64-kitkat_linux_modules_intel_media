@@ -1014,7 +1014,7 @@ int psb_msvdx_init(struct drm_device *dev)
         }
 
 #ifdef MERRIFIELD
-	if (!(IS_TNG_B0(dev) || IS_ANN_A0(dev))) {
+	if (!(IS_TNG_B0(dev) || IS_MOFD(dev))) {
 #endif
 		ret = psb_msvdx_post_init(dev);
 		if (ret) {

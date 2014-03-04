@@ -743,7 +743,7 @@ int psb_gtt_mm_init(struct psb_gtt *pg)
 
 	mm = &gtt_mm->base;
 
-	if (!IS_ANN_A0(pg->dev))
+	if (!IS_MOFD(pg->dev))
 		/*will use tt_start ~ 128M for IMG TT buffers */
 		tt_size /= 2;
 

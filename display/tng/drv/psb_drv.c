@@ -1289,7 +1289,7 @@ static int psb_do_init(struct drm_device *dev)
 	dev_priv->sizes.ta_mem_size = 0;
 
 	/* TT region managed by TTM. */
-	if (IS_ANN_A0(dev)) {
+	if (IS_MOFD(dev)) {
 		if (!ttm_bo_init_mm(bdev, TTM_PL_TT,
 				pg->vram_stolen_size >> PAGE_SHIFT)) {
 
@@ -1415,7 +1415,7 @@ static int psb_driver_unload(struct drm_device *dev)
 #endif
 		if (IS_MRFLD(dev))
 			mrfld_gtt_takedown(dev_priv->pg, 1);
-		else if (IS_ANN_A0(dev))
+		else if (IS_MOFD(dev))
 			mofd_gtt_takedown(dev_priv->pg, 1);
 		else
 			psb_gtt_takedown(dev_priv->pg, 1);
@@ -1500,7 +1500,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	u32 pm_mask = 0x0;
 	int pm_reg = 0x0;
 
-	if (IS_ANN_A0(dev)) {
+	if (IS_MOFD(dev)) {
 		pm_reg = 0x3f;
 		pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
 		printk ("\nHACK - Before PWR ON - pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
@@ -1708,7 +1708,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	if (IS_MRFLD(dev))
 		ret = mrfld_gtt_init(dev_priv->pg, 0);
-	else if (IS_ANN_A0(dev))
+	else if (IS_MOFD(dev))
 		ret = mofd_gtt_init(dev_priv->pg, 0);
 	else
 		ret = psb_gtt_init(dev_priv->pg, 0);
@@ -1740,7 +1740,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	    (pg->gatt_pages) : PSB_TT_PRIV0_PLIMIT;
 
 	/* CI/RAR use the lower half of TT. */
-	if (IS_ANN_A0(dev))
+	if (IS_MOFD(dev))
 		pg->gtt_video_start = 0;
 	else
 		pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
