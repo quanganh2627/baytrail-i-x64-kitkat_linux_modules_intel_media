@@ -444,7 +444,7 @@ int vsp_init_fw(struct drm_device *dev)
 	/* unmap the region */
 	iounmap(imr_ptr);
 #ifdef CONFIG_DX_SEP54
-	ret = sepapp_image_verify(imr_addr, imr_size, 0, vsp_magic_num);
+	ret = sepapp_image_verify(imr_addr, imr_size, 15, vsp_magic_num);
 	if (ret) {
 		DRM_ERROR("failed to verify vsp firmware, ret %x\n", ret);
 		ret = -1;
