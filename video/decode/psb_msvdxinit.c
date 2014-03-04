@@ -695,7 +695,7 @@ int tng_msvdx_fw_init(uint8_t *name,struct drm_device *dev)
 	DRM_INFO("imr5 WAC 0x97 = 0x%x\n", intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,0X97));
 
 
-	ret = sepapp_image_verify(imr_base, fw_size, 0,
+	ret = sepapp_image_verify(imr_base, fw_size, 15,
 			tng_magic_num);
 	if (ret) {
 		DRM_ERROR("failed to verify VED firmware ret %x\n", ret);
