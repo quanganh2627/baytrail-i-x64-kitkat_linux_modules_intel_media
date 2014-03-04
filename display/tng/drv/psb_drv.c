@@ -1740,10 +1740,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	    (pg->gatt_pages) : PSB_TT_PRIV0_PLIMIT;
 
 	/* CI/RAR use the lower half of TT. */
-	if (IS_MOFD(dev))
-		pg->gtt_video_start = 0;
-	else
-		pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
+	pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
 	pg->rar_start = pg->gtt_video_start;
 
 	/*
