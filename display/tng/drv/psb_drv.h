@@ -354,14 +354,18 @@ enum enum_ports {
 #define IS_TNG_A0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && (intel_mid_soc_stepping() == 0))
 
 #if defined(CONFIG_DRM_CTP)
-#define IS_TNG_B0(dev) 		0
+#define IS_TNG_B0(dev)		0
 #elif defined(CONFIG_DRM_VXD_BYT)
-#define IS_TNG_B0(dev) 		0
+#define IS_TNG_B0(dev)		0
 #else
 #define IS_TNG_B0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_TANGIER) && (intel_mid_soc_stepping() == 1))
 #endif
 
+#define IS_ANN(dev) (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE)
+
 #define IS_ANN_A0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE) && (intel_mid_soc_stepping() == 0))
+
+#define IS_ANN_B0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE) && (intel_mid_soc_stepping() == 1))
 
 #define IS_MOFD(dev) (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE)
 
