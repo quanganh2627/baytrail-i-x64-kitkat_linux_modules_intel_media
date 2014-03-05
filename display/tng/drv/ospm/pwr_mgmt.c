@@ -689,6 +689,11 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 	}
 
 	if (force_off) {
+		if (!ospm_power_is_hw_on(OSPM_VIDEO_DEC_ISLAND)) {
+			PSB_DEBUG_PM("msvdx in power off.\n");
+			return;
+		}
+
 		mutex_lock(&g_ospm_data->ospm_lock);
 		ret = p_island->p_funcs->power_down(
 			g_ospm_data->dev,
