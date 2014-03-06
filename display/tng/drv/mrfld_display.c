@@ -504,13 +504,23 @@ static int mrfld_crtc_mode_set(struct drm_crtc *crtc,
 	int pipe = psb_intel_crtc->pipe;
 
 	PSB_DEBUG_ENTRY("pipe = 0x%x\n", pipe);
+
+	switch (pipe) {
+	case 0:
+		dsi_config = dev_priv->dsi_configs[0];
+		break;
+	case 1:
+		break;
+	case 2:
+		dsi_config = dev_priv->dsi_configs[1];
+		break;
+	default:
+		DRM_ERROR("Illegal Pipe Number. \n");
+		return 0;
+	}
+
 	if (pipe != 1) {
 		int clk;
-
-		if (pipe == 0)
-			dsi_config = dev_priv->dsi_configs[0];
-		else if (pipe == 2)
-			dsi_config = dev_priv->dsi_configs[1];
 
 		if (dsi_config->lane_count)
 			clk = adjusted_mode->clock / dsi_config->lane_count;
