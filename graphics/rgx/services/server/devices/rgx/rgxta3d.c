@@ -2583,9 +2583,9 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
 	PVRSRV_ERROR			eError2;
 
 	/* Internal client sync info, used to help with merging of Android fd syncs */
-	IMG_UINT32				ui32IntClient3DFenceCount = 0;
-	PRGXFWIF_UFO_ADDR		*pauiIntClient3DFenceUFOAddress = IMG_NULL;
-	IMG_UINT32				*paui32IntClient3DFenceValue = IMG_NULL;
+	IMG_UINT32				ui32IntClientTAFenceCount = 0;
+	PRGXFWIF_UFO_ADDR		*pauiIntClientTAFenceUFOAddress = IMG_NULL;
+	IMG_UINT32				*paui32IntClientTAFenceValue = IMG_NULL;
 
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 	/* Android fd sync update info */
@@ -2641,11 +2641,98 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
 	{
 		RGX_SERVER_RC_TA_DATA *psTAData = &psRenderContext->sTAData;
 
+#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+		if (ui32NumFenceFds)
+		{
+			/*
+				Android fd sync fence info we can declare here as the
+				data they contain gets merged into *IntClientTAFence* so we
+				don't need to scope them beyond this if statement
+			*/
+			IMG_UINT32 ui32NumFenceSyncs = 0;
+			PRGXFWIF_UFO_ADDR *puiFenceFWAddrs = IMG_NULL;
+			IMG_UINT32 *pui32FenceValues = IMG_NULL;
+
+			/*
+				This call is only using the Android fd sync to fence the
+				TA command. There is an update but this is used to
+				indicate that the fence has been finished with and so it
+				can happen after the PR as by then we've finished using
+				the fd sync
+			*/
+			eError = PVRFDSyncQueryFencesKM(ui32NumFenceFds,
+											ai32FenceFds,
+											IMG_FALSE,
+											&ui32NumFenceSyncs,
+											&puiFenceFWAddrs,
+											&pui32FenceValues,
+											&ui32NumUpdateSyncs,
+											&puiUpdateFWAddrs,
+											&pui32UpdateValues);
+			if (eError != PVRSRV_OK)
+			{
+				goto fail_fdsync;
+			}
+
+			/*
+				Merge the Android syncs and the client fences together
+			*/
+			ui32IntClientTAFenceCount = ui32ClientTAFenceCount + ui32NumFenceSyncs;
+			pauiIntClientTAFenceUFOAddress = OSAllocMem(sizeof(*pauiIntClientTAFenceUFOAddress)* ui32IntClientTAFenceCount);
+			if (pauiIntClientTAFenceUFOAddress == IMG_NULL)
+			{
+				/* Free memory created by PVRFDSyncQueryFencesKM */
+				OSFreeMem(puiFenceFWAddrs);
+				OSFreeMem(pui32FenceValues);
+				OSFreeMem(puiUpdateFWAddrs);
+				OSFreeMem(pui32UpdateValues);
+
+				eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+				goto fail_fenceUFOarray;
+			}
+			paui32IntClientTAFenceValue = OSAllocMem(sizeof(*paui32IntClientTAFenceValue)* ui32IntClientTAFenceCount);
+			if (paui32IntClientTAFenceValue == IMG_NULL)
+			{
+				/* Free memory created by PVRFDSyncQueryFencesKM */
+				OSFreeMem(puiFenceFWAddrs);
+				OSFreeMem(pui32FenceValues);
+				OSFreeMem(puiUpdateFWAddrs);
+				OSFreeMem(pui32UpdateValues);
+
+				OSFreeMem(pauiIntClientTAFenceUFOAddress);
+				eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+				goto fail_fencevaluearray;
+			}
+
+			SYNC_MERGE_CLIENT_FENCES(ui32IntClientTAFenceCount, pauiIntClientTAFenceUFOAddress, paui32IntClientTAFenceValue,
+									 ui32NumFenceSyncs, puiFenceFWAddrs, pui32FenceValues,
+									 ui32ClientTAFenceCount, pauiClientTAFenceUFOAddress, paui32ClientTAFenceValue);
+
+			/* Free memory created by PVRFDSyncQueryFencesKM */
+			OSFreeMem(puiFenceFWAddrs);
+			OSFreeMem(pui32FenceValues);
+
+			if (ui32NumFenceSyncs || ui32NumUpdateSyncs)
+			{
+				PDUMPCOMMENT("(TA) Android native fences in use: %u fence syncs, %u update syncs",
+							 ui32NumFenceSyncs, ui32NumUpdateSyncs);
+			}
+			bSyncsMerged = IMG_TRUE;
+		}
+		else
+#endif /* PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC */
+		{
+			/* No client sync merging so just copy across the pointers */
+			ui32IntClientTAFenceCount = ui32ClientTAFenceCount;
+			pauiIntClientTAFenceUFOAddress = pauiClientTAFenceUFOAddress;
+			paui32IntClientTAFenceValue = paui32ClientTAFenceValue;
+		}
+
 		/* Init the TA command helper */
 		eError = RGXCmdHelperInitCmdCCB(FWCommonContextGetClientCCB(psTAData->psServerCommonContext),
-										  ui32ClientTAFenceCount,
-										  pauiClientTAFenceUFOAddress,
-										  paui32ClientTAFenceValue,
+										  ui32IntClientTAFenceCount,
+										  pauiIntClientTAFenceUFOAddress,
+										  paui32IntClientTAFenceValue,
 										  ui32ClientTAUpdateCount,
 										  pauiClientTAUpdateUFOAddress,
 										  paui32ClientTAUpdateValue,
@@ -2693,93 +2780,6 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
 	{
 		RGX_SERVER_RC_3D_DATA *ps3DData = &psRenderContext->s3DData;
 
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-		if (ui32NumFenceFds)
-		{
-			/*
-				Android fd sync fence info we can declare here as the
-				data they contain gets merged into *IntClient3DFence* so we
-				don't need to scope them beyond this if statement
-			*/
-			IMG_UINT32 ui32NumFenceSyncs = 0;
-			PRGXFWIF_UFO_ADDR *puiFenceFWAddrs = IMG_NULL;
-			IMG_UINT32 *pui32FenceValues = IMG_NULL;
-
-			/*
-				This call is only using the Android fd sync to fence the
-				3D (PR) command. There is an update but this is used to
-				indicate that the fence has been finished with and so it
-				can happen after the PR as by then we've finished using
-				the fd sync
-			*/
-			eError = PVRFDSyncQueryFencesKM(ui32NumFenceFds,
-											ai32FenceFds,
-											IMG_FALSE,
-											&ui32NumFenceSyncs,
-											&puiFenceFWAddrs,
-											&pui32FenceValues,
-											&ui32NumUpdateSyncs,
-											&puiUpdateFWAddrs,
-											&pui32UpdateValues);
-			if (eError != PVRSRV_OK)
-			{
-				goto fail_fdsync;
-			}
-
-			/*
-				Merge the Android syncs and the client fences together
-			*/
-			ui32IntClient3DFenceCount = ui32Client3DFenceCount + ui32NumFenceSyncs;
-			pauiIntClient3DFenceUFOAddress = OSAllocMem(sizeof(*pauiIntClient3DFenceUFOAddress)* ui32IntClient3DFenceCount);
-			if (pauiIntClient3DFenceUFOAddress == IMG_NULL)
-			{
-				/* Free memory created by PVRFDSyncQueryFencesKM */
-				OSFreeMem(puiFenceFWAddrs);
-				OSFreeMem(pui32FenceValues);
-				OSFreeMem(puiUpdateFWAddrs);
-				OSFreeMem(pui32UpdateValues);
-
-				eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-				goto fail_fenceUFOarray;
-			}	
-			paui32IntClient3DFenceValue = OSAllocMem(sizeof(*paui32IntClient3DFenceValue)* ui32IntClient3DFenceCount);
-			if (paui32IntClient3DFenceValue == IMG_NULL)
-			{
-				/* Free memory created by PVRFDSyncQueryFencesKM */
-				OSFreeMem(puiFenceFWAddrs);
-				OSFreeMem(pui32FenceValues);
-				OSFreeMem(puiUpdateFWAddrs);
-				OSFreeMem(pui32UpdateValues);
-
-				OSFreeMem(pauiIntClient3DFenceUFOAddress);
-				eError = PVRSRV_ERROR_OUT_OF_MEMORY;
-				goto fail_fencevaluearray;
-			}
-
-			SYNC_MERGE_CLIENT_FENCES(ui32IntClient3DFenceCount, pauiIntClient3DFenceUFOAddress, paui32IntClient3DFenceValue,
-									 ui32NumFenceSyncs, puiFenceFWAddrs, pui32FenceValues,
-									 ui32Client3DFenceCount, pauiClient3DFenceUFOAddress, paui32Client3DFenceValue);
-
-			/* Free memory created by PVRFDSyncQueryFencesKM */
-			OSFreeMem(puiFenceFWAddrs);
-			OSFreeMem(pui32FenceValues);
-
-			if (ui32NumFenceSyncs || ui32NumUpdateSyncs)
-			{
-				PDUMPCOMMENT("(TA) Android native fences in use: %u fence syncs, %u update syncs",
-							 ui32NumFenceSyncs, ui32NumUpdateSyncs);
-			}
-			bSyncsMerged = IMG_TRUE;
-		}
-		else
-#endif /* PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC */
-		{
-			/* No client sync merging so just copy across the pointers */
-			ui32IntClient3DFenceCount = ui32Client3DFenceCount;
-			pauiIntClient3DFenceUFOAddress = pauiClient3DFenceUFOAddress;
-			paui32IntClient3DFenceValue = paui32Client3DFenceValue;
-		}
-
 		if (ui32Server3DSyncPrims)
 		{
 			/*
@@ -2813,9 +2813,9 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
 
 		/* Init the PR fence command helper */
 		eError = RGXCmdHelperInitCmdCCB(FWCommonContextGetClientCCB(ps3DData->psServerCommonContext),
-										ui32IntClient3DFenceCount,
-										pauiIntClient3DFenceUFOAddress,
-										paui32IntClient3DFenceValue,
+										ui32Client3DFenceCount,
+										pauiClient3DFenceUFOAddress,
+										paui32Client3DFenceValue,
 										0,
 										IMG_NULL,
 										IMG_NULL,
@@ -3065,8 +3065,8 @@ PVRSRV_ERROR PVRSRVRGXKickTA3DKM(RGX_SERVER_RENDER_CONTEXT	*psRenderContext,
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 	if (bSyncsMerged)
 	{
-		OSFreeMem(paui32IntClient3DFenceValue);
-		OSFreeMem(pauiIntClient3DFenceUFOAddress);
+		OSFreeMem(paui32IntClientTAFenceValue);
+		OSFreeMem(pauiIntClientTAFenceUFOAddress);
 		OSFreeMem(puiUpdateFWAddrs);
 		OSFreeMem(pui32UpdateValues);
 	}
@@ -3111,8 +3111,8 @@ fail_prserversyncflagsallocpr:
 #if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
 	if (bSyncsMerged)
 	{
-		OSFreeMem(paui32IntClient3DFenceValue);
-		OSFreeMem(pauiIntClient3DFenceUFOAddress);
+		OSFreeMem(paui32IntClientTAFenceValue);
+		OSFreeMem(pauiIntClientTAFenceUFOAddress);
 		OSFreeMem(puiUpdateFWAddrs);
 		OSFreeMem(pui32UpdateValues);
 	}
