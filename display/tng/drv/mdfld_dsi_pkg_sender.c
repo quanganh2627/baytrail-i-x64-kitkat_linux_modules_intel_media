@@ -1605,6 +1605,7 @@ int mdfld_dsi_read_mcs_hs(struct mdfld_dsi_pkg_sender *sender,
 	return mdfld_dsi_read_mcs(sender, cmd, data, len,
 				MDFLD_DSI_HS_TRANSMISSION);
 }
+EXPORT_SYMBOL(mdfld_dsi_read_mcs_hs);
 
 int mdfld_dsi_read_mcs_lp(struct mdfld_dsi_pkg_sender *sender,
 			u8 cmd,
