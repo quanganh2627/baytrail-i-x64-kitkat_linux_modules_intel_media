@@ -74,9 +74,16 @@ MODULE_VERSION(HAD_DRIVER_VERSION);
 #define FIFO_THRESHOLD		0xFE
 #define DMA_FIFO_THRESHOLD	0x7
 #define BYTES_PER_WORD		0x4
+
+/* Sampling rate as per IEC60958 Ver 3 */
 #define CH_STATUS_MAP_32KHZ	0x3
 #define CH_STATUS_MAP_44KHZ	0x0
 #define CH_STATUS_MAP_48KHZ	0x2
+#define CH_STATUS_MAP_88KHZ	0x8
+#define CH_STATUS_MAP_96KHZ	0xA
+#define CH_STATUS_MAP_176KHZ	0xC
+#define CH_STATUS_MAP_192KHZ	0xE
+
 #define MAX_SMPL_WIDTH_20	0x0
 #define MAX_SMPL_WIDTH_24	0x1
 #define SMPL_WIDTH_16BITS	0x1
@@ -399,19 +406,26 @@ static int had_prog_status_reg(struct snd_pcm_substream *substream,
 	switch (substream->runtime->rate) {
 	case AUD_SAMPLE_RATE_32:
 		ch_stat0.status_0_regx.samp_freq = CH_STATUS_MAP_32KHZ;
-	break;
+		break;
 
 	case AUD_SAMPLE_RATE_44_1:
-	case AUD_SAMPLE_RATE_88_2:
-	case AUD_SAMPLE_RATE_176_4:
 		ch_stat0.status_0_regx.samp_freq = CH_STATUS_MAP_44KHZ;
-	break;
-
+		break;
 	case AUD_SAMPLE_RATE_48:
-	case AUD_SAMPLE_RATE_96:
-	case HAD_MAX_RATE:
 		ch_stat0.status_0_regx.samp_freq = CH_STATUS_MAP_48KHZ;
-	break;
+		break;
+	case AUD_SAMPLE_RATE_88_2:
+		ch_stat0.status_0_regx.samp_freq = CH_STATUS_MAP_88KHZ;
+		break;
+	case AUD_SAMPLE_RATE_96:
+		ch_stat0.status_0_regx.samp_freq = CH_STATUS_MAP_96KHZ;
+		break;
+	case AUD_SAMPLE_RATE_176_4:
+		ch_stat0.status_0_regx.samp_freq = CH_STATUS_MAP_176KHZ;
+		break;
+	case AUD_SAMPLE_RATE_192:
+		ch_stat0.status_0_regx.samp_freq = CH_STATUS_MAP_192KHZ;
+		break;
 
 	default:
 		/* control should never come here */

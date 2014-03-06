@@ -378,7 +378,7 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to allocate prim server sync (%s)",
 				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_data;
+		goto err_free_kernel_sync_prim;
 	}
 
 	eError = PVRSRVServerSyncGetStatusKM(1, &psPVRPt->psSyncData->psSyncKernel->psSync,
@@ -389,7 +389,7 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to get status of prim server sync (%s)",
 				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_data;
+		goto err_free_server_sync;
 	}
 
 	eError = PVRSRVServerSyncQueueHWOpKM(psPVRPt->psSyncData->psSyncKernel->psSync,
@@ -400,7 +400,7 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to queue prim server sync hw operation (%s)",
 				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_data;
+		goto err_free_server_sync;
 	}
 
 	psPVRPt->psSyncData->psSyncKernel->psCleanUpSync = IMG_NULL;
@@ -410,8 +410,15 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 err_out:
 	return psPVRPt;
 
+err_free_server_sync:
+	PVRSRVServerSyncFreeKM(psPVRPt->psSyncData->psSyncKernel->psSync);
+
+err_free_kernel_sync_prim:
+	OSFreeMem(psPVRPt->psSyncData->psSyncKernel);
+
 err_free_data:
 	OSFreeMem(psPVRPt->psSyncData);
+	psPVRPt->psSyncData = IMG_NULL;
 
 err_free_pt:
 	sync_pt_free((struct sync_pt *)psPVRPt);
@@ -495,12 +502,15 @@ static void PVRSyncFreeSync(struct sync_pt *psPt)
 		_debugInfoPt(psPt));
 
     /* Only free on the last reference */
-    if (atomic_dec_return(&psPVRPt->psSyncData->sRefCount) != 0)
-        return;
+	if (psPVRPt->psSyncData) {
+		if (atomic_dec_return(&psPVRPt->psSyncData->sRefCount) != 0)
+			return;
 
-	if(PVRSyncReleaseSyncPrim(psPVRPt->psSyncData->psSyncKernel))
-		queue_work(gsPVRSync.psWorkQueue, &gsPVRSync.sWork);
-	OSFreeMem(psPVRPt->psSyncData);
+		if(PVRSyncReleaseSyncPrim(psPVRPt->psSyncData->psSyncKernel))
+			queue_work(gsPVRSync.psWorkQueue, &gsPVRSync.sWork);
+		OSFreeMem(psPVRPt->psSyncData);
+		psPVRPt->psSyncData = IMG_NULL;
+	}
 }
 
 static struct sync_timeline_ops gsPVR_SYNC_TIMELINE_ops =

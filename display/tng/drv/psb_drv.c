@@ -2971,9 +2971,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 							__func__, pipe);
 
 					if (!IS_ANN_A0(dev)) {
-						if ((pipe != 1) && (is_panel_vid_or_cmd(dev) ==
-									MDFLD_DSI_ENCODER_DBI))
+						if (pipe != 1 &&
+							is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI &&
+							dsi_config &&
+							dsi_config->dsi_hw_context.panel_on) {
 							schedule_work(&dev_priv->reset_panel_work);
+						}
 					}
 				}
 
