@@ -361,10 +361,6 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	struct file *filp = priv->filp;
 	bool need_power_put = 0;
 
-	ret = mutex_lock_interruptible(&vsp_priv->vsp_mutex);
-	if (unlikely(ret != 0))
-		return -EFAULT;
-
 	/* check if mmu should be invalidated */
 	invalid_mmu = atomic_cmpxchg(&dev_priv->vsp_mmu_invaldc, 1, 0);
 	if (invalid_mmu && psb_check_vsp_idle(dev) == 0)
@@ -443,8 +439,6 @@ out:
 
 	vsp_priv->vsp_cmd_num = 0;
 out_err:
-	mutex_unlock(&vsp_priv->vsp_mutex);
-
 	return ret;
 }
 
