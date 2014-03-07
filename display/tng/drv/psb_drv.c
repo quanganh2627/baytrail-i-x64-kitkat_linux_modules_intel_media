@@ -1293,12 +1293,11 @@ static int psb_do_init(struct drm_device *dev)
 
 	/* TT region managed by TTM. */
 	if (IS_MOFD(dev)) {
-		if (!ttm_bo_init_mm(bdev, TTM_PL_TT,
-				pg->vram_stolen_size >> PAGE_SHIFT)) {
+		if (!ttm_bo_init_mm(bdev, TTM_PL_TT, MOFD_TTM_TT_PAGES)) {
 
 			dev_priv->have_tt = 1;
 			dev_priv->sizes.tt_size =
-				pg->vram_stolen_size / (1024 * 1024) / 2;
+				MOFD_TTM_TT_PAGES << PAGE_SHIFT / (1024 * 1024);
 		}
 	} else {
 		if (!ttm_bo_init_mm(bdev, TTM_PL_TT,
@@ -1416,10 +1415,10 @@ static int psb_driver_unload(struct drm_device *dev)
 			dev_priv->vsp_mmu = NULL;
 		}
 #endif
-		if (IS_MRFLD(dev))
-			mrfld_gtt_takedown(dev_priv->pg, 1);
-		else if (IS_MOFD(dev))
+		if (IS_MOFD(dev))
 			mofd_gtt_takedown(dev_priv->pg, 1);
+		else if (IS_MRFLD(dev))
+			mrfld_gtt_takedown(dev_priv->pg, 1);
 		else
 			psb_gtt_takedown(dev_priv->pg, 1);
 
@@ -1709,10 +1708,10 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	if (!dev_priv->pg)
 		goto out_err;
 
-	if (IS_MRFLD(dev))
-		ret = mrfld_gtt_init(dev_priv->pg, 0);
-	else if (IS_MOFD(dev))
+	if (IS_MOFD(dev))
 		ret = mofd_gtt_init(dev_priv->pg, 0);
+	else if (IS_MRFLD(dev))
+		ret = mrfld_gtt_init(dev_priv->pg, 0);
 	else
 		ret = psb_gtt_init(dev_priv->pg, 0);
 
@@ -1742,8 +1741,16 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	tt_pages = (pg->gatt_pages < PSB_TT_PRIV0_PLIMIT) ?
 	    (pg->gatt_pages) : PSB_TT_PRIV0_PLIMIT;
 
-	/* CI/RAR use the lower half of TT. */
-	pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
+
+	if (IS_MOFD(dev)) {
+		/* TTM TT only uses reserved GTT memory*/
+		pg->gtt_video_start = pg->reserved_gtt_start;
+		pg->gtt_video_start += MOFD_HW_WA_GTT_PAGES << PAGE_SHIFT;
+		pg->gtt_video_start = ALIGN(pg->gtt_video_start, 64 * 1024);
+	} else
+		/* CI/RAR use the lower half of TT. */
+		pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
+
 	pg->rar_start = pg->gtt_video_start;
 
 	/*

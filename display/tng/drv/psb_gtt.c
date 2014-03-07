@@ -743,8 +743,12 @@ int psb_gtt_mm_init(struct psb_gtt *pg)
 
 	mm = &gtt_mm->base;
 
-	if (!IS_MOFD(pg->dev))
-		/*will use tt_start ~ 128M for IMG TT buffers */
+	if (IS_MOFD(pg->dev)) {
+		pg->reserved_gtt_start = tt_start << PAGE_SHIFT;
+		/*reserve 1M for HW W/A*/
+		tt_start += MOFD_RESERVED_GTT_PAGES;
+	} else
+		/*will use tt_start ~ 128M for IMG TT buffers*/
 		tt_size /= 2;
 
 	drm_mm_init(mm, tt_start, (tt_size - tt_start));

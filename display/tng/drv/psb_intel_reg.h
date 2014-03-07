@@ -556,6 +556,7 @@ struct dpst_guardband {
 #define DISPPLANE_16BPP				(0x5<<26)
 #define DISPPLANE_32BPP_NO_ALPHA 		(0x6<<26)
 #define DISPPLANE_32BPP				(0x7<<26)
+#define DISPPLANE_PREMULT_DISABLE		(0x1<<23)
 #define DISPPLANE_STEREO_ENABLE			(1<<25)
 #define DISPPLANE_STEREO_DISABLE		0
 #define DISPPLANE_SEL_PIPE_MASK			(3<<24)

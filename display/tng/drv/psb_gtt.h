@@ -22,6 +22,11 @@
 
 #include <drm/drmP.h>
 
+/*Reserve 1M GTT for MOFD HW WA*/
+#define MOFD_RESERVED_GTT_PAGES		256
+#define MOFD_HW_WA_GTT_PAGES		8
+#define MOFD_TTM_TT_PAGES	(MOFD_RESERVED_GTT_PAGES - MOFD_HW_WA_GTT_PAGES)
+
 struct psb_gtt {
 	struct drm_device *dev;
 	int initialized;
@@ -30,6 +35,7 @@ struct psb_gtt {
 	uint32_t gtt_video_start;
 	uint32_t rar_start;
 	uint32_t gtt_start;
+	uint32_t reserved_gtt_start;
 	uint32_t gtt_phys_start;
 	unsigned gtt_pages;
 	unsigned gatt_pages;
