@@ -231,6 +231,7 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 	u32 temp;
 	bool enabled;
 	u32 power_island = 0;
+	unsigned long irqflags;
 	struct android_hdmi_priv *hdmi_priv = dev_priv->hdmi_priv;
 
 	PSB_DEBUG_ENTRY("mode = %d, pipe = %d\n", mode, pipe);
@@ -401,6 +402,9 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 			hdmi_priv->hdmi_suspended = false;
 
 		psb_enable_vblank(dev, pipe);
+		spin_lock_irqsave(&dev->vbl_lock, irqflags);
+		dev->vblank_enabled[pipe] = 1;
+		spin_unlock_irqrestore(&dev->vbl_lock, irqflags);
 
 		DCAttachPipe(pipe);
 		DC_MRFLD_onPowerOn(pipe);
