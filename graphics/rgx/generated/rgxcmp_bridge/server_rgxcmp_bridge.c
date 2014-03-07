@@ -738,7 +738,7 @@ compat_PVRSRVBridgeRGXKickCDM(IMG_UINT32 ui32BridgeID,
 	psRGXKickCDMIN->psClientFenceUFOAddress = (PRGXFWIF_UFO_ADDR*)(IMG_UINT64)psRGXKickCDMIN_32->psClientFenceUFOAddress;
 	psRGXKickCDMIN->pui32ClientFenceValue = (IMG_UINT32*)(IMG_UINT64)psRGXKickCDMIN_32->pui32ClientFenceValue;
 	psRGXKickCDMIN->ui32ClientUpdateCount = psRGXKickCDMIN_32->ui32ClientUpdateCount;
-	psRGXKickCDMIN->psClientUpdateUFOAddress = (PRGXFWIF_UFO_ADDR*)(IMG_UINT64)psRGXKickCDMIN->psClientUpdateUFOAddress;
+	psRGXKickCDMIN->psClientUpdateUFOAddress = (PRGXFWIF_UFO_ADDR*)(IMG_UINT64)psRGXKickCDMIN_32->psClientUpdateUFOAddress;
 	psRGXKickCDMIN->pui32ClientUpdateValue = (IMG_UINT32*)(IMG_UINT64)psRGXKickCDMIN_32->pui32ClientUpdateValue;
 	psRGXKickCDMIN->ui32ServerSyncCount = psRGXKickCDMIN_32->ui32ServerSyncCount;
 	psRGXKickCDMIN->pui32ServerSyncFlags = (IMG_UINT32*)(IMG_UINT64)psRGXKickCDMIN_32->pui32ServerSyncFlags;
