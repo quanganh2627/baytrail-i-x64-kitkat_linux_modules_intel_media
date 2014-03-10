@@ -1841,7 +1841,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	}
 	INIT_WORK(&dev_priv->vsync_event_work, mdfld_vsync_event_work);
 
-	dev_priv->vsync_wq = alloc_workqueue("vsync_wq", WQ_UNBOUND, 1);
+	dev_priv->vsync_wq = alloc_workqueue("vsync_wq", WQ_UNBOUND, 2);
 	if (!dev_priv->vsync_wq) {
 		DRM_ERROR("failed to create vsync workqueue\n");
 		ret = -ENOMEM;

@@ -95,7 +95,6 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->coded_buf = NULL;
 
 	vsp_priv->context_num = 0;
-	vsp_priv->context_vp8_id = 0;
 	atomic_set(&dev_priv->vsp_mmu_invaldc, 0);
 
 	dev_priv->vsp_private = vsp_priv;
@@ -482,8 +481,6 @@ int vsp_setup_fw(struct drm_psb_private *dev_priv)
 	else if (drm_vsp_pmpolicy == PSB_PMPOLICY_POWERDOWN ||
 			drm_vsp_pmpolicy == PSB_PMPOLICY_CLOCKGATING)
 		vsp_priv->ctrl->power_saving_mode = vsp_suspend_on_empty_queue;
-	else if (drm_vsp_pmpolicy == PSB_PMPOLICY_HWIDLE)
-		vsp_priv->ctrl->power_saving_mode = vsp_hw_idle_on_empty_queue;
 	else
 		vsp_priv->ctrl->power_saving_mode =
 			vsp_suspend_and_hw_idle_on_empty_queue;

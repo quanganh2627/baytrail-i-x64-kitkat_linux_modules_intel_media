@@ -321,6 +321,9 @@ static void PVRSyncPrint(struct seq_file *s, struct sync_pt *psPt)
 {
 	struct PVR_SYNC_PT *psPVRPt = (struct PVR_SYNC_PT *)psPt;
 
+	if (!psPVRPt->psSyncData)
+		return;
+
 	seq_printf(s, "sync: id=%u tv=%u # fw=0x%08x v=%u",
 			   psPVRPt->psSyncData->ui32Id,
 			   psPVRPt->psSyncData->ui32FenceValue,
@@ -338,6 +341,7 @@ static struct PVR_SYNC_PT *
 PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 {
 	struct PVR_SYNC_PT *psPVRPt = IMG_NULL;
+	struct PVR_SYNC_DATA *psSyncData = IMG_NULL;
 	IMG_UINT32 ui32Dummy;
 	IMG_UINT32 ui32FWAddr;
 	IMG_UINT32 ui32CurrOp;
@@ -356,24 +360,24 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 	psPVRPt->bSignaled = IMG_FALSE;
 	psPVRPt->bUpdated = IMG_FALSE;
 
-	psPVRPt->psSyncData = OSAllocMem(sizeof(struct PVR_SYNC_DATA));
-	if (!psPVRPt->psSyncData)
+	psSyncData = OSAllocMem(sizeof(struct PVR_SYNC_DATA));
+	if (!psSyncData)
 	{
 		goto err_free_pt;
 	}
 
-	psPVRPt->psSyncData->psSyncKernel = OSAllocMem(sizeof(struct PVR_SYNC_KERNEL_SYNC_PRIM));
-	if (!psPVRPt->psSyncData->psSyncKernel)
+	psSyncData->psSyncKernel = OSAllocMem(sizeof(struct PVR_SYNC_KERNEL_SYNC_PRIM));
+	if (!psSyncData->psSyncKernel)
 	{
 		goto err_free_data;
 	}
 
-	atomic_set(&psPVRPt->psSyncData->sRefCount, 1);
-	psPVRPt->psSyncData->ui32FenceValue = atomic_inc_return(&psPVRTl->sValue);
+	atomic_set(&psSyncData->sRefCount, 1);
+	psSyncData->ui32FenceValue = atomic_inc_return(&psPVRTl->sValue);
 
 	eError = PVRSRVServerSyncAllocKM(gsPVRSync.hDevCookie,
-									 &psPVRPt->psSyncData->psSyncKernel->psSync,
-									 &psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr);
+									 &psSyncData->psSyncKernel->psSync,
+									 &psSyncData->psSyncKernel->ui32SyncPrimVAddr);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to allocate prim server sync (%s)",
@@ -381,8 +385,8 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 		goto err_free_kernel_sync_prim;
 	}
 
-	eError = PVRSRVServerSyncGetStatusKM(1, &psPVRPt->psSyncData->psSyncKernel->psSync,
-										 &psPVRPt->psSyncData->ui32Id,
+	eError = PVRSRVServerSyncGetStatusKM(1, &psSyncData->psSyncKernel->psSync,
+										 &psSyncData->ui32Id,
 										 &ui32FWAddr,
 										 &ui32CurrOp, &ui32NextOp);
 	if (eError != PVRSRV_OK)
@@ -392,10 +396,10 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 		goto err_free_server_sync;
 	}
 
-	eError = PVRSRVServerSyncQueueHWOpKM(psPVRPt->psSyncData->psSyncKernel->psSync,
+	eError = PVRSRVServerSyncQueueHWOpKM(psSyncData->psSyncKernel->psSync,
 										 IMG_TRUE,
 										 &ui32Dummy,
-										 &psPVRPt->psSyncData->psSyncKernel->ui32SyncValue);
+										 &psSyncData->psSyncKernel->ui32SyncValue);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to queue prim server sync hw operation (%s)",
@@ -403,9 +407,10 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 		goto err_free_server_sync;
 	}
 
-	psPVRPt->psSyncData->psSyncKernel->psCleanUpSync = IMG_NULL;
-	psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr = 0;
-	psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue = 0;
+	psSyncData->psSyncKernel->psCleanUpSync = IMG_NULL;
+	psSyncData->psSyncKernel->ui32CleanUpVAddr = 0;
+	psSyncData->psSyncKernel->ui32CleanUpValue = 0;
+	psPVRPt->psSyncData = psSyncData;
 
 err_out:
 	return psPVRPt;

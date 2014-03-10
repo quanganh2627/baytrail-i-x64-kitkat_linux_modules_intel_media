@@ -602,6 +602,36 @@ int DCCBUpdateDbiPanel(struct drm_device *dev, int pipe)
 	return mdfld_dsi_dsr_update_panel_fb(dsi_config);
 }
 
+void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct mdfld_dsi_config *dsi_config;
+	int retry;
+
+	if ((pipe != 0) && (pipe != 2))
+		return;
+
+	dsi_config = (pipe == 0) ? dev_priv->dsi_configs[0] :
+				   dev_priv->dsi_configs[1];
+
+	if (!dsi_config || dsi_config->type != MDFLD_DSI_ENCODER_DBI)
+		return;
+
+	/* shall we use FLIP_DONE on ANN? */
+	if (IS_TNG_B0(dev)) {
+		retry = wait_event_interruptible_timeout(dev_priv->eof_wait,
+				(REG_READ(MIPIA_GEN_FIFO_STAT_REG) & BIT27),
+				msecs_to_jiffies(1000));
+	} else {
+		retry = 1000;
+		while (retry-- && !(REG_READ(MIPIA_GEN_FIFO_STAT_REG)))
+			udelay(500);
+	}
+
+	if (retry == 0)
+		DRM_ERROR("DBI FIFO not empty\n");
+}
+
 void DCCBUnblankDisplay(struct drm_device *dev)
 {
 	int res;

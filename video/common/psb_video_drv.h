@@ -303,6 +303,8 @@ struct psb_video_ctx {
 	uint32_t slice_extract_flag;
 	uint32_t frame_boundary;
 	uint32_t frame_end_seq;
+	uint32_t frame_end;
+	uint32_t copy_cmd_send;
 #endif
 };
 

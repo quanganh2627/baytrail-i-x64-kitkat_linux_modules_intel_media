@@ -723,23 +723,21 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 	psb_msvdx_dequeue_send(dev);
 
 #ifdef CONFIG_SLICE_HEADER_PARSING
-        spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
-        list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
+	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head){
 		if (pos->slice_extract_flag){
 			shp_ctx_count++;
-			seq_flag = (pos->frame_end_seq == (msvdx_priv->msvdx_current_sequence & (~0xf))) ? 1 : 0;
-			if(seq_flag && pos->frame_boundary){
-				frame_finished = 1;
-				break;
-			}
-
 		}
-        }
-        spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
+		if (pos->frame_end) {
+			frame_finished = 1;
+			pos->frame_end = 0;
+			break;
+		}
+	}
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 
 	if (shp_ctx_count == 0 || frame_finished)
 		power_island_put(OSPM_VIDEO_DEC_ISLAND);
-
 #else
 	power_island_put(OSPM_VIDEO_DEC_ISLAND);
 #endif

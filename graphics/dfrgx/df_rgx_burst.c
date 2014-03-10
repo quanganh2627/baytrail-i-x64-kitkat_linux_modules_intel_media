@@ -125,6 +125,7 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 	unsigned int freq_mhz_quantized;
 	u32 freq_code;
 	int prev_util_record_index = -1;
+	int gfx_pcs_result = 0;
 
 	sts = 0;
 
@@ -157,31 +158,30 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 
 	freq_mhz = freq_limited / 1000;
 
+	/* follow the right lock order: pvr_power_lock -> bus_freq_data_lock */
+	gfx_pcs_result = RGXPreClockSpeed();
+	if (gfx_pcs_result) {
+		DFRGX_DPF(DFRGX_DEBUG_HIGH,
+			"%s: Could not perform pre-clock-speed change\n",
+			__func__);
+		sts = -EBUSY;
+		goto out;
+	}
+
 	mutex_lock(&bfdata->lock);
 
 	if (bfdata->disabled)
-		goto out;
+		goto lock_out;
 
 	freq_code = gpu_freq_mhz_to_code(freq_mhz, &freq_mhz_quantized);
 
 	if ((bfdata->bf_freq_mhz_rlzd != freq_mhz_quantized) || bfdata->b_resumed ) {
-		int gfx_pcs_result = 0;
-
-		gfx_pcs_result = RGXPreClockSpeed();
-		if (gfx_pcs_result) {
-			DFRGX_DPF(DFRGX_DEBUG_HIGH,
-				"%s: Could not perform pre-clock-speed change\n",
-				__func__);
-			sts = -EBUSY;
-			goto out;
-		}
 		sts = gpu_freq_set_from_code(freq_code);
 		if (sts < 0) {
 			DFRGX_DPF(DFRGX_DEBUG_MED,
 				"%s: error (%d) from gpu_freq_set_from_code for %dMHz\n",
 				__func__, sts, freq_mhz_quantized);
-			RGXPostClockSpeed();
-			goto out;
+			goto lock_out;
 		} else {
 			bfdata->bf_freq_mhz_rlzd = sts;
 			DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: freq MHz"
@@ -191,9 +191,11 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 			bfdata->b_resumed = 0;
 		}
 
-		/* Inform gfx driver that clock speed changed*/
-		if(!RGXUpdateClockSpeed((bfdata->bf_freq_mhz_rlzd * 1000000)))
-			RGXPostClockSpeed();
+		/*
+		 * Inform gfx driver that clock speed changed.
+		 * This operation can't be failed
+		 */
+		RGXUpdateClockSpeed((bfdata->bf_freq_mhz_rlzd * 1000000));
 
 		if (df) {
 
@@ -229,9 +231,11 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 		if (bfdata->g_dfrgx_data.gpu_utilization_record_index >= 0)
 			gpu_profiling_records_update_entry(bfdata->g_dfrgx_data.gpu_utilization_record_index, 1);
 	}
-out:
-	mutex_unlock(&bfdata->lock);
 
+lock_out:
+	mutex_unlock(&bfdata->lock);
+	RGXPostClockSpeed();
+out:
 	return sts;
 }
 
@@ -811,8 +815,6 @@ int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx)
 		goto error_init_obj;
 	}
 
-	g_dfrgx->g_suspended = 0;
-
 	if (g_dfrgx->g_enable) {
 		hrt_start(g_dfrgx);
 		sts = df_rgx_create_worker_thread(g_dfrgx);
@@ -828,6 +830,10 @@ int dfrgx_burst_init(struct df_rgx_data_s *g_dfrgx)
 	}
 
 	g_dfrgx->g_initialized = 1;
+
+	/* Initialize to suspended state */
+	/* Allows system to enter sleep states while charging */
+	dfrgx_burst_suspend(g_dfrgx);
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s:gpu burst mode initialization"
 				" -- done!\n",

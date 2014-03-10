@@ -387,6 +387,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 	uint32_t imr_info[2], ci_info[2];
 	uint32_t ctx_num = 0;
 	unsigned long irq_flags;
+	struct file *filp = file_priv->filp;
 #ifdef CONFIG_VIDEO_MRFLD
 	struct ttm_object_file *tfile = psb_fpriv(file_priv)->tfile;
 	struct psb_msvdx_ec_ctx *ec_ctx = NULL;
@@ -433,7 +434,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 		if (ctx_type & VA_RT_FORMAT_PROTECTED) {
 			video_ctx->slice_extract_flag = 1;
 			video_ctx->frame_boundary = 1;
-			video_ctx->frame_end_seq = 0;
+			video_ctx->frame_end_seq = 0xffffffff;
 		}
 #endif
 		video_ctx->filp = file_priv->filp;
@@ -454,7 +455,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 			|| (VAEntrypointEncSlice == (ctx_type & 0xff)
 				&& VAProfileVP8Version0_3 ==
 					((ctx_type >> 8) & 0xff))) {
-			ctx_num = vsp_new_context(dev, ctx_type & 0xff);
+			ctx_num = vsp_new_context(dev, filp, ctx_type & 0xff);
 
 			ret = copy_to_user((void __user *)((unsigned long)arg->value),
 				&ctx_num, sizeof(ctx_num));
