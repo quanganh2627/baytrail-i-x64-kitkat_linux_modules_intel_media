@@ -83,6 +83,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  * a day to check for any missed clean-up. */
 #define CLEANUP_THREAD_WAIT_SLEEP_TIMEOUT 0x01B77400
 
+/*! Sleep time (1h) for Devices Watchdog thread when GPU is in power off state */
+#define DEVICES_WATCHDOG_POWER_OFF_SLEEP_TIMEOUT 60 * 60 * 1000
+
 
 typedef struct DEBUG_REQUEST_ENTRY_TAG
 {
@@ -402,21 +405,65 @@ static IMG_VOID CleanupThread(IMG_PVOID pvData)
 	PVR_DPF((CLEANUP_DPFL, "CleanupThread: thread ending... "));
 }
 
-
-static IMG_VOID FatalErrorDetectionThread(IMG_PVOID pvData)
+static IMG_VOID DevicesWatchdogThread(IMG_PVOID pvData)
 {
 	PVRSRV_DATA  *psPVRSRVData = pvData;
-	
-	/* Loop continuously checking the device status every few seconds. */
+        IMG_HANDLE hOSEvent;
+        PVRSRV_ERROR  eError;
+
+        /* Open an event on the devices watchdog event object so we can listen on it
+          and abort the devices watchdog thread. */
+        eError = OSEventObjectOpen(psPVRSRVData->hDevicesWatchdogEvObj, &hOSEvent);
+        PVR_LOGRN_IF_ERROR(eError, "OSEventObjectOpen");
+
+        /* Loop continuously checking the device status every few seconds. */
 	while (!psPVRSRVData->bUnload)
 	{
 		IMG_UINT32    i;
-		PVRSRV_ERROR  eError;
-		
-		/* Wait time between polls (done at the start of the loop to allow devices to initialise)... */
-		OSSleepms(FATAL_ERROR_DETECTION_POLL_MS);
-		
-		for (i = 0;  i < psPVRSRVData->ui32RegisteredDevices;  i++)
+		IMG_BOOL bPwrIsOn = IMG_FALSE;
+
+		/* Check if at lease one of the devices is on. */
+		for (i = 0; i < psPVRSRVData->ui32RegisteredDevices; i++)
+		{
+			PVRSRV_DEVICE_NODE* psDeviceNode = psPVRSRVData->apsRegisteredDevNodes[i];
+			if (PVRSRVIsDevicePowered(psDeviceNode->sDevId.ui32DeviceIndex))
+			{
+				bPwrIsOn = IMG_TRUE;
+			}
+		}
+
+		if (bPwrIsOn)
+		{
+			/* Wait time between polls (done at the start of the loop to allow devices
+			   to initialise) or for the event signal. */
+			eError = OSEventObjectWaitTimeout(hOSEvent, FATAL_ERROR_DETECTION_POLL_MS);
+		}
+		else
+		{
+			PVR_DPF((PVR_DBG_MESSAGE, "DevicesWatchdogThread: GPU off. Going to sleep."));
+			eError = OSEventObjectWaitTimeout(hOSEvent, DEVICES_WATCHDOG_POWER_OFF_SLEEP_TIMEOUT);
+		}
+
+		if (eError == PVRSRV_OK)
+		{
+			if (psPVRSRVData->bUnload)
+			{
+				PVR_DPF((PVR_DBG_MESSAGE, "DevicesWatchdogThread: Shutdown event received."));
+				break;
+			}
+			else
+			{
+				PVR_DPF((PVR_DBG_MESSAGE, "DevicesWatchdogThread: Power state change event received."));
+			}
+		}
+		else if (eError != PVRSRV_ERROR_TIMEOUT)
+		{
+			/* If timeout do nothing otherwise print warning message. */
+			PVR_DPF((PVR_DBG_ERROR, "DevicesWatchdogThread: "
+					"Error (%d) when waiting for event!", eError));
+		}
+
+		for (i = 0;  i < psPVRSRVData->ui32RegisteredDevices; i++)
 		{
 			PVRSRV_DEVICE_NODE*  psDeviceNode = psPVRSRVData->apsRegisteredDevNodes[i];
 			
@@ -425,7 +472,7 @@ static IMG_VOID FatalErrorDetectionThread(IMG_PVOID pvData)
 				eError = psDeviceNode->pfnUpdateHealthStatus(psDeviceNode, IMG_TRUE);
 				if (eError != PVRSRV_OK)
 				{
-					PVR_DPF((PVR_DBG_WARNING, "FatalErrorDetectionThread: "
+						PVR_DPF((PVR_DBG_WARNING, "DevicesWatchdogThread: "
 							"Could not check for fatal error (%d)!",
 							eError));
 				}
@@ -433,7 +480,7 @@ static IMG_VOID FatalErrorDetectionThread(IMG_PVOID pvData)
 
 			if (psDeviceNode->eHealthStatus != PVRSRV_DEVICE_HEALTH_STATUS_OK)
 			{
-				PVR_DPF((PVR_DBG_ERROR, "FatalErrorDetectionThread: Fatal Error Detected!!!"));
+						PVR_DPF((PVR_DBG_ERROR, "DevicesWatchdogThread: Fatal Error Detected!!!"));
 			}
 			
 			/* Attempt to service the HWPerf buffer to regularly transport 
@@ -443,13 +490,15 @@ static IMG_VOID FatalErrorDetectionThread(IMG_PVOID pvData)
 				eError = psDeviceNode->pfnServiceHWPerf(psDeviceNode);
 				if (eError != PVRSRV_OK)
 				{
-					PVR_DPF((PVR_DBG_WARNING, "FatalErrorDetectionThread: "
+						PVR_DPF((PVR_DBG_WARNING, "DevicesWatchdogThread: "
 							"Error occurred when servicing HWPerf buffer (%d)",
 							eError));
 				}
 			}
 		}
 	}
+	eError = OSEventObjectClose(hOSEvent);
+	PVR_LOG_IF_ERROR(eError, "OSEventObjectClose");
 }
 
 
@@ -670,14 +719,19 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVInit(IMG_VOID)
 		goto Error;
 	}
 
+	/* Create the devices watchdog event object */
+	eError = OSEventObjectCreate("PVRSRV_DEVICESWATCHDOG_EVENTOBJECT", &gpsPVRSRVData->hDevicesWatchdogEvObj);
+	PVR_LOGG_IF_ERROR(eError, "OSEventObjectCreate", Error);
+
 	/* Create a thread which is used to detect fatal errors */
-	eError = OSThreadCreate(&gpsPVRSRVData->hFatalErrorDetectionThread,
-							"pvr_fatal_error_detection",
-							FatalErrorDetectionThread,
+	eError = OSThreadCreate(&gpsPVRSRVData->hDevicesWatchdogThread,
+							"pvr_devices_wd_thread",
+							DevicesWatchdogThread,
 							gpsPVRSRVData);
+
 	if (eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVInit: Failed to create fatal error detection thread"));
+		PVR_DPF((PVR_DBG_ERROR,"PVRSRVInit: Failed to create devices watchdog thread"));
 		goto Error;
 	}
 
@@ -711,10 +765,24 @@ IMG_VOID IMG_CALLCONV PVRSRVDeInit(IMG_VOID)
 		OSEventObjectSignal(psPVRSRVData->hGlobalEventObject);
 	}
 
-	/* Stop and cleanup the fatal error detection thread */
-	if (psPVRSRVData->hFatalErrorDetectionThread)
+	/* Stop and cleanup the devices watchdog thread */
+	if (psPVRSRVData->hDevicesWatchdogThread)
 	{
-		OSThreadDestroy(gpsPVRSRVData->hFatalErrorDetectionThread);
+		if (psPVRSRVData->hDevicesWatchdogEvObj)
+		{
+			eError = OSEventObjectSignal(psPVRSRVData->hDevicesWatchdogEvObj);
+			PVR_LOG_IF_ERROR(eError, "OSEventObjectSignal");
+		}
+		eError = OSThreadDestroy(gpsPVRSRVData->hDevicesWatchdogThread);
+		gpsPVRSRVData->hDevicesWatchdogThread = IMG_NULL;
+		PVR_LOG_IF_ERROR(eError, "OSThreadDestroy");
+	}
+
+	if (gpsPVRSRVData->hDevicesWatchdogEvObj)
+       {
+		eError = OSEventObjectDestroy(gpsPVRSRVData->hDevicesWatchdogEvObj);
+		gpsPVRSRVData->hDevicesWatchdogEvObj = IMG_NULL;
+		PVR_LOG_IF_ERROR(eError, "OSEventObjectDestroy");
 	}
 
 	/* Stop and cleanup the deferred clean up thread, event object and
