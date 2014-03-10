@@ -375,7 +375,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 	/*TODO:vcheeram - Remove the hardcoding of fp for JDI_7x12_CMD panel
 	 * on ANN for fp.
 	 */
-	if (IS_ANN_A0(dev) && (get_panel_type(dev, dsi_config->pipe) == JDI_7x12_CMD))
+	if (IS_ANN_A0(dev) && dsi_config != NULL && (get_panel_type(dev, dsi_config->pipe) == JDI_7x12_CMD))
 		fp = 0x177;
 
 	if (is_mipi) {
