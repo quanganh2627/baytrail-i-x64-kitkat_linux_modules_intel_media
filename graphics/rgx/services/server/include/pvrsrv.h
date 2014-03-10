@@ -91,7 +91,9 @@ typedef struct PVRSRV_DATA_TAG
 	IMG_HANDLE					hCleanupThread;				/*!< Cleanup thread */
 	IMG_HANDLE					hCleanupEventObject;		/*!< Event object to drive cleanup thread */
 
-	IMG_HANDLE					hFatalErrorDetectionThread;	/*!< Fatal Error Detection thread */
+	IMG_HANDLE					hDevicesWatchdogThread;		/*!< Devices Watchdog thread */
+	IMG_HANDLE					hDevicesWatchdogEvObj;		/*! Event object to drive devices watchdog thread */
+
 	IMG_BOOL					bUnload;					/*!< Driver unload is in progress */
 } PVRSRV_DATA;
 
