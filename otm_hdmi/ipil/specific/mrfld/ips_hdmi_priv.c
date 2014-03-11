@@ -353,7 +353,7 @@ u32 gunit_iosf_read32(u32 ep_id, u32 reg)
 
 	/* Check if transaction is complete */
 	ret = hdmi_read32(0x210C);
-	while ((retry < 0x1000) && (ret != 2)) {
+	while ((retry++ < 0x1000) && (ret != 2)) {
 		usleep_range(500, 1000);
 		ret = hdmi_read32(0x210C);
 	}
