@@ -311,7 +311,7 @@ static bool vec_power_up(struct drm_device *dev,
 	else {
 		PSB_DEBUG_PM("TOPAZ: Fail to set VEC freq by code %d!\n",
 			freq_code);
-		return false;
+		/*return false;*/
 	}
 
 	if (drm_topaz_cgpolicy != PSB_CGPOLICY_ON)
@@ -358,7 +358,7 @@ static bool vec_power_down(struct drm_device *dev,
 	else {
 		PSB_DEBUG_PM("TOPAZ: Fail to set VEC freq by code %d!\n",
 			freq_code);
-		return false;
+		/*return false;*/
 	}
 
 #ifndef USE_GFX_INTERNAL_PM_FUNC
