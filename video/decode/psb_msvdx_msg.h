@@ -343,29 +343,25 @@ struct fw_slice_header_extract_msg {
 			uint32_t weighted_bipred_idc:2;
 			uint32_t residual_colour_transform_flag:1;
 			uint32_t chroma_format_idc:2;
+			uint32_t idr_flag:1;
+			uint32_t pic_order_cnt_type:2;
 		} bits;
 		uint32_t value;
 	} flag_bitfield;
 
 	union {
 		struct {
-			uint8_t num_slice_groups_minus1:8;
-			uint8_t slice_group_map_type:8;
-			uint8_t log2_slice_group_change_cycle:8;
-			uint8_t num_ref_idc_l0_active_minus1:8;
+			uint8_t num_slice_groups_minus1:3;
+			uint8_t num_ref_idc_l1_active_minus1:5;
+			uint8_t slice_group_map_type:3;
+			uint8_t num_ref_idc_l0_active_minus1:5;
+			uint8_t log2_slice_group_change_cycle:4;
+			uint8_t slice_header_bit_offset:4;
+			uint8_t log2_max_frame_num_minus4:4;
+			uint8_t logs_max_pic_order_cnt_lsb_minus4:4;
 		} bits;
 		uint32_t value;
 	} pic_param0;
-
-	union {
-		struct {
-			uint8_t log2_max_pic_order_cnt_lsb_minus4:8;
-			uint8_t pic_order_cnt_type:8;
-			uint8_t log2_max_frame_num_minus4:8;
-			uint8_t num_ref_idc_l1_active_minus1:8;
-		} bits;
-		uint32_t value;
-	} pic_param1;
 };
 
 struct fw_slice_header_extract_done_msg {
