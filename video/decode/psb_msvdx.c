@@ -345,7 +345,8 @@ static int psb_msvdx_map_command(struct drm_device *dev,
 			PSB_DEBUG_MSVDX("Parse cmd msg size is %d,"
 				"type is 0x%x, fence is %d, flags is 0x%x, context is 0x%x,"
 				"mmu_ptd is 0x%x, src is 0x%x, src_size is %d, dst is 0x%x, dst_size is %d,"
-				"flag_bitfield is 0x%x, pic_param0 is 0x%x, pic_param1 is 0x%x.\n",
+				"flag_bitfield is 0x%x, pic_param0 is 0x%x\n",
+
 			extract_msg->header.bits.msg_size,
 			extract_msg->header.bits.msg_type,
 			extract_msg->header.bits.msg_fence,
@@ -357,8 +358,7 @@ static int psb_msvdx_map_command(struct drm_device *dev,
 			extract_msg->dst,
 			extract_msg->src_size,
 			extract_msg->flag_bitfield.value,
-			extract_msg->pic_param0.value,
-			extract_msg->pic_param1.value);
+			extract_msg->pic_param0.value);
 			break;
 		}
 		/* VA_MSGID_NALU_EXTRACT end */
