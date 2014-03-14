@@ -4162,6 +4162,7 @@ static struct pci_driver psb_pci_driver = {
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
+	pdev->d3_delay = 0;
 	return drm_get_pci_dev(pdev, ent, &driver);
 }
 
