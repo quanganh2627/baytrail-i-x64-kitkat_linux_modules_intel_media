@@ -123,7 +123,8 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			cmd_wr = vsp_priv->ctrl->cmd_wr;
 
 			if (msg->context != 0 && cmd_wr == cmd_rd) {
-				sequence =vp8_error_response(dev_priv, msg->context);
+				vsp_priv->vp8_cmd_num = 0;
+				sequence = vp8_error_response(dev_priv, msg->context);
 			}
 
 			ret = false;
@@ -1136,11 +1137,11 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 			(vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
 
 		/* Wait all the cmd be finished */
-		while (vsp_priv->vp8_cmd_num > 0 && count++ < 120) {
-			msleep(1);
+		while (vsp_priv->vp8_cmd_num > 0 && count++ < 20000) {
+			PSB_UDELAY(6);
 		}
 
-		if (count == 120) {
+		if (count == 20000) {
 			DRM_ERROR("Failed to handle sigint event\n");
 		}
 
