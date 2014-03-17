@@ -65,9 +65,18 @@ int psb_wait_for_register(struct drm_psb_private *dev_priv,
 		if (value == (reg_value & enable))
 			return 0;
 
-		/* Wait a bit */
-		PSB_UDELAY(timeout);
-		/* PSB_UDELAY(5); */
+		if (timeout < 10) {
+			/* Wait a bit */
+			PSB_UDELAY(timeout);
+			/* PSB_UDELAY(5); */
+		}
+		else if (timeout < 20000) {
+			usleep_range(timeout, timeout + timeout / 5);
+		}
+		else {
+			msleep(timeout / 1000);
+		}
+
 		poll_cnt--;
 	}
 	PSB_DEBUG_MSVDX("MSVDX: Timeout while waiting for register %08x:"
@@ -791,7 +800,7 @@ int msvdx_mtx_init(struct drm_device *dev, int error_reset)
 	ret = psb_wait_for_register(dev_priv, MSVDX_COMMS_SIGNATURE,
 				    MSVDX_COMMS_SIGNATURE_VALUE,
 				    0xffffffff,
-				    1000, 1000);
+				    1000, 900);
 	if (ret) {
 		PSB_DEBUG_WARN("WARN: Gunit upload fw failure,\n"
 				"MSVDX_COMMS_SIGNATURE reg is 0x%x,"
