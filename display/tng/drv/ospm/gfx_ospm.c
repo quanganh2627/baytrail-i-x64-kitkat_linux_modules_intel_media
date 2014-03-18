@@ -502,13 +502,16 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 			PSB_DEBUG_PM("SLC: flush and invalide timeout\n" );
 	}
 
-	if (!ret && IS_TNG_B0(dev)) {
+	if (!ret) {
 		uint32_t reg, data;
 
 		/* soc.gfx_wrapper.gbypassenable_sw = 1 */
 		reg = 0x160854 - GFX_WRAPPER_OFFSET;
 		data = WRAPPER_REG_READ(reg);
-		data |= 0x101; /*Disable Bypass SLC for VED on Merfld PR2 B0*/
+		if (IS_TNG_B0(dev))
+			data |= 0x101; /*Disable Bypass SLC for VED on Merfld PR2 B0*/
+		else
+			data |= 0x100; /*Bypass SLC for VEC*/
 		WRAPPER_REG_WRITE(reg, data);
 	}
 
