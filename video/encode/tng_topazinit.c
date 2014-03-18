@@ -968,13 +968,12 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 			  fw_name);
 
 		/* # get firmware */
-		ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
 		if (IS_TNG_B0(dev))
 			ret = request_firmware(&raw, FW_NAME_B0,
-					       &dev->pdev->dev);
+				&dev->pdev->dev);
 		else if (IS_MOFD(dev))
 			ret = request_firmware(&raw, FW_NAME_ANN,
-					       &dev->pdev->dev);
+				&dev->pdev->dev);
 		else
 			DRM_ERROR("VEC secure fw: bad platform\n");
 	}
