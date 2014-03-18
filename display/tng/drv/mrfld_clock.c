@@ -334,7 +334,6 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 	if (pipe != 1) {
 		switch(get_panel_type(dev, pipe)) {
 		case SHARP_10x19_CMD:
-		case SHARP_25x16_CMD:
 				clock.p1 = 3;
 				clock.m = 137;
 				break;
@@ -346,7 +345,11 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 				clock.p1 = 4;
 				clock.m = 120;
 				break;
-		case SHARP_10x19_VID:
+		case SHARP_25x16_CMD:
+				clock.p1 = 3;
+				clock.m = 138;
+				break;
+		case SHARP_25x16_VID:
 		case JDI_25x16_VID:
 				clock.p1 = 3;
 				clock.m = 162;
