@@ -931,6 +931,8 @@ int tng_topaz_uninit(struct drm_device *dev)
 	return 0;
 }
 
+extern struct soft_platform_id spid;
+
 int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
@@ -942,18 +944,40 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	int fw_size;
 	uint8_t *imr_ptr;
 	const uint32_t tng_magic_num = 0x43455624;
+	const int FW_NAME_LEN = 30;
+	char fw_name[FW_NAME_LEN];
+	int name_ret;
 
 #ifdef VERIFYFW_INIT
 	uint32_t i, *p_buf;
 #endif
-	/* # get firmware */
-	ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
-	if (IS_TNG_B0(dev))
+
+	name_ret = snprintf(fw_name, FW_NAME_LEN, "topaz.bin.%04x.%04x",
+		 (int)spid.platform_family_id, (int)spid.hardware_id);
+	if (name_ret > FW_NAME_LEN) {
+		DRM_ERROR("failed to get fw name, ret %d vs expect %d\n",
+			  name_ret, FW_NAME_LEN);
+		/* no way */
+		return -1;
+	}
+
+	/* try load with spid first */
+	ret = request_firmware(&raw, fw_name, &dev->pdev->dev);
+	if (ret) {
+		DRM_INFO("failed to load fw: %s, try to load different fw\n",
+			  fw_name);
+
+		/* # get firmware */
 		ret = request_firmware(&raw, FW_NAME_B0, &dev->pdev->dev);
-	else if (IS_ANN_A0(dev))
-		ret = request_firmware(&raw, FW_NAME_ANN, &dev->pdev->dev);
-	else
-		DRM_ERROR("VEC secure fw: bad platform\n");
+		if (IS_TNG_B0(dev))
+			ret = request_firmware(&raw, FW_NAME_B0,
+					       &dev->pdev->dev);
+		else if (IS_ANN_A0(dev))
+			ret = request_firmware(&raw, FW_NAME_ANN,
+					       &dev->pdev->dev);
+		else
+			DRM_ERROR("VEC secure fw: bad platform\n");
+	}
 
 	if (ret) {
 		DRM_ERROR("TOPAZ: Request firmware failed: %d\n", ret);
@@ -1021,7 +1045,7 @@ int tng_topaz_init_fw_chaabi(struct drm_device *dev)
 	PSB_DEBUG_TOPAZ("imr6 RAC 0x9a = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9a));
 	PSB_DEBUG_TOPAZ("imr6 WAC 0x9b = 0x%x\n", intel_mid_msgbus_read32(TNG_IMR_MSG_PORT,0X9b));
 #endif
-	ret = sepapp_image_verify(imr6l_addr, fw_size, 0, tng_magic_num);
+	ret = sepapp_image_verify(imr6l_addr, fw_size, 15, tng_magic_num);
 	if (ret) {
 		DRM_ERROR("failed to verify vec firmware ret %x\n", ret);
 		ret = -1;

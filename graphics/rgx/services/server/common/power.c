@@ -456,7 +456,12 @@ PVRSRV_ERROR PVRSRVSetDevicePowerStateKM(IMG_UINT32				ui32DeviceIndex,
 										 PVRSRV_DEV_POWER_STATE	eNewPowerState,
 										 IMG_BOOL				bForced)
 {
+        PVRSRV_DATA*    psPVRSRVData = PVRSRVGetPVRSRVData();
 	PVRSRV_ERROR	eError;
+        PVRSRV_DEV_POWER_STATE eOldPowerState;
+
+        PVRSRVGetDevicePowerState(ui32DeviceIndex, &eOldPowerState);
+
 
 	#if defined(PDUMP)
 	if (eNewPowerState == PVRSRV_DEV_POWER_STATE_DEFAULT)
@@ -500,6 +505,15 @@ PVRSRV_ERROR PVRSRVSetDevicePowerStateKM(IMG_UINT32				ui32DeviceIndex,
 		PDUMPPOWCMDEND();
 	}
 
+	/* Signal Device Watchdog Thread about power mode change. */
+	if (eOldPowerState != eNewPowerState && eNewPowerState == PVRSRV_DEV_POWER_STATE_ON)
+	{
+		if (psPVRSRVData->hDevicesWatchdogThread && psPVRSRVData->hDevicesWatchdogEvObj)
+		{
+			eError = OSEventObjectSignal(psPVRSRVData->hDevicesWatchdogEvObj);
+			PVR_LOG_IF_ERROR(eError, "OSEventObjectSignal");
+		}
+	}
 Exit:
 
 	if (eError == PVRSRV_ERROR_DEVICE_POWER_CHANGE_DENIED)

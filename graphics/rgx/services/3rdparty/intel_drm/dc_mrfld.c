@@ -190,11 +190,8 @@ static IMG_BOOL _Disable_ExtraPowerIslands(DC_MRFLD_DEVICE *psDevice,
 		}
 	}
 
-	if (ui32PowerIslands && !power_island_put(ui32PowerIslands)) {
-		DRM_ERROR("Failed to turn off islands %lx\n",
-				ui32PowerIslands);
-		return IMG_FALSE;
-	}
+	if (ui32PowerIslands)
+		power_island_put(ui32PowerIslands);
 
 	psDevice->ui32ExtraPowerIslandsStatus &= ~ui32PowerIslands;
 	return IMG_TRUE;

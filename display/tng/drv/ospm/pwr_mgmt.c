@@ -329,9 +329,10 @@ static bool power_down_island(struct ospm_power_island *p_island)
 	bool ret = true;
 
 	if (atomic_dec_return(&p_island->ref_count) < 0) {
-		PSB_DEBUG_PM("Island %x, UnExpect RefCount %d\n",
+		DRM_ERROR("Island %x, UnExpect RefCount %d\n",
 				p_island->island,
 				p_island->ref_count);
+		dump_stack();
 		goto power_down_err;
 	}
 
@@ -689,6 +690,11 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 	}
 
 	if (force_off) {
+		if (!ospm_power_is_hw_on(OSPM_VIDEO_DEC_ISLAND)) {
+			PSB_DEBUG_PM("msvdx in power off.\n");
+			return;
+		}
+
 		mutex_lock(&g_ospm_data->ospm_lock);
 		ret = p_island->p_funcs->power_down(
 			g_ospm_data->dev,

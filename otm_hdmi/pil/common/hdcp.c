@@ -1128,11 +1128,6 @@ static void hdcp_task_event_handler(struct work_struct *work)
 	if (hdcp_context == NULL || hwq == NULL)
 		goto EXIT_HDCP_HANDLER;
 
-
-
-	if (!otm_hdmi_hdcp_power_islands_on())
-		goto EXIT_HDCP_HANDLER;
-
 	switch (msg) {
 	case HDCP_ENABLE:
 #ifndef OTM_HDMI_HDCP_ALWAYS_ENC
@@ -1242,8 +1237,6 @@ static void hdcp_task_event_handler(struct work_struct *work)
 	default:
 		break;
 	}
-
-	otm_hdmi_power_islands_off();
 
 	if (reset_hdcp == true) {
 		msg = HDCP_RESET;
