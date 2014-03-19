@@ -111,6 +111,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/sharp10x19_cmd.o \
 	$(DISPLAYDIR)/sharp25x16_vid.o \
 	$(DISPLAYDIR)/sharp25x16_cmd.o \
+	$(DISPLAYDIR)/sdc16x25_8_cmd.o \
 	$(DISPLAYDIR)/jdi25x16_vid.o \
 	$(DISPLAYDIR)/ospm/pwr_mgmt.o \
 	$(DISPLAYDIR)/ospm/gfx_rtpm.o \

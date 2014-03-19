@@ -333,6 +333,10 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 	 */
 	if (pipe != 1) {
 		switch(get_panel_type(dev, pipe)) {
+		case SDC_16x25_CMD:
+				clock.p1 = 3;
+				clock.m = 126;
+				break;
 		case SHARP_10x19_CMD:
 				clock.p1 = 3;
 				clock.m = 137;
