@@ -1088,11 +1088,19 @@ void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 			drain_rate = ACTUAL_DRAIN_RATE_25x16;
 		if (drain_rate != 0) {
 			value = ((64 * 32 / drain_rate) & 0xFF) | 0x80;
+#if 0
 			ctx->ddl1 = value | (HDMI_SPRITE_DEADLINE << 8) |
 					(value << 24);
 			ctx->ddl2 = value | (HDMI_OVERLAY_DEADLINE << 8);
 			ctx->ddl3 = 0;
 			ctx->ddl4 = value | (value << 8);
+#else
+			ctx->ddl1 = 0x83838383;
+			ctx->ddl2 = 0x83838383;
+			ctx->ddl3 = 0x83;
+			ctx->ddl4 = 0x8383;
+
+#endif
 		}
 		mutex_unlock(&dsi_config->context_lock);
 	}
