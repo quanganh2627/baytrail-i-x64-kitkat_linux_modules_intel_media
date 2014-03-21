@@ -148,10 +148,10 @@ static int enter_dsr_locked(struct mdfld_dsi_config *dsi_config, int level)
 	 */
 	drm_vblank_off(dev, dsi_config->pipe);
 
+	DC_MRFLD_onPowerOff(dsi_config->pipe);
+
 	/*turn off dbi interface put in ulps*/
 	__dbi_power_off(dsi_config);
-
-	DC_MRFLD_onPowerOff(dsi_config->pipe);
 
 	PSB_DEBUG_ENTRY("entered\n");
 	return 0;

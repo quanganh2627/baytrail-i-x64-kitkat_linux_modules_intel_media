@@ -203,13 +203,11 @@ void DCCBFlipOverlay(struct drm_device *dev,
 	if (ctx->index == 1)
 		ovadd_reg = OVC_OVADD;
 
-	ctx->ovadd |= ctx->pipe;
 	ctx->ovadd |= 1;
 
-	if (((ctx->pipe & OV_PIPE_SELECT) >> OV_PIPE_SELECT_POS) == OV_PIPE_A)
+	if (ctx->pipe == 0)
 		dsi_config = dev_priv->dsi_configs[0];
-	else if (((ctx->pipe & OV_PIPE_SELECT) >> OV_PIPE_SELECT_POS) ==
-			OV_PIPE_C)
+	else if (ctx->pipe == 2)
 		dsi_config = dev_priv->dsi_configs[1];
 
 	if (dsi_config) {
@@ -344,6 +342,23 @@ void DCCBFlipPrimary(struct drm_device *dev,
 		PSB_WVDC32(ctx->linoff, DSPALINOFF + reg_offset);
 		PSB_WVDC32(ctx->surf, DSPASURF + reg_offset);
 	}
+}
+
+void DCCBSetPipeToOvadd(u32 *ovadd, int pipe)
+{
+	switch (pipe) {
+	case 0:
+		*ovadd |= OV_PIPE_A << OV_PIPE_SELECT_POS;
+		break;
+	case 1:
+		*ovadd |= OV_PIPE_B << OV_PIPE_SELECT_POS;
+		break;
+	case 2:
+		*ovadd |= OV_PIPE_C << OV_PIPE_SELECT_POS;
+		break;
+	}
+
+	return;
 }
 
 void DCCBSetupZorder(struct drm_device *dev,
@@ -484,11 +499,20 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct mdfld_dsi_config *dsi_config = NULL;
 	struct mdfld_dsi_hw_context *dsi_ctx;
+	u32 ovadd_reg = OV_OVADD;
+	u32 ovstat_reg = OV_DOVASTA;
+	u32 power_islands = OSPM_DISPLAY_A;
 	int pipe;
 
 	if (index != 0 && index != 1) {
 		DRM_ERROR("Invalid overlay index %d\n", index);
 		return -EINVAL;
+	}
+
+	if (index) {
+		ovadd_reg = OVC_OVADD;
+		ovstat_reg = OVC_DOVCSTA;
+		power_islands |= OSPM_DISPLAY_C;
 	}
 
 	pipe = _GetPipeFromOvadd(ctx);
@@ -507,6 +531,17 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 				dsi_ctx->ovcadd = 0;
 		}
 	}
+
+	if (power_island_get(power_islands)) {
+		/*make sure previous flip was done*/
+		//_OverlayWaitFlip(dev, ovstat_reg, index, pipe);
+		//_OverlayWaitVblank(dev, pipe);
+
+		PSB_WVDC32(ctx, ovadd_reg);
+
+		power_island_put(power_islands);
+	}
+
 	return 0;
 }
 

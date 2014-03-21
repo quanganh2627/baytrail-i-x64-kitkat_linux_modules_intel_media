@@ -84,6 +84,17 @@ typedef struct {
 	DC_MRFLD_SURF_CUSTOM sContext[MAX_CONTEXT_COUNT];
 } DC_MRFLD_BUFFER;
 
+struct plane_state {
+	int type;
+	int index;
+	int attached_pipe;
+	bool active;
+	bool flip_active;
+	bool disabled;
+	u32 extra_power_island;
+	bool powered_off;
+};
+
 /*Display Controller Device*/
 typedef struct {
 	IMG_HANDLE hSrvHandle;
@@ -112,14 +123,26 @@ typedef struct {
 	IMG_UINT32 ui32PlanePipeMapping[DC_PLANE_MAX][MAX_PLANE_INDEX];
 	IMG_UINT32 ui32ExtraPowerIslandsStatus;
 
+	struct plane_state plane_states[DC_PLANE_MAX][MAX_PLANE_INDEX];
+
 } DC_MRFLD_DEVICE;
 
 typedef struct {
 	DC_MRFLD_DEVICE *psDevice;
 } DC_MRFLD_DISPLAY_CONTEXT;
 
+struct flip_plane {
+	struct list_head list;
+	int type;
+	int index;
+	int attached_pipe;
+	DC_MRFLD_BUFFER *flip_buf;
+	DC_MRFLD_SURF_CUSTOM  *flip_ctx;
+};
+
 struct DC_MRFLD_PIPE_INFO {
 	IMG_UINT32 uiSwapInterval;
+	struct list_head flip_planes;
 };
 
 /*flip status*/

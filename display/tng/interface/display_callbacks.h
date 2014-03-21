@@ -79,6 +79,7 @@ int DCCBgttUnmapMemory(struct drm_device *dev,
 bool DCChangeSwapChainProperty(unsigned long *psSwapChainGTTOffset,
 			int pipe);
 u32 DCCBGetPipeCount(void);
+void DCCBSetPipeToOvadd(u32 *ovadd, int pipe);
 bool DCCBIsSuspended(struct drm_device *dev);
 int DCCBIsPipeActive(struct drm_device *dev, int pipe);
 

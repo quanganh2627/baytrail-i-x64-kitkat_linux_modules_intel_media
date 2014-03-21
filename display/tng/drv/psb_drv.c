@@ -3124,7 +3124,7 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 			power_island_put(power_island);
 		}
 	}
-
+#if 0
 	if (arg->plane_enable_mask != 0)
 		DC_MRFLD_Enable_Plane(arg->plane.type,
 				arg->plane.index, arg->plane.ctx);
@@ -3132,6 +3132,16 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 	if (arg->plane_disable_mask != 0)
 		DC_MRFLD_Disable_Plane(arg->plane.type,
 				arg->plane.index, arg->plane.ctx);
+#endif
+	if (arg->get_plane_state_mask != 0) {
+		u32 pipe = arg->plane.ctx;
+		bool bDisabled = DC_MRFLD_Is_Plane_Disabled(arg->plane.type,
+						arg->plane.index, pipe);
+		if (bDisabled)
+			arg->plane.ctx = PSB_DC_PLANE_DISABLED;
+		else
+			arg->plane.ctx = PSB_DC_PLANE_ENABLED;
+	}
 
 	if (arg->overlay_read_mask & OVSTATUS_REGRBIT_OVR_UPDT) {
 		u32 ovstat_reg = OV_DOVASTA;
@@ -4420,6 +4430,7 @@ struct drm_psb_register_rw_arg_32 {
 	uint32_t cursor_disable_mask;
 	uint32_t plane_enable_mask;
 	uint32_t plane_disable_mask;
+	uint32_t get_plane_state_mask;
 	struct {
 		uint32_t type;
 		uint32_t index;
@@ -4501,6 +4512,7 @@ int compat_PVRSRV_BridgeDispatchKM3(struct file *filp, unsigned int cmd,
 		|| __put_user(req32.cursor_disable_mask, &request->cursor_disable_mask)
 		|| __put_user(req32.plane_enable_mask, &request->plane_enable_mask)
 		|| __put_user(req32.plane_disable_mask, &request->plane_disable_mask)
+		|| __put_user(req32.get_plane_state_mask, &request->get_plane_state_mask)
 		|| __put_user(req32.plane.type, &request->plane.type)
 		|| __put_user(req32.plane.index, &request->plane.index)
 		|| __put_user(req32.plane.ctx, &request->plane.ctx)) {

@@ -837,11 +837,18 @@ struct drm_psb_register_rw_arg {
 	uint32_t plane_enable_mask;
 	uint32_t plane_disable_mask;
 
+	uint32_t get_plane_state_mask;
+
 	struct {
 		uint32_t type;
 		uint32_t index;
 		uint32_t ctx;
 	} plane;
+};
+
+enum {
+	PSB_DC_PLANE_ENABLED,
+	PSB_DC_PLANE_DISABLED,
 };
 
 enum {
