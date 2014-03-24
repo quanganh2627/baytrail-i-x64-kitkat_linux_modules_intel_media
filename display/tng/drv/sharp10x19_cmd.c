@@ -55,6 +55,10 @@ static int sharp10x19_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 	int i;
 	int loop = 1;
 
+	if (!sender) {
+		DRM_ERROR("Failed to get DSI packet sender\n");
+		return -EINVAL;
+	}
 	if (is_dual_panel(dev))
 		loop = 2;
 	for(i = 0; i < loop; i++) {
