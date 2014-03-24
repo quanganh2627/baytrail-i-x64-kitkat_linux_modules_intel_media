@@ -384,6 +384,9 @@ static bool ospm_gfx_power_up(struct drm_device *dev,
 	PSB_DEBUG_PM("Pre-power-up status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
+	PSB_DEBUG_PM("Power down LDO, then RSCD");
+	ret = GFX_POWER_UP(PMU_LDO);
+
 	ret = GFX_POWER_UP(PMU_RSCD);
 
 	PSB_DEBUG_PM("Post-power-up status = 0x%08x\n",
@@ -413,6 +416,7 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
 	bool ret;
+	uint32_t reg, data;
 
 	PSB_DEBUG_PM("OSPM: ospm_gfx_power_down \n");
 
@@ -425,6 +429,14 @@ static bool ospm_gfx_power_down(struct drm_device *dev,
 	 */
 	psb_irq_uninstall_islands(dev,OSPM_GRAPHICS_ISLAND);
 	synchronize_irq(dev->pdev->irq);
+
+	PSB_DEBUG_PM("Flush SLC, then power down SLC LDO");
+	/* write 1 to RGX_CR_SLC_CTRL_FLUSH_INVAL */
+	reg = 0x103818 - RGX_OFFSET;
+	data = 1;
+	RGX_REG_WRITE(reg, data);
+
+	ret = GFX_POWER_DOWN(PMU_LDO);
 
 	/* power down every thing */
 	ret = GFX_POWER_DOWN(PMU_RSCD);
@@ -449,10 +461,11 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 		__func__,
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
-	ret = GFX_POWER_UP(PMU_LDO);
-
-	if (!ret)
-		ret = GFX_POWER_UP(PMU_SLC);
+	/* bind LDO power up with GFX */
+	/*
+	 * ret = GFX_POWER_UP(PMU_LDO);
+	 */
+	ret = GFX_POWER_UP(PMU_SLC);
 
 	/*
 	 * This workarounds are only needed for TNG A0/A1 silicon.
@@ -557,10 +570,11 @@ static bool ospm_slc_power_down(struct drm_device *dev,
 
 	if (!ret)
 		ret = GFX_POWER_DOWN(PMU_SLC);
-
-	if (!ret)
-		ret = GFX_POWER_DOWN(PMU_LDO);
-
+	/* bind LDO power down with GFX */
+	/*
+	 *if (!ret)
+	 *	ret = GFX_POWER_DOWN(PMU_LDO);
+	 */
 	PSB_DEBUG_PM("Post-power-off Status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
