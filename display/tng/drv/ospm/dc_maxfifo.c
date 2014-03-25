@@ -151,6 +151,8 @@ bool enter_s0i1_display_mode(struct drm_device *dev)
 		maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_ENTERED;
 		PSB_DEBUG_PM("Enabled S0i1-Display Punit DSPSSMP Register\n");
 	}
+
+	return true;
 }
 
 bool exit_s0i1_display_mode(struct drm_device *dev)
@@ -169,6 +171,7 @@ bool exit_s0i1_display_mode(struct drm_device *dev)
 		PSB_DEBUG_PM(" Disabled S0i1-Display in Punit DSPSSMP Register\n");
 	}
 
+	return true;
 }
 
 bool enter_maxfifo_mode(struct drm_device *dev)
