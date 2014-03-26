@@ -831,6 +831,8 @@ PVRSRV_ERROR RGXPreClockSpeedChange (IMG_HANDLE				hDevHandle,
 		}
 	} else {
 		eError = PVRSRV_ERROR_UNKNOWN_POWER_STATE;
+		PVR_DPF((PVR_DBG_ERROR,"eCurrentPowerState 0x%x, psFWTraceBuf->ePowState 0x%x\n",
+				eCurrentPowerState, psFWTraceBuf->ePowState));
 	}
 
 	return eError;

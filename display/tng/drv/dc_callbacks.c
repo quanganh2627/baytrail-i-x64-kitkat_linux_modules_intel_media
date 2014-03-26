@@ -547,7 +547,8 @@ int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct mdfld_dsi_config *dsi_config = NULL;
 	struct mdfld_dsi_hw_context *dsi_ctx = NULL;
-	u32 dspcntr, dspsurf;
+	u32 dspcntr_value;
+	u32 reg_offset;
 
 	if (index < 0 || index > 2) {
 		DRM_ERROR("Invalid primary index %d\n", index);
@@ -556,26 +557,38 @@ int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 
 	if (index == 0) {
 		dsi_config = dev_priv->dsi_configs[0];
-		dspcntr = DSPACNTR;
-		dspsurf = DSPASURF;
+		reg_offset = 0;
 	} else if (index == 1) {
-		dspcntr = DSPBCNTR;
-		dspsurf = DSPBSURF;
+		reg_offset = 0x1000;
 	} else if (index == 2) {
 		dsi_config = dev_priv->dsi_configs[1];
-		dspcntr = DSPCCNTR;
-		dspsurf = DSPCSURF;
+		reg_offset = 0x2000;
 	}
+
+	if (PSB_RVDC32(DSPASURF + reg_offset) == 0)
+		return 0;
+
+	dspcntr_value = ~DISPPLANE_PIXFORMAT_MASK & PSB_RVDC32(DSPACNTR + reg_offset);
+	dspcntr_value = DISPPLANE_32BPP | BIT31 | dspcntr_value;
 
 	if (dsi_config) {
 		dsi_ctx = &dsi_config->dsi_hw_context;
-		if (dsi_ctx)
-			dsi_ctx->dspcntr &= ~DISPLAY_PLANE_ENABLE;
+		dsi_ctx->dsppos = 0;
+		dsi_ctx->dspsize = (4 << 16) | 63;
+		dsi_ctx->dspstride = (64 << 2);
+		dsi_ctx->dspcntr = dspcntr_value;
+		dsi_ctx->dsplinoff = 0;
+		dsi_ctx->dspsurf = 0;
 	}
 
-	PSB_WVDC32((PSB_RVDC32(dspcntr) & ~DISPLAY_PLANE_ENABLE),
-			dspcntr);
-	PSB_WVDC32((PSB_RVDC32(dspsurf)), dspsurf);
+	PSB_WVDC32(0, DSPAPOS + reg_offset);
+	PSB_WVDC32((4 << 16) | 63, DSPASIZE + reg_offset);
+	PSB_WVDC32((64 << 2), DSPASTRIDE + reg_offset);
+	PSB_WVDC32(dspcntr_value, DSPACNTR + reg_offset);
+
+	PSB_WVDC32(0, DSPALINOFF + reg_offset);
+	PSB_WVDC32(0, DSPATILEOFF + reg_offset);
+	PSB_WVDC32(0, DSPASURF + reg_offset);
 
 	return 0;
 }

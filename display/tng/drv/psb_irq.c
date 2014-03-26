@@ -444,7 +444,7 @@ static void psb_vdc_interrupt(struct drm_device *dev, uint32_t vdc_stat)
  * all of "graphics".
  */
 
-int register_rgx_irq_handler(int (*pfn_rgxIrqHandler) (void *), void * pData)
+void register_rgx_irq_handler(int (*pfn_rgxIrqHandler) (void *), void * pData)
 {
 	if (gpDrmDevice){
 		struct drm_psb_private *dev_priv =
