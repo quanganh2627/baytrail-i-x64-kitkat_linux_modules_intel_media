@@ -31,6 +31,7 @@
 #include <asm/intel_scu_ipc.h>
 
 #include <linux/pm_runtime.h>
+#include <linux/pm_qos.h>
 
 #include "psb_drv.h"
 #include "pmu_tng.h"
@@ -401,8 +402,11 @@ bool power_island_get(u32 hw_island)
 	int pm_ret;
 	struct ospm_power_island *p_island;
 	struct drm_psb_private *dev_priv = g_ospm_data->dev->dev_private;
+	struct pm_qos_request qos;
 
 	mutex_lock(&g_ospm_data->ospm_lock);
+	memset(&qos, 0, sizeof(struct pm_qos_request));
+	pm_qos_add_request(&qos, PM_QOS_CPU_DMA_LATENCY, CSTATE_EXIT_LATENCY_S0i1 - 1);
 
 	if (!any_island_on()) {
 		PSB_DEBUG_PM("Resuming PCI\n");
@@ -433,6 +437,7 @@ bool power_island_get(u32 hw_island)
 	}
 
 out_err:
+	pm_qos_remove_request(&qos);
 	mutex_unlock(&g_ospm_data->ospm_lock);
 
 	return ret;
@@ -451,8 +456,11 @@ bool power_island_put(u32 hw_island)
 	u32 i = 0;
 	struct drm_psb_private *dev_priv = g_ospm_data->dev->dev_private;
 	struct ospm_power_island *p_island;
+	struct pm_qos_request qos;
 
 	mutex_lock(&g_ospm_data->ospm_lock);
+	memset(&qos, 0, sizeof(struct pm_qos_request));
+	pm_qos_add_request(&qos, PM_QOS_CPU_DMA_LATENCY, CSTATE_EXIT_LATENCY_S0i1 - 1);
 
 	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
 		if (hw_island & island_list[i].island) {
@@ -473,9 +481,10 @@ out_err:
 		/* Here, we use runtime pm framework to suit
 		 * S3 PCI suspend/resume
 		 */
-		pm_runtime_put_sync_suspend(&g_ospm_data->dev->pdev->dev);
+		pm_runtime_put_sync(&g_ospm_data->dev->pdev->dev);
 		wake_unlock(&dev_priv->ospm_wake_lock);
 	}
+	pm_qos_remove_request(&qos);
 	mutex_unlock(&g_ospm_data->ospm_lock);
 
 	return ret;
