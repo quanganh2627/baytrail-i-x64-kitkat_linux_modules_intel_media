@@ -466,6 +466,7 @@ static IMG_VOID DevicesWatchdogThread(IMG_PVOID pvData)
 		for (i = 0;  i < psPVRSRVData->ui32RegisteredDevices; i++)
 		{
 			PVRSRV_DEVICE_NODE*  psDeviceNode = psPVRSRVData->apsRegisteredDevNodes[i];
+			PVRSRV_RGXDEV_INFO* psDevInfo = (PVRSRV_RGXDEV_INFO*)psDeviceNode->pvDevice;
 			
 			if (psDeviceNode->pfnUpdateHealthStatus != IMG_NULL)
 			{
@@ -480,9 +481,8 @@ static IMG_VOID DevicesWatchdogThread(IMG_PVOID pvData)
 
 			if (psDeviceNode->eHealthStatus != PVRSRV_DEVICE_HEALTH_STATUS_OK)
 			{
-						PVR_DPF((PVR_DBG_ERROR, "DevicesWatchdogThread: Fatal Error Detected!!!"));
+				PVR_DPF((PVR_DBG_ERROR, "FatalErrorDetectionThread: Fatal Error Detected!!!"));
 			}
-			
 			/* Attempt to service the HWPerf buffer to regularly transport 
 			 * idle / periodic packets to host buffer. */
 			if (psDeviceNode->pfnServiceHWPerf != IMG_NULL)

@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.38.2.30
+@Title          RGX Core BVNC 5.5.1.17
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,26 +39,27 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_38_2_30_H_
-#define _RGXCORE_KM_1_38_2_30_H_
+#ifndef _RGXCORE_KM_5_5_1_17_H_
+#define _RGXCORE_KM_5_5_1_17_H_
 
-/***** Automatically generated file (11/21/2013 4:21:21 PM): Do not edit manually ********************/
-/***** Timestamp:  (11/21/2013 4:21:21 PM)************************************************************/
-/***** CS: @2160803 ******************************************************************/
+/***** Automatically generated file (1/28/2014 3:39:54 PM): Do not edit manually ********************/
+/***** Timestamp:  (1/28/2014 3:39:54 PM)************************************************************/
+/***** CS: @2546826 ******************************************************************/
 
 
 /******************************************************************************
- * BVNC = 1.38.2.30 
+ * BVNC = 5.5.1.17 
  *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 38
-#define RGX_BVNC_KM_N 2
-#define RGX_BVNC_KM_C 30
+#define RGX_BVNC_KM_B 5
+#define RGX_BVNC_KM_V 5
+#define RGX_BVNC_KM_N 1
+#define RGX_BVNC_KM_C 17
 
 /******************************************************************************
  * Errata 
  *****************************************************************************/
 
+#define FIX_HW_BRN_38344
 
 
  
@@ -68,4 +69,4 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 
-#endif /* _RGXCORE_KM_1_38_2_30_H_ */
+#endif /* _RGXCORE_KM_5_5_1_17_H_ */

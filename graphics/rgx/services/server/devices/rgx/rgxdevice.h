@@ -68,6 +68,7 @@ typedef struct {
  *****************************************************************************/
 #define RGXKM_DEVICE_STATE_ZERO_FREELIST		(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed free lists */
 #define RGXKM_DEVICE_STATE_FTRACE_EN			(0x1 << 1)		/*!< Used to enable device FTrace thread to consume HWPerf data */
+#define RGXKM_DEVICE_STATE_DISABLE_FED_LOGGING_EN (0x1 << 2)	/*!< Used to disable the Fatal Error Detection logging */
 
 #define RGXFWIF_GPU_STATS_WINDOW_SIZE_US					1000000
 #define RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE				10000

@@ -1,5 +1,5 @@
 /*************************************************************************/ /*!
-@Title          RGX Core BVNC 1.38.4.20
+@Title          RGX Config BVNC 5.V.1.17
 @Copyright      Copyright (c) Imagination Technologies Ltd. All Rights Reserved
 @License        Dual MIT/GPLv2
 
@@ -39,33 +39,27 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 
-#ifndef _RGXCORE_KM_1_38_4_20_H_
-#define _RGXCORE_KM_1_38_4_20_H_
+#ifndef _RGXCONFIG_KM_5_V_1_17_H_
+#define _RGXCONFIG_KM_5_V_1_17_H_
 
-/***** Automatically generated file (11/21/2013 4:54:22 PM): Do not edit manually ********************/
-/***** Timestamp:  (11/21/2013 4:54:22 PM)************************************************************/
-/***** CS: @2160803 ******************************************************************/
+/***** Automatically generated file (1/28/2014 3:39:54 PM): Do not edit manually ********************/
+/***** Timestamp:  (1/28/2014 3:39:54 PM)************************************************************/
 
-
-/******************************************************************************
- * BVNC = 1.38.4.20 
- *****************************************************************************/
-#define RGX_BVNC_KM_B 1
-#define RGX_BVNC_KM_V 38
-#define RGX_BVNC_KM_N 4
-#define RGX_BVNC_KM_C 20
+#define RGX_BNC_KM_B 5
+#define RGX_BNC_KM_N 1
+#define RGX_BNC_KM_C 17
 
 /******************************************************************************
- * Errata 
+ * DDK Defines
  *****************************************************************************/
+#define RGX_FEATURE_SLC_SIZE_IN_BYTES (128*1024)
+#define RGX_FEATURE_PHYS_BUS_WIDTH (40)
+#define RGX_FEATURE_AXI_ACELITE 
+#define RGX_FEATURE_SLC_CACHE_LINE_SIZE_BITS (512)
+#define RGX_FEATURE_NUM_CLUSTERS (1)
+#define RGX_FEATURE_VIRTUAL_ADDRESS_SPACE_BITS (40)
+#define RGX_FEATURE_SLC_BANKS (1)
+#define RGX_FEATURE_META (MTP218)
 
 
-
- 
-/******************************************************************************
- * Enhancements 
- *****************************************************************************/
-
-
-
-#endif /* _RGXCORE_KM_1_38_4_20_H_ */
+#endif /* _RGXCONFIG_5_V_1_17_H_ */

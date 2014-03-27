@@ -533,6 +533,11 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 		psDevInfo->ui32DeviceFlags |= RGXKM_DEVICE_STATE_ZERO_FREELIST;
 	}
 
+	if (ui32DeviceFlags & RGXKMIF_DEVICE_STATE_DISABLE_FED_LOGGING_EN)
+	{
+		psDevInfo->ui32DeviceFlags |= RGXKM_DEVICE_STATE_DISABLE_FED_LOGGING_EN;
+	}
+
 #if defined(SUPPORT_GPUTRACE_EVENTS)
 	/* If built, always setup FTrace consumer thread. */
 	RGXHWPerfFTraceGPUInit(psDeviceNode->pvDevice);

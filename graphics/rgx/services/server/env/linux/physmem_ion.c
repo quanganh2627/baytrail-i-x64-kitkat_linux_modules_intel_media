@@ -68,7 +68,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include <linux/err.h>
 #include <linux/slab.h>
-#include <linux/ion.h>
+#include PVR_ANDROID_ION_HEADER
 #include <linux/scatterlist.h>
 
 typedef struct _PMR_ION_DATA_ {
@@ -91,6 +91,12 @@ typedef struct _PMR_ION_DATA_ {
 #define ION_BUFFER_HASH_SIZE 20
 HASH_TABLE *g_psIonBufferHash = IMG_NULL;
 IMG_UINT32 g_ui32HashRefCount = 0;
+
+#if defined(PVR_ANDROID_ION_USE_SG_LENGTH)
+#define pvr_sg_length(sg) ((sg)->length)
+#else
+#define pvr_sg_length(sg) sg_dma_len(sg)
+#endif
 
 /*****************************************************************************
  *                       Ion specific functions                              *
@@ -125,7 +131,7 @@ PVRSRV_ERROR IonPhysAddrAcquire(PMR_ION_DATA *psPrivData,
 	*/
 	for_each_sg(table->sgl, sg, table->nents, i)
 	{
-		ui32PageCount += PAGE_ALIGN(sg_dma_len(sg)) / PAGE_SIZE;
+		ui32PageCount += PAGE_ALIGN(pvr_sg_length(sg)) / PAGE_SIZE;
 	}
 
 	if (WARN_ON(!ui32PageCount))
@@ -149,7 +155,7 @@ PVRSRV_ERROR IonPhysAddrAcquire(PMR_ION_DATA *psPrivData,
 	{
 		IMG_UINT32 j;
 
-		for (j = 0; j < sg_dma_len(sg); j += PAGE_SIZE)
+		for (j = 0; j < pvr_sg_length(sg); j += PAGE_SIZE)
 		{
 			/* Pass 2: Get the page data */
 			sCpuPhysAddr.uiAddr = sg_phys(sg);
@@ -246,7 +252,7 @@ PMRFinalizeIon(PMR_IMPL_PRIVDATA pvPriv)
 
 		pvKernAddr = ion_map_kernel(psPrivData->psIonClient, psPrivData->psIonHandle);
 
-		if (IS_ERR(pvKernAddr))
+		if (IS_ERR_OR_NULL(pvKernAddr))
 		{
 			PVR_DPF((PVR_DBG_ERROR, "%s: Failed to poison allocation before free", __FUNCTION__));
 			PVR_ASSERT(IMG_FALSE);
@@ -329,7 +335,7 @@ PMRAcquireKernelMappingDataIon(PMR_IMPL_PRIVDATA pvPriv,
 
 	pvKernAddr = ion_map_kernel(psPrivData->psIonClient, psPrivData->psIonHandle);
 
-	if (IS_ERR(pvKernAddr))
+	if (IS_ERR_OR_NULL(pvKernAddr))
 	{
 		eError = PVRSRV_ERROR_PMR_NO_KERNEL_MAPPING;
 		goto fail;
@@ -543,7 +549,7 @@ PhysmemImportIon(CONNECTION_DATA *psConnection,
 
 		pvKernAddr = ion_map_kernel(psPrivData->psIonClient, psPrivData->psIonHandle);
 
-		if (IS_ERR(pvKernAddr))
+		if (IS_ERR_OR_NULL(pvKernAddr))
 		{
 			PVR_DPF((PVR_DBG_ERROR, "%s: ion_map_kernel failed", __func__));
 			eError = PVRSRV_ERROR_PMR_NO_KERNEL_MAPPING;

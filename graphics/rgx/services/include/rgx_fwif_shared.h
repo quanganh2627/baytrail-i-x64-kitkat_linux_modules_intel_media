@@ -54,8 +54,9 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  ******************************************************************************
  * Device state flags
  *****************************************************************************/
-#define RGXKMIF_DEVICE_STATE_ZERO_FREELIST		(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed free lists */
-#define RGXKMIF_DEVICE_STATE_FTRACE_EN			(0x1 << 1)		/*!< Used to enable device FTrace thread to consume HWPerf data */
+#define RGXKMIF_DEVICE_STATE_ZERO_FREELIST			(0x1 << 0)		/*!< Zeroing the physical pages of reconstructed free lists */
+#define RGXKMIF_DEVICE_STATE_FTRACE_EN				(0x1 << 1)		/*!< Used to enable device FTrace thread to consume HWPerf data */
+#define RGXKMIF_DEVICE_STATE_DISABLE_FED_LOGGING_EN (0x1 << 2)		/*!< Used to disable the Fatal Error Detection logging */
 
 
 /*!

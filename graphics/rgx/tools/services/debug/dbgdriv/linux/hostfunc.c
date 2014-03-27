@@ -183,7 +183,7 @@ void PVRSRVDebugPrintf	(
 		va_end (vaArgs);
 	}
 }
-#endif	/* defined(DEBUG) && !defined(SUPPORT_DRM) */
+#endif	/* defined(PVRSRV_NEED_PVR_DPF) && !defined(SUPPORT_DRM) */
 
 /*!
 ******************************************************************************

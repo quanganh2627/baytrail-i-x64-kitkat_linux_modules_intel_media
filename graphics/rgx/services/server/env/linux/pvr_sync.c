@@ -105,6 +105,9 @@ struct PVR_SYNC_KERNEL_SYNC_PRIM
 	 * this struct. */
 	SERVER_SYNC_PRIMITIVE *psCleanUpSync;
 
+	/* Id from the cleanup server sync */
+	IMG_UINT32            ui32CleanUpId;
+
 	/* FWAddr used by the cleanup server sync */
 	IMG_UINT32            ui32CleanUpVAddr;
 
@@ -308,34 +311,42 @@ static void PVRSyncReleaseTimeline(struct sync_timeline *psObj)
     mutex_unlock(&gTlListLock);
 }
 
-static void PVRSyncPrintTimeline(struct seq_file *s,
-								 struct sync_timeline *psObj)
+static void PVRSyncValueStrTimeline(struct sync_timeline *psObj,
+                                                                        char *str, int size)
 {
-	struct PVR_SYNC_TIMELINE *psPVRTl = (struct PVR_SYNC_TIMELINE *)psObj;
+        struct PVR_SYNC_TIMELINE *psPVRTl = (struct PVR_SYNC_TIMELINE *)psObj;
 
-	seq_printf(s, "id=%u tv=%d",
-			   psPVRTl->ui32Id, atomic_read(&psPVRTl->sValue));
+        snprintf(str, size, "%d", atomic_read(&psPVRTl->sValue));
 }
 
-static void PVRSyncPrint(struct seq_file *s, struct sync_pt *psPt)
+static void PVRSyncValueStr(struct sync_pt *psPt,
+                                                        char *str, int size)
 {
-	struct PVR_SYNC_PT *psPVRPt = (struct PVR_SYNC_PT *)psPt;
+        struct PVR_SYNC_PT *psPVRPt = (struct PVR_SYNC_PT *)psPt;
 
-	if (!psPVRPt->psSyncData)
-		return;
-
-	seq_printf(s, "sync: id=%u tv=%u # fw=0x%08x v=%u",
-			   psPVRPt->psSyncData->ui32Id,
-			   psPVRPt->psSyncData->ui32FenceValue,
-			   psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr,
-			   psPVRPt->psSyncData->psSyncKernel->ui32SyncValue);
-	if (psPVRPt->psSyncData->psSyncKernel->psCleanUpSync)
-	{
-		seq_printf(s, " # cleanup: fw=0x%08x v=%u ",
-				   psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr,
-				   psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue);
-	}
+        /* This output is very compressed cause in the systrace case we just have
+         * 32 chars and when printing it to /d/sync there are only 64 chars
+         * available. Prints:
+         * s=actual sync, cls=cleanup sync
+         * timeline value (s_id/s_address:latest cls_value-cls_id/cls_addr) */
+        if (!psPVRPt->psSyncData->psSyncKernel->psCleanUpSync)
+        {
+                snprintf(str, size, "%u (%u/0x%08x)",
+                                 psPVRPt->psSyncData->ui32FenceValue,
+                                 psPVRPt->psSyncData->ui32Id,
+                                 psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr);
+        }else
+        {
+                snprintf(str, size, "%u (%u/0x%08x:%u-%u/0x%08x)",
+                                 psPVRPt->psSyncData->ui32FenceValue,
+                                 psPVRPt->psSyncData->ui32Id,
+                                 psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr,
+                                 psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue,
+                                 psPVRPt->psSyncData->psSyncKernel->ui32CleanUpId,
+                                 psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr);
+        }
 }
+
 
 static struct PVR_SYNC_PT *
 PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
@@ -525,8 +536,8 @@ static struct sync_timeline_ops gsPVR_SYNC_TIMELINE_ops =
 	.compare            = PVRSyncCompare,
 	.free_pt            = PVRSyncFreeSync,
 	.release_obj        = PVRSyncReleaseTimeline,
-	.print_obj          = PVRSyncPrintTimeline,
-	.print_pt           = PVRSyncPrint,
+        .timeline_value_str = PVRSyncValueStrTimeline,
+        .pt_value_str       = PVRSyncValueStr,
 };
 
 /* foreign sync handling */
@@ -1345,6 +1356,7 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 				 * demand and queue an update operation. */
 				if (!psPVRPt->psSyncData->psSyncKernel->psCleanUpSync)
 				{
+					IMG_UINT32 ui32FWAddr, ui32CurrOp, ui32NextOp;
 					eError = PVRSRVServerSyncAllocKM(gsPVRSync.hDevCookie,
 													 &psPVRPt->psSyncData->psSyncKernel->psCleanUpSync,
 													 &psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr);
@@ -1352,6 +1364,17 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 					{
 						PVR_DPF((PVR_DBG_ERROR, "%s: Failed to allocate cleanup prim server sync (%s)",
 								 __func__, PVRSRVGetErrorStringKM(eError)));
+						goto err_put;
+					}
+
+					eError = PVRSRVServerSyncGetStatusKM(1, &psPVRPt->psSyncData->psSyncKernel->psCleanUpSync,
+														 &psPVRPt->psSyncData->psSyncKernel->ui32CleanUpId,
+														 &ui32FWAddr,
+														 &ui32CurrOp, &ui32NextOp);
+					if (eError != PVRSRV_OK)
+					{
+						PVR_DPF((PVR_DBG_ERROR, "%s: Failed to get status of cleanup prim server "
+								 "sync (%s)", __func__, PVRSRVGetErrorStringKM(eError)));
 						goto err_put;
 					}
 				}

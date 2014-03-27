@@ -50,7 +50,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "pvr_debug.h"
 
 #if defined(SUPPORT_ION)
-#include <linux/ion.h>
+#include PVR_ANDROID_ION_HEADER
 #include "ion_sys.h"
 #include "allocmem.h"
 #endif

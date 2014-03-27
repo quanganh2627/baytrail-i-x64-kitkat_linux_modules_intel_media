@@ -126,6 +126,8 @@ struct _PMR_OSPAGEARRAY_DATA_ {
     IMG_BOOL bOnDemand;
     /*
 	 The cache mode of the PMR (required at free time)
+	 Boolean used to track if we need to revert the cache attributes
+	 of the pages used in this allocation. Depends on OS/architecture.
 	*/
     IMG_UINT32 ui32CPUCacheFlags;
 	IMG_BOOL bUnsetMemoryType;
@@ -388,7 +390,7 @@ _ScanObjectsInPagePool(struct shrinker *psShrinker, struct shrink_control *psShr
 	/*
 	  Note:
 	  For anything other then x86 this list will be empty but we want to
-	  keep differences between compiled code to a minumium and so
+	  keep differences between compiled code to a minimum and so
 	  this isn't wrapped in #if defined(CONFIG_X86)
 	*/
 	list_for_each_entry_safe(psPagePoolEntry, psTempPoolEntry, &g_sUncachedPagePoolList, sPagePoolItem)
@@ -517,7 +519,7 @@ static IMG_VOID _DeinitPagePool(IMG_VOID)
 	/*
 		Note:
 		For anything other then x86 this will be a no-op but we want to
-		keep differences between compiled code to a minumium and so
+		keep differences between compiled code to a minimum and so
 		this isn't wrapped in #if defined(CONFIG_X86)
 	*/
 	list_for_each_entry_safe(psPagePoolEntry, psTempPoolEntry, &g_sUncachedPagePoolList, sPagePoolItem)
@@ -749,12 +751,20 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 		if (psPage != IMG_NULL)
 		{
 			bFromPagePool = IMG_TRUE;
+			/*
+			Unset memory type is set to true as although in the "normal" case
+			(where we free the page back to the pool) we don't want to unset
+			it, we _must_ unset it in the case where the page pool was full
+			and thus we have to give the page back to the OS.
+			*/
+		//	*pbUnsetMemoryType = IMG_TRUE;
+
 		}
 	}
 
-	/* 
-		Either the pool was empty or it was for a cached page so we
-		must ask the OS and do the cache management as required.
+	/*Did we check the page pool and/or was it a page pool miss,
+	either the pool was empty or it was for a cached page so we
+	must ask the OS and do the cache management as required.
 	*/
 	if (!bFromPagePool)
 	{

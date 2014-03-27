@@ -52,8 +52,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "ion_sys.h"
 
 #include <linux/version.h>
-#include <linux/ion.h>
-#include <../drivers/gpu/ion/ion_priv.h>
+#include PVR_ANDROID_ION_HEADER
+#include PVR_ANDROID_ION_PRIV_HEADER
 #include <linux/err.h>
 #include <linux/slab.h>
 
