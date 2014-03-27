@@ -242,7 +242,8 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 	 * NOTE: this path only works for TMD panel now. update it to
 	 * support all MIPI panels later.
 	 */
-	if (pipe != 1 && ((get_panel_type(dev, pipe) == TMD_VID) ||
+	if (pipe != 1 && (IS_MOFD(dev) ||
+				(get_panel_type(dev, pipe) == TMD_VID) ||
 				(get_panel_type(dev, pipe) == TMD_6X10_VID) ||
 				(get_panel_type(dev, pipe) == CMI_7x12_VID) ||
 				(get_panel_type(dev, pipe) == CMI_7x12_CMD) ||
@@ -250,7 +251,9 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 				(get_panel_type(dev, pipe) == SHARP_10x19_DUAL_CMD) ||
 				(get_panel_type(dev, pipe) == SHARP_25x16_CMD) ||
 				(get_panel_type(dev, pipe) == JDI_7x12_CMD) ||
-				(get_panel_type(dev, pipe) == JDI_7x12_VID))) {
+				(get_panel_type(dev, pipe) == JDI_7x12_VID) ||
+				(get_panel_type(dev, pipe) == SHARP_25x16_VID) ||
+				(get_panel_type(dev, pipe) == JDI_25x16_VID))) {
 		return;
 	}
 #endif
