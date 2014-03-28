@@ -179,6 +179,7 @@ int sharp25x16_cmd_power_on(
 		DRM_ERROR("Failed to get DSI packet sender\n");
 		return -EINVAL;
 	}
+	msleep(150);
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 		set_address_mode, 0x0, 1,
 		MDFLD_DSI_SEND_PACKAGE);
@@ -268,6 +269,7 @@ static int sharp25x16_cmd_power_off(
 		goto power_off_err;
 	}
 
+	msleep(100);
 	return 0;
 power_off_err:
 	err = -EIO;

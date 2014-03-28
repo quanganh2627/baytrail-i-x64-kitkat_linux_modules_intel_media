@@ -473,7 +473,7 @@ out_err:
 		/* Here, we use runtime pm framework to suit
 		 * S3 PCI suspend/resume
 		 */
-		pm_runtime_put(&g_ospm_data->dev->pdev->dev);
+		pm_runtime_put_sync_suspend(&g_ospm_data->dev->pdev->dev);
 		wake_unlock(&dev_priv->ospm_wake_lock);
 	}
 	mutex_unlock(&g_ospm_data->ospm_lock);
