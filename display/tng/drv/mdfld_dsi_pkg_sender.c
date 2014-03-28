@@ -1356,7 +1356,7 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 		mutex_lock(&sender->lock);
 		for(i = 0; i < loop_num; i++) {
 			if (i != 0)
-				offset = 0x800;
+				offset = MIPIC_REG_OFFSET;
 
 			if (IS_TNG_B0(dev)) {
 				retry = wait_event_interruptible_timeout(dev_priv->eof_wait,
@@ -1390,23 +1390,37 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 			else
 				wait_for_hs_fifos_empty(sender);
 			sender->work_for_slave_panel = false;
+		}
 
-			/*record the last screen update timestamp*/
-			if (i == 0) {
-				atomic64_set(&sender->last_screen_update,
-					atomic64_read(&sender->te_seq));
-				*(cb + (index++)) = write_mem_start;
-			}
+		/*record the last screen update timestamp*/
+		atomic64_set(&sender->last_screen_update,
+			atomic64_read(&sender->te_seq));
+		*(cb + (index++)) = write_mem_start;
 
-			REG_WRITE(sender->mipi_cmd_len_reg + offset, 1);
-			REG_WRITE(sender->mipi_cmd_addr_reg + offset, cb_phy | BIT0 | BIT1);
+		/* Set write_mem_start to mipi C first */
+		if (is_dual_dsi(dev))
+			REG_WRITE(sender->mipi_cmd_len_reg + MIPIC_REG_OFFSET, 1);
+		REG_WRITE(sender->mipi_cmd_len_reg, 1);
+		if (is_dual_dsi(dev))
+			REG_WRITE(sender->mipi_cmd_addr_reg + MIPIC_REG_OFFSET, cb_phy | BIT0 | BIT1);
+		REG_WRITE(sender->mipi_cmd_addr_reg, cb_phy | BIT0 | BIT1);
 
+		if (is_dual_dsi(dev)) {
 			retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
-			while (retry && (REG_READ(sender->mipi_cmd_addr_reg + offset) & BIT0)) {
+			while (retry && (REG_READ(sender->mipi_cmd_addr_reg + MIPIC_REG_OFFSET) & BIT0)) {
 				udelay(1);
 				retry--;
 			}
+			DRM_INFO("MIPI C write_mem_start command not completed.\n");
 		}
+
+		retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
+		while (retry && (REG_READ(sender->mipi_cmd_addr_reg) & BIT0)) {
+			udelay(1);
+			retry--;
+		}
+		DRM_INFO("MIPI C write_mem_start command not completed.\n");
+
 		mutex_unlock(&sender->lock);
 		return 0;
 	}
