@@ -1436,6 +1436,7 @@ extern int drm_decode_flag;
 extern char HDMI_EDID[20];
 extern int hdmi_state;
 extern int drm_vsp_vpp_batch_cmd;
+extern int drm_video_sepkey;
 
 /*
  * set cpu_relax = 1 in sysfs to use cpu_relax instead of udelay bysy loop

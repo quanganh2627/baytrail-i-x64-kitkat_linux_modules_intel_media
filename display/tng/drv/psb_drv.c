@@ -148,6 +148,7 @@ int drm_vsp_single_int = 0;
 int drm_vec_force_up_freq = 0;
 int drm_vec_force_down_freq = 0;
 int drm_vsp_vpp_batch_cmd = 1;
+int drm_video_sepkey = -1;
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -190,6 +191,7 @@ MODULE_PARM_DESC(vsp_single_int, "force VSP VPP generate one irq per command gro
 MODULE_PARM_DESC(vec_force_up_freq, "force VEC running at certain freq");
 MODULE_PARM_DESC(vec_force_down_freq, "force VEC power down at certain freq");
 MODULE_PARM_DESC(vsp_vpp_batch_cmd, "set vsp vpp for batch cmd submit");
+MODULE_PARM_DESC(video_sepkey, "Force sepapp to use specified key index to verify ved/vec/vsp firmware");
 
 module_param_named(enable_color_conversion, drm_psb_enable_color_conversion,
 					int, 0600);
@@ -236,6 +238,7 @@ module_param_named(vsp_single_int, drm_vsp_single_int, int, 0600);
 module_param_named(vec_force_up_freq, drm_vec_force_up_freq, int, 0600);
 module_param_named(vec_force_down_freq, drm_vec_force_down_freq, int, 0600);
 module_param_named(vsp_vpp_batch_cmd, drm_vsp_vpp_batch_cmd, int, 0600);
+module_param_named(video_sepkey, drm_video_sepkey, int, 0600);
 
 #ifndef MODULE
 /* Make ospm configurable via cmdline firstly,

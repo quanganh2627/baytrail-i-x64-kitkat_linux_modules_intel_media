@@ -672,9 +672,9 @@ static int tng_submit_encode_cmdbuf(struct drm_device *dev,
 		/* #.# load fw to driver */
 		PSB_DEBUG_TOPAZ("TOPAZ:load /lib/firmware/topazhp_fw.bin\n");
 		if (Is_Secure_Fw())
-			ret = tng_topaz_init_fw_chaabi(dev);
+			ret = tng_securefw(dev, "topaz", "VEC", TNG_IMR6L_MSG_REGADDR);
 		else
-			ret = tng_topaz_init_fw(dev);
+			ret = tng_rawfw(dev, "topaz");
 		if (ret) {
 			/* FIXME: find a proper return value */
 			DRM_ERROR("TOPAX:load firmware from storage failed\n");

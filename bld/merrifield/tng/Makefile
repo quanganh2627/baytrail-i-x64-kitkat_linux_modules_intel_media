@@ -167,6 +167,7 @@ endif
 $(DRIVER_NAME)-objs += \
 	$(VIDEO_COMMON_DIR)/psb_ttm_glue.o \
 	$(VIDEO_COMMON_DIR)/psb_cmdbuf.o \
+	$(VIDEO_COMMON_DIR)/tng_securefw.o \
 	$(VIDEO_COMMON_DIR)/psb_buffer.o \
 	$(VIDEO_COMMON_DIR)/psb_fence.o \
 	$(VIDEO_COMMON_DIR)/psb_mmu.o \
