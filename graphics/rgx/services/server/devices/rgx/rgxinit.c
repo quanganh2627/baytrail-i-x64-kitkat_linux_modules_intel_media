@@ -1101,6 +1101,10 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 							     psRGXFwInit,
 							     ui32APMLatency,
 							     ui32CoreClockSpeed);
+
+	OSFreeMem(pui32BIFTilingXStrides);
+	pui32BIFTilingXStrides = IMG_NULL;
+
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVRGXInitFirmwareKM: RGXSetupFirmware failed (%u)", eError));
@@ -1110,7 +1114,8 @@ PVRSRV_ERROR PVRSRVRGXInitFirmwareKM(PVRSRV_DEVICE_NODE			*psDeviceNode,
 	return eError;
 
 failed_init_firmware:
-
+	if (pui32BIFTilingXStrides != IMG_NULL)
+		OSFreeMem(pui32BIFTilingXStrides);
 failed_to_pass_compatibility_check:
 	PVR_ASSERT(eError != PVRSRV_OK);
 	return eError;
