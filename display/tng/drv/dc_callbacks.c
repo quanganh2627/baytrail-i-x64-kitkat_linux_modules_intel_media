@@ -254,16 +254,6 @@ void DCCBFlipSprite(struct drm_device *dev,
 		dsi_config = dev_priv->dsi_configs[1];
 	}
 
-	if (dsi_config) {
-		dsi_ctx = &dsi_config->dsi_hw_context;
-		dsi_ctx->sprite_dsppos = ctx->pos;
-		dsi_ctx->sprite_dspsize = ctx->size;
-		dsi_ctx->sprite_dspstride = ctx->stride;
-		dsi_ctx->sprite_dspcntr = ctx->cntr;
-		dsi_ctx->sprite_dsplinoff = ctx->linoff;
-		dsi_ctx->sprite_dspsurf = ctx->surf;
-	}
-
 	if ((ctx->update_mask & SPRITE_UPDATE_POSITION))
 		PSB_WVDC32(ctx->pos, DSPAPOS + reg_offset);
 
@@ -275,12 +265,26 @@ void DCCBFlipSprite(struct drm_device *dev,
 	if ((ctx->update_mask & SPRITE_UPDATE_CONSTALPHA))
 		PSB_WVDC32(ctx->contalpa, DSPACONSTALPHA + reg_offset);
 
-	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL))
-		PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
+	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL)){
+                if(drm_psb_set_gamma_success)
+		        PSB_WVDC32(ctx->cntr | DISPPLANE_GAMMA_ENABLE, DSPACNTR + reg_offset);
+                else
+                        PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
+        }
 
 	if ((ctx->update_mask & SPRITE_UPDATE_SURFACE)) {
 		PSB_WVDC32(ctx->linoff, DSPALINOFF + reg_offset);
 		PSB_WVDC32(ctx->surf, DSPASURF + reg_offset);
+	}
+
+	if (dsi_config) {
+		dsi_ctx = &dsi_config->dsi_hw_context;
+		dsi_ctx->sprite_dsppos = ctx->pos;
+		dsi_ctx->sprite_dspsize = ctx->size;
+		dsi_ctx->sprite_dspstride = ctx->stride;
+		dsi_ctx->sprite_dspcntr = ctx->cntr | ((PSB_RVDC32(DSPACNTR + reg_offset) & DISPPLANE_GAMMA_ENABLE));
+		dsi_ctx->sprite_dsplinoff = ctx->linoff;
+		dsi_ctx->sprite_dspsurf = ctx->surf;
 	}
 }
 
@@ -314,16 +318,6 @@ void DCCBFlipPrimary(struct drm_device *dev,
 	} else
 		return;
 
-	if (dsi_config) {
-		dsi_ctx = &dsi_config->dsi_hw_context;
-		dsi_ctx->dsppos = ctx->pos;
-		dsi_ctx->dspsize = ctx->size;
-		dsi_ctx->dspstride = ctx->stride;
-		dsi_ctx->dspcntr = ctx->cntr;
-		dsi_ctx->dsplinoff = ctx->linoff;
-		dsi_ctx->dspsurf = ctx->surf;
-	}
-
 	if ((ctx->update_mask & SPRITE_UPDATE_POSITION))
 		PSB_WVDC32(ctx->pos, DSPAPOS + reg_offset);
 
@@ -335,12 +329,26 @@ void DCCBFlipPrimary(struct drm_device *dev,
 	if ((ctx->update_mask & SPRITE_UPDATE_CONSTALPHA))
 		PSB_WVDC32(ctx->contalpa, DSPACONSTALPHA + reg_offset);
 
-	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL))
-		PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
+	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL)){
+                if(drm_psb_set_gamma_success)
+                        PSB_WVDC32(ctx->cntr | DISPPLANE_GAMMA_ENABLE, DSPACNTR + reg_offset);
+                else
+                        PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
+        }
 
 	if ((ctx->update_mask & SPRITE_UPDATE_SURFACE)) {
 		PSB_WVDC32(ctx->linoff, DSPALINOFF + reg_offset);
 		PSB_WVDC32(ctx->surf, DSPASURF + reg_offset);
+	}
+
+	if (dsi_config) {
+		dsi_ctx = &dsi_config->dsi_hw_context;
+		dsi_ctx->dsppos = ctx->pos;
+		dsi_ctx->dspsize = ctx->size;
+		dsi_ctx->dspstride = ctx->stride;
+		dsi_ctx->dspcntr = ctx->cntr | ((PSB_RVDC32(DSPACNTR + reg_offset) & DISPPLANE_GAMMA_ENABLE));
+		dsi_ctx->dsplinoff = ctx->linoff;
+		dsi_ctx->dspsurf = ctx->surf;
 	}
 }
 

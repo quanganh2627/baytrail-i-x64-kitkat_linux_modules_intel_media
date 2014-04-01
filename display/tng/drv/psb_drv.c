@@ -108,7 +108,7 @@ int drm_decode_flag = 0x0;
 int drm_psb_enable_pr2_cabc = 1;
 int drm_psb_enable_gamma;
 int drm_psb_enable_color_conversion;
-
+int drm_psb_set_gamma_success = 0;
 /*EXPORT_SYMBOL(drm_psb_debug);*/
 static int drm_psb_trap_pagefaults;
 
@@ -149,6 +149,10 @@ int drm_vec_force_up_freq = 0;
 int drm_vec_force_down_freq = 0;
 int drm_vsp_vpp_batch_cmd = 1;
 int drm_video_sepkey = -1;
+int gamma_setting[129] = {0};
+int csc_setting[6] = {0};
+int gamma_number = 129;
+int csc_number = 6;
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -239,6 +243,8 @@ module_param_named(vec_force_up_freq, drm_vec_force_up_freq, int, 0600);
 module_param_named(vec_force_down_freq, drm_vec_force_down_freq, int, 0600);
 module_param_named(vsp_vpp_batch_cmd, drm_vsp_vpp_batch_cmd, int, 0600);
 module_param_named(video_sepkey, drm_video_sepkey, int, 0600);
+module_param_array_named(gamma_adjust, gamma_setting, int, &gamma_number, 0600);
+module_param_array_named(csc_adjust, csc_setting, int, &csc_number, 0600);
 
 #ifndef MODULE
 /* Make ospm configurable via cmdline firstly,
@@ -415,6 +421,10 @@ MODULE_DEVICE_TABLE(pci, pciidlist);
 /* CSC IOCTLS */
 #define DRM_IOCTL_PSB_SET_CSC \
 	DRM_IOW(DRM_PSB_SET_CSC + DRM_COMMAND_BASE, struct drm_psb_csc_matrix)
+
+/*CSC GAMMA Setting*/
+#define DRM_IOCTL_PSB_CSC_GAMMA_SETTING \
+                DRM_IOWR(DRM_PSB_CSC_GAMMA_SETTING + DRM_COMMAND_BASE, struct drm_psb_csc_gamma_setting)
 
 #define DRM_IOCTL_PSB_ENABLE_IED_SESSION \
 		DRM_IO(DRM_PSB_ENABLE_IED_SESSION + DRM_COMMAND_BASE)
@@ -611,6 +621,8 @@ static int psb_s3d_enable_ioctl(struct drm_device *dev, void *data,
 #endif
 static int psb_set_csc_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file_priv);
+static int psb_csc_gamma_setting_ioctl(struct drm_device *dev, void *data,
+                                 struct drm_file *file_priv);
 static int psb_enable_ied_session_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 static int psb_disable_ied_session_ioctl(struct drm_device *dev, void *data,
@@ -756,6 +768,7 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 			psb_query_display_ied_caps_ioctl, DRM_AUTH),
 #endif
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_SET_CSC, psb_set_csc_ioctl, DRM_AUTH),
+        PSB_IOCTL_DEF(DRM_IOCTL_PSB_CSC_GAMMA_SETTING, psb_csc_gamma_setting_ioctl, DRM_AUTH),
 /*
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_S3D_QUERY, psb_s3d_query_ioctl, DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_S3D_PREMODESET, psb_s3d_premodeset_ioctl,
@@ -1582,6 +1595,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 #endif
 
 	mutex_init(&dev_priv->dpms_mutex);
+        mutex_init(&dev_priv->gamma_csc_lock);
 	mutex_init(&dev_priv->dsr_mutex);
 	mutex_init(&dev_priv->vsync_lock);
 
@@ -2099,6 +2113,26 @@ static int psb_vbt_ioctl(struct drm_device *dev, void *data,
 	memcpy(pGCT, &dev_priv->gct_data, sizeof(*pGCT));
 
 	return 0;
+}
+
+static int psb_csc_gamma_setting_ioctl(struct drm_device *dev, void *data,
+                         struct drm_file *file_priv)
+{
+        struct drm_psb_csc_gamma_setting *csc_gamma_setting = NULL;
+        int ret = 0;
+        csc_gamma_setting = (struct drm_psb_csc_gamma_setting *)
+                                        data;
+        printk("seting gamma ioctl!\n");
+        if (!csc_gamma_setting)
+                return -EINVAL;
+
+        if (csc_gamma_setting->type == GAMMA)
+                ret = mdfld_intel_crtc_set_gamma(dev,
+                        &csc_gamma_setting->data.gamma_data);
+        else if (csc_gamma_setting->type == CSC)
+                ret = mdfld_intel_crtc_set_color_conversion(dev,
+                        &csc_gamma_setting->data.csc_data);
+        return ret;
 }
 
 static int psb_enable_ied_session_ioctl(struct drm_device *dev, void *data,
@@ -3856,6 +3890,62 @@ ssize_t gpio_control_write(struct file *file, const char *buffer,
 	return count;
 }
 
+static int csc_control_read(struct file *file, char __user *buf,
+				    size_t nbytes,loff_t *ppos)
+{
+	return 0;
+}
+
+static int csc_control_write(struct file *file, const char *buffer,
+				      size_t count, loff_t *ppos)
+{
+	char buf[2];
+	int  csc_control;
+	struct drm_minor *minor = (struct drm_minor *)PDE_DATA(file_inode(file));
+	struct drm_device *dev = minor->dev;
+	struct csc_setting csc;
+	struct gamma_setting gamma;
+
+	if (count != sizeof(buf)) {
+		return -EINVAL;
+	} else {
+		if (copy_from_user(buf, buffer, count))
+			return -EINVAL;
+		if (buf[count-1] != '\n')
+			return -EINVAL;
+		csc_control = buf[0] - '0';
+		PSB_DEBUG_ENTRY(" csc control: %d\n", csc_control);
+
+		switch (csc_control) {
+		case 0x0:
+			csc.pipe = 0;
+			csc.type = CSC_REG_SETTING;
+			csc.enable_state = true;
+			csc.data_len = CSC_REG_COUNT;
+			memcpy(csc.data.csc_reg_data, csc_setting, sizeof(csc.data.csc_reg_data));
+			mdfld_intel_crtc_set_color_conversion(dev, &csc);
+			break;
+		case 0x1:
+			gamma.pipe = 0;
+			gamma.type = GAMMA_REG_SETTING;
+			gamma.enable_state = true;
+			gamma.data_len = GAMMA_10_BIT_TABLE_COUNT;
+			memcpy(gamma.gamma_tableX100, gamma_setting, sizeof(gamma.gamma_tableX100));
+			mdfld_intel_crtc_set_gamma(dev, &gamma);
+			break;
+		default:
+			printk("invalied parameters\n");
+		}
+	}
+	return count;
+}
+
+static const struct file_operations psb_csc_proc_fops = {
+       .owner = THIS_MODULE,
+       .read = csc_control_read,
+       .write = csc_control_write,
+};
+
 static int psb_hdmi_proc_open(struct inode *inode, struct file *file)
 {
 	return 0;
@@ -3934,9 +4024,12 @@ static void psb_shutdown(struct pci_dev *pdev)
 
 static int psb_proc_init(struct drm_minor *minor)
 {
+        struct proc_dir_entry *csc_setting;
 #ifdef CONFIG_SUPPORT_HDMI
 	psb_hdmi_proc_init(minor);
 #endif
+        csc_setting = proc_create_data(CSC_PROC_ENTRY, 0644, minor->proc_root, &psb_csc_proc_fops, minor);
+
 	return 0;
 }
 

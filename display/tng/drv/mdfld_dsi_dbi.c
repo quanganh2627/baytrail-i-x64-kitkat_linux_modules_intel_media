@@ -468,7 +468,9 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(regs->dsppos_reg, ctx->dsppos);
 	REG_WRITE(regs->dspstride_reg, ctx->dspstride);
 
-	if (!IS_ANN(dev)) {
+	//if (!IS_ANN(dev)) 
+        //ANN gamma setting use old path
+        {
 		/*restore color_coef (chrome) */
 		for (i = 0; i < 6; i++)
 			REG_WRITE(regs->color_coef_reg + (i<<2), ctx->color_coef[i]);
@@ -688,8 +690,9 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	int err = 0;
 	u32 guit_val = 0;
 	u32 power_island = 0;
-	int retry;
+	int retry,i;
 	int offset = 0;
+        u32 val;
 
 	if (!dsi_config)
 		return -EINVAL;
@@ -700,8 +703,25 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 	ctx = &dsi_config->dsi_hw_context;
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
-	/*Disable plane*/
-	REG_WRITE(regs->dspcntr_reg, 0);
+
+        ctx->dspcntr    = REG_READ(regs->dspcntr_reg);
+        ctx->pipeconf   = REG_READ(regs->pipeconf_reg);
+
+        //if (!IS_ANN_A0(dev)) 
+	//ANN gamma setting use old path
+        {
+                /*save color_coef (chrome) */
+                for (i = 0; i < 6; i++)
+                        ctx->color_coef[i] = REG_READ(regs->color_coef_reg + (i<<2));
+
+                /* save palette (gamma) */
+                for (i = 0; i < 256; i++)
+                        ctx->palette[i] = REG_READ(regs->palette_reg + (i<<2));
+        }
+
+        /*Disable plane*/
+        val = ctx->dspcntr;
+        REG_WRITE(regs->dspcntr_reg, (val & ~BIT31));
 
 	/*Disable pipe*/
 	/* Don't disable DSR mode. */

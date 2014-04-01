@@ -64,6 +64,7 @@ extern int gfxrtdelay;
 extern int drm_psb_te_timer_delay;
 extern int drm_psb_enable_gamma;
 extern int drm_psb_enable_color_conversion;
+extern int drm_psb_set_gamma_success;
 extern u32 DISP_PLANEB_STATUS;
 
 extern struct ttm_bo_driver psb_ttm_bo_driver;
@@ -107,6 +108,7 @@ enum enum_ports {
 #define PANEL_PROC_ENTRY "panel_status"
 #define HDMI_PROC_ENTRY "hdmi_power"
 #define GPIO_PROC_ENTRY "hdmi_gpio_control"
+#define CSC_PROC_ENTRY "csc_control"
 
 
 #define PSB_DRM_DRIVER_DATE "2009-03-10"
@@ -1129,6 +1131,9 @@ extern int drm_crtc_probe_output_modes(struct drm_device *dev, int, int);
 extern int drm_pick_crtcs(struct drm_device *dev);
 extern int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 					struct gamma_setting *setting_data);
+
+extern int mdfld_intel_crtc_set_color_conversion(struct drm_device *dev,
+                                        struct csc_setting *setting_data);
 
 static inline struct drm_psb_private *psb_priv(struct drm_device *dev)
 {
