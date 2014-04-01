@@ -1260,6 +1260,7 @@ FailRegisterCmdComplete:
 	OSUninstallMISR(psDisplayContext->hMISR);
 FailMISR:
 	_DCDeviceReleaseRef(psDevice);
+	psDevice->psFuncTable->pfnContextDestroy(psDisplayContext->hDisplayContext);
 FailDCDeviceContext:
 	SCPDestroy(psDisplayContext->psSCPContext);
 FailSCP:
