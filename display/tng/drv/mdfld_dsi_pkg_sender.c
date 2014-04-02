@@ -1411,7 +1411,6 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 				udelay(1);
 				retry--;
 			}
-			DRM_INFO("MIPI C write_mem_start command not completed.\n");
 		}
 
 		retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
@@ -1419,8 +1418,6 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 			udelay(1);
 			retry--;
 		}
-		DRM_INFO("MIPI C write_mem_start command not completed.\n");
-
 		mutex_unlock(&sender->lock);
 		return 0;
 	}
