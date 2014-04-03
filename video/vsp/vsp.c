@@ -123,7 +123,7 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 
 			if (msg->context != 0 && cmd_wr == cmd_rd) {
 				vsp_priv->vp8_cmd_num = 0;
-				sequence = vp8_error_response(dev_priv, msg->context);
+				sequence = vsp_priv->last_sequence;
 			}
 
 			ret = false;
@@ -334,7 +334,7 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 		goto out;
 
 	if (time_after(jiffies, vsp_priv->cmd_submit_time + HZ * 50 / 1000)) {
-		DRM_ERROR(" will be force to flush cmd due to jiffies\n");
+		VSP_DEBUG(" will be force to flush cmd due to jiffies\n");
 		vsp_priv->force_flush_cmd = 1;
 	}
 
@@ -1612,6 +1612,9 @@ void handle_error_response(unsigned int error_type, unsigned int cmd_type)
 	case VssCorruptFrame:
 		DRM_ERROR("VSP: Coded Frame is corrupted\n");
 		break;
+	case VssCorruptFramecontinue_VP8:
+		DRM_ERROR("VSP: not need to re-init context\n");
+		break;
 	case VssContextMustBeDestroyed_VP8:
 		DRM_ERROR("VSP: context must be destroyed and new context is created\n");
 		break;
@@ -1619,56 +1622,5 @@ void handle_error_response(unsigned int error_type, unsigned int cmd_type)
 		DRM_ERROR("VSP: Unknown error, code %x\n", error_type);
 		break;
 	}
-}
-
-static int vp8_error_response(struct drm_psb_private *dev_priv, int context)
-{
-	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	struct vss_command_t *cur_cell_cmd, *cur_cmd;
-	unsigned int cmd_rd, cmd_wr;
-	int sequence;
-
-	cmd_rd = vsp_priv->ctrl->cmd_rd;
-	cmd_wr = vsp_priv->ctrl->cmd_wr;
-	VSP_DEBUG("cmd_rd=%d, cmd_wr=%d\n", cmd_rd, cmd_wr);
-
-	VSP_DEBUG("send destroy context buffer command\n");
-	cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
-
-	cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
-	cur_cmd->type = VssGenDestroyContext;
-	cur_cmd->size = 0;
-	cur_cmd->buffer_id = 0;
-	cur_cmd->irq = 0;
-	cur_cmd->reserved6 = 0;
-	cur_cmd->reserved7 = 0;
-	cur_cmd->buffer = context;
-
-	VSP_DEBUG("send create context buffer command\n");
-	cur_cmd = vsp_priv->cmd_queue + (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
-	cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
-	cur_cmd->type = VssGenInitializeContext;
-	cur_cmd->buffer = context;
-	cur_cmd->size = VSP_APP_ID_VP8_ENC;
-	cur_cmd->buffer_id = 0;
-	cur_cmd->irq = 0;
-	cur_cmd->reserved6 = 0;
-	cur_cmd->reserved7 = 0;
-
-	VSP_DEBUG("send seq cmd again\n");
-	cur_cell_cmd = vsp_priv->cmd_queue + (vsp_priv->ctrl->cmd_wr + 2) % VSP_CMD_QUEUE_SIZE;
-
-	memcpy(cur_cell_cmd, &vsp_priv->seq_cmd, sizeof(struct vss_command_t));
-	VSP_DEBUG("cmd: %.8x %.8x %.8x %.8x %.8x %.8x\n",
-		   cur_cell_cmd->context, cur_cell_cmd->type,
-		   cur_cell_cmd->buffer, cur_cell_cmd->size,
-		   cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
-	VSP_DEBUG("send %.8x cmd to VSP\n", cur_cell_cmd->type);
-
-	vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + VSP_CMD_QUEUE_SIZE + 3) % VSP_CMD_QUEUE_SIZE;
-
-	sequence = vsp_priv->last_sequence;
-
-	return sequence;
 }
 

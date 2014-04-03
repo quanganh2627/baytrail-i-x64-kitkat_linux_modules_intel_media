@@ -221,7 +221,8 @@ enum VssStatus {
 	VssInvalidPictureParameters_VP8  = 0x2,
 	VssContextMustBeDestroyed_VP8    = 0x3,
 	VssInitFailure_VP8               = 0x5,
-	VssCorruptFrame                  = 0x6
+	VssCorruptFrame                  = 0x6,
+	VssCorruptFramecontinue_VP8      = 0x7
 };
 
 enum FrcResponseType {
