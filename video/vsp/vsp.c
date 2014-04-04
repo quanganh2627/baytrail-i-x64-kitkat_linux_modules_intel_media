@@ -619,6 +619,16 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			cur_cmd->irq = 0;
 			cur_cmd->reserved6 = 0;
 			cur_cmd->reserved7 = 0;
+		} else if (cur_cmd->type == VssGenInitializeContext) {
+			/* Init them just get InitContext command */
+			vsp_priv->force_flush_cmd = 0;
+			vsp_priv->acc_num_cmd = 0;
+			vsp_priv->delayed_burst_cnt = 90;
+
+			vsp_cmd_num++;
+
+		} else if (cur_cmd->type == VssGenDestroyContext) {
+			vsp_cmd_num++;
 		} else
 			/* calculate the numbers of cmd send to VSP */
 			vsp_cmd_num++;
@@ -988,18 +998,17 @@ int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		}
 	} else if (ctx_type == VAEntrypointVideoProc) {
 		vsp_priv->context_vpp_num++;
+#ifdef MOOREFIELD
 		if (vsp_priv->context_vpp_num > MAX_VPP_CONTEXT_NUM) {
 			DRM_ERROR("VSP: Only support one VPP stream!\n");
 			ret = -1;
 		}
+#endif
 	} else {
 		DRM_ERROR("VSP: couldn't support the context %x\n", ctx_type);
 		ret = -1;
 	}
 
-	vsp_priv->force_flush_cmd = 0;
-	vsp_priv->acc_num_cmd = 0;
-	vsp_priv->delayed_burst_cnt = 90;
 	return ret;
 }
 
