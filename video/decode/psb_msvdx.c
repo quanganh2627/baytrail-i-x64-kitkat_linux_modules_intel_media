@@ -1164,8 +1164,8 @@ loop: /* just for coding style check */
 			PSB_DEBUG_MSVDX(
 		"no matched ctx: fence 0x%x, found %d, ctx 0x%08x\n",
 				fence, found, msvdx_ec_ctx);
-			PSB_WMSVDX32(0, MSVDX_CMDS_END_SLICE_PICTURE_OFFSET);
-			PSB_WMSVDX32(1, MSVDX_CMDS_END_SLICE_PICTURE_OFFSET);
+			PSB_WMSVDX32(0, MSVDX_CMDS_END_SLICE_PICTURE_OFFSET + MSVDX_CMDS_BASE);
+			PSB_WMSVDX32(1, MSVDX_CMDS_END_SLICE_PICTURE_OFFSET + MSVDX_CMDS_BASE);
 			goto done;
 		}
 
