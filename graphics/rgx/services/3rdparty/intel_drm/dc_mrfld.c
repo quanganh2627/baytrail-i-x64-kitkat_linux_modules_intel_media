@@ -1715,6 +1715,9 @@ void DC_MRFLD_onPowerOff(uint32_t iPipe)
 				power_island_put(pstate->extra_power_island);
 				pstate->powered_off = true;
 			}
+
+			/* set plane state to be correct in power off */
+			pstate->disabled = true;
 		}
 	}
 }
