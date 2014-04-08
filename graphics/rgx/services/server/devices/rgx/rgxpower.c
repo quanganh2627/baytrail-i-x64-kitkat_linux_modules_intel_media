@@ -57,6 +57,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "devicemem_pdump.h"
 #include "dfrgx_interface.h"
 #include "rgxpowermon.h"
+#include <linux/kernel.h>
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
@@ -545,6 +546,7 @@ static PVRSRV_ERROR RGXStop(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXStop: RGXRunScript failed (%d)", eError));
+		panic("RGXStop() failed");
 		return eError;
 	}
 
@@ -704,6 +706,8 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 			if (eError != PVRSRV_OK)
 			{
 				PVR_DPF((PVR_DBG_ERROR,"RGXPostPowerState: RGXStart failed"));
+				panic("RGXStart() failed");
+
 				return eError;
 			}
 			
