@@ -72,9 +72,13 @@ static uint32_t DC_MRFLD_PixelFormat_Mapping[] = {
 	[IMG_PIXFMT_B8G8R8A8_UNORM] = (0x6 << 26),
 };
 
-static uint32_t DC_MRFLD_ExtraPowerIslands[DC_PLANE_MAX][MAX_PLANE_INDEX] = {
+static uint32_t DC_ExtraPowerIslands[DC_PLANE_MAX][MAX_PLANE_INDEX] = {
 	{ 0,              0,              0},
+#ifdef CONFIG_MOOREFIELD
+	{ 0,              0,              0},
+#else
 	{ OSPM_DISPLAY_C, 0,              0},
+#endif
 	{ 0,              OSPM_DISPLAY_C, 0},
 	{ 0,              0,              0},
 };
@@ -183,7 +187,7 @@ static IMG_BOOL _Disable_ExtraPowerIslands(DC_MRFLD_DEVICE *psDevice,
 			/* don't need to power it off when it's active */
 			if (ui32ActivePlanes & (1 << j)) {
 				ui32ActiveExtraIslands =
-					DC_MRFLD_ExtraPowerIslands[i][j];
+					DC_ExtraPowerIslands[i][j];
 				/*remove power islands needed by this plane*/
 				ui32PowerIslands &= ~ui32ActiveExtraIslands;
 			}
@@ -653,7 +657,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 
 			/* check whether needs extra power island*/
 			psFlip->uiPowerIslands |=
-				DC_MRFLD_ExtraPowerIslands[type][index];
+				DC_ExtraPowerIslands[type][index];
 
 			/* update plane - pipe mapping*/
 			gpsDevice->ui32PlanePipeMapping[type][index] = pipe;
@@ -1557,7 +1561,7 @@ static PVRSRV_ERROR DC_MRFLD_init(struct drm_device *psDrmDev)
 			pstate->active = false;
 			pstate->disabled = true;
 			pstate->extra_power_island =
-				DC_MRFLD_ExtraPowerIslands[i][j];
+				DC_ExtraPowerIslands[i][j];
 			pstate->powered_off = true;
 
 			psDevice->ui32PlanePipeMapping[i][j] = -1;
@@ -1761,7 +1765,7 @@ int DC_MRFLD_Enable_Plane(int type, int index, u32 ctx)
 
 #if 0
 		/* power on extra power islands if required */
-		uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[type][index];
+		uiExtraPowerIslands = DC_ExtraPowerIslands[type][index];
 		_Enable_ExtraPowerIslands(gpsDevice,
 					uiExtraPowerIslands);
 #endif
@@ -1826,7 +1830,7 @@ int DC_MRFLD_Disable_Plane(int type, int index, u32 ctx)
 		*ui32ActivePlanes &= ~(1 << index);
 
 		/* power off extra power islands if required */
-		uiExtraPowerIslands = DC_MRFLD_ExtraPowerIslands[type][index];
+		uiExtraPowerIslands = DC_ExtraPowerIslands[type][index];
 		if (uiExtraPowerIslands) {
 #if 0
 			req = kzalloc(sizeof(*req), GFP_KERNEL);
