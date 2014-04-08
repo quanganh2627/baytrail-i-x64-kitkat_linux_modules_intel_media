@@ -33,14 +33,14 @@
 #include "displays/sharp25x16_cmd.h"
 
 static u8 sharp_mode_set_data[5][3] = {
-			{0x10, 0x00, 0x2a},
+			{0x10, 0x00, 0x2f},
 			{0x10, 0x01, 0x01},
 			{0x10, 0x07, 0x00},
 			{0x70, 0x00, 0x70},
 			{0x00, 0x1f, 0x00}
 			};
 static u8 sharp_clumn_addr_left[] = {
-			0x2a, 0x00, 0x00, 0x04, 0xff};
+			0x2a, 0x00, 0x00, 0x09, 0xff};
 static u8 sharp_page_addr_left[] = {
 			0x2b, 0x00, 0x00, 0x06, 0x3f};
 static u8 sharp_mode_set_dec_sel[3] =
@@ -141,7 +141,8 @@ void sharp25x16_cmd_controller_init(
 				dsi_config->lane_count);
 
 	hw_ctx->mipi = SEL_FLOPPED_HSTX	| PASS_FROM_SPHY_TO_AFE |
-		DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE | TE_TRIGGER_GPIO_PIN;
+		DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE | TE_TRIGGER_GPIO_PIN |
+		DUAL_LINK_MODE_PIXEL_ALTER;
 	hw_ctx->video_mode_format = 0xf;
 
 }

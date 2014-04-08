@@ -844,6 +844,7 @@ struct dpst_guardband {
 #define MIPI			0x61190
 #define MIPI_C			0x62190
 #define MIPI_PORT_EN			(1 << 31)
+#define DUAL_LINK_MODE_PIXEL_ALTER	(1 << 26)
 /** Turns on border drawing to allow centered display. */
 #define SEL_FLOPPED_HSTX		(1 << 23)
 #define PASS_FROM_SPHY_TO_AFE 		(1 << 16)
