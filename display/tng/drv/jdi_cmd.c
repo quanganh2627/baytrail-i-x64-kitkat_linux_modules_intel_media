@@ -108,25 +108,26 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 					__func__, __LINE__);
 			goto ic_init_err;
 		}
-		err = mdfld_dsi_send_gen_short_hs(sender,
-				access_protect, 4, 2,
-				MDFLD_DSI_SEND_PACKAGE);
-		if (err) {
-			DRM_ERROR("%s: %d: Manufacture command protect on\n",
-					__func__, __LINE__);
-			goto ic_init_err;
-		}
-
-		err = mdfld_dsi_send_gen_long_lp(sender,
-				jdi_timing_control,
-				21, MDFLD_DSI_SEND_PACKAGE);
-		if (err) {
-			DRM_ERROR("%s: %d: Set panel timing\n",
-					__func__, __LINE__);
-			goto ic_init_err;
-		}
-		msleep(20);
 	}
+
+	err = mdfld_dsi_send_gen_short_hs(sender,
+			access_protect, 4, 2,
+			MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Manufacture command protect on\n",
+				__func__, __LINE__);
+		goto ic_init_err;
+	}
+
+	err = mdfld_dsi_send_gen_long_lp(sender,
+			jdi_timing_control,
+			21, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set panel timing\n",
+				__func__, __LINE__);
+		goto ic_init_err;
+	}
+	msleep(20);
 
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 			set_tear_on, 0x00, 1,
