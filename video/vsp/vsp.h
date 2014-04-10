@@ -264,10 +264,6 @@ struct vsp_private {
 	struct VssVp8encPictureParameterBuffer *vp8_encode_frame_cmd;
 	struct ttm_bo_kmap_obj vp8_encode_frame__kmap;
 
-	void *coded_buf;
-	struct ttm_bo_kmap_obj coded_buf_kmap;
-	struct ttm_buffer_object *coded_buf_bo;
-
 	/* For VP8 dual encoding */
 	struct file *vp8_filp[2];
 	int context_vp8_num;

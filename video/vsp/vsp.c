@@ -67,8 +67,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 				uint32_t fence_type,
 				struct drm_psb_cmdbuf_arg *arg,
 				struct psb_ttm_fence_rep *fence_arg,
-				struct ttm_buffer_object *pic_param_bo,
-				struct ttm_buffer_object *coded_buf_bo);
+				struct ttm_buffer_object *pic_param_bo);
 
 static int  vp8_error_response(struct drm_psb_private *dev_priv, int context);
 
@@ -216,73 +215,6 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 
 			VSP_DEBUG("sequence %d\n", sequence);
 			VSP_DEBUG("receive vp8 encoded frame response\n");
-
-#ifdef VP8_ENC_DEBUG
-			struct VssVp8encEncodedFrame *encoded_frame =
-				(struct VssVp8encEncodedFrame *)
-					(vsp_priv->coded_buf);
-			struct VssVp8encPictureParameterBuffer *t =
-					vsp_priv->vp8_encode_frame_cmd;
-			int i = 0;
-			int j = 0;
-			VSP_DEBUG("VSP clock cycles from pre response %x\n",
-				  msg->vss_cc);
-			vsp_priv->vss_cc_acc += msg->vss_cc;
-
-			VSP_DEBUG("receive vp8 encoded frame buffer %x",
-					msg->buffer);
-			VSP_DEBUG("size %x cur command id is %d\n",
-					msg->size, vsp_priv->ctrl->cmd_rd);
-			VSP_DEBUG("read vp8 pic param address %x at %d\n",
-				vsp_priv->vp8_encode_frame_cmd,
-				vsp_priv->ctrl->cmd_rd);
-
-			/* psb_clflush(vsp_priv->coded_buf); */
-
-			VSP_DEBUG("size %d\n", t->encoded_frame_size);
-
-			VSP_DEBUG("status[0x80010000=success] %x\n",
-					encoded_frame->status);
-			VSP_DEBUG("frame flags[1=Key, 0=Non-key] %d\n",
-					encoded_frame->frame_flags);
-			VSP_DEBUG("segments = %d\n",
-					encoded_frame->segments);
-			VSP_DEBUG("quantizer[0]=%d\n",
-					encoded_frame->quantizer[0]);
-			VSP_DEBUG("frame size %d[bytes]\n",
-					encoded_frame->frame_size);
-			VSP_DEBUG("partitions num %d\n",
-					encoded_frame->partitions);
-			VSP_DEBUG("coded data start %p\n",
-					encoded_frame->coded_data);
-			VSP_DEBUG("surfaceId_of_ref_frame[0] %x\n",
-					encoded_frame->surfaceId_of_ref_frame[0]);
-			VSP_DEBUG("surfaceId_of_ref_frame[1] %x\n",
-					encoded_frame->surfaceId_of_ref_frame[1]);
-			VSP_DEBUG("surfaceId_of_ref_frame[2] %x\n",
-					encoded_frame->surfaceId_of_ref_frame[2]);
-			VSP_DEBUG("surfaceId_of_ref_frame[3] %x\n",
-					encoded_frame->surfaceId_of_ref_frame[3]);
-
-			if (encoded_frame->partitions > PARTITIONS_MAX) {
-				VSP_DEBUG("partitions num error\n");
-				encoded_frame->partitions = PARTITIONS_MAX;
-			}
-
-			for (; i < encoded_frame->partitions; i++) {
-				VSP_DEBUG("%d partitions size %d start %x\n", i,
-					encoded_frame->partition_size[i],
-					encoded_frame->partition_start[i]);
-			}
-
-			/* dump coded buf for debug */
-			int size = sizeof(struct VssVp8encEncodedFrame);
-			char *tmp = (char *) (vsp_priv->coded_buf);
-			for (j = 0; j < 32; j++) {
-				VSP_DEBUG("coded buf is: %d, %x\n", j,
-					*(tmp + size - 4 + j));
-			}
-#endif
 
 			break;
 		}
@@ -635,7 +567,6 @@ static int vsp_prehandle_command(struct drm_file *priv,
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	struct ttm_buffer_object *pic_bo_vp8;
-	struct ttm_buffer_object *coded_buf_bo;
 	int vp8_pic_num = 0;
 
 	cur_cmd = (struct vss_command_t *)cmd_start;
@@ -719,16 +650,6 @@ static int vsp_prehandle_command(struct drm_file *priv,
 				goto out;
 			}
 
-			coded_buf_bo =
-				ttm_buffer_object_lookup(tfile,
-						cur_cmd->reserved6);
-			if (coded_buf_bo == NULL) {
-				DRM_ERROR("VSP: failed to find %x bo\n",
-					cur_cmd->reserved6);
-				ret = -1;
-				goto out;
-			}
-
 			vp8_pic_num++;
 			VSP_DEBUG("find pic param buffer: id %x, offset %lx\n",
 				cur_cmd->reserved7, pic_bo_vp8->offset);
@@ -772,7 +693,7 @@ static int vsp_prehandle_command(struct drm_file *priv,
 	} else if (vp8_pic_num > 0) {
 		ret = vsp_fence_vp8enc_surfaces(priv, validate_list,
 					fence_type, arg,
-					fence_arg, pic_bo_vp8, coded_buf_bo);
+					fence_arg, pic_bo_vp8);
 	} else {
 		/* unreserve these buffer */
 		list_for_each_entry_safe(pos, next, validate_list, head) {
@@ -938,8 +859,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 				uint32_t fence_type,
 				struct drm_psb_cmdbuf_arg *arg,
 				struct psb_ttm_fence_rep *fence_arg,
-				struct ttm_buffer_object *pic_param_bo,
-				struct ttm_buffer_object *coded_buf_bo)
+				struct ttm_buffer_object *pic_param_bo)
 {
 	bool is_iomem;
 	int ret = 0;
@@ -950,6 +870,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	struct ttm_bo_kmap_obj vp8_encode_frame__kmap;
+	int vp8_id = 0;
 
 	INIT_LIST_HEAD(&surf_list);
 
@@ -980,27 +901,6 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 			pic_param->encoded_frame_base);
 
 	vsp_priv->vp8_encode_frame_cmd = (void *)pic_param;
-
-	if (vsp_priv->coded_buf != NULL) {
-		ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
-		ttm_bo_unref(&vsp_priv->coded_buf_bo);
-		vsp_priv->coded_buf = NULL;
-	}
-	/* map coded buffer */
-	ret = ttm_bo_kmap(coded_buf_bo, 0, coded_buf_bo->num_pages,
-			  &vsp_priv->coded_buf_kmap);
-	if (ret) {
-		DRM_ERROR("VSP: ttm_bo_kmap failed: %d\n", ret);
-		ttm_bo_unref(&coded_buf_bo);
-		goto out;
-	}
-
-	vsp_priv->coded_buf_bo = coded_buf_bo;
-	vsp_priv->coded_buf = (void *)
-		ttm_kmap_obj_virtual(
-				&vsp_priv->coded_buf_kmap,
-				&is_iomem);
-
 
 	/* just fence pic param if this is not end command */
 	/* only send last output fence_arg back */
@@ -1171,7 +1071,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		} else {
 			VSP_DEBUG("support dual VP8 encoding at most\n");
 		}
-		
+
 		vsp_priv->ctrl->cmd_wr =
 			(vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
 
@@ -1182,12 +1082,6 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 
 		if (count == 20000) {
 			DRM_ERROR("Failed to handle sigint event\n");
-		}
-
-		if (vsp_priv->coded_buf != NULL) {
-			ttm_bo_kunmap(&vsp_priv->coded_buf_kmap);
-			ttm_bo_unref(&vsp_priv->coded_buf_bo);
-			vsp_priv->coded_buf = NULL;
 		}
 
 		vsp_priv->context_vp8_num--;
