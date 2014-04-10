@@ -299,6 +299,8 @@ static struct data_rate_divider_selector_list_t
 #define TX_SWINGS_5     0x0690
 #define TX_SWINGS_6     0x822C
 #define TX_SWINGS_7     0x8224
+#define TX_GROUP_1      0x82AC
+#define TX_GROUP_2      0x82B8
 
 #define DPLL_IOSF_EP 0x13
 
@@ -446,7 +448,7 @@ static void __ips_hdmi_set_program_dpll(int n, int p1, int p2, int m1, int m2)
 	gunit_iosf_write32(DPLL_IOSF_EP, PLLB_DWORD8, tmp & 0x00FFFFFF);
 
 	/* Enable Tx for periodic GRC update*/
-	gunit_iosf_write32(DPLL_IOSF_EP, DPLL_Tx_GRC, 0x0100000F);
+	gunit_iosf_write32(DPLL_IOSF_EP, DPLL_Tx_GRC, 0x00004000);
 
 	/* GRC cal clock set to 19.2MHZ */
 	gunit_iosf_write32(DPLL_IOSF_EP, REF_DWORD18, 0x30002400);
@@ -455,6 +457,12 @@ static void __ips_hdmi_set_program_dpll(int n, int p1, int p2, int m1, int m2)
 	 * Disable fast lock.
 	 */
 	gunit_iosf_write32(DPLL_IOSF_EP, CMN_DWORD8, 0x0);
+
+	/* Stagger Programming */
+	gunit_iosf_write32(DPLL_IOSF_EP, TX_GROUP_1, 0x00001500);
+	gunit_iosf_write32(DPLL_IOSF_EP, TX_GROUP_2, 0x40400000);
+	gunit_iosf_write32(DPLL_IOSF_EP, PCS_DWORD12_1, 0x00220F00);
+	gunit_iosf_write32(DPLL_IOSF_EP, PCS_DWORD12_2, 0x00750F00);
 
 	/* Set divisors*/
 	gunit_iosf_write32(DPLL_IOSF_EP, PLLA_DWORD3_1, div);
@@ -487,17 +495,13 @@ static void __ips_hdmi_set_program_dpll(int n, int p1, int p2, int m1, int m2)
 
 	/* Swing settings */
 	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_1, 0x00000000);
-	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_2, 0x2B407055);
-	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_3, 0x55A0983A);
+	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_2, 0x2B245555);
+	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_3, 0x5578B83A);
 	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_4, 0x0C782040);
-	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_5, 0x2B247878);
+	//gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_5, 0x2B247878);
 	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_6, 0x00030000);
 	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_7, 0x00004000);
 	gunit_iosf_write32(DPLL_IOSF_EP, TX_SWINGS_1, 0x80000000);
-
-	/* Stagger Programming */
-	gunit_iosf_write32(DPLL_IOSF_EP, PCS_DWORD12_1, 0x00401F00);
-	gunit_iosf_write32(DPLL_IOSF_EP, PCS_DWORD12_2, 0x00451F00);
 
 	/* Wait until DPLL is locked */
 	ret = hdmi_read32(IPS_DPLL_B);
