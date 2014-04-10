@@ -844,7 +844,7 @@ IMG_VOID IMG_CALLCONV SCPDumpStatus(SCP_CONTEXT *psContext)
 	OSLockAcquire(psContext->hLock);
 
 	PVR_LOG(("Pending command:"));
-	if (psContext->ui32DepOffset == psContext->ui32ReadOffset)
+	if (psContext->ui32DepOffset == psContext->ui32WriteOffset)
 	{
 		PVR_LOG(("\tNone"));
 	}

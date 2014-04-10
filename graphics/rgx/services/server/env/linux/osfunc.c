@@ -93,7 +93,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "syscommon.h"
 #endif
 
-#if defined(EMULATOR)
+#if defined(EMULATOR) || defined(VIRTUAL_PLATFORM)
 #define EVENT_OBJECT_TIMEOUT_MS		(2000)
 #else
 #define EVENT_OBJECT_TIMEOUT_MS		(100)

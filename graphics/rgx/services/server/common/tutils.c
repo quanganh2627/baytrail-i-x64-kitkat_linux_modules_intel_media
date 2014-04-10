@@ -68,6 +68,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "pvr_debug.h"
 #include "srvkm.h"
+#include "power.h"
 
 #include "allocmem.h"
 #include "osfunc.h"
@@ -1106,6 +1107,87 @@ static PVRSRV_ERROR  TLTestCMD_StreamOpen(PVR_TL_TEST_CMD_STREAM_NAME_IN *psIn1)
 	PVR_DPF_RETURN_RC(eError);
 }
 
+static PVRSRV_ERROR TLTestCMD_SetPwrState(IMG_UINT32 *uiIn1)
+{
+	PVRSRV_ERROR eError;
+
+	eError = PVRSRVPowerLock();
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"TLTestCMD_SetPwrState: Failed to acquire power lock"));
+		return eError;
+	}
+
+	if (*uiIn1 == PVR_TL_TEST_PWR_STATE_ON)
+	{
+		PVR_DPF((PVR_DBG_MESSAGE, "TLTestCMD_SetPwrState: Turning GPU Power ON."));
+		eError = PVRSRVSetDevicePowerStateKM(0,
+											 PVRSRV_DEV_POWER_STATE_ON,
+											 IMG_TRUE);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR,"TLTestCMD_SetPwrState: Failed to set power state."));
+			return eError;
+		}
+	}
+	else
+	{
+		PVR_DPF((PVR_DBG_MESSAGE, "TLTestCMD_SetPwrState: Turning GPU Power OFF."));
+		eError = PVRSRVSetDevicePowerStateKM(0,
+											 PVRSRV_DEV_POWER_STATE_OFF,
+											 IMG_TRUE);
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR,"TLTestCMD_SetPwrState: Failed to set power state."));
+			return eError;
+		}
+	}
+
+	PVRSRVPowerUnlock();
+
+	return PVRSRV_OK;
+}
+
+static PVRSRV_ERROR TLTestCMD_GetPwrState(IMG_UINT32 *puiOut1)
+{
+	PVRSRV_DEV_POWER_STATE ePwrState;
+	PVRSRV_ERROR eError;
+
+	eError = PVRSRVPowerLock();
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"TLTestCMD_GetPwrState: Failed to acquire power lock"));
+		return eError;
+	}
+
+	PVRSRVGetDevicePowerState(0, &ePwrState);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR,"TLTestCMD_GetPwrState: Could not obtain power state."));
+		return eError;
+	}
+
+	PVRSRVPowerUnlock();
+
+	*puiOut1 = ePwrState;
+
+	return PVRSRV_OK;
+}
+
+static PVRSRV_ERROR TLTestCMD_SetDwtWakeupCounter(IMG_UINT32 *uiIn1)
+{
+	PVRSRVGetPVRSRVData()->ui32DevicesWdWakeupCounter = *uiIn1;
+
+	return PVRSRV_OK;
+}
+
+static PVRSRV_ERROR TLTestCMD_GetDwtWakeupCounter(IMG_UINT32 *puiOut1)
+{
+	*puiOut1 = PVRSRVGetPVRSRVData()->ui32DevicesWdWakeupCounter;
+
+	return PVRSRV_OK;
+}
+
 PVRSRV_ERROR
 TLServerTestIoctlKM(IMG_UINT32 	uiCmd,
 					IMG_PBYTE 	uiIn1,
@@ -1191,6 +1273,22 @@ TLServerTestIoctlKM(IMG_UINT32 	uiCmd,
 	case PVR_TL_TEST_CMD_DUMP_PDUMP_STATE:
 		eError = TLTestCMD_DumpPDumpState();
 		PVR_LOG_IF_ERROR(eError, "TLTestCMD_DumpPDumpState");
+		break;
+
+	case PVR_TL_TEST_CMD_SET_PWR_STATE:
+		eError = TLTestCMD_SetPwrState((IMG_UINT32*)uiIn1);
+		break;
+
+	case PVR_TL_TEST_CMD_GET_PWR_STATE:
+		eError = TLTestCMD_GetPwrState(puiOut1);
+		break;
+
+	case PVR_TL_TEST_CMD_SET_DWT_PWR_CHANGE_COUNTER:
+		eError = TLTestCMD_SetDwtWakeupCounter((IMG_UINT32*)uiIn1);
+		break;
+
+	case PVR_TL_TEST_CMD_GET_DWT_PWR_CHANGE_COUNTER:
+		eError = TLTestCMD_GetDwtWakeupCounter(puiOut1);
 		break;
 
 	default:

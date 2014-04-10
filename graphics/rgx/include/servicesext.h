@@ -166,7 +166,7 @@ typedef enum _PVRSRV_ROTATION_ {
 	PVRSRV_ROTATE_90	=	1,  /*!< Rotate by 90 degrees */
 	PVRSRV_ROTATE_180	=	2,  /*!< Rotate by 180 degrees */
 	PVRSRV_ROTATE_270	=	3,  /*!< Rotate by 270 degrees */
-	PVRSRV_FLIP_Y
+	PVRSRV_FLIP_Y		=	4,  /*!< Flip in Y axis */
 
 } PVRSRV_ROTATION;
 

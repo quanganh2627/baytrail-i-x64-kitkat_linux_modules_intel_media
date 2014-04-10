@@ -2378,16 +2378,14 @@ IMG_VOID RGXScheduleProcessQueuesKM(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle)
 ******************************************************************************/
 static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 {
-	PVRSRV_DEVICE_NODE	   *psDeviceNode = (PVRSRV_DEVICE_NODE*) pvData;
-	PVRSRV_RGXDEV_INFO	   *psDevInfo = psDeviceNode->pvDevice;
+	PVRSRV_DEVICE_NODE     *psDeviceNode = (PVRSRV_DEVICE_NODE*) pvData;
+	PVRSRV_RGXDEV_INFO     *psDevInfo = psDeviceNode->pvDevice;
 	RGXFWIF_DM			   eDM;
 	PVRSRV_ERROR		   eError;
-	RGXFWIF_GPU_UTIL_FWCB  *psUtilFWCb = psDevInfo->psRGXFWIfGpuUtilFWCb;
-	IMG_UINT64			   ui64FWCbEntryCurrent;
-	IMG_BOOL			   bGPUHasWorkWaiting;
 	PVRSRV_DEV_POWER_STATE ePowerState;
 
-	/* Ensure RGX is powered up before kicking MTS */
+	/* We don't need to acquire the BridgeLock as this power transition won't
+	   send a command to the FW */
 	eError = PVRSRVPowerLock();
 	if (eError != PVRSRV_OK) 
 	{
@@ -2397,20 +2395,27 @@ static IMG_VOID _RGXScheduleProcessQueuesMISR(IMG_VOID *pvData)
 		return;
 	}
 
-	ui64FWCbEntryCurrent = psUtilFWCb->aui64CB[(psUtilFWCb->ui32WriteOffset - 1) & RGXFWIF_GPU_UTIL_FWCB_MASK];
-	bGPUHasWorkWaiting = (RGXFWIF_GPU_UTIL_FWCB_ENTRY_STATE(ui64FWCbEntryCurrent) == RGXFWIF_GPU_UTIL_FWCB_STATE_BLOCKED);
-
+	/* Check whether it's worth waking up the GPU */
 	eError = PVRSRVGetDevicePowerState(psDeviceNode->sDevId.ui32DeviceIndex, &ePowerState);
 
-	/* Check whether it's worth waking up the GPU */
-	if ((eError == PVRSRV_OK) && (ePowerState == PVRSRV_DEV_POWER_STATE_OFF) && !bGPUHasWorkWaiting)
+	if ((eError == PVRSRV_OK) && (ePowerState == PVRSRV_DEV_POWER_STATE_OFF))
 	{
-		PVRSRVPowerUnlock();
-		return;
+		RGXFWIF_GPU_UTIL_FWCB  *psUtilFWCb = psDevInfo->psRGXFWIfGpuUtilFWCb;
+		IMG_UINT64             ui64FWCbEntryCurrent;
+		IMG_BOOL               bGPUHasWorkWaiting;
+
+		ui64FWCbEntryCurrent = psUtilFWCb->aui64CB[(psUtilFWCb->ui32WriteOffset - 1) & RGXFWIF_GPU_UTIL_FWCB_MASK];
+		bGPUHasWorkWaiting = (RGXFWIF_GPU_UTIL_FWCB_ENTRY_STATE(ui64FWCbEntryCurrent) == RGXFWIF_GPU_UTIL_FWCB_STATE_BLOCKED);
+
+		if (!bGPUHasWorkWaiting)
+		{
+			/* all queues are empty, don't wake up the GPU */
+			PVRSRVPowerUnlock();
+			return;
+		}
 	}
 
-	/* We don't need to acquire the BridgeLock as this power transition won't
-	   send a command to the FW */
+	/* wake up the GPU */
 	eError = PVRSRVSetDevicePowerStateKM(psDeviceNode->sDevId.ui32DeviceIndex,
 										 PVRSRV_DEV_POWER_STATE_ON,
 										 IMG_FALSE);

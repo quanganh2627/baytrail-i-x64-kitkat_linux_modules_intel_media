@@ -93,6 +93,11 @@ typedef struct PVRSRV_DATA_TAG
 
 	IMG_HANDLE					hDevicesWatchdogThread;		/*!< Devices Watchdog thread */
 	IMG_HANDLE					hDevicesWatchdogEvObj;		/*! Event object to drive devices watchdog thread */
+	volatile IMG_UINT32			ui32DevicesWatchdogPwrTrans;/*! Number of off -> on power state transitions */
+	volatile IMG_UINT32			ui32DevicesWatchdogTimeout; /*! Timeout for the Devices Watchdog Thread */
+#ifdef PVR_TESTING_UTILS
+	volatile IMG_UINT32			ui32DevicesWdWakeupCounter;	/* Need this for the unit tests. */
+#endif
 
 	IMG_BOOL					bUnload;					/*!< Driver unload is in progress */
 } PVRSRV_DATA;

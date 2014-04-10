@@ -86,6 +86,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 /*! Sleep time (1h) for Devices Watchdog thread when GPU is in power off state */
 #define DEVICES_WATCHDOG_POWER_OFF_SLEEP_TIMEOUT 60 * 60 * 1000
 
+#define DEVICES_WATCHDOG_POWER_ON_SLEEP_TIMEOUT  (10000)
 
 typedef struct DEBUG_REQUEST_ENTRY_TAG
 {
@@ -407,43 +408,34 @@ static IMG_VOID CleanupThread(IMG_PVOID pvData)
 
 static IMG_VOID DevicesWatchdogThread(IMG_PVOID pvData)
 {
-	PVRSRV_DATA  *psPVRSRVData = pvData;
-        IMG_HANDLE hOSEvent;
-        PVRSRV_ERROR  eError;
+	PVRSRV_DATA *psPVRSRVData = pvData;
+	PVRSRV_DEVICE_HEALTH_STATUS ePreviousHealthStatus = PVRSRV_DEVICE_HEALTH_STATUS_OK;
+	IMG_HANDLE hOSEvent;
+	PVRSRV_ERROR  eError;
+	IMG_UINT32 ui32Timeout = DEVICES_WATCHDOG_POWER_ON_SLEEP_TIMEOUT;
+	PVRSRV_DEV_POWER_STATE ePowerState;
 
-        /* Open an event on the devices watchdog event object so we can listen on it
-          and abort the devices watchdog thread. */
-        eError = OSEventObjectOpen(psPVRSRVData->hDevicesWatchdogEvObj, &hOSEvent);
-        PVR_LOGRN_IF_ERROR(eError, "OSEventObjectOpen");
+	PVR_DPF((PVR_DBG_MESSAGE, "DevicesWatchdogThread: Power off sleep time: %d.",
+			DEVICES_WATCHDOG_POWER_OFF_SLEEP_TIMEOUT));
 
-        /* Loop continuously checking the device status every few seconds. */
+	/* Open an event on the devices watchdog event object so we can listen on it
+	   and abort the devices watchdog thread. */
+	eError = OSEventObjectOpen(psPVRSRVData->hDevicesWatchdogEvObj, &hOSEvent);
+	PVR_LOGRN_IF_ERROR(eError, "OSEventObjectOpen");
+
+	/* Loop continuously checking the device status every few seconds. */
 	while (!psPVRSRVData->bUnload)
 	{
-		IMG_UINT32    i;
+		IMG_UINT32 i;
 		IMG_BOOL bPwrIsOn = IMG_FALSE;
 
-		/* Check if at lease one of the devices is on. */
-		for (i = 0; i < psPVRSRVData->ui32RegisteredDevices; i++)
-		{
-			PVRSRV_DEVICE_NODE* psDeviceNode = psPVRSRVData->apsRegisteredDevNodes[i];
-			if (PVRSRVIsDevicePowered(psDeviceNode->sDevId.ui32DeviceIndex))
-			{
-				bPwrIsOn = IMG_TRUE;
-			}
-		}
+		/* Wait time between polls (done at the start of the loop to allow devices
+		   to initialise) or for the event signal (shutdown or power on). */
+		eError = OSEventObjectWaitTimeout(hOSEvent, ui32Timeout);
 
-		if (bPwrIsOn)
-		{
-			/* Wait time between polls (done at the start of the loop to allow devices
-			   to initialise) or for the event signal. */
-			eError = OSEventObjectWaitTimeout(hOSEvent, FATAL_ERROR_DETECTION_POLL_MS);
-		}
-		else
-		{
-			PVR_DPF((PVR_DBG_MESSAGE, "DevicesWatchdogThread: GPU off. Going to sleep."));
-			eError = OSEventObjectWaitTimeout(hOSEvent, DEVICES_WATCHDOG_POWER_OFF_SLEEP_TIMEOUT);
-		}
-
+#ifdef PVR_TESTING_UTILS
+		psPVRSRVData->ui32DevicesWdWakeupCounter++;
+#endif
 		if (eError == PVRSRV_OK)
 		{
 			if (psPVRSRVData->bUnload)
@@ -463,17 +455,47 @@ static IMG_VOID DevicesWatchdogThread(IMG_PVOID pvData)
 					"Error (%d) when waiting for event!", eError));
 		}
 
+		eError = PVRSRVPowerLock();
+		if (eError != PVRSRV_OK)
+		{
+			PVR_DPF((PVR_DBG_ERROR,"DevicesWatchdogThread: Failed to acquire power lock"));
+		}
+		else
+		{
+			/* Check if at lease one of the devices is on. */
+			for (i = 0; i < psPVRSRVData->ui32RegisteredDevices && !bPwrIsOn; i++)
+			{
+				if (PVRSRVGetDevicePowerState(i, &ePowerState) == PVRSRV_OK)
+				{
+					bPwrIsOn = ePowerState == PVRSRV_DEV_POWER_STATE_ON;
+					break;
+				}
+			}
+
+			if (bPwrIsOn || psPVRSRVData->ui32DevicesWatchdogPwrTrans)
+			{
+				psPVRSRVData->ui32DevicesWatchdogPwrTrans = 0;
+				ui32Timeout = psPVRSRVData->ui32DevicesWatchdogTimeout = DEVICES_WATCHDOG_POWER_ON_SLEEP_TIMEOUT;
+			}
+			else
+			{
+				ui32Timeout = psPVRSRVData->ui32DevicesWatchdogTimeout = DEVICES_WATCHDOG_POWER_OFF_SLEEP_TIMEOUT;
+			}
+
+			PVRSRVPowerUnlock();
+		}
+
 		for (i = 0;  i < psPVRSRVData->ui32RegisteredDevices; i++)
 		{
-			PVRSRV_DEVICE_NODE*  psDeviceNode = psPVRSRVData->apsRegisteredDevNodes[i];
-			PVRSRV_RGXDEV_INFO* psDevInfo = (PVRSRV_RGXDEV_INFO*)psDeviceNode->pvDevice;
+			PVRSRV_DEVICE_NODE* psDeviceNode = psPVRSRVData->apsRegisteredDevNodes[i];
+			PVRSRV_RGXDEV_INFO* psDevInfo = (PVRSRV_RGXDEV_INFO*) psDeviceNode->pvDevice;
 			
 			if (psDeviceNode->pfnUpdateHealthStatus != IMG_NULL)
 			{
 				eError = psDeviceNode->pfnUpdateHealthStatus(psDeviceNode, IMG_TRUE);
 				if (eError != PVRSRV_OK)
 				{
-						PVR_DPF((PVR_DBG_WARNING, "DevicesWatchdogThread: "
+					PVR_DPF((PVR_DBG_WARNING, "DevicesWatchdogThread: "
 							"Could not check for fatal error (%d)!",
 							eError));
 				}
@@ -481,8 +503,17 @@ static IMG_VOID DevicesWatchdogThread(IMG_PVOID pvData)
 
 			if (psDeviceNode->eHealthStatus != PVRSRV_DEVICE_HEALTH_STATUS_OK)
 			{
-				PVR_DPF((PVR_DBG_ERROR, "FatalErrorDetectionThread: Fatal Error Detected!!!"));
+				if (psDeviceNode->eHealthStatus != ePreviousHealthStatus)
+				{
+					if (!(psDevInfo->ui32DeviceFlags & RGXKM_DEVICE_STATE_DISABLE_DW_LOGGING_EN))
+					{
+						PVR_DPF((PVR_DBG_ERROR, "DevicesWatchdogThread: Device not responding!!!"));
+						PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX);
+					}
+				}
 			}
+			ePreviousHealthStatus = psDeviceNode->eHealthStatus;
+			
 			/* Attempt to service the HWPerf buffer to regularly transport 
 			 * idle / periodic packets to host buffer. */
 			if (psDeviceNode->pfnServiceHWPerf != IMG_NULL)
@@ -490,17 +521,17 @@ static IMG_VOID DevicesWatchdogThread(IMG_PVOID pvData)
 				eError = psDeviceNode->pfnServiceHWPerf(psDeviceNode);
 				if (eError != PVRSRV_OK)
 				{
-						PVR_DPF((PVR_DBG_WARNING, "DevicesWatchdogThread: "
+					PVR_DPF((PVR_DBG_WARNING, "DevicesWatchdogThread: "
 							"Error occurred when servicing HWPerf buffer (%d)",
 							eError));
 				}
 			}
 		}
 	}
+
 	eError = OSEventObjectClose(hOSEvent);
 	PVR_LOG_IF_ERROR(eError, "OSEventObjectClose");
 }
-
 
 PVRSRV_DATA *PVRSRVGetPVRSRVData()
 {

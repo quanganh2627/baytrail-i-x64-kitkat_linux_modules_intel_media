@@ -436,6 +436,7 @@ PVRSRV_ERROR PVRSRVDevicePostPowerStateKM(IMG_BOOL					bAllDevices,
 	return eError;
 }
 
+#define DEVICES_WATCHDOG_POWER_OFF_SLEEP_TIMEOUT (3600000)
 
 /*!
 ******************************************************************************
@@ -456,12 +457,16 @@ PVRSRV_ERROR PVRSRVSetDevicePowerStateKM(IMG_UINT32				ui32DeviceIndex,
 										 PVRSRV_DEV_POWER_STATE	eNewPowerState,
 										 IMG_BOOL				bForced)
 {
-        PVRSRV_DATA*    psPVRSRVData = PVRSRVGetPVRSRVData();
+	PVRSRV_DATA*    psPVRSRVData = PVRSRVGetPVRSRVData();
 	PVRSRV_ERROR	eError;
-        PVRSRV_DEV_POWER_STATE eOldPowerState;
+	PVRSRV_DEV_POWER_STATE eOldPowerState;
 
-        PVRSRVGetDevicePowerState(ui32DeviceIndex, &eOldPowerState);
-
+	eError = PVRSRVGetDevicePowerState(ui32DeviceIndex, &eOldPowerState);
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_WARNING, "PVRSRVSetDevicePowerStateKM: Couldn't read power state."));
+		eOldPowerState = PVRSRV_DEV_POWER_STATE_DEFAULT;
+	}
 
 	#if defined(PDUMP)
 	if (eNewPowerState == PVRSRV_DEV_POWER_STATE_DEFAULT)
@@ -508,12 +513,18 @@ PVRSRV_ERROR PVRSRVSetDevicePowerStateKM(IMG_UINT32				ui32DeviceIndex,
 	/* Signal Device Watchdog Thread about power mode change. */
 	if (eOldPowerState != eNewPowerState && eNewPowerState == PVRSRV_DEV_POWER_STATE_ON)
 	{
-		if (psPVRSRVData->hDevicesWatchdogThread && psPVRSRVData->hDevicesWatchdogEvObj)
+		psPVRSRVData->ui32DevicesWatchdogPwrTrans++;
+
+		if (psPVRSRVData->ui32DevicesWatchdogTimeout == DEVICES_WATCHDOG_POWER_OFF_SLEEP_TIMEOUT)
 		{
-			eError = OSEventObjectSignal(psPVRSRVData->hDevicesWatchdogEvObj);
-			PVR_LOG_IF_ERROR(eError, "OSEventObjectSignal");
+			if (psPVRSRVData->hDevicesWatchdogEvObj)
+			{
+				eError = OSEventObjectSignal(psPVRSRVData->hDevicesWatchdogEvObj);
+				PVR_LOG_IF_ERROR(eError, "OSEventObjectSignal");
+			}
 		}
 	}
+
 Exit:
 
 	if (eError == PVRSRV_ERROR_DEVICE_POWER_CHANGE_DENIED)
