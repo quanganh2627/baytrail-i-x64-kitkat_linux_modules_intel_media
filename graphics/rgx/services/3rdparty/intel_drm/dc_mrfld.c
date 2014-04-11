@@ -1690,8 +1690,13 @@ void DC_MRFLD_onPowerOff(uint32_t iPipe)
 
 	int i, j;
 	struct plane_state *pstate;
+	struct drm_psb_private *dev_priv;
 
 	if (!gpsDevice)
+		return;
+
+	dev_priv = gpsDevice->psDrmDevice->dev_private;
+	if (!dev_priv->um_start)
 		return;
 
 	for (i = 1; i < DC_PLANE_MAX; i++) {
@@ -1722,8 +1727,13 @@ void DC_MRFLD_onPowerOn(uint32_t iPipe)
 	 */
 	int i, j;
 	struct plane_state *pstate;
+	struct drm_psb_private *dev_priv;
 
 	if (!gpsDevice)
+		return;
+
+	dev_priv = gpsDevice->psDrmDevice->dev_private;
+	if (!dev_priv->um_start)
 		return;
 
 	/* keep primary on and flip to black screen */
