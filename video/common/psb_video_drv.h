@@ -192,6 +192,9 @@ extern int psb_mmu_virtual_to_pfn(struct psb_mmu_pd *pd, uint32_t virtual,
 int psb_ttm_bo_clflush(struct psb_mmu_driver *mmu,
 			struct ttm_buffer_object *bo);
 
+int tng_securefw(struct drm_device *dev, char *fw_basename, char *island_name, int imrl_reg);
+int tng_rawfw(struct drm_device *dev, uint8_t *name);
+
 
 /* Currently defined profiles */
 enum VAProfile {

@@ -21,6 +21,8 @@
 #define _FPGA_TOPAZ_H_
 
 #include "psb_drv.h"
+#include "tng_topaz_hw_reg.h"
+
 
 #define TOPAZ_MTX_REG_SIZE (34 * 4 + 183 * 4)
 

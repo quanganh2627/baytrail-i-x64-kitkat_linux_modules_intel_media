@@ -2085,7 +2085,6 @@ enum MTX_eWriteBackData {
 
 int tng_topaz_reset(struct drm_psb_private *dev_priv);
 int tng_topaz_init_fw(struct drm_device *dev);
-int tng_topaz_init_fw_chaabi(struct drm_device *dev);
 
 int tng_topaz_init_board(
 	struct drm_device *dev,
