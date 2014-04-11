@@ -1944,8 +1944,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	*/
 	dpst_init(dev, 5, 1);
 
-	if (!is_dual_dsi(dev))
-		mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
+	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:
