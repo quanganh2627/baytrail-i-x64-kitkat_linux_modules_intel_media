@@ -229,7 +229,7 @@ static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd)
 		freq_val = intel_mid_msgbus_read32(PUNIT_PORT, reg_freq);
 		if ((freq_val & IP_FREQ_VALID) == 0)
 			break;
-		if (tcount > 500) {
+		if (tcount > 1500) {
 			WARN(1, "%s: P-Unit freq request wait timeout",
 				__func__);
 			return -EBUSY;
