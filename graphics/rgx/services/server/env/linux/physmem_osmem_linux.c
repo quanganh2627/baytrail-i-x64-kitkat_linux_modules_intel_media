@@ -84,6 +84,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "osfunc.h"
 #endif
 
+/* Provide SHRINK_STOP definition for kernel older than 3.12 */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0))
+#define SHRINK_STOP (~0UL)
+#endif
+
 struct _PMR_OSPAGEARRAY_DATA_ {
     /*
       uiNumPages:
@@ -186,6 +191,12 @@ static struct kmem_cache *g_psLinuxPagePoolCache = IMG_NULL;
 static LIST_HEAD(g_sPagePoolList);
 static DEFINE_MUTEX(g_sPagePoolMutex);
 static LIST_HEAD(g_sUncachedPagePoolList);
+
+static inline int
+_PagePoolTrylock(void)
+{
+	return mutex_trylock(&g_sPagePoolMutex);
+}
 
 static inline void
 _PagePoolLock(void)
@@ -344,7 +355,9 @@ _CountObjectsInPagePool(struct shrinker *psShrinker, struct shrink_control *psSh
 	(void)psShrinker;
 	(void)psShrinkControl;
 
-	_PagePoolLock();
+	/* In order to avoid possible deadlock use mutex_trylock in place of mutex_lock */
+	if (_PagePoolTrylock() == 0)
+			return 0;
 	remain = g_ui32PagePoolEntryCount;
 	_PagePoolUnlock();
 
@@ -361,7 +374,9 @@ _ScanObjectsInPagePool(struct shrinker *psShrinker, struct shrink_control *psShr
 	PVR_ASSERT(psShrinker == &g_sShrinker);
 	(void)psShrinker;
 
-	_PagePoolLock();
+	/* In order to avoid possible deadlock use mutex_trylock in place of mutex_lock */
+	if (_PagePoolTrylock() == 0)
+			return SHRINK_STOP;
 	list_for_each_entry_safe(psPagePoolEntry, psTempPoolEntry, &g_sPagePoolList, sPagePoolItem)
 	{
 		_RemoveEntryFromPoolUnlocked(psPagePoolEntry);

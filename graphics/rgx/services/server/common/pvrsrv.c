@@ -462,7 +462,7 @@ static IMG_VOID DevicesWatchdogThread(IMG_PVOID pvData)
 		}
 		else
 		{
-			/* Check if at lease one of the devices is on. */
+			/* Check if at least one of the devices is on. */
 			for (i = 0; i < psPVRSRVData->ui32RegisteredDevices && !bPwrIsOn; i++)
 			{
 				if (PVRSRVGetDevicePowerState(i, &ePowerState) == PVRSRV_OK)
