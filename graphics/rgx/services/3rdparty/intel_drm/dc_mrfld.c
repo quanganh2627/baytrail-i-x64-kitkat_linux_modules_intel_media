@@ -268,6 +268,22 @@ void display_power_work(struct work_struct *work)
 	kfree(req);
 }
 
+static void free_flip(DC_MRFLD_FLIP *psFlip)
+{
+	int i;
+	struct flip_plane *tmp, *plane;
+
+	for (i = 0; i < MAX_PIPE_NUM; i++) {
+		list_for_each_entry_safe(plane, tmp,
+				&psFlip->asPipeInfo[i].flip_planes, list) {
+			list_del(&plane->list);
+			kfree(plane);
+		}
+	}
+
+	kfree(psFlip);
+}
+
 static void disable_plane(struct plane_state *pstate)
 {
 	int type = pstate->type;
@@ -381,6 +397,45 @@ static void disable_unused_planes(int pipe)
 	}
 }
 
+static void free_flip_states_on_pipe(struct drm_device *psDrmDev, int pipe)
+{
+	struct list_head *psFlipQueue;
+	DC_MRFLD_FLIP *psFlip, *psTmp;
+	IMG_UINT32 eFlipState;
+	IMG_BOOL bActivePipe;
+
+	if (pipe != DC_PIPE_A && pipe != DC_PIPE_B)
+		return IMG_NULL;
+
+	psFlipQueue = &gpsDevice->sFlipQueues[pipe];
+
+	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[pipe])
+	{
+		eFlipState = psFlip->eFlipStates[pipe];
+
+		if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
+			/* done with this flip item, disable vsync now*/
+			DCCBDisableVSyncInterrupt(psDrmDev, pipe);
+
+			if (pipe != DC_PIPE_B)
+				DCCBDsrAllow(psDrmDev, pipe);
+		}
+
+		/*remove this entry from flip queue, decrease refCount*/
+		list_del(&psFlip->sFlips[pipe]);
+
+		if ((psFlip->uiRefCount>0) && !(--psFlip->uiRefCount)) {
+			/*retire all buffers possessed by this flip*/
+			DCDisplayConfigurationRetired(
+					psFlip->hConfigData);
+			/* free it */
+			free_flip(psFlip);
+		}
+	}
+
+	return IMG_NULL;
+}
+
 static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 {
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom = NULL;
@@ -478,6 +533,8 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	disable_unused_planes(iPipe);
 
 	psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DC_UPDATED;
+	psFlip->uiVblankCounters[iPipe] =
+			drm_vblank_count(gpsDevice->psDrmDevice, iPipe);
 
 	bUpdated = IMG_TRUE;
 err_out:
@@ -543,22 +600,6 @@ static bool _Can_Flip(int iPipe)
 		DRM_ERROR("num of updated buffers is %d\n", num_updated);
 	}
 	return ret;
-}
-
-static void free_flip(DC_MRFLD_FLIP *psFlip)
-{
-	int i;
-	struct flip_plane *tmp, *plane;
-
-	for (i = 0; i < MAX_PIPE_NUM; i++) {
-		list_for_each_entry_safe(plane, tmp,
-				&psFlip->asPipeInfo[i].flip_planes, list) {
-			list_del(&plane->list);
-			kfree(plane);
-		}
-	}
-
-	kfree(psFlip);
 }
 
 static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
@@ -697,6 +738,19 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 			INIT_LIST_HEAD(&psFlip->sFlips[i]);
 			list_add_tail(&psFlip->sFlips[i],
 					&gpsDevice->sFlipQueues[i]);
+		} else if (!psFlip->bActivePipes[i] && gpsDevice->bFlipEnabled[i]) {
+			/* give a chance to disable planes on inactive pipe */
+			clear_plane_flip_state(i);
+			disable_unused_planes(i);
+
+			/*
+			 * NOTE:To inactive pipe, need to free the attached
+			 * flipStates on FlipQueue; otherwise, as all pipes
+			 * share same Flip item, other active pipes will be
+			 * blocked by this pipe and no chance to get buffer
+			 * retired.
+			 */
+			free_flip_states_on_pipe(gpsDevice->psDrmDevice, i);
 		}
 	}
 
@@ -715,6 +769,9 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 
 		/* Issue "write_mem_start" for command mode panel. */
 		DCCBUpdateDbiPanel(gpsDevice->psDrmDevice, DC_PIPE_A);
+		if (psFlip)
+			psFlip->uiVblankCounters[DC_PIPE_A] =
+				drm_vblank_count(gpsDevice->psDrmDevice, DC_PIPE_A);
 	}
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
@@ -742,6 +799,7 @@ static void _Queue_Flip(IMG_HANDLE hConfigData, IMG_HANDLE *ahBuffers,
 	/*set flip state as queued*/
 	for (i = 0; i < MAX_PIPE_NUM; i++) {
 		psFlip->eFlipStates[i] = DC_MRFLD_FLIP_QUEUED;
+		psFlip->bActivePipes[i] = IMG_FALSE;
 		INIT_LIST_HEAD(&psFlip->asPipeInfo[i].flip_planes);
 	}
 
@@ -775,6 +833,8 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 	IMG_UINT32 eFlipState;
 	int i, j;
 	struct plane_state *pstate;
+	IMG_UINT32 uiVblankCounter;
+	IMG_BOOL bNewFlipUpdated = IMG_FALSE;
 
 	if (!gpsDevice)
 		return IMG_TRUE;
@@ -801,29 +861,49 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 	 *    displaying buffer was dequeued by a client and being rendered
 	 *    then tearing might happen on the screen.
 	 */
+	uiVblankCounter	= drm_vblank_count(psDrmDev, iPipe);
+
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
 	{
+		/* Only when new flip updated and TE/VBLANK comes after
+		 * that flip indicates the new flip takes effects on screen.
+		 */
 		eFlipState = psFlip->eFlipStates[iPipe];
-		if (eFlipState == DC_MRFLD_FLIP_DISPLAYED) {
-			/* done with this flip item, disable vsync now*/
-			DCCBDisableVSyncInterrupt(psDrmDev, iPipe);
 
-			if (iPipe != DC_PIPE_B)
-				DCCBDsrAllow(psDrmDev, iPipe);
-
-			/*remove this entry from flip queue, decrease refCount*/
-			list_del(&psFlip->sFlips[iPipe]);
-
-			if (!(--psFlip->uiRefCount)) {
-				/*retire all buffers possessed by this flip*/
-				DCDisplayConfigurationRetired(
-						psFlip->hConfigData);
-				/* free it */
-				free_flip(psFlip);
-			}
-		} else if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
-			psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DISPLAYED;
+		if ((eFlipState == DC_MRFLD_FLIP_DC_UPDATED) &&
+		    (uiVblankCounter > psFlip->uiVblankCounters[iPipe])) {
+			bNewFlipUpdated = IMG_TRUE;
 			break;
+		}
+	}
+
+	/* if new flip updated on pipe, give a chance to retire */
+	if (bNewFlipUpdated) {
+		list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
+		{
+			eFlipState = psFlip->eFlipStates[iPipe];
+			if (eFlipState == DC_MRFLD_FLIP_DISPLAYED) {
+				/*remove this entry from flip queue, decrease refCount*/
+				list_del(&psFlip->sFlips[iPipe]);
+
+				if (!(--psFlip->uiRefCount)) {
+					/*retire all buffers possessed by this flip*/
+					DCDisplayConfigurationRetired(
+							psFlip->hConfigData);
+					/* free it */
+					free_flip(psFlip);
+				}
+			} else if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
+
+				psFlip->eFlipStates[iPipe] = DC_MRFLD_FLIP_DISPLAYED;
+
+				/* done with this flip item, disable vsync now*/
+				DCCBDisableVSyncInterrupt(psDrmDev, iPipe);
+
+				if (iPipe != DC_PIPE_B)
+					DCCBDsrAllow(psDrmDev, iPipe);
+				break;
+			}
 		}
 	}
 
@@ -1658,7 +1738,7 @@ void DCUnAttachPipe(uint32_t iPipe)
 	/* complete the flips*/
 	list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe]) {
 
-		if (psFlip->eFlipStates[iPipe] != DC_MRFLD_FLIP_QUEUED) {
+		if (psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_DC_UPDATED) {
 			/* Put pipe's vsync which has been enabled. */
 			DCCBDisableVSyncInterrupt(gpsDevice->psDrmDevice, iPipe);
 

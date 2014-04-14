@@ -156,6 +156,7 @@ enum DC_MRFLD_FLIP_STATUS {
 typedef struct {
 	struct list_head sFlips[MAX_PIPE_NUM];
 	IMG_UINT32 eFlipStates[MAX_PIPE_NUM];
+	IMG_UINT32 uiVblankCounters[MAX_PIPE_NUM];
 	struct DC_MRFLD_PIPE_INFO asPipeInfo[MAX_PIPE_NUM];
 	IMG_BOOL bActivePipes[MAX_PIPE_NUM];
 	IMG_UINT32 uiNumBuffers;
