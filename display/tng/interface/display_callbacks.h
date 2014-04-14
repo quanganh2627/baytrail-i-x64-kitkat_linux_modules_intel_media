@@ -76,6 +76,8 @@ int DCCBgttMapMemory(struct drm_device *dev,
 		     unsigned int ui32PagesNum, unsigned int *ui32Offset);
 int DCCBgttUnmapMemory(struct drm_device *dev,
 		       unsigned int hHandle, unsigned int ui32TaskId);
+int DCCBgttCleanupMemoryOnTask(struct drm_device *dev,
+				unsigned int ui32TaskId);
 bool DCChangeSwapChainProperty(unsigned long *psSwapChainGTTOffset,
 			int pipe);
 u32 DCCBGetPipeCount(void);

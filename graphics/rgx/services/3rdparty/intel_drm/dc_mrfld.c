@@ -127,6 +127,17 @@ static IMG_BOOL _Is_Valid_DC_Buffer(DC_BUFFER_IMPORT_INFO *psBufferInfo)
 }
 #endif /* if KEEP_UNUSED_CODE */
 
+static IMG_BOOL _Is_Task_KThread()
+{
+	/* skip task from user space and work queue */
+	if (((current->flags & PF_NO_SETAFFINITY) == 0)
+	    && ((current->flags & PF_WQ_WORKER) == 0)
+	    && ((current->flags & PF_KTHREAD) != 0))
+		return IMG_TRUE;
+	else
+		return IMG_FALSE;
+}
+
 static void _Update_PlanePipeMapping(DC_MRFLD_DEVICE *psDevice,
 					IMG_UINT32 uiType,
 					IMG_UINT32 uiIndex,
@@ -1460,6 +1471,14 @@ static IMG_VOID DC_MRFLD_BufferFree(IMG_HANDLE hBuffer)
 				psBuffer->ui32OwnerTaskID);
 		kfree(psBuffer->psSysAddr);
 		vfree(psBuffer->sCPUVAddr);
+	}
+
+	if (psBuffer->eSource == DCMrfldEX_BUFFER_SOURCE_IMPORT &&
+	    _Is_Task_KThread()) {
+		DRM_DEBUG("owner task id: %d\n", psBuffer->ui32OwnerTaskID);
+		/* KThread is triggered to clean up gtt */
+		DCCBgttCleanupMemoryOnTask(psDrmDev,
+					psBuffer->ui32OwnerTaskID);
 	}
 
 	kfree(psBuffer);

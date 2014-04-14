@@ -1186,6 +1186,146 @@ static u32 gtt_get_tgid(void)
 	return task_tgid_nr(current);
 }
 
+static int
+psb_gtt_mm_get_mem_mapping_anyused_locked(struct drm_open_hash *ht,
+				  struct psb_gtt_mem_mapping **hentry)
+{
+	struct drm_hash_item *entry;
+	struct psb_gtt_mem_mapping *mapping;
+	int ret;
+
+	ret = drm_ht_find_item_anyused(ht, &entry);
+	if (ret) {
+		DRM_DEBUG("Cannot find\n");
+		return ret;
+	}
+
+	mapping =  container_of(entry, struct psb_gtt_mem_mapping, item);
+	if (!mapping) {
+		DRM_DEBUG("Invalid entry\n");
+		return -EINVAL;
+	}
+
+	*hentry = mapping;
+	return 0;
+}
+
+static struct psb_gtt_mem_mapping *
+psb_gtt_mm_remove_mem_mapping_anyused_locked(struct drm_open_hash *ht) {
+	struct psb_gtt_mem_mapping *tmp;
+	struct psb_gtt_hash_entry *entry;
+	int ret;
+
+	if (!ht) {
+		DRM_DEBUG("hash table is NULL\n");
+		return NULL;
+	}
+
+	ret = psb_gtt_mm_get_mem_mapping_anyused_locked(ht, &tmp);
+	if (ret) {
+		DRM_DEBUG("Cannot find any used\n");
+		return NULL;
+	}
+
+	drm_ht_remove_item(ht, &tmp->item);
+
+	entry = container_of(ht, struct psb_gtt_hash_entry, ht);
+	if (entry)
+		entry->count--;
+
+	return tmp;
+}
+
+static int psb_gtt_mm_remove_free_mem_mapping_anyused_locked
+	(struct drm_open_hash *ht,
+	struct drm_mm_node **node)
+{
+	struct psb_gtt_mem_mapping *entry;
+
+	entry = psb_gtt_mm_remove_mem_mapping_anyused_locked(ht);
+	if (!entry) {
+		DRM_DEBUG("entry is NULL\n");
+		return -EINVAL;
+	}
+
+	*node = entry->node;
+
+	kfree(entry);
+	return 0;
+}
+
+static int psb_gtt_remove_node_anyused(struct psb_gtt_mm *mm,
+			       u32 tgid,
+			       struct drm_mm_node **node)
+{
+	struct psb_gtt_hash_entry *hentry;
+	struct drm_mm_node *tmp;
+	int ret;
+
+	spin_lock(&mm->lock);
+	ret = psb_gtt_mm_get_ht_by_pid_locked(mm, tgid, &hentry);
+	if (ret) {
+		spin_unlock(&mm->lock);
+		return ret;
+	}
+	spin_unlock(&mm->lock);
+
+	/*remove mapping entry*/
+	spin_lock(&mm->lock);
+	ret = psb_gtt_mm_remove_free_mem_mapping_anyused_locked(&hentry->ht,
+			&tmp);
+	if (ret) {
+		DRM_DEBUG("remove_free failed\n");
+		spin_unlock(&mm->lock);
+		return ret;
+	}
+
+	*node = tmp;
+
+	/*check the count of mapping entry*/
+	if (!hentry->count) {
+		DRM_DEBUG("count of mapping entry is zero, tgid=%d\n", tgid);
+		psb_gtt_mm_remove_free_ht_locked(mm, tgid);
+	}
+
+	spin_unlock(&mm->lock);
+
+	return 0;
+}
+
+static int psb_gtt_unmap_anyused(struct drm_device *dev,
+			unsigned int ui32TaskId)
+{
+	struct drm_psb_private *dev_priv
+	= (struct drm_psb_private *)dev->dev_private;
+	struct psb_gtt_mm *mm = dev_priv->gtt_mm;
+	struct psb_gtt *pg = dev_priv->pg;
+	uint32_t pages, offset_pages;
+	struct drm_mm_node *node;
+	int ret;
+
+	ret = psb_gtt_remove_node_anyused(mm,
+				  (u32)ui32TaskId,
+				  &node);
+	if (ret) {
+		DRM_DEBUG("remove node failed\n");
+		return ret;
+	}
+
+	/*remove gtt entries*/
+	offset_pages = node->start;
+	pages = node->size;
+
+	psb_gtt_remove_pages(pg, offset_pages, pages, 0, 0, 1);
+
+
+	/*free tt node*/
+
+	psb_gtt_mm_free_mem(mm, node);
+	return 0;
+
+}
+
 int psb_gtt_map_meminfo(struct drm_device *dev,
 			void *hKernelMemInfo,
 			uint32_t page_align, uint32_t * offset)
@@ -1323,7 +1463,6 @@ static int psb_gtt_unmap_common(struct drm_device *dev,
 	pages = node->size;
 
 	psb_gtt_remove_pages(pg, offset_pages, pages, 0, 0, 1);
-
 
 	/*free tt node*/
 
@@ -1626,5 +1765,14 @@ int DCCBgttUnmapMemory(struct drm_device *dev, unsigned int hHandle,
 
 	/*free tt node */
 	psb_gtt_mm_free_mem(mm, node);
+	return 0;
+}
+
+int DCCBgttCleanupMemoryOnTask(struct drm_device *dev, unsigned int ui32TaskId)
+{
+	/* unmap all gtt for tgid */
+	while (!psb_gtt_unmap_anyused(dev, ui32TaskId))
+		;
+
 	return 0;
 }
