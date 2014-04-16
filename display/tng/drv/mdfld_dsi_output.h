@@ -477,6 +477,10 @@ struct mdfld_dsi_config {
 #define MDFLD_DSI_ENCODER(encoder) \
 	(container_of(encoder, struct mdfld_dsi_encoder, base))
 
+#define MDFLD_DSI_ENCODER_WITH_DRM_ENABLE(encoder) \
+		(container_of((struct drm_encoder *) encoder, \
+		struct mdfld_dsi_encoder, base))
+
 static inline struct mdfld_dsi_config *
 mdfld_dsi_get_config(struct mdfld_dsi_connector *connector)
 {

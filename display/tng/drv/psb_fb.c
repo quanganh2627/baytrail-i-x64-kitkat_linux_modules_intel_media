@@ -437,6 +437,12 @@ static int psbfb_create(struct psb_fbdev *fbdev,
 	struct device *device = &dev->pdev->dev;
 	int size;
 	int ret;
+	struct mdfld_dsi_encoder *dsi_encoder =
+		MDFLD_DSI_ENCODER_WITH_DRM_ENABLE(dev_priv->encoder0);
+	struct mdfld_dsi_config *dsi_config =
+		mdfld_dsi_encoder_get_config(dsi_encoder);
+	struct drm_display_mode *fixed_mode = dsi_config->fixed_mode;
+
 	/* PR2 panel must have 200 pixel dummy clocks,
 	 * So the display timing should be 800x1024, and surface
 	 * is 608x1024(64 bits align), or the information between android
@@ -444,10 +450,10 @@ static int psbfb_create(struct psb_fbdev *fbdev,
 	 */
 
 	if (get_panel_type(dev, 0) == TMD_6X10_VID)
-		mode_cmd.width = sizes->surface_width - 200;
+		mode_cmd.width = fixed_mode->hdisplay - 200;
 	else
-		mode_cmd.width = sizes->surface_width;
-	mode_cmd.height = sizes->surface_height;
+		mode_cmd.width = fixed_mode->hdisplay;
+	mode_cmd.height = fixed_mode->vdisplay;
 
 	mode_cmd.pitches[0] = mode_cmd.width * (sizes->surface_bpp >> 3);
 
@@ -507,10 +513,10 @@ static int psbfb_create(struct psb_fbdev *fbdev,
 
 	if (get_panel_type(dev, 0) == TMD_6X10_VID)
 		drm_fb_helper_fill_var(info, &fbdev->psb_fb_helper,
-				       sizes->fb_width - 200, sizes->fb_height);
+				       fixed_mode->hdisplay - 200, fixed_mode->vdisplay);
 	else
 		drm_fb_helper_fill_var(info, &fbdev->psb_fb_helper,
-				       sizes->fb_width, sizes->fb_height);
+				       fixed_mode->hdisplay, fixed_mode->vdisplay);
 
 	info->fix.mmio_start = pci_resource_start(dev->pdev, 0);
 	info->fix.mmio_len = pci_resource_len(dev->pdev, 0);
