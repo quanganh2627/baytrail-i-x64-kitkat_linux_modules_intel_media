@@ -110,6 +110,8 @@ int drm_psb_enable_pr2_cabc = 1;
 int drm_psb_enable_gamma;
 int drm_psb_enable_color_conversion;
 int drm_psb_set_gamma_success = 0;
+int gamma_setting_save[256] = {0};
+int csc_setting_save[6] = {0};
 /*EXPORT_SYMBOL(drm_psb_debug);*/
 static int drm_psb_trap_pagefaults;
 
@@ -2132,12 +2134,16 @@ static int psb_csc_gamma_setting_ioctl(struct drm_device *dev, void *data,
         if (!csc_gamma_setting)
                 return -EINVAL;
 
-        if (csc_gamma_setting->type == GAMMA)
+        if (csc_gamma_setting->type == GAMMA){
+                drm_psb_enable_gamma = 1;
                 ret = mdfld_intel_crtc_set_gamma(dev,
                         &csc_gamma_setting->data.gamma_data);
-        else if (csc_gamma_setting->type == CSC)
+	}
+        else if (csc_gamma_setting->type == CSC){
+                drm_psb_enable_color_conversion = 1;
                 ret = mdfld_intel_crtc_set_color_conversion(dev,
                         &csc_gamma_setting->data.csc_data);
+	}
         return ret;
 }
 
@@ -3932,6 +3938,7 @@ static int csc_control_write(struct file *file, const char *buffer,
 			csc.enable_state = true;
 			csc.data_len = CSC_REG_COUNT;
 			memcpy(csc.data.csc_reg_data, csc_setting, sizeof(csc.data.csc_reg_data));
+                        drm_psb_enable_color_conversion = 1;
 			mdfld_intel_crtc_set_color_conversion(dev, &csc);
 			break;
 		case 0x1:
@@ -3940,6 +3947,7 @@ static int csc_control_write(struct file *file, const char *buffer,
 			gamma.enable_state = true;
 			gamma.data_len = GAMMA_10_BIT_TABLE_COUNT;
 			memcpy(gamma.gamma_tableX100, gamma_setting, sizeof(gamma.gamma_tableX100));
+                        drm_psb_enable_gamma = 1;
 			mdfld_intel_crtc_set_gamma(dev, &gamma);
 			break;
 		default:

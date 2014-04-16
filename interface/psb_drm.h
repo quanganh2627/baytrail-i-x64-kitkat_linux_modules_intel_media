@@ -1133,7 +1133,7 @@ struct drm_psb_csc_gamma_setting {
 		struct csc_setting csc_data;
 		struct gamma_setting gamma_data;
 	} data;
-};
+}__attribute__((packed));
 struct drm_psb_buffer_data {
 	void *h_buffer;
 };

@@ -512,6 +512,7 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 	int ret = 0;
 	int pipe = 0;
 	u32 val = 0;
+	int i;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -681,6 +682,10 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 
 			j = j + 8;
 		}
+                /* save palette (gamma) */
+                for (i = 0; i < 256; i++)
+                        gamma_setting_save[i] = ctx->palette[i];
+
 		/*enable*/
 		val = REG_READ(regs->pipeconf_reg);
 		val |= (PIPEACONF_GAMMA);
@@ -694,6 +699,11 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 	} else {
 		drm_psb_enable_gamma = 0;
                 drm_psb_set_gamma_success = 0;
+
+                /*reset gamma setting*/
+                for (i = 0; i < 256; i++)
+                        gamma_setting_save[i] = 0;
+
 		/*disable */
 		val = REG_READ(regs->pipeconf_reg);
 		val &= ~(PIPEACONF_GAMMA);
@@ -817,6 +827,10 @@ int mdfld_intel_crtc_set_color_conversion(struct drm_device *dev,
 			}
 		}
 
+                /*save color_coef (chrome) */
+                for (i = 0; i < 6; i++)
+                        csc_setting_save[i] = ctx->color_coef[i];
+
 		/*enable*/
 		val = REG_READ(regs->pipeconf_reg);
 		val |= (PIPEACONF_COLOR_MATRIX_ENABLE);
@@ -826,6 +840,11 @@ int mdfld_intel_crtc_set_color_conversion(struct drm_device *dev,
 		REG_WRITE(regs->dspcntr_reg, val);
 	} else {
 		drm_psb_enable_color_conversion = 0;
+
+                /*reset color_conversion color setting*/
+                for (i = 0; i < 6; i++)
+                        csc_setting_save[i] = 0;
+
 		/*disable*/
 		val = REG_READ(regs->pipeconf_reg);
 		val &= ~(PIPEACONF_COLOR_MATRIX_ENABLE);

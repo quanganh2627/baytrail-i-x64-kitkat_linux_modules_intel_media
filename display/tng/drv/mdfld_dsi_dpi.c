@@ -361,7 +361,7 @@ reset_recovery:
 		REG_WRITE(DSPFW6, 0x00001F3F);
 		REG_WRITE(DSPFW7, 0x1F3F1F3F);
 		REG_WRITE(DSPSRCTRL, 0x00080100);
-		REG_WRITE(DSPCHICKENBIT, 0x0);
+		REG_WRITE(DSPCHICKENBIT, 0x20);
 		REG_WRITE(FBDC_CHICKEN, 0x0C0C0C0C);
 		REG_WRITE(CURACNTR, 0x0);
 		REG_WRITE(CURBCNTR, 0x0);
@@ -400,11 +400,11 @@ reset_recovery:
 
 	/*restore color_coef (chrome) */
 	for (i = 0; i < 6; i++)
-		REG_WRITE(regs->color_coef_reg + (i<<2), ctx->color_coef[i]);
+		REG_WRITE(regs->color_coef_reg + (i<<2), csc_setting_save[i]);
 
 	/* restore palette (gamma) */
 	for (i = 0; i < 256; i++)
-		REG_WRITE(regs->palette_reg + (i<<2), ctx->palette[i]);
+		REG_WRITE(regs->palette_reg + (i<<2), gamma_setting_save[i]);
 
 	/* restore dpst setting */
 	if (dev_priv->psb_dpst_state) {
@@ -548,6 +548,7 @@ static int __dpi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 	ctx->lastbrightnesslevel = psb_brightness;
 
 	tmp = REG_READ(regs->pipeconf_reg);
+        ctx->dspcntr = REG_READ(regs->dspcntr_reg);
 
 	/*save color_coef (chrome) */
 	for (i = 0; i < 6; i++)

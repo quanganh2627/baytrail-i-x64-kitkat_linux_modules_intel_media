@@ -66,6 +66,8 @@ extern int drm_psb_te_timer_delay;
 extern int drm_psb_enable_gamma;
 extern int drm_psb_enable_color_conversion;
 extern int drm_psb_set_gamma_success;
+extern int gamma_setting_save[256];
+extern int csc_setting_save[6];
 extern u32 DISP_PLANEB_STATUS;
 
 extern struct ttm_bo_driver psb_ttm_bo_driver;
