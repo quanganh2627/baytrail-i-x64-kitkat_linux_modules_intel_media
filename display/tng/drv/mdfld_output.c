@@ -41,6 +41,7 @@
 #include "displays/sharp25x16_vid.h"
 #include "displays/sharp25x16_cmd.h"
 #include "displays/sdc16x25_8_cmd.h"
+#include "displays/sdc25x16_cmd.h"
 #include "displays/jdi25x16_vid.h"
 #include "psb_drv.h"
 #include "android_hdmi.h"
@@ -56,6 +57,7 @@ static struct intel_mid_panel_list panel_list[] = {
 	{SHARP_25x16_CMD, MDFLD_DSI_ENCODER_DBI, sharp25x16_cmd_init},
 	{SDC_16x25_CMD, MDFLD_DSI_ENCODER_DBI, sdc16x25_8_cmd_init},
 	{JDI_25x16_VID, MDFLD_DSI_ENCODER_DPI, jdi25x16_vid_init},
+	{SDC_25x16_CMD, MDFLD_DSI_ENCODER_DBI, sdc25x16_cmd_init},
 };
 
 enum panel_type get_panel_type(struct drm_device *dev, int pipe)
@@ -72,6 +74,7 @@ bool is_dual_dsi(struct drm_device *dev)
 		(get_panel_type(dev, 0) == SHARP_25x16_CMD) ||
 		(get_panel_type(dev, 0) == SHARP_10x19_DUAL_CMD) ||
 		(get_panel_type(dev, 0) == SDC_16x25_CMD) ||
+		(get_panel_type(dev, 0) == SDC_25x16_CMD) ||
 		(get_panel_type(dev, 0) == JDI_25x16_VID))
 		return true;
 	else return false;
