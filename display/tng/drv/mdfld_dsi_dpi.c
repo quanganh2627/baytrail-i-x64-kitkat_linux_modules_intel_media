@@ -759,6 +759,9 @@ static int __mdfld_dsi_dpi_set_power(struct drm_encoder *encoder, bool on)
 		dsi_config->dsi_hw_context.panel_on = 1;
 		break;
 	case false:
+		if (!dsi_config->dsi_hw_context.panel_on &&
+			!dpi_output->first_boot)
+			goto fun_exit;
 		if (__dpi_panel_power_off(dsi_config, p_funcs)) {
 			DRM_ERROR("Faild to turn off panel\n");
 			goto set_power_err;
