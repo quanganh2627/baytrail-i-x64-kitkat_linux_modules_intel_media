@@ -800,31 +800,6 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 
 };
 
-static void get_imr_info(struct drm_psb_private *dev_priv)
-{
-	u32 high, low, start, end;
-	int size = 0;
-
-	low = intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,
-			PNW_IMR3L_MSG_REGADDR);
-	high = intel_mid_msgbus_read32(PNW_IMR_MSG_PORT,
-			PNW_IMR3H_MSG_REGADDR);
-	start = (low & PNW_IMR_ADDRESS_MASK) << PNW_IMR_ADDRESS_SHIFT;
-	end = (high & PNW_IMR_ADDRESS_MASK) << PNW_IMR_ADDRESS_SHIFT;
-	if (end > start)
-		size = end - start + 1;
-	if (size > 0) {
-		dev_priv->rar_region_start = start;
-		dev_priv->rar_region_size = size;
-	} else {
-		dev_priv->rar_region_start = 0;
-		dev_priv->rar_region_size = 0;
-	}
-	DRM_INFO("IMR3 start=0x%08x, size=%dB\n",
-		 dev_priv->rar_region_start, dev_priv->rar_region_size);
-	return;
-}
-
 static void psb_set_uopt(struct drm_psb_uopt *uopt)
 {
 	return;
@@ -886,15 +861,6 @@ static void psb_do_takedown(struct drm_device *dev)
 	if (dev_priv->have_tt) {
 		ttm_bo_clean_mm(bdev, TTM_PL_TT);
 		dev_priv->have_tt = 0;
-	}
-
-	if (dev_priv->have_camera) {
-		ttm_bo_clean_mm(bdev, TTM_PL_CI);
-		dev_priv->have_camera = 0;
-	}
-	if (dev_priv->have_rar) {
-		ttm_bo_clean_mm(bdev, TTM_PL_RAR);
-		dev_priv->have_rar = 0;
 	}
 
 	psb_msvdx_uninit(dev);
@@ -1278,9 +1244,6 @@ static int psb_do_init(struct drm_device *dev)
 	struct psb_gtt *pg = dev_priv->pg;
 
 	uint32_t tmp;
-	uint32_t stolen_gtt;
-	uint32_t tt_start;
-	uint32_t tt_pages;
 
 	int ret = -ENOMEM;
 
@@ -1300,52 +1263,34 @@ static int psb_do_init(struct drm_device *dev)
 		goto out_err;
 	}
 
-	stolen_gtt = (pg->stolen_size >> PAGE_SHIFT) * 4;
-	stolen_gtt = (stolen_gtt + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	stolen_gtt = (stolen_gtt < pg->gtt_pages) ? stolen_gtt : pg->gtt_pages;
-
-	dev_priv->gatt_free_offset = pg->mmu_gatt_start +
-	    (stolen_gtt << PAGE_SHIFT) * 1024;
-
-	tt_pages = (pg->gatt_pages < PSB_TT_PRIV0_PLIMIT) ?
-	    pg->gatt_pages : PSB_TT_PRIV0_PLIMIT;
-	tt_start = dev_priv->gatt_free_offset - pg->mmu_gatt_start;
-	tt_pages -= tt_start >> PAGE_SHIFT;
 	dev_priv->sizes.ta_mem_size = 0;
 
 	/* TT region managed by TTM. */
-	if (IS_MOFD(dev)) {
-		if (!ttm_bo_init_mm(bdev, TTM_PL_TT, MOFD_TTM_TT_PAGES)) {
+	if (!ttm_bo_init_mm(bdev, TTM_PL_TT,
+			    pg->gatt_pages -
+			    (pg->gtt_video_start >> PAGE_SHIFT)
+			    )) {
 
-			dev_priv->have_tt = 1;
-			dev_priv->sizes.tt_size =
-				MOFD_TTM_TT_PAGES << PAGE_SHIFT / (1024 * 1024);
-		}
-	} else {
-		if (!ttm_bo_init_mm(bdev, TTM_PL_TT,
-				    pg->gatt_pages -
-				    (pg->gtt_video_start >> PAGE_SHIFT)
-				    )) {
-
-			dev_priv->have_tt = 1;
-			dev_priv->sizes.tt_size =
-			    (tt_pages << PAGE_SHIFT) / (1024 * 1024) / 2;
-		}
+		dev_priv->have_tt = 1;
+		dev_priv->sizes.tt_size = (pg->gatt_pages -
+			(pg->gtt_video_start >> PAGE_SHIFT)) / 256;
+		printk("[TTM] TT heap size is %d\n", pg->gtt_video_start);
 	}
 	if (!ttm_bo_init_mm(bdev,
 			    DRM_PSB_MEM_MMU,
-			    PSB_MEM_IMR_START >> PAGE_SHIFT)) {
+			    PSB_MEM_TT_START >> PAGE_SHIFT)) {
 		dev_priv->have_mem_mmu = 1;
 		dev_priv->sizes.mmu_size =
-			PSB_MEM_IMR_START / (1024 * 1024);
+			PSB_MEM_TT_START / (1024 * 1024);
+		printk("[TTM] MMU heap size is %d\n", PSB_MEM_TT_START);
 	}
 
 	if (IS_MSVDX_MEM_TILE(dev)) {
 		/* Create tiling MMU region managed by TTM */
 		tmp = (0x10000000) >> PAGE_SHIFT;
-		printk(KERN_INFO "init tiling heap, 0x%08x in pages\n", tmp);
 		if (!ttm_bo_init_mm(bdev, DRM_PSB_MEM_MMU_TILING, tmp))
 			dev_priv->have_mem_mmu_tiling = 1;
+		printk("[TTM] MMU tiling heap size is %d\n", tmp);
 	}
 
 	PSB_DEBUG_INIT("Init MSVDX\n");
@@ -1406,11 +1351,6 @@ static int psb_driver_unload(struct drm_device *dev)
 						    pg->mmu_gatt_start,
 						    pg->vram_stolen_size >>
 						    PAGE_SHIFT);
-			if (pg->rar_stolen_size != 0)
-				psb_mmu_remove_pfn_sequence
-				    (psb_mmu_get_default_pd(dev_priv->mmu),
-				     pg->rar_start,
-				     pg->rar_stolen_size >> PAGE_SHIFT);
 			up_read(&pg->sem);
 			psb_mmu_driver_takedown(dev_priv->mmu);
 			dev_priv->mmu = NULL;
@@ -1426,20 +1366,12 @@ static int psb_driver_unload(struct drm_device *dev)
 				(dev_priv->vsp_mmu),
 				pg->mmu_gatt_start,
 				pg->vram_stolen_size >> PAGE_SHIFT);
-			if (pg->rar_stolen_size != 0)
-				psb_mmu_remove_pfn_sequence(
-					psb_mmu_get_default_pd
-					(dev_priv->vsp_mmu),
-					pg->rar_start,
-					pg->rar_stolen_size >> PAGE_SHIFT);
 			up_read(&pg->sem);
 			psb_mmu_driver_takedown(dev_priv->vsp_mmu);
 			dev_priv->vsp_mmu = NULL;
 		}
 #endif
-		if (IS_MOFD(dev))
-			mofd_gtt_takedown(dev_priv->pg, 1);
-		else if (IS_MRFLD(dev))
+		if (IS_MRFLD(dev))
 			mrfld_gtt_takedown(dev_priv->pg, 1);
 		else
 			psb_gtt_takedown(dev_priv->pg, 1);
@@ -1689,9 +1621,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	PSB_DEBUG_INIT("Init TTM fence and BO driver\n");
 
-	if (IS_FLDS(dev))
-		get_imr_info(dev_priv);
-
 	/* Init OSPM support */
 	ospm_power_init(dev);
 
@@ -1731,9 +1660,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	if (!dev_priv->pg)
 		goto out_err;
 
-	if (IS_MOFD(dev))
-		ret = mofd_gtt_init(dev_priv->pg, 0);
-	else if (IS_MRFLD(dev))
+	if (IS_MRFLD(dev))
 		ret = mrfld_gtt_init(dev_priv->pg, 0);
 	else
 		ret = psb_gtt_init(dev_priv->pg, 0);
@@ -1764,47 +1691,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	tt_pages = (pg->gatt_pages < PSB_TT_PRIV0_PLIMIT) ?
 	    (pg->gatt_pages) : PSB_TT_PRIV0_PLIMIT;
 
-
-	if (IS_MOFD(dev)) {
-		/* TTM TT only uses reserved GTT memory*/
-		pg->gtt_video_start = pg->reserved_gtt_start;
-		pg->gtt_video_start += MOFD_HW_WA_GTT_PAGES << PAGE_SHIFT;
-		pg->gtt_video_start = ALIGN(pg->gtt_video_start, 64 * 1024);
-	} else
-		/* CI/RAR use the lower half of TT. */
-		pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
-
-	pg->rar_start = pg->gtt_video_start;
-
-	/*
-	 * Make MSVDX/TOPAZ MMU aware of the rar stolen memory area.
-	 */
-	if (dev_priv->pg->rar_stolen_size != 0) {
-		down_read(&pg->sem);
-		ret =
-		    psb_mmu_insert_pfn_sequence(psb_mmu_get_default_pd
-						(dev_priv->mmu),
-						dev_priv->rar_region_start >>
-						PAGE_SHIFT,
-						pg->mmu_gatt_start +
-						pg->rar_start,
-						pg->rar_stolen_size >>
-						PAGE_SHIFT, 0);
-		up_read(&pg->sem);
-		if (ret)
-			goto out_err;
-#ifdef SUPPORT_VSP
-		down_read(&pg->sem);
-		ret = psb_mmu_insert_pfn_sequence(
-			psb_mmu_get_default_pd(dev_priv->vsp_mmu),
-			dev_priv->rar_region_start >> PAGE_SHIFT,
-			pg->mmu_gatt_start + pg->rar_start,
-			pg->rar_stolen_size >> PAGE_SHIFT, 0);
-		up_read(&pg->sem);
-		if (ret)
-			goto out_err;
-#endif
-	}
+	/* CI/RAR use the lower half of TT. */
+	pg->gtt_video_start = (tt_pages / 2) << PAGE_SHIFT;
 
 	dev_priv->pf_pd = psb_mmu_alloc_pd(dev_priv->mmu, 1, 0);
 	if (!dev_priv->pf_pd)

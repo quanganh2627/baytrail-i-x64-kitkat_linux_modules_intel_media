@@ -489,7 +489,6 @@ struct drm_psb_private {
 	uint8_t *ved_wrapper_reg;
 	uint8_t *vec_wrapper_reg;
 	uint8_t *vdc_reg;
-	uint32_t gatt_free_offset;
 
 	/* IMG video context */
 	struct list_head video_ctx;
@@ -543,23 +542,8 @@ struct drm_psb_private {
 	uint32_t num_pipe;
 
 	/*
-	 * CI share buffer
-	 */
-	unsigned int ci_region_start;
-	unsigned int ci_region_size;
-
-	/*
-	 * RAR share buffer;
-	 */
-	unsigned int rar_region_start;
-	unsigned int rar_region_size;
-
-	/*
 	 *Memory managers
 	 */
-
-	int have_camera;
-	int have_rar;
 	int have_tt;
 	int have_mem_mmu;
 	int have_mem_mmu_tiling;
