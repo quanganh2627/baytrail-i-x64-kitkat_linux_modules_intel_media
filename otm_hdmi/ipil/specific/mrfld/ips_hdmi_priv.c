@@ -87,7 +87,7 @@ struct data_rate_divider_selector_list_t {
 };
 static struct data_rate_divider_selector_list_t
 	data_rate_divider_selector_list[] = {
-			{25175, 2, 156, 1, 3, 16},
+			{25175, 2, 118, 1, 3, 12},
 			{25200, 2, 105, 1, 2, 16},
 			{26000, 2, 122, 1, 3, 12},
 			{27000, 3, 75, 1, 2, 16},
