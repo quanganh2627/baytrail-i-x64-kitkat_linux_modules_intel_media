@@ -995,6 +995,7 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 	struct drm_device *dev;
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_psb_private *dev_priv;
+	struct panel_funcs *p_funcs;
 
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
@@ -1006,15 +1007,32 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
 
-	PSB_DEBUG_ENTRY("%s\n", (mode == DRM_MODE_DPMS_ON ? "on" : "off"));
+	PSB_DEBUG_ENTRY("%s\n", (mode == DRM_MODE_DPMS_ON ? "on" :
+		DRM_MODE_DPMS_STANDBY == mode ? "standby" : "off"));
 
 	mutex_lock(&dev_priv->dpms_mutex);
 	DCLockMutex();
 
+	p_funcs = dbi_output->p_funcs;
 	if (mode == DRM_MODE_DPMS_ON) {
 		mdfld_generic_dsi_dbi_set_power(encoder, true);
 		DCAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOn(dsi_config->pipe);
+		mdfld_dsi_dsr_forbid_locked(dsi_config);
+		if (p_funcs && p_funcs->set_brightness)
+			if (p_funcs->set_brightness(dsi_config,
+				psb_brightness))
+				DRM_ERROR("Failed to set panel brightness\n");
+		mdfld_dsi_dsr_allow_locked(dsi_config);
+	} else if (mode == DRM_MODE_DPMS_STANDBY) {
+		struct mdfld_dsi_hw_context *ctx;
+		//ctx = &dsi_config->dsi_hw_context;
+		//ctx->lastbrightnesslevel = psb_brightness;
+		mdfld_dsi_dsr_forbid_locked(dsi_config);
+		if (p_funcs && p_funcs->set_brightness)
+			if (p_funcs->set_brightness(dsi_config, 0))
+				DRM_ERROR("Failed to set panel brightness\n");
+		mdfld_dsi_dsr_allow_locked(dsi_config);
 	} else {
 		mdfld_generic_dsi_dbi_set_power(encoder, false);
 
