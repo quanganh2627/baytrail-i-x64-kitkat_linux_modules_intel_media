@@ -862,7 +862,7 @@ int ospm_runtime_pm_allow(struct drm_device *dev)
 
 void ospm_runtime_pm_forbid(struct drm_device *dev)
 {
-	struct drm_psb_private *dev_priv = dev->dev_private;
+//	struct drm_psb_private *dev_priv = dev->dev_private;
 
-	pm_runtime_forbid(&dev->pdev->dev);
+//	pm_runtime_forbid(&dev->pdev->dev);
 }
