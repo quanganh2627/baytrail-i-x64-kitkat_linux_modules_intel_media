@@ -41,6 +41,7 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */ /**************************************************************************/
 #include <linux/module.h>
+#include <drm/drmP.h>
 #include "rgxdf.h"
 #include "device.h"
 #include "rgxdevice.h"
@@ -54,6 +55,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "sync_internal.h"
 #include "rgxfwutils.h"
 #include "img_types.h"
+
+extern struct drm_device *gpsPVRDRMDev;
 
 static PVRSRV_DEVICE_NODE* pDevNode = IMG_NULL;
 
@@ -97,6 +100,15 @@ static PVRSRV_DEVICE_NODE* RGXGetDeviceNode()
 
 	return pDevNode;
 }
+
+unsigned int RGXGetDRMDeviceID(void)
+{
+	if (gpsPVRDRMDev != NULL)
+		return gpsPVRDRMDev->pci_device;
+
+	return 0;
+}
+EXPORT_SYMBOL(RGXGetDRMDeviceID);
 
 int rgx_is_device_powered(void)
 {

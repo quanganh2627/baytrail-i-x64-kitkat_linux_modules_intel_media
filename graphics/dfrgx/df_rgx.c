@@ -80,6 +80,7 @@
 
 #include <governor.h>
 
+#include <rgxdf.h>
 #include <ospm/gfx_freq.h>
 #include "dev_freq_debug.h"
 #include "dev_freq_graphics_pm.h"
@@ -683,7 +684,6 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	struct devfreq *df;
 	int error = 0;
 	int sts = 0;
-	int start = 0;
 
 	DFRGX_DPF(DFRGX_DEBUG_LOW, "%s: entry\n", __func__);
 
@@ -722,16 +722,23 @@ static int df_rgx_busfreq_probe(struct platform_device *pdev)
 	df->previous_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 	bfdata->bf_prev_freq_rlzd = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 
-	if (!is_tng_a0){
-		/*On TNG_B0 We will use 457KHZ and 533KHZ as turbo*/
-		df->min_freq = DFRGX_FREQ_457_MHZ;
-		df->max_freq = DF_RGX_FREQ_KHZ_MAX;
-		start = sizeof(a_available_state_freq)/sizeof(a_available_state_freq[0]);
-	} else {
+	/* Set min/max freq depending on stepping/SKU */
+	if (RGXGetDRMDeviceID() == 0x1182) {
+		/* TNG SKU3 */
+		df->min_freq = DFRGX_FREQ_200_MHZ;
+		df->max_freq = DFRGX_FREQ_266_MHZ;
+	}
+	else if (is_tng_a0) {
 		df->min_freq = DF_RGX_FREQ_KHZ_MIN_INITIAL;
 		df->max_freq = DF_RGX_FREQ_KHZ_MAX_INITIAL;
-		start = THERMAL_COOLING_DEVICE_MAX_STATE;
 	}
+	else {
+		df->min_freq = DFRGX_FREQ_457_MHZ;
+		df->max_freq = DF_RGX_FREQ_KHZ_MAX;
+	}
+	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s: dev_id = 0x%x, min_freq = %lu, max_freq = %lu\n",
+		__func__, RGXGetDRMDeviceID(), df->min_freq, df->max_freq);
+
 	bfdata->gbp_cooldv_state_override = -1;
 
 	/* Thermal freq-state mapping after characterization */
