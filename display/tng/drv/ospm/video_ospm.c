@@ -213,7 +213,7 @@ static bool ved_power_down(struct drm_device *dev,
 	if (need_set_ved_freq && (pci_device != 0x1182)) {
 		if (!psb_msvdx_set_ved_freq(IP_FREQ_200_00))
 			PSB_DEBUG_PM("MSVDX: Set VED frequency to " \
-				"200MHZ after power up\n");
+				"200MHZ before power down\n");
 	}
 
 

@@ -855,12 +855,6 @@ int psb_mtx_send(struct drm_psb_private *dev_priv, const void *msg)
 	/* signal an interrupt to let the mtx know there is a new message */
 	PSB_WMSVDX32(1, MTX_KICK_INPUT_OFFSET);
 
-	/* Read MSVDX Register several times in case Idle signal assert */
-	PSB_RMSVDX32(MSVDX_INTERRUPT_STATUS_OFFSET);
-	PSB_RMSVDX32(MSVDX_INTERRUPT_STATUS_OFFSET);
-	PSB_RMSVDX32(MSVDX_INTERRUPT_STATUS_OFFSET);
-	PSB_RMSVDX32(MSVDX_INTERRUPT_STATUS_OFFSET);
-
 out:
 	return ret;
 }
@@ -1430,6 +1424,10 @@ int psb_msvdx_save_context(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	int offset;
+	int need_sw_reset;
+
+	need_sw_reset = msvdx_priv->msvdx_needs_reset &
+			MSVDX_RESET_NEEDS_REUPLOAD_FW;
 
 	if (msvdx_priv->fw_loaded_by_punit)
 		msvdx_priv->msvdx_needs_reset = MSVDX_RESET_NEEDS_INIT_FW;
@@ -1453,20 +1451,17 @@ int psb_msvdx_save_context(struct drm_device *dev)
 	PSB_DEBUG_MSVDX("ec error state %d\n", msvdx_priv->vec_ec_mem_data[4]);
 #endif
 
-	/* Reset MTX */
-	PSB_WMSVDX32(MTX_SOFT_RESET_MTXRESET, MTX_SOFT_RESET_OFFSET);
+	if (need_sw_reset) {
+		PSB_DEBUG_WARN("msvdx run into wrong state, soft reset msvdx before power down\n");
+		PSB_WMSVDX32(MTX_SOFT_RESET_MTXRESET, MTX_SOFT_RESET_OFFSET);
 
-	/* why need reset msvdx before power off it, need check IMG */
-	if (psb_msvdx_core_reset(dev_priv))
-		PSB_DEBUG_WARN("failed to call psb_msvdx_core_reset.\n");
+		if (psb_msvdx_core_reset(dev_priv))
+			PSB_DEBUG_WARN("failed to call psb_msvdx_core_reset.\n");
 
-	/* Initialize VEC Local RAM */
-	for (offset = 0; offset < VEC_LOCAL_MEM_BYTE_SIZE / 4; ++offset)
-		PSB_WMSVDX32(0, VEC_LOCAL_MEM_OFFSET + offset * 4);
-
-	if (msvdx_priv->fw_loaded_by_punit) {
-		PSB_WMSVDX32(0, MTX_ENABLE_OFFSET);
-		psb_msvdx_mtx_set_clocks(dev_priv->dev, 0);
+		if (msvdx_priv->fw_loaded_by_punit) {
+			PSB_WMSVDX32(0, MTX_ENABLE_OFFSET);
+			psb_msvdx_mtx_set_clocks(dev_priv->dev, 0);
+		}
 	}
 
 	return 0;
@@ -1488,11 +1483,11 @@ void psb_msvdx_check_reset_fw(struct drm_device *dev)
 	/* handling fw upload here if required */
 	/* power off first, then hw_begin will power up/upload FW correctly */
 	if (msvdx_priv->msvdx_needs_reset & MSVDX_RESET_NEEDS_REUPLOAD_FW) {
-		msvdx_priv->msvdx_needs_reset &= ~MSVDX_RESET_NEEDS_REUPLOAD_FW;
 		spin_unlock_irqrestore(&msvdx_priv->msvdx_lock, irq_flags);
 		PSB_DEBUG_PM("MSVDX: force to power off msvdx due to decoding error.\n");
 		ospm_apm_power_down_msvdx(dev, 1);
 		spin_lock_irqsave(&msvdx_priv->msvdx_lock, irq_flags);
+		msvdx_priv->msvdx_needs_reset &= ~MSVDX_RESET_NEEDS_REUPLOAD_FW;
 	}
 	spin_unlock_irqrestore(&msvdx_priv->msvdx_lock, irq_flags);
 }
