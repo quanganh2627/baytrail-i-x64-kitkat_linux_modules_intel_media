@@ -27,18 +27,26 @@
 #include <asm/intel_scu_pmic.h>
 
 #include "displays/sharp25x16_vid.h"
+static int mipi_reset_gpio;
 
-static u8 sharp_mode_set_data1[] = {0x10, 0x00, 0x3a};
-static u8 sharp_mode_set_data2[] = {0x10, 0x01, 0x00};
-static u8 sharp_mode_set_data3[] = {0x10, 0x07, 0x00};
-static u8 sharp_mode_set_data4[] = {0x70, 0x00, 0x70};
-
+static u8 sharp_mode_set_data[7][3] = {
+			{0x10, 0x00, 0x3a},
+			{0x10, 0x01, 0x00},
+			{0x10, 0x07, 0x00},
+			{0x70, 0x00, 0x70},
+			{0x00, 0x1f, 0x00},
+			{0x20, 0x2e, 0x12},
+			{0x20, 0x2a, 0x00}
+			};
+static u8 sharp_set_brightness[3] =
+			{0x20, 0x2a, 0x0};
 int mdfld_dsi_sharp25x16_ic_init(struct mdfld_dsi_config *dsi_config)
 {
 	struct mdfld_dsi_pkg_sender *sender
 		= mdfld_dsi_get_pkg_sender(dsi_config);
 	struct drm_device *dev = dsi_config->dev;
 	int err = 0;
+	int i;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -47,43 +55,16 @@ int mdfld_dsi_sharp25x16_ic_init(struct mdfld_dsi_config *dsi_config)
 		return -EINVAL;
 	}
 
-	/* Set video mode */
-	err = mdfld_dsi_send_gen_long_lp(sender, sharp_mode_set_data1,
-			3,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Mode data 1\n", __func__, __LINE__);
-		goto ic_init_err;
+	for (i = 0; i < 7; i++) {
+		err = mdfld_dsi_send_gen_long_hs(sender, sharp_mode_set_data[i],
+				3,
+				MDFLD_DSI_SEND_PACKAGE);
+		if (err) {
+			DRM_ERROR("%s: %d: Set Mode data\n", __func__, __LINE__);
+			goto ic_init_err;
+		}
+		REG_WRITE(MIPIA_HS_GEN_CTRL_REG, 5);
 	}
-	REG_WRITE(MIPIA_LP_GEN_CTRL_REG, 5);
-
-	err = mdfld_dsi_send_gen_long_lp(sender, sharp_mode_set_data2,
-			3,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Mode data 2\n", __func__, __LINE__);
-		goto ic_init_err;
-	}
-	REG_WRITE(MIPIA_LP_GEN_CTRL_REG, 5);
-
-	err = mdfld_dsi_send_gen_long_lp(sender, sharp_mode_set_data3,
-			3,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Mode data 3\n", __func__, __LINE__);
-		goto ic_init_err;
-	}
-	REG_WRITE(MIPIA_LP_GEN_CTRL_REG, 5);
-
-	err = mdfld_dsi_send_gen_long_lp(sender, sharp_mode_set_data4,
-			3,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Mode data 4\n", __func__, __LINE__);
-		goto ic_init_err;
-	}
-	REG_WRITE(MIPIA_LP_GEN_CTRL_REG, 5);
-
 	return 0;
 
 ic_init_err:
@@ -198,24 +179,6 @@ power_on_err:
 	return err;
 }
 
-static void __vpro2_power_ctrl(bool on)
-{
-	u8 addr, value;
-	addr = 0xad;
-	if (intel_scu_ipc_ioread8(addr, &value))
-		DRM_ERROR("%s: %d: failed to read vPro2\n", __func__, __LINE__);
-
-	/* Control vPROG2 power rail with 2.85v. */
-	if (on)
-		value |= 0x1;
-	else
-		value &= ~0x1;
-
-	if (intel_scu_ipc_iowrite8(addr, value))
-		DRM_ERROR("%s: %d: failed to write vPro2\n",
-				__func__, __LINE__);
-}
-
 static int mdfld_dsi_sharp25x16_power_off(struct mdfld_dsi_config *dsi_config)
 {
 	struct mdfld_dsi_pkg_sender *sender =
@@ -259,10 +222,9 @@ static int mdfld_dsi_sharp25x16_power_off(struct mdfld_dsi_config *dsi_config)
 	/* Wait for 3 frames after enter_sleep_mode. */
 	msleep(51);
 
-	/* Can not poweroff VPROG2, because many other module related to
-	 * this power supply, such as PSH sensor. */
-	/*__vpro2_power_ctrl(false);*/
-
+	/* enable it after AOB re-work
+	* gpio_set_value_cansleep(mipi_reset_gpio, 0);
+	*/
 	return 0;
 
 power_off_err:
@@ -272,7 +234,27 @@ power_off_err:
 
 static int mdfld_dsi_sharp25x16_panel_reset(struct mdfld_dsi_config *dsi_config)
 {
-	__vpro2_power_ctrl(true);
+	int ret = 0;
+
+	PSB_DEBUG_ENTRY("\n");
+	msleep(10);
+	if (mipi_reset_gpio == 0) {
+		ret = get_gpio_by_name("disp0_rst");
+		if (ret < 0) {
+			DRM_ERROR("Faild to get panel reset gpio, " \
+				  "use default reset pin\n");
+			return 0;
+		}
+		mipi_reset_gpio = ret;
+		ret = gpio_request(mipi_reset_gpio, "mipi_display");
+		if (ret) {
+			DRM_ERROR("Faild to request panel reset gpio\n");
+			return 0;
+		}
+	}
+	gpio_direction_output(mipi_reset_gpio, 0);
+	usleep_range(1000, 1500);
+	gpio_set_value_cansleep(mipi_reset_gpio, 1);
 
 	return 0;
 }
@@ -313,6 +295,27 @@ static struct drm_display_mode *sharp25x16_vid_get_config_mode(void)
 static int mdfld_dsi_sharp25x16_set_brightness(struct mdfld_dsi_config *dsi_config,
 		int level)
 {
+	struct mdfld_dsi_pkg_sender *sender =
+		mdfld_dsi_get_pkg_sender(dsi_config);
+	struct drm_device *dev = dsi_config->dev;
+	u8 duty_val = 0;
+
+	PSB_DEBUG_ENTRY("level = %d\n", level);
+
+	if (!sender) {
+		DRM_ERROR("Failed to get DSI packet sender\n");
+		return -EINVAL;
+	}
+
+	duty_val = (0xFF * level) / 100;
+	if (duty_val < 12)
+		duty_val = 0;
+	sharp_set_brightness[2] = duty_val;
+	mdfld_dsi_send_gen_long_hs(sender, sharp_set_brightness,
+				3,
+				MDFLD_DSI_SEND_PACKAGE);
+
+	REG_WRITE(MIPIA_HS_GEN_CTRL_REG, 5);
 	return 0;
 }
 
