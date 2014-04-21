@@ -78,6 +78,7 @@
 
 /* MaxFifo/ S0i1-Display */
 #include "dc_maxfifo.h"
+#define VBLANK_OFF_DELAY_DEFAULT	300
 
 #define KEEP_UNUSED_CODE 0
 #define KEEP_UNUSED_CODE_S3D 0
@@ -1851,6 +1852,12 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	dev->vblank_disable_allowed = 1;
 	dev->max_vblank_count = 0xffffff;
 	/* only 24 bits of frame count */
+
+	/* For Video mode panels, set the drm_vblank_offdelay so that we turn
+	 * off faster than the default of 5 seconds. This is done to have
+	 * better S0i1-Display residency for idle use cases
+	 */
+	drm_vblank_offdelay = VBLANK_OFF_DELAY_DEFAULT;
 
 	dev->driver->get_vblank_counter = psb_get_vblank_counter;
 
