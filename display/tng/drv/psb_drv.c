@@ -3041,6 +3041,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			dsi_config = dev_priv->dsi_configs[1];
 
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
+			if (IS_MOFD(dev))
+				mutex_lock(&dev->mode_config.mutex);
 
 			if (dev->vblank_enabled[pipe]) {
 				vblwait.request.type =
@@ -3071,6 +3073,9 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				}
 				mdfld_dsi_dsr_allow(dsi_config);
 			}
+
+			if (IS_MOFD(dev))
+				mutex_unlock(&dev->mode_config.mutex);
 
 			getrawmonotonic(&now);
 			nsecs = timespec_to_ns(&now);
