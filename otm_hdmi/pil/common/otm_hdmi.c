@@ -523,7 +523,7 @@ otm_hdmi_ret_t otm_hdmi_get_eld(void *ctx, otm_hdmi_eld_t *eld)
 		WARN_ON(edid_int->short_audio_descriptor_count >
 						sizeof(eld->mn_sand_sads));
 		memcpy(eld->mn_sand_sads, edid_int->short_audio_descriptor_data,
-		       min_t(int, sizeof(eld->mn_sand_sads),
+		       min_t(int, MAX_DATA_BLOCK_SIZE,
 			     3 * edid_int->short_audio_descriptor_count));
 	}
 
