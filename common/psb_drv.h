@@ -42,6 +42,7 @@
 #include "pvr_drm.h"
 
 #include "mdfld_hdmi_audio_if.h"
+#include <linux/pm_qos.h>
 
 /*  Name changed with kernel 3.10 gen graphics patches. */
 #if !defined DRM_MODE_ENCODER_DSI
@@ -383,6 +384,9 @@ struct drm_psb_private {
 #ifdef CONFIG_MDFLD_DSI_DPU
 	void *dbi_dpu_info;
 #endif
+	/* QOS */
+	struct pm_qos_request s0ix_qos;
+
 	struct mdfld_dsi_config *dsi_configs[2];
 
 	struct work_struct te_work;

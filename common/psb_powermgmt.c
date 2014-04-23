@@ -2181,6 +2181,7 @@ void ospm_runtime_pm_forbid(struct drm_device *dev)
 int psb_runtime_suspend(struct device *dev)
 {
 	pm_message_t state;
+	struct drm_psb_private *dev_priv = gpDrmDevice->dev_private;
 	int ret = 0;
 
 	state.event = 0;
@@ -2196,13 +2197,18 @@ int psb_runtime_suspend(struct device *dev)
 	else
 		ret = ospm_power_suspend(gpDrmDevice->pdev, state);
 
+	if (!ret)
+		pm_qos_remove_request(&dev_priv->s0ix_qos);
 	return ret;
 }
 
 int psb_runtime_resume(struct device *dev)
 {
+	struct drm_psb_private *dev_priv = gpDrmDevice->dev_private;
 	PSB_DEBUG_ENTRY("\n");
 
+	pm_qos_add_request(&dev_priv->s0ix_qos,
+			PM_QOS_CPU_DMA_LATENCY, CSTATE_EXIT_LATENCY_S0i1 - 1);
 	/* Nop for GFX */
 	return 0;
 }
