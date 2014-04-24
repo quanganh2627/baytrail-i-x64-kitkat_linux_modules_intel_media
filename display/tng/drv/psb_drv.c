@@ -3058,7 +3058,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
-				if (ret) {
+				if (ret && (ret != -EINTR)) {
 					DRM_ERROR("fail to get vsync on pipe %d, ret %d\n", pipe, ret);
 					vsync_state_dump(dev, pipe);
 
@@ -3070,7 +3070,9 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 							schedule_work(&dev_priv->reset_panel_work);
 						}
 					}
-				}
+				} else if (ret == -EINTR)
+					ret = 0;
+
 				mdfld_dsi_dsr_allow(dsi_config);
 			}
 
