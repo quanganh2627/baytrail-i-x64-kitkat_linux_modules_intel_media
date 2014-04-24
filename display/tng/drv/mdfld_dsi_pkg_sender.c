@@ -1358,7 +1358,7 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 			if (i != 0)
 				offset = MIPIC_REG_OFFSET;
 
-			if (IS_TNG_B0(dev)) {
+			if (!IS_TNG_A0(dev)) {
 				retry = wait_event_interruptible_timeout(dev_priv->eof_wait,
 				  (REG_READ(sender->mipi_gen_fifo_stat_reg) & BIT27),
 				    msecs_to_jiffies(MDFLD_DSI_DBI_FIFO_TIMEOUT));
