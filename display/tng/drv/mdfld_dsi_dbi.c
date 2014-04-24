@@ -736,7 +736,14 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 
 		if (!retry) {
 			DRM_ERROR("Failed to disable pipe\n");
-			err = -EAGAIN;
+			if (IS_MOFD(dev)) {
+				/*
+				 * FIXME: turn off the power island directly
+				 * although failed to disable pipe.
+				 */
+				err = 0;
+			} else
+				err = -EAGAIN;
 			goto power_off_err;
 		}
 	}
