@@ -1415,7 +1415,7 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 
 		retry = MDFLD_DSI_DBI_FIFO_TIMEOUT;
 		while (retry && (REG_READ(sender->mipi_cmd_addr_reg) & BIT0)) {
-			udelay(1);
+			usleep_range(990, 1010);
 			retry--;
 		}
 		mutex_unlock(&sender->lock);
