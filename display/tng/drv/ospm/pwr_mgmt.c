@@ -417,7 +417,7 @@ bool power_island_get(u32 hw_island)
 		pm_ret = pm_runtime_get_sync(&g_ospm_data->dev->pdev->dev);
 		if (pm_ret < 0) {
 			ret = false;
-			pr_err("pm_runtime_get_sync failed 0x%p.\n",
+			PSB_DEBUG_PM("pm_runtime_get_sync failed 0x%x.\n",
 				&g_ospm_data->dev->pdev->dev);
 			goto out_err;
 		}
@@ -429,12 +429,9 @@ bool power_island_get(u32 hw_island)
 			p_island = &island_list[i];
 			ret = power_up_island(p_island);
 			if (!ret) {
-				pr_err("power up failed %x NC_PMSSS: 0x%08x \n",
-					island_list[i].island, intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
-				/* Retry */
-				ret = power_up_island(p_island);
-				if (!ret)
-					panic("gfx_island_up_error ");
+				PSB_DEBUG_PM("power up failed %x\n",
+					island_list[i].island);
+				goto out_err;
 			}
 		}
 	}
@@ -471,16 +468,13 @@ bool power_island_put(u32 hw_island)
 			p_island = &island_list[i];
 			ret = power_down_island(p_island);
 			if (!ret) {
-				pr_err("power down failed %x NC_PMSSS: 0x%08x \n",
-					island_list[i].island, intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
-				/* Retry */
-				ret = power_down_island(p_island);
-				if (!ret) 
-					panic("gfx_island_off_error");
+				PSB_DEBUG_PM("power down failed %x\n",
+					island_list[i].island);
 			}
 		}
 	}
 
+out_err:
 	/* Check to see if we need to suspend PCI */
 	if (!any_island_on()) {
 		PSB_DEBUG_PM("Suspending PCI\n");
