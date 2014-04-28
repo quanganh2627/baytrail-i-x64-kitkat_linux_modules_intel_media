@@ -233,3 +233,23 @@ void apply_ANN_A0_workarounds(int islands, int pre_po)
 		break;
 	}
 }
+
+/* ANN B0 Workarounds */
+void apply_HSD_4645248_clkgating_disable(void)
+{
+	/**
+	 * HSD - 4645248: RGXStart() issue during D0ix
+	 * runk and idle clock gating must be disabled before RGXStart()
+	 * change: The driver should set GFX_CG_DIS_0[1:0] = 2'b11
+	 * at MMADR offset 0x160000
+	 */
+	struct drm_device *dev = gpDrmDevice;
+	if(IS_MOFD(dev)) {
+		uint32_t GFX_CG_DIS_0_OFFSET = 0x160000 - GFX_WRAPPER_OFFSET;
+		uint32_t GFX_CG_DIS_0_DATA = WRAPPER_REG_READ(GFX_CG_DIS_0_OFFSET);
+
+		GFX_CG_DIS_0_DATA |= (BIT0 | BIT1);
+		WRAPPER_REG_WRITE(GFX_CG_DIS_0_OFFSET, GFX_CG_DIS_0_DATA);
+	}
+}
+

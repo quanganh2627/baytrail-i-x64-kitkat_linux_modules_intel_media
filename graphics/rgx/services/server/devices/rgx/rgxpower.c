@@ -58,6 +58,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "dfrgx_interface.h"
 #include "rgxpowermon.h"
 #include <linux/kernel.h>
+#include "tng_wa.h"
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
@@ -702,6 +703,7 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 			/*
 				Run the RGX init script.
 			*/
+			apply_HSD_4645248_clkgating_disable();
 			eError = RGXStart(psDevInfo, psDevConfig);
 			if (eError != PVRSRV_OK)
 			{
