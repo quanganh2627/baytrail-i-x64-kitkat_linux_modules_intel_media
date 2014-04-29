@@ -588,7 +588,6 @@ irqreturn_t psb_irq_handler(DRM_IRQ_ARGS)
 	}
 
 	PSB_WVDC32(vdc_stat, PSB_INT_IDENTITY_R);
-	(void)PSB_RVDC32(PSB_INT_IDENTITY_R);
 	DRM_READMEMORYBARRIER();
 
 	if (!handled)

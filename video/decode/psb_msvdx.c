@@ -890,10 +890,11 @@ loop: /* just for coding style check */
 	if (ridx == widx)
 		goto done;
 
-	buf_size = PSB_RMSVDX32(MSVDX_COMMS_TO_HOST_BUF_SIZE) & ((1 << 16) - 1);
+	buf_size = PSB_RMSVDX32(MSVDX_COMMS_TO_HOST_BUF_SIZE);
 	/*0x2000 is VEC Local Ram offset*/
 	buf_offset =
-		(PSB_RMSVDX32(MSVDX_COMMS_TO_HOST_BUF_SIZE) >> 16) + 0x2000;
+		(buf_size >> 16) + 0x2000;
+	buf_size = (buf_size & ((1 << 16) - 1));
 
 	ofs = 0;
 	buf[ofs] = PSB_RMSVDX32(buf_offset + (ridx << 2));
@@ -1245,9 +1246,6 @@ int psb_msvdx_interrupt(void *pvData)
 	dev_priv = psb_priv(dev);
 
 	msvdx_priv = dev_priv->msvdx_private;
-#ifndef CONFIG_DRM_VXD_BYT
-	msvdx_priv->msvdx_hw_busy = REG_READ(0x20D0) & (0x1 << 9);
-#endif
 	msvdx_stat = PSB_RMSVDX32(MSVDX_INTERRUPT_STATUS_OFFSET);
 
 	precord = get_new_history_record();
@@ -1273,7 +1271,6 @@ int psb_msvdx_interrupt(void *pvData)
 		/* Clear this interupt bit only */
 		PSB_WMSVDX32(MSVDX_INTERRUPT_STATUS_MMU_FAULT_IRQ_MASK,
 			     MSVDX_INTERRUPT_CLEAR_OFFSET);
-		PSB_RMSVDX32(MSVDX_INTERRUPT_CLEAR_OFFSET);
 		DRM_READMEMORYBARRIER();
 
 		msvdx_priv->msvdx_needs_reset = 1;
@@ -1288,7 +1285,6 @@ int psb_msvdx_interrupt(void *pvData)
 		else
 			PSB_WMSVDX32(0xffff, MSVDX_INTERRUPT_CLEAR_OFFSET);
 
-		PSB_RMSVDX32(MSVDX_INTERRUPT_CLEAR_OFFSET);
 		DRM_READMEMORYBARRIER();
 
 		psb_msvdx_mtx_interrupt(dev);
@@ -1410,12 +1406,6 @@ int psb_check_msvdx_idle(struct drm_device *dev)
 #endif
 		return -EBUSY;
 	}
-	/*
-		if (msvdx_priv->msvdx_hw_busy) {
-			PSB_DEBUG_PM("MSVDX: %s, HW is busy\n", __func__);
-			return -EBUSY;
-		}
-	*/
 	return 0;
 }
 

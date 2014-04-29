@@ -929,7 +929,6 @@ int psb_msvdx_post_init(struct drm_device *dev)
         msvdx_priv = dev_priv->msvdx_private;
 
         msvdx_priv->msvdx_busy = 0;
-        msvdx_priv->msvdx_hw_busy = 1;
 
         if (msvdx_priv->fw_loaded_by_punit) {
                 /* DDK: Configure MSVDX Memory Stalling iwth the min, max and ratio of access */

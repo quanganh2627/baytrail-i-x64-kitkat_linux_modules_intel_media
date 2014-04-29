@@ -226,7 +226,6 @@ struct msvdx_private {
 	int msvdx_fw_size;
 
 	uint32_t fw_b0_uploaded;
-	uint32_t msvdx_hw_busy;
 
 	uint32_t vec_ec_mem_data[5];
 	uint32_t vec_ec_mem_saved;
