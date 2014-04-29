@@ -67,11 +67,8 @@ int rtpm_idle(struct device *dev)
 
 	PSB_DEBUG_PM("%s\n", __func__);
 
-	for (i = 0; i < ARRAY_SIZE(island_list); i++) {
-		if (island_list[i].island & OSPM_DISPLAY_ISLAND)
-			continue;
+	for (i = 0; i < ARRAY_SIZE(island_list); i++)
 		ref_count += atomic_read(&island_list[i].ref_count);
-	}
 
 	if (ref_count) {
 		PSB_DEBUG_PM("%s return busy\n", __func__);
@@ -98,7 +95,6 @@ void rtpm_forbid(struct drm_device *dev)
 
 void rtpm_init(struct drm_device *dev)
 {
-	pm_runtime_put_noidle(&dev->pdev->dev);
 	rtpm_allow(dev);
 }
 

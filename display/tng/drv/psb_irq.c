@@ -869,7 +869,8 @@ int psb_enable_vblank(struct drm_device *dev, int pipe)
 	reg_val = REG_READ(pipeconf_reg);
 
 	if (!(reg_val & PIPEACONF_ENABLE)) {
-		DRM_ERROR("%s: pipe %d is disabled\n", __func__, pipe);
+		DRM_ERROR("%s: pipe %d is disabled %#x\n",
+			  __func__, pipe, reg_val);
 		return -EINVAL;
 	}
 

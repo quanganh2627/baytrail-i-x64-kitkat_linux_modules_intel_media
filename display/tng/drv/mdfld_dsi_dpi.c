@@ -283,6 +283,55 @@ static int __dpi_config_port(struct mdfld_dsi_config *dsi_config,
 	return 0;
 }
 
+static void ann_dc_setup(struct mdfld_dsi_config *dsi_config)
+{
+	struct drm_device *dev = dsi_config->dev;
+	struct mdfld_dsi_hw_registers *regs = &dsi_config->regs;
+	struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
+
+
+	DRM_INFO("restore some registers to default value\n");
+
+	power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
+
+	REG_WRITE(DSPCLK_GATE_D, 0x0);
+	REG_WRITE(RAMCLK_GATE_D, 0xc0000);
+	REG_WRITE(PFIT_CONTROL, 0x20000000);
+	REG_WRITE(DSPIEDCFGSHDW, 0x0);
+	REG_WRITE(DSPARB2, 0x000A0200);
+	REG_WRITE(DSPARB, 0x18040080);
+	REG_WRITE(DSPFW1, 0x0F0F3F3F);
+	REG_WRITE(DSPFW2, 0x5F2F0F3F);
+	REG_WRITE(DSPFW3, 0x0);
+	REG_WRITE(DSPFW4, 0x07071F1F);
+	REG_WRITE(DSPFW5, 0x2F17071F);
+	REG_WRITE(DSPFW6, 0x00001F3F);
+	REG_WRITE(DSPFW7, 0x1F3F1F3F);
+	REG_WRITE(DSPSRCTRL, 0x00080100);
+	REG_WRITE(DSPCHICKENBIT, 0x20);
+	REG_WRITE(FBDC_CHICKEN, 0x0C0C0C0C);
+	REG_WRITE(CURACNTR, 0x0);
+	REG_WRITE(CURBCNTR, 0x0);
+	REG_WRITE(CURCCNTR, 0x0);
+	REG_WRITE(IEP_OVA_CTRL, 0x0);
+	REG_WRITE(IEP_OVA_CTRL, 0x0);
+	REG_WRITE(DSPACNTR, 0x0);
+	REG_WRITE(DSPBCNTR, 0x0);
+	REG_WRITE(DSPCCNTR, 0x0);
+	REG_WRITE(DSPDCNTR, 0x0);
+	REG_WRITE(DSPECNTR, 0x0);
+	REG_WRITE(DSPFCNTR, 0x0);
+
+	power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
+
+	DRM_INFO("setup drain latency\n");
+
+	REG_WRITE(regs->ddl1_reg, ctx->ddl1);
+	REG_WRITE(regs->ddl2_reg, ctx->ddl2);
+	REG_WRITE(regs->ddl3_reg, ctx->ddl3);
+	REG_WRITE(regs->ddl4_reg, ctx->ddl4);
+}
+
 /**
  * Power on sequence for video mode MIPI panel.
  * NOTE: do NOT modify this function
@@ -345,37 +394,7 @@ reset_recovery:
 
 	if (IS_ANN(dev)) {
 		/* FIXME: reset the DC registers for ANN A0 */
-		power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
-
-		REG_WRITE(DSPCLK_GATE_D, 0x0);
-		REG_WRITE(RAMCLK_GATE_D, 0xc0000);
-		REG_WRITE(PFIT_CONTROL, 0x20000000);
-		REG_WRITE(DSPIEDCFGSHDW, 0x0);
-		REG_WRITE(DSPARB2, 0x000A0200);
-		REG_WRITE(DSPARB, 0x18040080);
-		REG_WRITE(DSPFW1, 0x0F0F3F3F);
-		REG_WRITE(DSPFW2, 0x5F2F0F3F);
-		REG_WRITE(DSPFW3, 0x0);
-		REG_WRITE(DSPFW4, 0x07071F1F);
-		REG_WRITE(DSPFW5, 0x2F17071F);
-		REG_WRITE(DSPFW6, 0x00001F3F);
-		REG_WRITE(DSPFW7, 0x1F3F1F3F);
-		REG_WRITE(DSPSRCTRL, 0x00080100);
-		REG_WRITE(DSPCHICKENBIT, 0x20);
-		REG_WRITE(FBDC_CHICKEN, 0x0C0C0C0C);
-		REG_WRITE(CURACNTR, 0x0);
-		REG_WRITE(CURBCNTR, 0x0);
-		REG_WRITE(CURCCNTR, 0x0);
-		REG_WRITE(IEP_OVA_CTRL, 0x0);
-		REG_WRITE(IEP_OVA_CTRL, 0x0);
-		REG_WRITE(DSPACNTR, 0x0);
-		REG_WRITE(DSPBCNTR, 0x0);
-		REG_WRITE(DSPCCNTR, 0x0);
-		REG_WRITE(DSPDCNTR, 0x0);
-		REG_WRITE(DSPECNTR, 0x0);
-		REG_WRITE(DSPFCNTR, 0x0);
-
-		power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
+		ann_dc_setup(dsi_config);
 	}
 
 	__dpi_set_properties(dsi_config, PORT_A);
@@ -742,10 +761,25 @@ static int __mdfld_dsi_dpi_set_power(struct drm_encoder *encoder, bool on)
 
 	mutex_lock(&dsi_config->context_lock);
 
-	if (dpi_output->first_boot && dsi_config->dsi_hw_context.panel_on) {
-		printk(KERN_ALERT "skip panle power setting for first boot!" \
-				"panel is already powered on\n");
-		goto fun_exit;
+	if (dpi_output->first_boot && on) {
+		if (dsi_config->dsi_hw_context.panel_on) {
+			if (IS_ANN(dev))
+				ann_dc_setup(dsi_config);
+
+			psb_enable_vblank(dev, dsi_config->pipe);
+
+			/* don't need ISLAND c for non dual-dsi panel */
+			if (!is_dual_dsi(dev))
+				power_island_put(OSPM_DISPLAY_C);
+
+			DRM_INFO("skip panle power setting for first boot! "
+				 "panel is already powered on\n");
+			goto fun_exit;
+		}
+
+		/* power down islands turned on by firmware */
+		power_island_put(OSPM_DISPLAY_A | OSPM_DISPLAY_C |
+				 OSPM_DISPLAY_MIO);
 	}
 
 	switch (on) {

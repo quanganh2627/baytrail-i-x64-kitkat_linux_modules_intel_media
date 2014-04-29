@@ -875,17 +875,20 @@ int mdfld_generic_dsi_dbi_set_power(struct drm_encoder *encoder, bool on)
 	if (dsi_connector->status != connector_status_connected)
 		goto set_power_err;
 
-	if (dbi_output->first_boot &&
-	    dsi_config->dsi_hw_context.panel_on) {
-		if (on) {
+	if (dbi_output->first_boot && on) {
+		if (dsi_config->dsi_hw_context.panel_on) {
 			/* When using smooth transition,
 			 * wake up ESD detection thread.
 			 */
 			mdfld_dsi_error_detector_wakeup(dsi_connector);
+
+			DRM_INFO("skip panle power setting for first boot!");
+			goto fun_exit;
 		}
-		DRM_INFO("skip panle power setting for first boot! " \
-			 "panel is already powered on\n");
-		goto fun_exit;
+
+		/* power down islands turned on by firmware */
+		power_island_put(OSPM_DISPLAY_A |
+				 OSPM_DISPLAY_C | OSPM_DISPLAY_MIO);
 	}
 
 	switch (on) {

@@ -566,7 +566,13 @@ void ospm_power_init(struct drm_device *dev)
 			case OSPM_DISPLAY_A:
 			case OSPM_DISPLAY_C:
 			case OSPM_DISPLAY_MIO:
-				island_list[i].p_funcs->power_down(dev, &island_list[i]);
+				atomic_set(&island_list[i].ref_count, 1);
+				island_list[i].island_state = OSPM_POWER_ON;
+				if (island_list[i].p_dependency) {
+					atomic_inc(&island_list[i].p_dependency->ref_count);
+					island_list[i].island_state = OSPM_POWER_ON;
+				}
+
 				break;
 			default:
 				break;
