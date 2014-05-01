@@ -441,7 +441,14 @@ static int psbfb_create(struct psb_fbdev *fbdev,
 		MDFLD_DSI_ENCODER_WITH_DRM_ENABLE(dev_priv->encoder0);
 	struct mdfld_dsi_config *dsi_config =
 		mdfld_dsi_encoder_get_config(dsi_encoder);
-	struct drm_display_mode *fixed_mode = dsi_config->fixed_mode;
+	struct drm_display_mode *fixed_mode;
+
+	if (!dsi_config) {
+		DRM_ERROR("Failed to get encoder config\n");
+		return -EINVAL;
+	}
+
+	fixed_mode = dsi_config->fixed_mode;
 
 	/* PR2 panel must have 200 pixel dummy clocks,
 	 * So the display timing should be 800x1024, and surface
