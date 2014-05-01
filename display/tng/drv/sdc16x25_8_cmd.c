@@ -53,16 +53,19 @@ int sdc16x25_8_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 	PSB_DEBUG_ENTRY("\n");
 
 	/* interface control: dual DSI */
+	cmd = sdc16x25_8_test_key_enable[0];
 	ret = mdfld_dsi_send_mcs_long_lp(sender, sdc16x25_8_test_key_enable, sizeof(sdc16x25_8_test_key_enable),
 					 MDFLD_DSI_SEND_PACKAGE);
 	if (ret)
 		goto err_out;
 
+	cmd = sdc16x25_8_eight_lane_enable[0];
 	ret = mdfld_dsi_send_mcs_long_lp(sender, sdc16x25_8_eight_lane_enable, sizeof(sdc16x25_8_eight_lane_enable),
 					 MDFLD_DSI_SEND_PACKAGE);
 	if (ret)
 		goto err_out;
 
+	cmd = sdc16x25_8_test_key_disable[0];
 	ret = mdfld_dsi_send_mcs_long_lp(sender, sdc16x25_8_test_key_disable, sizeof(sdc16x25_8_test_key_disable),
 					 MDFLD_DSI_SEND_PACKAGE);
 	if (ret)
@@ -100,12 +103,14 @@ int sdc16x25_8_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		goto err_out;
 
 	/* column address */
+	cmd = sdc16x25_8_mcs_column_addr[0];
 	ret = mdfld_dsi_send_mcs_long_lp(sender, sdc16x25_8_mcs_column_addr, 5,
 					 MDFLD_DSI_SEND_PACKAGE);
 	if (ret)
 		goto err_out;
 
 	/* page address */
+	cmd = sdc16x25_8_mcs_page_addr[0];
 	ret = mdfld_dsi_send_mcs_long_lp(sender, sdc16x25_8_mcs_page_addr, 5,
 					 MDFLD_DSI_SEND_PACKAGE);
 	if (ret)
