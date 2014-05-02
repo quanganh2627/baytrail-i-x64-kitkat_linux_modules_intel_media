@@ -640,6 +640,8 @@ struct dpst_guardband {
  */
 #define OV_C_OFFSET		0x08000
 #define OV_OVADD		0x30000
+#define OV_ENABLE_ROTATION BIT12
+#define OV_180_DEGREE	BIT11
 #define OV_DOVASTA              0x30008
 #define OV_PIPE_SELECT				(BIT6|BIT7)
 #define OV_PIPE_SELECT_POS			6

@@ -220,6 +220,8 @@ void DCCBFlipOverlay(struct drm_device *dev,
 			dsi_ctx->ovcadd = ctx->ovadd;
 	}
 
+	if ((ctx->index == 0) && display_need_180_rotation(dev_priv))
+		ctx->ovadd |= OV_ENABLE_ROTATION | OV_180_DEGREE;
 	/*Flip surf*/
 	PSB_WVDC32(ctx->ovadd, ovadd_reg);
 }
