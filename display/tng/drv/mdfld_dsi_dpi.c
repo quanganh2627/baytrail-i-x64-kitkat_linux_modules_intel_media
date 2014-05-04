@@ -499,6 +499,9 @@ reset_recovery:
 		REG_WRITE(regs->ddl2_reg, ctx->ddl2);
 		REG_WRITE(regs->ddl3_reg, ctx->ddl3);
 		REG_WRITE(regs->ddl4_reg, ctx->ddl4);
+
+		REG_WRITE(DSPARB2, ctx->dsparb2);
+		REG_WRITE(DSPARB, ctx->dsparb);
 	}
 
 	/*Enable pipe*/
@@ -574,6 +577,9 @@ static int __dpi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 	ctx = &dsi_config->dsi_hw_context;
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
+
+	ctx->dsparb = REG_READ(DSPARB);
+	ctx->dsparb2 = REG_READ(DSPARB2);
 
 	/* Don't reset brightness to 0.*/
 	ctx->lastbrightnesslevel = psb_brightness;

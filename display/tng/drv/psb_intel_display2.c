@@ -47,9 +47,7 @@ void mdfldWaitForPipeDisable(struct drm_device *dev, int pipe)
 {
 	int count, temp;
 	u32 pipeconf_reg = PIPEACONF;
-#if 1				/* FIXME MRFLD */
-	return;
-#endif				/* FIXME MRFLD */
+
 	switch (pipe) {
 	case 0:
 		break;
@@ -80,9 +78,6 @@ void mdfldWaitForPipeEnable(struct drm_device *dev, int pipe)
 {
 	int count, temp;
 	u32 pipeconf_reg = PIPEACONF;
-#if 1				/* FIXME MRFLD */
-	return;
-#endif				/* FIXME MRFLD */
 
 	switch (pipe) {
 	case 0:

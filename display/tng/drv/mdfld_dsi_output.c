@@ -1077,6 +1077,7 @@ void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 	ctx = &dsi_config->dsi_hw_context;
 	if (dsi_config->pipe == 0) {
 		mutex_lock(&dsi_config->context_lock);
+#if 0
 		if ((mode->hdisplay == 720) && (mode->vdisplay == 1280))
 			drain_rate = ACTUAL_DRAIN_RATE_7x12;
 		else if ((mode->hdisplay == 1080) && (mode->vdisplay == 1920))
@@ -1085,20 +1086,27 @@ void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 			drain_rate = ACTUAL_DRAIN_RATE_25x16;
 		if (drain_rate != 0) {
 			value = ((64 * 32 / drain_rate) & 0xFF) | 0x80;
-#if 0
 			ctx->ddl1 = value | (HDMI_SPRITE_DEADLINE << 8) |
 					(value << 24);
 			ctx->ddl2 = value | (HDMI_OVERLAY_DEADLINE << 8);
 			ctx->ddl3 = 0;
 			ctx->ddl4 = value | (value << 8);
-#else
 			ctx->ddl1 = 0x83838383;
 			ctx->ddl2 = 0x83838383;
 			ctx->ddl3 = 0x83;
 			ctx->ddl4 = 0x8383;
 
-#endif
 		}
+#endif
+		ctx->ddl1 = 0x86868686;
+		ctx->ddl2 = 0x86868686;
+		ctx->ddl3 = 0x86;
+		ctx->ddl4 = 0x8686;
+
+		/* init for 1st boot, 12KB for plane A D E F */
+		ctx->dsparb = 0xc0300c0;
+		ctx->dsparb2 = 0x90180;
+
 		mutex_unlock(&dsi_config->context_lock);
 	}
 

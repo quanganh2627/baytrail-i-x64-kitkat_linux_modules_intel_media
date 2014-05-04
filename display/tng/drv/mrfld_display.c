@@ -209,6 +209,28 @@ void mrfld_disable_crtc(struct drm_device *dev, int pipe, bool plane_d)
 	/* Disable PLLs. */
 }
 
+void mofd_update_fifo_size(struct drm_device *dev, bool hdmi_on)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = dev_priv->dsi_configs[0];
+	struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
+
+	DRM_INFO("setting fifo size, hdmi_suspend: %d\n", hdmi_on);
+
+	if (!hdmi_on) {
+		/* no hdmi, 12KB for plane A D E F */
+		REG_WRITE(DSPARB2, 0x90180);
+		REG_WRITE(DSPARB, 0xc0300c0);
+	} else {
+		/* with hdmi, 10KB for plane A D E F; 8KB for plane B */
+		REG_WRITE(DSPARB2, 0x981c0);
+		REG_WRITE(DSPARB, 0x120480a0);
+	}
+
+	ctx->dsparb = REG_READ(DSPARB);
+	ctx->dsparb2 = REG_READ(DSPARB2);
+}
+
 /**
  * Sets the power management mode of crtc including the pll pipe and plane.
  *
@@ -488,6 +510,9 @@ static void mrfld_crtc_dpms(struct drm_crtc *crtc, int mode)
 		if ((pipe == 1) && hdmi_priv)
 			hdmi_priv->hdmi_suspended = true;
 
+		if (IS_ANN(dev))
+			mofd_update_fifo_size(dev, false);
+
 		/* Make the pending flip request as completed. */
 		DCUnAttachPipe(pipe);
 		DC_MRFLD_onPowerOff(pipe);
@@ -542,6 +567,8 @@ static int mrfld_crtc_mode_set(struct drm_crtc *crtc,
 		return mdfld_crtc_dsi_mode_set(crtc, dsi_config, mode,
 				adjusted_mode, x, y, old_fb);
 	} else {
+		if (IS_ANN(dev))
+			mofd_update_fifo_size(dev, true);
 		android_hdmi_crtc_mode_set(crtc, mode, adjusted_mode,
 				x, y, old_fb);
 

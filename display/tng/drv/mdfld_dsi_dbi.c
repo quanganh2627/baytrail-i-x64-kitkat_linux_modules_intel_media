@@ -557,6 +557,9 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 		REG_WRITE(regs->ddl2_reg, ctx->ddl2);
 		REG_WRITE(regs->ddl3_reg, ctx->ddl3);
 		REG_WRITE(regs->ddl4_reg, ctx->ddl4);
+
+		REG_WRITE(DSPARB2, ctx->dsparb2);
+		REG_WRITE(DSPARB, ctx->dsparb);
 	}
 
 	/*Enable pipe*/
@@ -722,6 +725,9 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 
         ctx->dspcntr    = REG_READ(regs->dspcntr_reg);
         ctx->pipeconf   = REG_READ(regs->pipeconf_reg);
+
+	ctx->dsparb = REG_READ(DSPARB);
+	ctx->dsparb2 = REG_READ(DSPARB2);
 
         //if (!IS_ANN_A0(dev)) 
 	//ANN gamma setting use old path
