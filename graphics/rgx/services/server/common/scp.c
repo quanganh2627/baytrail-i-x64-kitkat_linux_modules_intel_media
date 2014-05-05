@@ -863,11 +863,22 @@ IMG_VOID IMG_CALLCONV SCPDumpStatus(SCP_CONTEXT *psContext)
 	else
 	{
 		SCP_COMMAND *psCommand;
+		IMG_UINT32 ui32DepOffset = psContext->ui32DepOffset;
 
-		/* Dump the command we're pending on */
-		psCommand = (SCP_COMMAND *)((IMG_UINT8 *)psContext->pvCCB +
-		            psContext->ui32DepOffset);
-		_SCPDumpCommand(psCommand);
+		while (ui32DepOffset != psContext->ui32WriteOffset)
+		{
+			/* Dump the command we're pending on */
+			psCommand = (SCP_COMMAND *)((IMG_UINT8 *)psContext->pvCCB +
+				ui32DepOffset);
+
+			_SCPDumpCommand(psCommand);
+
+			/* processed cmd so update queue */
+			UPDATE_CCB_OFFSET(ui32DepOffset,
+							  psCommand->ui32CmdSize,
+							  psContext->ui32CCBSize);
+
+		}
 	}
 	
 	PVR_LOG(("Active command(s):"));
