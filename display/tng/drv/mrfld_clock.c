@@ -357,7 +357,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 		case SHARP_25x16_VID:
 		case JDI_25x16_VID:
 				clock.p1 = 3;
-				clock.m = 162;
+				clock.m = 140;
 				break;
 		case JDI_7x12_VID:
 				clock.p1 = 5;

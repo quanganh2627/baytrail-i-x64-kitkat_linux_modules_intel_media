@@ -96,10 +96,10 @@ void mdfld_dsi_sharp25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_confi
 	hw_ctx->lp_rx_timeout = 0xFFFFFF;
 	hw_ctx->device_reset_timer = 0xffff;
 	hw_ctx->turn_around_timeout = 0x3f;
-	hw_ctx->high_low_switch_count = 0x40;
-	hw_ctx->clk_lane_switch_time_cnt =  0x16002d;
+	hw_ctx->high_low_switch_count = 0x2c;
+	hw_ctx->clk_lane_switch_time_cnt =  0x2b0014;
 	hw_ctx->lp_byteclk = 0x5;
-	hw_ctx->dphy_param = 0x3c1fc51f;
+	hw_ctx->dphy_param = 0x2a18681f;
 	hw_ctx->eot_disable = 0x2;
 	hw_ctx->init_count = 0xfa0;
 	hw_ctx->dbi_bw_ctrl = 0x820;
@@ -270,10 +270,9 @@ static struct drm_display_mode *sharp25x16_vid_get_config_mode(void)
 		return NULL;
 
 	mode->hdisplay = 2560;
-
-	mode->hsync_start = mode->hdisplay + 8;
-	mode->hsync_end = mode->hsync_start + 30;
-	mode->htotal = mode->hsync_end + 32;
+	mode->hsync_start = mode->hdisplay + 120;
+	mode->hsync_end = mode->hsync_start + 34;
+	mode->htotal = mode->hsync_end + 86;
 
 	mode->vdisplay = 1600;
 	mode->vsync_start = mode->vdisplay + 12;

@@ -84,10 +84,14 @@ int mdfld_dsi_dpi_timing_calculation(struct drm_device *dev,
 	 * bclock_count = pclk_count * bpp / num_lane / 8
 	 */
 	if (is_dual_dsi(dev)) {
-		dpi_timing->hsync_count = pclk_hsync;
-		dpi_timing->hbp_count = pclk_hbp;
-		dpi_timing->hfp_count = pclk_hfp;
-		dpi_timing->hactive_count = pclk_hactive / 2;
+		dpi_timing->hsync_count =
+			mdfld_dsi_dpi_to_byte_clock_count(pclk_hsync, num_lane, bpp);
+		dpi_timing->hbp_count =
+			mdfld_dsi_dpi_to_byte_clock_count(pclk_hbp, num_lane, bpp);
+		dpi_timing->hfp_count =
+			mdfld_dsi_dpi_to_byte_clock_count(pclk_hfp, num_lane, bpp);
+		dpi_timing->hactive_count =
+			mdfld_dsi_dpi_to_byte_clock_count(pclk_hactive / 2, num_lane, bpp);
 		dpi_timing->vsync_count = pclk_vsync;
 		dpi_timing->vbp_count = pclk_vbp;
 		dpi_timing->vfp_count = pclk_vfp;
@@ -107,6 +111,7 @@ int mdfld_dsi_dpi_timing_calculation(struct drm_device *dev,
 			mdfld_dsi_dpi_to_byte_clock_count(pclk_vbp, num_lane, bpp);
 		dpi_timing->vfp_count =
 			mdfld_dsi_dpi_to_byte_clock_count(pclk_vfp, num_lane, bpp);
+
 	}
 	PSB_DEBUG_ENTRY("DPI timings: %d, %d, %d, %d, %d, %d, %d\n",
 			dpi_timing->hsync_count, dpi_timing->hbp_count,
@@ -248,7 +253,6 @@ static void __dpi_set_properties(struct mdfld_dsi_config *dsi_config,
 	REG_WRITE(regs->vsync_count_reg + offset, ctx->vsync_count);
 	REG_WRITE(regs->vbp_count_reg + offset, ctx->vbp_count);
 	REG_WRITE(regs->vfp_count_reg + offset, ctx->vfp_count);
-
 }
 
 static int __dpi_config_port(struct mdfld_dsi_config *dsi_config,

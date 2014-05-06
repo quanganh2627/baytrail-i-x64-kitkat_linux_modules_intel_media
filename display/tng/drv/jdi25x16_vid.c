@@ -39,7 +39,7 @@ static u8 jdi25x16_page_addr[] = {
 static u8 jdi25x16_set_tear_on[] = {0x35, 0x00};
 static u8 jdi25x16_tear_scanline[] = {
             0x44, 0x00, 0x00};
-static u8 jdi25x16_set_brightness[] = {0x51, 0xFF};
+static u8 jdi25x16_set_brightness[] = {0x51, 0x00};
 static u8 jdi25x16_turn_on_backlight[] = {0x53, 0x24};
 static u8 jdi25x16_set_mode[] = {0xb3, 0x14};
 
@@ -111,12 +111,6 @@ int mdfld_dsi_jdi25x16_ic_init(struct mdfld_dsi_config *dsi_config)
 		    DRM_ERROR("%s: %d: Set brightness\n", __func__, __LINE__);
 		    goto ic_init_err;
 		}
-		err = mdfld_dsi_send_mcs_short_hs(sender, jdi25x16_turn_on_backlight[0],
-				jdi25x16_turn_on_backlight[1], 1, 0);
-		if (err) {
-		    DRM_ERROR("%s: %d: Turn on backlight\n", __func__, __LINE__);
-		    goto ic_init_err;
-		}
 	}
 	sender->work_for_slave_panel = false;
 	return 0;
@@ -171,11 +165,17 @@ int mdfld_dsi_jdi25x16_set_mode(struct mdfld_dsi_config *dsi_config)
 			__func__, __LINE__);
 			goto set_mode_err;
 		}
-		/* Set Display on 0x29 */
-		err = mdfld_dsi_send_mcs_short_hs(sender, set_display_on, 0, 0,
-				MDFLD_DSI_SEND_PACKAGE);
+	}
+	mdelay(20);
+	for (i = 0; i < 2; i++) {
+		if (i == 0)
+			sender->work_for_slave_panel = false;
+		else
+			sender->work_for_slave_panel = true;
+		err = mdfld_dsi_send_mcs_short_hs(sender, jdi25x16_turn_on_backlight[0],
+				jdi25x16_turn_on_backlight[1], 1, 0);
 		if (err) {
-			DRM_ERROR("%s: %d: Set Display On\n", __func__, __LINE__);
+			DRM_ERROR("%s: %d: Turn on backlight\n", __func__, __LINE__);
 			goto set_mode_err;
 		}
 	}
@@ -211,11 +211,11 @@ void mdfld_dsi_jdi25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_config)
 	hw_ctx->hs_tx_timeout = 0xFFFFFF;
 	hw_ctx->lp_rx_timeout = 0xFFFFFF;
 	hw_ctx->device_reset_timer = 0xffff;
-	hw_ctx->turn_around_timeout = 0x3f;
-	hw_ctx->high_low_switch_count = 0x40;
-	hw_ctx->clk_lane_switch_time_cnt =  0x16002d;
+	hw_ctx->turn_around_timeout = 0x2f;
+	hw_ctx->high_low_switch_count = 0x2c;
+	hw_ctx->clk_lane_switch_time_cnt =  0x2b0014;
 	hw_ctx->lp_byteclk = 0x5;
-	hw_ctx->dphy_param = 0x3c1fc51f;
+	hw_ctx->dphy_param = 0x2a18681f;
 	hw_ctx->eot_disable = 0x2;
 	hw_ctx->init_count = 0xfa0;
 	hw_ctx->dbi_bw_ctrl = 0x820;
@@ -416,9 +416,9 @@ static struct drm_display_mode *jdi25x16_vid_get_config_mode(void)
 
 	mode->hdisplay = 2560;
 
-	mode->hsync_start = mode->hdisplay + 8;
-	mode->hsync_end = mode->hsync_start + 20;
-	mode->htotal = mode->hsync_end + 32;
+	mode->hsync_start = mode->hdisplay + 160;
+	mode->hsync_end = mode->hsync_start + 24;
+	mode->htotal = mode->hsync_end + 56;
 
 	mode->vdisplay = 1600;
 	mode->vsync_start = mode->vdisplay + 12;
@@ -440,6 +440,33 @@ static struct drm_display_mode *jdi25x16_vid_get_config_mode(void)
 static int mdfld_dsi_jdi25x16_set_brightness(struct mdfld_dsi_config *dsi_config,
 		int level)
 {
+	struct mdfld_dsi_pkg_sender *sender =
+		mdfld_dsi_get_pkg_sender(dsi_config);
+	u8 duty_val = 0;
+	int i;
+
+	PSB_DEBUG_ENTRY("level = %d\n", level);
+
+	if (!sender) {
+		DRM_ERROR("Failed to get DSI packet sender\n");
+		return -EINVAL;
+	}
+
+	duty_val = (0xFF * level) / 100;
+	for (i = 0; i < 2; i++) {
+		if (i == 0)
+			sender->work_for_slave_panel = false;
+		else
+			sender->work_for_slave_panel = true;
+		/*
+		*	Set maximum brightness here. AOB needs to be modified
+		*	to get real brightness setting
+		*/
+		mdfld_dsi_send_mcs_short_hs(sender,
+				write_display_brightness, 0xff, 1,
+				MDFLD_DSI_SEND_PACKAGE);
+	}
+	sender->work_for_slave_panel = false;
 	return 0;
 }
 
