@@ -2403,7 +2403,16 @@ static int psb_set_csc_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file_priv)
 {
 	struct drm_psb_csc_matrix *csc_matrix = data;
-	csc_program_DC(dev, csc_matrix->matrix, csc_matrix->pipe);
+        struct csc_setting csc;
+
+	csc.pipe = csc_matrix->pipe;
+	csc.type = CSC_SETTING;
+	csc.enable_state = true;
+	csc.data_len = CSC_COUNT;
+	memcpy(csc.data.csc_data, csc_matrix->matrix, sizeof(csc.data.csc_data));
+	drm_psb_enable_color_conversion = 1;
+	mdfld_intel_crtc_set_color_conversion(dev, &csc);
+
 	return 0;
 }
 

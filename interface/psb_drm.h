@@ -1039,7 +1039,7 @@ typedef struct tagHDMITESTREGREADWRITE {
 struct drm_psb_csc_matrix {
 	int pipe;
 	int64_t matrix[9];
-};
+}__attribute__((packed));
 
 struct psb_drm_dpu_rect {
 	int x, y;

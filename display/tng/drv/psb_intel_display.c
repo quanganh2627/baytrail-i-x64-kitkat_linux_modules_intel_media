@@ -829,7 +829,7 @@ int mdfld_intel_crtc_set_color_conversion(struct drm_device *dev,
 
                 /*save color_coef (chrome) */
                 for (i = 0; i < 6; i++)
-                        csc_setting_save[i] = ctx->color_coef[i];
+                        csc_setting_save[i] = REG_READ(regs->color_coef_reg + (i<<2));
 
 		/*enable*/
 		val = REG_READ(regs->pipeconf_reg);
