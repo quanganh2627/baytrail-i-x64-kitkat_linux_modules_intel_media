@@ -54,7 +54,7 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			    struct drm_psb_cmdbuf_arg *arg,
 			    unsigned char *cmd_start,
 			    struct psb_ttm_fence_rep *fence_arg);
-static int vsp_fence_surfaces(struct drm_file *priv,
+static int vsp_fence_vpp_surfaces(struct drm_file *priv,
 			      struct list_head *validate_list,
 			      uint32_t fence_type,
 			      struct drm_psb_cmdbuf_arg *arg,
@@ -63,6 +63,12 @@ static int vsp_fence_surfaces(struct drm_file *priv,
 static void handle_error_response(unsigned int error_type,
 				unsigned int cmd_type);
 static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
+				struct list_head *validate_list,
+				uint32_t fence_type,
+				struct drm_psb_cmdbuf_arg *arg,
+				struct psb_ttm_fence_rep *fence_arg,
+				struct ttm_buffer_object *pic_param_bo);
+static int vsp_fence_compose_surfaces(struct drm_file *priv,
 				struct list_head *validate_list,
 				uint32_t fence_type,
 				struct drm_psb_cmdbuf_arg *arg,
@@ -216,6 +222,17 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			VSP_DEBUG("sequence %d\n", sequence);
 			VSP_DEBUG("receive vp8 encoded frame response\n");
 
+			break;
+		}
+		case VssWiDi_ComposeSetSequenceParametersResponse:
+		{
+			VSP_DEBUG("The Compose respose value is %d\n", msg->buffer);
+			break;
+		}
+		case VssWiDi_ComposeFrameResponse:
+		{
+			VSP_DEBUG("Compose sequence %x is done!!\n", msg->buffer);
+			sequence = msg->buffer;
 			break;
 		}
 		default:
@@ -498,6 +515,18 @@ int vsp_send_command(struct drm_device *dev,
 					goto out;
 				else
 					continue;
+			} else if (cur_cmd->type == VspFenceComposeCommand) {
+				VSP_DEBUG("skip VspFenceComposeCommand\n");
+				cur_cmd++;
+				cmd_size -= sizeof(*cur_cmd);
+				VSP_DEBUG("first cmd_size %ld\n", cmd_size);
+				if (cmd_size == 0)
+					goto out;
+				else
+					continue;
+			} else if (cur_cmd->type == VssWiDi_ComposeFrameCommand) {
+				/* save the fence value in buffer_id */
+				cur_cmd->buffer_id = vsp_priv->compose_fence;
 			}
 
 			/* FIXME: could remove cmd_idx here */
@@ -568,6 +597,9 @@ static int vsp_prehandle_command(struct drm_file *priv,
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	struct ttm_buffer_object *pic_bo_vp8;
 	int vp8_pic_num = 0;
+	struct ttm_buffer_object *compose_param_bo = NULL;
+	int compose_param_num = 0;
+
 
 	cur_cmd = (struct vss_command_t *)cmd_start;
 
@@ -595,6 +627,28 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			if (pic_param_num > 1) {
 				DRM_ERROR("pic_param_num invalid(%d)!\n",
 					  pic_param_num);
+				ret = -1;
+				goto out;
+			}
+		} else if (cur_cmd->type == VspFenceComposeCommand) {
+			compose_param_bo =
+				ttm_buffer_object_lookup(tfile,
+							 cur_cmd->buffer);
+			if (compose_param_bo == NULL) {
+				DRM_ERROR("VSP: failed to find %x bo\n",
+					  cur_cmd->buffer);
+				ret = -1;
+				goto out;
+			}
+			compose_param_num++;
+			VSP_DEBUG("find compose param buffer: id %x, offset %lx\n",
+				  cur_cmd->buffer, compose_param_bo->offset);
+			VSP_DEBUG("compose param placement %x bus.add %p\n",
+				  compose_param_bo->mem.placement,
+				  compose_param_bo->mem.bus.addr);
+			if (compose_param_num > 1) {
+				DRM_ERROR("compose_param_num invalid(%d)!\n",
+					  compose_param_num);
 				ret = -1;
 				goto out;
 			}
@@ -704,12 +758,17 @@ static int vsp_prehandle_command(struct drm_file *priv,
 		vsp_priv->vsp_cmd_num = vsp_cmd_num;
 
 	if (pic_param_num > 0) {
-		ret = vsp_fence_surfaces(priv, validate_list, fence_type, arg,
+		ret = vsp_fence_vpp_surfaces(priv, validate_list, fence_type, arg,
 					 fence_arg, pic_param_bo);
 	} else if (vp8_pic_num > 0) {
 		ret = vsp_fence_vp8enc_surfaces(priv, validate_list,
 					fence_type, arg,
 					fence_arg, pic_bo_vp8);
+	} else if (compose_param_num) {
+		vsp_priv->force_flush_cmd = 1;
+		ret = vsp_fence_compose_surfaces(priv, validate_list,
+					fence_type, arg,
+					fence_arg, compose_param_bo);
 	} else {
 		/* unreserve these buffer */
 		list_for_each_entry_safe(pos, next, validate_list, head) {
@@ -729,7 +788,7 @@ out:
 	return ret;
 }
 
-int vsp_fence_surfaces(struct drm_file *priv,
+int vsp_fence_vpp_surfaces(struct drm_file *priv,
 		       struct list_head *validate_list,
 		       uint32_t fence_type,
 		       struct drm_psb_cmdbuf_arg *arg,
@@ -940,6 +999,40 @@ out:
 #endif
 	return ret;
 }
+
+static int vsp_fence_compose_surfaces(struct drm_file *priv,
+				struct list_head *validate_list,
+				uint32_t fence_type,
+				struct drm_psb_cmdbuf_arg *arg,
+				struct psb_ttm_fence_rep *fence_arg,
+				struct ttm_buffer_object *compose_param_bo)
+{
+	int ret = 0;
+	struct ttm_fence_object *fence = NULL;
+	struct drm_device *dev = priv->minor->dev;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct vsp_private *vsp_priv = dev_priv->vsp_private;
+
+	psb_fence_or_sync(priv, VSP_ENGINE_VPP, fence_type,
+			  arg->fence_flags, validate_list,
+			  fence_arg, &fence);
+	if (fence) {
+		VSP_DEBUG("compose fence sequence %x\n",
+			  fence->sequence);
+		vsp_priv->compose_fence = fence->sequence;
+
+		ttm_fence_object_unref(&fence);
+	} else {
+		VSP_DEBUG("NO fence?????\n");
+		ret = -1;
+	}
+out:
+	ttm_bo_unref(&compose_param_bo);
+	return ret;
+}
+
+
+
 
 bool vsp_fence_poll(struct drm_device *dev)
 {

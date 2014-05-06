@@ -288,6 +288,9 @@ struct vsp_private {
 	int force_flush_cmd;
 	int delayed_burst_cnt;
 	struct delayed_work vsp_cmd_submit_check_wq;
+
+	/* Composer related */
+	uint32_t compose_fence;
 };
 
 extern int vsp_init(struct drm_device *dev);
