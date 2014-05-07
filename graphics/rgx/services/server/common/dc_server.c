@@ -1297,7 +1297,7 @@ PVRSRV_ERROR DCDisplayContextConfigureCheck(DC_DISPLAY_CONTEXT *psDisplayContext
 		eError = psDevice->psFuncTable->pfnContextConfigureCheck(psDisplayContext->hDisplayContext,
 																ui32PipeCount,
 																pasSurfAttrib,
-																ahBuffers);
+																&ahBuffers);
 		if (eError != PVRSRV_OK)
 		{
 			goto FailConfigCheck;
@@ -1383,7 +1383,7 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 			eError = psDevice->psFuncTable->pfnContextConfigureCheck(psDisplayContext->hDisplayContext,
 																	ui32PipeCount,
 																	pasSurfAttrib,
-																	ahBuffers);
+																	&ahBuffers);
 			if (eError != PVRSRV_OK)
 			{
 				goto FailConfigCheck;

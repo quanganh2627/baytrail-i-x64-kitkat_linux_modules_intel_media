@@ -164,7 +164,7 @@ typedef struct {
 	IMG_HANDLE hConfigData;
 	IMG_UINT32 uiSwapInterval;
 	IMG_UINT32 uiPowerIslands;
-	DC_MRFLD_BUFFER asBuffers[0];
+	DC_MRFLD_BUFFER *pasBuffers[0];
 } DC_MRFLD_FLIP;
 
 /*exported functions*/

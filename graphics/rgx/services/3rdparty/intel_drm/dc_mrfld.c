@@ -283,6 +283,7 @@ static void free_flip(DC_MRFLD_FLIP *psFlip)
 {
 	int i;
 	struct flip_plane *tmp, *plane;
+	DC_MRFLD_BUFFER *psBuffer;
 
 	for (i = 0; i < MAX_PIPE_NUM; i++) {
 		list_for_each_entry_safe(plane, tmp,
@@ -290,6 +291,15 @@ static void free_flip(DC_MRFLD_FLIP *psFlip)
 			list_del(&plane->list);
 			kfree(plane);
 		}
+	}
+
+	/* free buffers which allocated in configureCheck*/
+	for (i = 0; i < psFlip->uiNumBuffers; i++) {
+		psBuffer = psFlip->pasBuffers[i];
+		if (!psBuffer) {
+			continue;
+		}
+		OSFreeMem(psBuffer);
 	}
 
 	kfree(psFlip);
@@ -451,7 +461,7 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 {
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom = NULL;
 	struct intel_dc_plane_zorder *zorder = NULL;
-	DC_MRFLD_BUFFER *pasBuffers;
+	DC_MRFLD_BUFFER **pasBuffers;
 	struct flip_plane *plane;
 	IMG_UINT32 uiNumBuffers;
 	IMG_UINT32 ulAddr;
@@ -475,7 +485,7 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	if (psFlip->eFlipStates[iPipe] == DC_MRFLD_FLIP_DC_UPDATED)
 		return IMG_TRUE;
 
-	pasBuffers = psFlip->asBuffers;
+	pasBuffers = psFlip->pasBuffers;
 	uiNumBuffers = psFlip->uiNumBuffers;
 
 	if (!pasBuffers || !uiNumBuffers) {
@@ -616,7 +626,7 @@ static bool _Can_Flip(int iPipe)
 static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 {
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom;
-	DC_MRFLD_BUFFER *pasBuffers;
+	DC_MRFLD_BUFFER **pasBuffers;
 	IMG_UINT32 uiNumBuffers;
 	struct flip_plane *flip_plane;
 	int type, index, pipe;
@@ -628,7 +638,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 		return;
 	}
 
-	pasBuffers = psFlip->asBuffers;
+	pasBuffers = psFlip->pasBuffers;
 	uiNumBuffers = psFlip->uiNumBuffers;
 
 	if (!pasBuffers || !uiNumBuffers) {
@@ -639,20 +649,20 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 	mutex_lock(&gpsDevice->sMappingLock);
 
 	for (i = 0; i < uiNumBuffers; i++) {
-		if (pasBuffers[i].eFlipOp == DC_MRFLD_FLIP_SURFACE) {
+		if (pasBuffers[i]->eFlipOp == DC_MRFLD_FLIP_SURFACE) {
 			/* assign to pipe 0 by default*/
 			psFlip->bActivePipes[DC_PIPE_A] = IMG_TRUE;
 			continue;
 		}
 
-		if (pasBuffers[i].eFlipOp != DC_MRFLD_FLIP_CONTEXT) {
+		if (pasBuffers[i]->eFlipOp != DC_MRFLD_FLIP_CONTEXT) {
 			DRM_ERROR("%s: bad flip operation %d\n", __func__,
-					pasBuffers[i].eFlipOp);
+					pasBuffers[i]->eFlipOp);
 			continue;
 		}
 
-		for (j = 0; j < pasBuffers[i].ui32ContextCount; j++) {
-			psSurfCustom = &pasBuffers[i].sContext[j];
+		for (j = 0; j < pasBuffers[i]->ui32ContextCount; j++) {
+			psSurfCustom = &pasBuffers[i]->sContext[j];
 
 			type = psSurfCustom->type;
 			index = -1;
@@ -693,7 +703,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 			flip_plane->type = type;
 			flip_plane->index = index;
 			flip_plane->attached_pipe = pipe;
-			flip_plane->flip_buf = &pasBuffers[i];
+			flip_plane->flip_buf = pasBuffers[i];
 			flip_plane->flip_ctx = psSurfCustom;
 
 			list_add_tail(&flip_plane->list,
@@ -797,7 +807,7 @@ static void _Queue_Flip(IMG_HANDLE hConfigData, IMG_HANDLE *ahBuffers,
 	int i;
 
 	uiFlipSize = sizeof(DC_MRFLD_FLIP);
-	uiFlipSize += uiNumBuffers * sizeof(DC_MRFLD_BUFFER);
+	uiFlipSize += uiNumBuffers * sizeof(DC_MRFLD_BUFFER*);
 
 	psFlip = kzalloc(uiFlipSize , GFP_KERNEL);
 	if (!gpsDevice || !psFlip) {
@@ -824,8 +834,7 @@ static void _Queue_Flip(IMG_HANDLE hConfigData, IMG_HANDLE *ahBuffers,
 			DRM_DEBUG("%s: buffer %d is empty!\n", __func__, i);
 			continue;
 		}
-
-		memcpy(&psFlip->asBuffers[i], psBuffer, sizeof(*psBuffer));
+		psFlip->pasBuffers[i] = psBuffer;
 	}
 
 	psFlip->uiSwapInterval = ui32DisplayPeriod;
@@ -1127,30 +1136,41 @@ static PVRSRV_ERROR DC_MRFLD_ContextConfigureCheck(
 				IMG_HANDLE hDisplayContext,
 				IMG_UINT32 ui32PipeCount,
 				PVRSRV_SURFACE_CONFIG_INFO *pasSurfAttrib,
-				IMG_HANDLE *ahBuffers)
+				IMG_HANDLE **pahBuffers)
 {
 	DC_MRFLD_DISPLAY_CONTEXT *psDisplayContext =
 		(DC_MRFLD_DISPLAY_CONTEXT *)hDisplayContext;
 	DC_MRFLD_DEVICE *psDevice;
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom;
 	DC_MRFLD_BUFFER *psBuffer;
+	IMG_HANDLE *ahBuffers;
 	int err;
 	int i;
 
-	if (!psDisplayContext || !pasSurfAttrib || !ahBuffers)
+	if (!psDisplayContext || !pasSurfAttrib || !pahBuffers || !(*pahBuffers))
 		return PVRSRV_ERROR_INVALID_PARAMS;
 
 	DRM_DEBUG("%s\n", __func__);
 
 	psDevice = psDisplayContext->psDevice;
+	ahBuffers = *pahBuffers;
 
 	/*TODO: handle ui32PipeCount = 0*/
 
 	/* reset buffer context count*/
 	for (i = 0; i < ui32PipeCount; i++) {
-		psBuffer = (DC_MRFLD_BUFFER *) ahBuffers[i];
-		if (psBuffer)
+		if (!ahBuffers[i]) {
+			continue;
+		}
+		psBuffer = OSAllocMem(sizeof(DC_MRFLD_BUFFER));
+		if (psBuffer == IMG_NULL) {
+			return PVRSRV_ERROR_OUT_OF_MEMORY;
+		}
+		OSMemCopy(psBuffer, ahBuffers[i], sizeof(DC_MRFLD_BUFFER));
+		if (psBuffer) {
 			psBuffer->ui32ContextCount = 0;
+		}
+		ahBuffers[i] = psBuffer;
 	}
 
 	for (i = 0; i < ui32PipeCount; i++) {
@@ -1187,6 +1207,7 @@ static PVRSRV_ERROR DC_MRFLD_ContextConfigureCheck(
 		psBuffer->eFlipOp = DC_MRFLD_FLIP_CONTEXT;
 	}
 
+	*pahBuffers = ahBuffers;
 	return PVRSRV_OK;
 }
 
