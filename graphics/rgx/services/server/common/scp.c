@@ -337,6 +337,14 @@ PVRSRV_ERROR _SCPCommandReady(SCP_COMMAND *psCommand)
 			sync_fence_put(psCommand->psAcquireFence);
 			psCommand->psAcquireFence = IMG_NULL;
 		}
+		else if (psCommand->psAcquireFence->status < 0)
+		{
+			/* Just take error fence as signaled and send it to display */
+			PVR_DPF((PVR_DBG_WARNING, "%s:AcqureFence[%p] status is error!",
+					__FUNCTION__, psCommand->psAcquireFence));
+			sync_fence_put(psCommand->psAcquireFence);
+			psCommand->psAcquireFence = IMG_NULL;
+		}
 		else
 		{
 			return PVRSRV_ERROR_FAILED_DEPENDENCIES;
