@@ -36,9 +36,12 @@
 static int mipi_reset_gpio;
 static int bias_en_gpio;
 
-static u8 jdi_set_address_mode[] = {0x36, 0xc0, 0x00, 0x00};
+static u8 jdi_set_address_mode[] = {0x36, 0x00, 0x00, 0x00};
 static u8 jdi_write_display_brightness[] = {0x51, 0x0f, 0xff, 0x00};
 
+static u8 jdi_mcs_clumn_addr[] = {0x2a, 0x00, 0x00, 0x02, 0xcf};
+static u8 jdi_mcs_page_addr[] = {0x2b, 0x00, 0x00, 0x04, 0xff};
+static u8 jdi_set_mode[] = {0xb3, 0x35};
 int mdfld_dsi_jdi_ic_init(struct mdfld_dsi_config *dsi_config)
 {
 	struct mdfld_dsi_pkg_sender *sender
@@ -94,6 +97,19 @@ int mdfld_dsi_jdi_ic_init(struct mdfld_dsi_config *dsi_config)
 		goto ic_init_err;
 	}
 
+	err = mdfld_dsi_send_mcs_long_hs(sender,jdi_mcs_clumn_addr,
+			5, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Clumn Address\n",__func__, __LINE__);
+		goto ic_init_err;
+	}
+
+	err = mdfld_dsi_send_mcs_long_hs(sender,jdi_mcs_page_addr,
+			5, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Page Address\n",__func__, __LINE__);
+		goto ic_init_err;
+	}
 	return 0;
 
 ic_init_err:
@@ -215,6 +231,27 @@ static int mdfld_dsi_jdi_power_on(struct mdfld_dsi_config *dsi_config)
 	}
 	/* Wait for 6 frames after exit_sleep_mode. */
 	msleep(100);
+
+	err = mdfld_dsi_send_gen_short_hs(sender,access_protect, 0x4, 2,
+                        MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set MCAP\n",__func__, __LINE__);
+		goto power_on_err;
+	}
+
+	err = mdfld_dsi_send_gen_long_hs(sender, jdi_set_mode,2,
+			MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Mode\n", __func__, __LINE__);
+		goto power_on_err;
+	}
+
+	err = mdfld_dsi_send_gen_short_hs(sender,access_protect, 0x3, 2,
+                        MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set MCAP\n",__func__, __LINE__);
+		goto power_on_err;
+	}
 
 	/* Set Display on */
 	err = mdfld_dsi_send_mcs_short_hs(sender, set_display_on, 0, 0,
@@ -396,9 +433,9 @@ static int mdfld_dsi_jdi_panel_reset(struct mdfld_dsi_config *dsi_config)
 	gpio_set_value_cansleep(bias_en_gpio, 0);
 	gpio_set_value_cansleep(mipi_reset_gpio, 0);
 	usleep_range(2000, 2500);
-	gpio_set_value_cansleep(mipi_reset_gpio, 1);
-	usleep_range(2000, 2500);
 	gpio_set_value_cansleep(bias_en_gpio, 1);
+	usleep_range(2000, 2500);
+	gpio_set_value_cansleep(mipi_reset_gpio, 1);
 	usleep_range(2000, 2500);
 	/* switch i2c scl pin back */
 	reg_value_scl |= 0x1000;
