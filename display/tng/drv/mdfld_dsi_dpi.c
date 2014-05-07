@@ -799,6 +799,11 @@ static int __mdfld_dsi_dpi_set_power(struct drm_encoder *encoder, bool on)
 			goto set_power_err;
 		}
 		dsi_config->dsi_hw_context.panel_on = 1;
+
+		/* for every dpi panel power on, clear the dpi underrun count */
+		dev_priv->pipea_dpi_underrun_count = 0;
+		dev_priv->pipec_dpi_underrun_count = 0;
+
 		break;
 	case false:
 		if (!dsi_config->dsi_hw_context.panel_on &&

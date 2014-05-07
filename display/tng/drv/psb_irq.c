@@ -344,8 +344,35 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	uint32_t pipe_status = dev_priv->pipestat[pipe] >> 16;
 	uint32_t i = 0;
 	unsigned long irq_flags;
+	uint32_t mipi_intr_stat_val = 0;
+	uint32_t mipi_intr_stat_reg = 0;
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irq_flags);
+
+	if (pipe == MDFLD_PIPE_A)
+		mipi_intr_stat_reg = MIPIA_INTR_STAT_REG;
+
+	if ((mipi_intr_stat_reg) && (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DPI)) {
+		mipi_intr_stat_val = PSB_RVDC32(mipi_intr_stat_reg);
+		PSB_WVDC32(mipi_intr_stat_val, mipi_intr_stat_reg);
+		if (mipi_intr_stat_val & DPI_FIFO_UNDER_RUN) {
+			dev_priv->pipea_dpi_underrun_count++;
+			/* ignore the first dpi underrun after dpi panel power on */
+			if (dev_priv->pipea_dpi_underrun_count > 1)
+				DRM_INFO("Display pipe A received a DPI_FIFO_UNDER_RUN event\n");
+		}
+
+		mipi_intr_stat_reg = MIPIA_INTR_STAT_REG + MIPIC_REG_OFFSET;
+
+		mipi_intr_stat_val = PSB_RVDC32(mipi_intr_stat_reg);
+		PSB_WVDC32(mipi_intr_stat_val, mipi_intr_stat_reg);
+		if (mipi_intr_stat_val & DPI_FIFO_UNDER_RUN) {
+			dev_priv->pipec_dpi_underrun_count++;
+			/* ignore the first dpi underrun after dpi panel power on */
+			if (dev_priv->pipec_dpi_underrun_count > 1)
+				DRM_INFO("Display pipe C received a DPI_FIFO_UNDER_RUN event\n");
+		}
+	}
 
 	pipe_stat_val = PSB_RVDC32(pipe_stat_reg);
 	/* Sometimes We read 0 from HW - keep reading until we get non-zero */

@@ -1891,6 +1891,9 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 		goto out_err;
 	}
 
+	dev_priv->pipea_dpi_underrun_count = 0;
+	dev_priv->pipec_dpi_underrun_count = 0;
+
 	if (drm_psb_no_fb == 0) {
 		psb_modeset_init(dev);
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35))

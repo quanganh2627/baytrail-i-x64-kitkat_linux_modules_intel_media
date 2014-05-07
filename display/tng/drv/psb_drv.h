@@ -442,6 +442,9 @@ struct drm_psb_private {
 	atomic_t *vblank_count;
 	bool vsync_enabled[3];
 
+	bool pipea_dpi_underrun_count;
+	bool pipec_dpi_underrun_count;
+
 	/*
 	 *TTM Glue.
 	 */
@@ -1188,6 +1191,7 @@ extern int mdfld_irq_disable_hdmi_audio(struct drm_device *dev);
 extern void psb_te_timer_func(unsigned long data);
 extern void mdfld_te_handler_work(struct work_struct *te_work);
 extern void mdfld_vsync_event_work(struct work_struct *work);
+
 #ifdef CONFIG_SUPPORT_HDMI
 void hdmi_do_audio_underrun_wq(struct work_struct *work);
 void hdmi_do_audio_bufferdone_wq(struct work_struct *work);
