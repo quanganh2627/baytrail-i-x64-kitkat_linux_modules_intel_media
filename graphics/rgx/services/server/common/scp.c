@@ -720,6 +720,7 @@ IMG_EXPORT
 PVRSRV_ERROR SCPRun(SCP_CONTEXT *psContext)
 {
 	SCP_COMMAND *psCommand;
+	PVRSRV_ERROR eError = PVRSRV_OK;
 
 	if (psContext == IMG_NULL)
 	{
@@ -729,8 +730,6 @@ PVRSRV_ERROR SCPRun(SCP_CONTEXT *psContext)
 	OSLockAcquire(psContext->hLock);
 	while (psContext->ui32DepOffset != psContext->ui32WriteOffset)
 	{
-		PVRSRV_ERROR eError;
-
 		psCommand = (SCP_COMMAND *)((IMG_UINT8 *)psContext->pvCCB +
 		            psContext->ui32DepOffset);
 
@@ -758,7 +757,7 @@ PVRSRV_ERROR SCPRun(SCP_CONTEXT *psContext)
 	}
 	OSLockRelease(psContext->hLock);
 
-	return PVRSRV_OK;
+	return eError;
 }
 
 IMG_EXPORT
