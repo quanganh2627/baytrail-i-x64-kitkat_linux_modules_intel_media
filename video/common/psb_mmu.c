@@ -1280,7 +1280,6 @@ int psb_ttm_bo_clflush(struct psb_mmu_driver *mmu,
                           &bo_kmap);
         if (ret) {
                 DRM_ERROR("ttm_bo_kmap failed: %d.\n", ret);
-                ttm_bo_unref(bo);
                 return ret;
         }
 
