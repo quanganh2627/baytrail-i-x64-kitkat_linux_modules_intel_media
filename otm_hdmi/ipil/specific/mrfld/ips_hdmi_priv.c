@@ -88,10 +88,10 @@ struct data_rate_divider_selector_list_t {
 static struct data_rate_divider_selector_list_t
 	data_rate_divider_selector_list[] = {
 			{25175, 2, 118, 1, 3, 12},
-			{25200, 2, 105, 1, 2, 16},
+			{25200, 2, 79, 1, 2, 12},
 			{26000, 2, 122, 1, 3, 12},
 			{27000, 3, 75, 1, 2, 16},
-			{27027, 3, 75, 1, 2, 16},
+			{27027, 2, 74, 1, 3, 7},
 			{27500, 2, 129, 1, 3, 12},
 			{28000, 2, 153, 1, 3, 14},
 			{28320, 2, 118, 1, 2, 16},
@@ -410,6 +410,7 @@ static bool __ips_hdmi_get_divider_selector(
 	*p1 = data_rate_divider_selector_list[matched_idx].p1;
 	*p2 = data_rate_divider_selector_list[matched_idx].p2;
 	*real_dclk = data_rate_divider_selector_list[matched_idx].target_data_rate;
+	pr_debug("dclk: %d, real_dclk: %d", dclk,  *real_dclk);
 	return true;
 }
 
