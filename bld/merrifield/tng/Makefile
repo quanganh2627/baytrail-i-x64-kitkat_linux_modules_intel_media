@@ -124,6 +124,8 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/ospm/early_suspend.o \
 	$(DISPLAYDIR)/ospm/early_suspend_sysfs.o
 
+$(DRIVER_NAME)-objs += $(DISPLAYDIR)/cmn_dc_callbacks.o
+
 ifeq ($(CONFIG_MOOREFIELD),y)
 $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/ospm/gfx_ospm_ann.o \

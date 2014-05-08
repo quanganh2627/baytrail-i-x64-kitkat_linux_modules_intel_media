@@ -189,74 +189,6 @@ void DCCBFlipToSurface(struct drm_device *dev, unsigned long uiAddr,
 	DCWriteReg(dev, dspsurf, uiAddr);
 }
 
-static bool is_vblank_period(struct drm_device *dev, int pipe)
-{
-	struct drm_psb_private *dev_priv = NULL;
-	struct mdfld_dsi_config *dsi_config = NULL;
-	struct android_hdmi_priv *hdmi_priv = NULL;
-	u32 reg_offset = 0;
-	int vdisplay = 0, vrefresh = 0;
-	int delay_us = 5, dsl_threshold = 0, plane_flip_time = 200;
-	int retry = 0;
-	int dsl = 0;
-
-	if (!dev || !dev->dev_private)
-		return false;
-
-	dev_priv = (struct drm_psb_private *)dev->dev_private;
-
-	switch (pipe) {
-	case PIPEA:
-		reg_offset = 0;
-		dsi_config = dev_priv->dsi_configs[0];
-		if (dsi_config && dsi_config->mode) {
-			vdisplay = dsi_config->mode->vdisplay;
-			vrefresh = dsi_config->mode->vrefresh;
-		}
-		break;
-	case PIPEB:
-		reg_offset = 0x1000;
-		hdmi_priv = dev_priv->hdmi_priv;
-		if (hdmi_priv && hdmi_priv->current_mode) {
-			vdisplay = hdmi_priv->current_mode->vdisplay;
-			vrefresh = hdmi_priv->current_mode->vrefresh;
-		}
-		break;
-	case PIPEC:
-		reg_offset = 0x2000;
-		dsi_config = dev_priv->dsi_configs[1];
-		if (dsi_config && dsi_config->mode) {
-			vdisplay = dsi_config->mode->vdisplay;
-			vrefresh = dsi_config->mode->vrefresh;
-		}
-		break;
-	default:
-		DRM_ERROR("Invalid pipe %d\n", pipe);
-		return false;
-	}
-
-	if (vdisplay <= 0) {
-		DRM_ERROR("Invalid vertical active region for pipe %d.\n", pipe);
-		return false;
-	}
-
-	retry = (int)(1000000 / (vrefresh * delay_us));
-	dsl_threshold = vdisplay - (int)(1000000 / (vrefresh * plane_flip_time));
-	while (--retry && ((REG_READ(PIPEADSL + reg_offset) & PIPE_LINE_CNT_MASK) >= dsl_threshold))
-		udelay(delay_us);
-
-	if (!retry) {
-		DRM_ERROR("Pipe %d DSL is sticky.\n", pipe);
-		return false;
-	}
-
-	dsl = REG_READ(PIPEADSL + reg_offset) & PIPE_LINE_CNT_MASK;
-	if (dsl >= dsl_threshold)
-		DRM_INFO("DSL is at line %u for pipe %d.\n", dsl, pipe);
-
-	return true;
-}
-
 void DCCBFlipOverlay(struct drm_device *dev,
 			struct intel_dc_overlay_ctx *ctx)
 {
@@ -765,13 +697,6 @@ void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe)
 
 	if (retry == 0)
 		DRM_ERROR("DBI FIFO not empty\n");
-}
-
-void DCCBAvoidFlipInVblankInterval(struct drm_device *dev, int pipe)
-{
-	if ((pipe == PIPEB) ||
-		(is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DPI))
-		is_vblank_period(dev, pipe);
 }
 
 void DCCBUnblankDisplay(struct drm_device *dev)
