@@ -517,6 +517,11 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 
 	clear_plane_flip_state(iPipe);
 
+	/* Delay the Flip if we are close the Vblank interval since we
+	 * do not want to update plane registers during the vblank period
+	 */
+	DCCBAvoidFlipInVblankInterval(gpsDevice->psDrmDevice, iPipe);
+
 	list_for_each_entry(plane,
 			    &(psFlip->asPipeInfo[iPipe].flip_planes), list) {
 		zorder = &plane->flip_ctx->zorder;

@@ -58,6 +58,7 @@ void DCCBSetupZorder(struct drm_device *dev,
 			struct intel_dc_plane_zorder *zorder,
 			int pipe);
 void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe);
+void DCCBAvoidFlipInVblankInterval(struct drm_device *dev, int pipe);
 int DCCBUpdateDbiPanel(struct drm_device *dev, int pipe);
 int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
 			int index);
