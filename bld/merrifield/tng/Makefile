@@ -57,7 +57,8 @@ ccflags-$(CONFIG_SUPPORT_HDMI) += \
 	-I$(OTM_HDMI_INC)/ipil/common \
 	-I$(OTM_HDMI_INC)/ipil/specific/include \
 	-I$(OTM_HDMI_INC)/pil/specific/mrfld \
-	-I$(OTM_HDMI_INC)/ipil/specific/mfld
+	-I$(OTM_HDMI_INC)/ipil/specific/mfld \
+	-Idrivers/staging/sep54
 
 #
 # Video ccflags
