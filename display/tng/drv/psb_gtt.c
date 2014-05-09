@@ -1580,6 +1580,11 @@ int psb_gtt_map_vaddr(struct drm_device *dev,
 
 	DRM_DEBUG("get %d pages\n", pages);
 
+	if (IS_ANN(dev)) {
+		if (page_align == 0)
+			page_align = 2;
+	}
+
 	/*alloc memory in TT apeture*/
 	ret = psb_gtt_mm_alloc_mem(mm, pages, page_align, &node);
 	if (ret) {
