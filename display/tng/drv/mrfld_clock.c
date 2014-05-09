@@ -350,6 +350,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 				clock.m = 120;
 				break;
 		case SDC_25x16_CMD:
+		case JDI_25x16_CMD:
 		case SHARP_25x16_CMD:
 				clock.p1 = 3;
 				clock.m = 138;

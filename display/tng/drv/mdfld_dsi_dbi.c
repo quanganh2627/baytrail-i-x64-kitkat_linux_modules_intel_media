@@ -665,6 +665,9 @@ reset_recovery:
 					ctx->lastbrightnesslevel))
 			DRM_ERROR("Failed to set panel brightness\n");
 
+	if (p_funcs && p_funcs->drv_set_panel_mode)
+		p_funcs->drv_set_panel_mode(dsi_config);
+
 	/*wait for all FIFOs empty*/
 	mdfld_dsi_wait_for_fifos_empty(sender);
 	if (is_dual_dsi(dev)) {

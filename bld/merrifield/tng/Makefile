@@ -114,6 +114,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/sdc16x25_8_cmd.o \
 	$(DISPLAYDIR)/sdc25x16_cmd.o \
 	$(DISPLAYDIR)/jdi25x16_vid.o \
+	$(DISPLAYDIR)/jdi25x16_cmd.o \
 	$(DISPLAYDIR)/ospm/pwr_mgmt.o \
 	$(DISPLAYDIR)/ospm/gfx_rtpm.o \
 	$(DISPLAYDIR)/ospm/dc_ospm.o \
