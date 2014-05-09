@@ -1871,7 +1871,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 #else
 		mdfld_dbi_dsr_init(dev);
 #endif				/*CONFIG_MID_DSI_DPU */
-		INIT_WORK(&dev_priv->te_work, mdfld_te_handler_work);
 		INIT_WORK(&dev_priv->reset_panel_work,
 				mdfld_reset_panel_handler_work);
 	}
@@ -1957,6 +1956,10 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	dpst_init(dev, 5, 1);
 
 	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
+	if (IS_FLDS(dev) &&
+			(is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI)) {
+		INIT_WORK(&dev_priv->te_work, mdfld_te_handler_work);
+	}
 
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:
