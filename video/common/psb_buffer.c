@@ -451,7 +451,8 @@ static int drm_psb_ttm_tt_populate(struct ttm_tt *ttm)
 		return ttm_agp_tt_populate(ttm);
 #endif
 
-#ifdef CONFIG_SWIOTLB
+/* disable swiotlb, instead use GFP_DMA32 */
+#ifdef CONFIG_SWIOTLB && 0
 	if (swiotlb_nr_tbl())
 		return ttm_dma_populate(ttm_dma, ddev->dev);
 #endif
@@ -490,7 +491,8 @@ static void drm_psb_ttm_tt_unpopulate(struct ttm_tt *ttm)
 	}
 #endif
 
-#ifdef CONFIG_SWIOTLB
+/* disable swiotlb, instead use GFP_DMA32 */
+#ifdef CONFIG_SWIOTLB && 0
 	if (swiotlb_nr_tbl()) {
 		ttm_dma_unpopulate(ttm_dma, ddev->dev);
 		return;
