@@ -431,7 +431,7 @@ static int __init vxd_driver_load()
 	ret = ttm_bo_device_init(bdev,
 				 dev_priv->bo_global_ref.ref.object,
 				 &psb_ttm_bo_driver,
-				 DRM_PSB_FILE_PAGE_OFFSET, false);
+				 DRM_PSB_FILE_PAGE_OFFSET, true);
 	if (unlikely(ret != 0))
 		goto out_err;
 	dev_priv->has_bo_device = 1;
