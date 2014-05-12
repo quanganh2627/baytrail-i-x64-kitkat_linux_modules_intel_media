@@ -3050,7 +3050,9 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			if (IS_MOFD(dev))
 				mutex_lock(&dev->mode_config.mutex);
 
-			if (dev->vblank_enabled[pipe]) {
+			if (dev->vblank_enabled[pipe] && ((pipe == 1) ||
+						(dsi_config &&
+						 dsi_config->dsi_hw_context.panel_on))) {
 				vblwait.request.type =
 					(_DRM_VBLANK_RELATIVE |
 					 _DRM_VBLANK_NEXTONMISS);
