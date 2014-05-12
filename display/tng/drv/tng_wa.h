@@ -38,6 +38,4 @@ void apply_TNG_A0_workarounds(int islands, int pre_po);
 /* Apply the ANN A0 Workaround */
 void apply_ANN_A0_workarounds(int islands, int pre_po);
 
-void apply_HSD_4645248_clkgating_disable(void);
-
 #endif	/* _TNG_WORKAROUNDS_H_ */
