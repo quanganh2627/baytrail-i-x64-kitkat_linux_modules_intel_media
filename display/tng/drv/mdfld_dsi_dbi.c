@@ -1405,3 +1405,12 @@ void mdfld_reset_panel_handler_work(struct work_struct *work)
 		DRM_INFO("%s invalid panel init\n", __func__);
 	}
 }
+
+/*
+ * SV's suggestion, dbi_bw_ctrl is calculated by following formular:
+ * (16*252+8)/lane_count in spec, and sv uses (16*256)/lane_count
+ */
+uint32_t calculate_dbi_bw_ctrl(const uint32_t lane_count)
+{
+	return (16*256)/lane_count;
+}

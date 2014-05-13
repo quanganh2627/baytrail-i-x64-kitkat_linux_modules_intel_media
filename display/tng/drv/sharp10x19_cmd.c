@@ -173,7 +173,7 @@ static void sharp10x19_cmd_controller_init(struct mdfld_dsi_config *dsi_config)
 	hw_ctx->dphy_param = 0x2a18681f;
 
 	hw_ctx->init_count = 0xf0;
-	hw_ctx->dbi_bw_ctrl = 1100;
+	hw_ctx->dbi_bw_ctrl = calculate_dbi_bw_ctrl(dsi_config->lane_count);
 	hw_ctx->hs_ls_dbi_enable = 0x0;
 	hw_ctx->dsi_func_prg = ((DBI_DATA_WIDTH_OPT2 << 13) |
 				dsi_config->lane_count);
