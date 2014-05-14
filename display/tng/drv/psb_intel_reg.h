@@ -526,6 +526,7 @@ struct dpst_guardband {
 #define PIPE_PIXEL_MASK         0x00ffffff
 #define PIPE_PIXEL_SHIFT        0
 
+#define GCI_CTRL		0x650c
 #define DSPARB			0x70030
 #define DSPARB2			0x7002C
 #define DSPFW1			0x70034

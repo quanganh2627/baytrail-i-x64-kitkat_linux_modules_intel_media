@@ -399,6 +399,14 @@ reset_recovery:
 
 	__dpi_set_properties(dsi_config, PORT_A);
 
+	/* update 0x650c[0] = 1 to fixed arbitration pattern
+	 * it is found display TLB request be blocked by display plane
+	 * memory requests, never goes out. This causes display controller
+	 * uses stale TLB data to do memory translation, getting wrong
+	 * memory address for data, and causing the flickering issue.
+	 */
+	REG_WRITE(GCI_CTRL, REG_READ(GCI_CTRL) | 1);
+
 	/*Setup pipe timing*/
 	REG_WRITE(regs->htotal_reg, ctx->htotal);
 	REG_WRITE(regs->hblank_reg, ctx->hblank);
