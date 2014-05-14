@@ -179,6 +179,15 @@ int mdfld_dsi_jdi25x16_set_mode(struct mdfld_dsi_config *dsi_config)
 			goto set_mode_err;
 		}
 	}
+
+        msleep(20);
+	err = mdfld_dsi_send_mcs_short_hs(sender, jdi25x16_turn_on_backlight[0],
+			jdi25x16_turn_on_backlight[1], 1, 0);
+	if (err) {
+		DRM_ERROR("%s: %d: Turn on backlight\n", __func__, __LINE__);
+		goto set_mode_err;
+	}
+
 	sender->work_for_slave_panel = false;
 	return 0;
 

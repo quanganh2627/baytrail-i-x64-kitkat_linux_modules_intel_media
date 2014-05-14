@@ -80,23 +80,13 @@ int mdfld_dsi_jdi_ic_init(struct mdfld_dsi_config *dsi_config)
 		goto ic_init_err;
 	}
 
-	/* Write control display */
-	err = mdfld_dsi_send_mcs_short_hs(sender, write_ctrl_display, 0x24, 1,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Write Control Display\n", __func__,
-				__LINE__);
-		goto ic_init_err;
-	}
-
-	/* Write control CABC */
+    /* Write control CABC */
 	err = mdfld_dsi_send_mcs_short_hs(sender, write_ctrl_cabc, STILL_IMAGE,
 			1, MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
 		DRM_ERROR("%s: %d: Write Control CABC\n", __func__, __LINE__);
 		goto ic_init_err;
 	}
-
 	err = mdfld_dsi_send_mcs_long_hs(sender,jdi_mcs_clumn_addr,
 			5, MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
@@ -267,6 +257,15 @@ static int mdfld_dsi_jdi_power_on(struct mdfld_dsi_config *dsi_config)
 	err = mdfld_dsi_send_dpi_spk_pkg_hs(sender, MDFLD_DSI_DPI_SPK_TURN_ON);
 	if (err) {
 		DRM_ERROR("Failed to send turn on packet\n");
+		goto power_on_err;
+	}
+
+	/* Write control display */
+	err = mdfld_dsi_send_mcs_short_hs(sender, write_ctrl_display, 0x24, 1,
+			MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Write Control Display\n", __func__,
+				__LINE__);
 		goto power_on_err;
 	}
 
