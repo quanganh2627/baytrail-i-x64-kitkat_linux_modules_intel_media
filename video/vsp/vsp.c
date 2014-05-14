@@ -609,6 +609,8 @@ static int vsp_prehandle_command(struct drm_file *priv,
 				cur_cmd->buffer = 1;
 			} else if (priv->filp == vsp_priv->vp8_filp[1]) {
 				cur_cmd->buffer = 2;
+			} else if (priv->filp == vsp_priv->vp8_filp[2]) {
+				cur_cmd->buffer = 3;
 			} else {
 				DRM_ERROR("got the wrong context_id and exit\n");
 				return -1;
@@ -644,6 +646,8 @@ static int vsp_prehandle_command(struct drm_file *priv,
 				cur_cmd->context = 1;
 			} else if (priv->filp == vsp_priv->vp8_filp[1]) {
 				cur_cmd->context = 2;
+			} else if (priv->filp == vsp_priv->vp8_filp[2]) {
+				cur_cmd->context = 3;
 			} else {
 				DRM_ERROR("got the wrong context_id and exit\n");
 				return -1;
@@ -666,7 +670,7 @@ static int vsp_prehandle_command(struct drm_file *priv,
 			VSP_DEBUG("pic param placement %x bus.add %p\n",
 				pic_bo_vp8->mem.placement,
 				pic_bo_vp8->mem.bus.addr);
-			if (pic_param_num > 1) {
+			if (vp8_pic_num > 1) {
 				DRM_ERROR("should be only 1 pic param cmd\n");
 				ret = -1;
 				goto out;
@@ -678,6 +682,8 @@ static int vsp_prehandle_command(struct drm_file *priv,
 				cur_cmd->context = 1;
 			} else if (priv->filp == vsp_priv->vp8_filp[1]) {
 				cur_cmd->context = 2;
+			} else if (priv->filp == vsp_priv->vp8_filp[2]) {
+				cur_cmd->context = 3;
 			} else {
 				DRM_ERROR("got the wrong context_id and exit\n");
 				return -1;
@@ -918,8 +924,7 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 			  arg->fence_flags, validate_list,
 			  fence_arg, &fence);
 	if (fence) {
-		VSP_DEBUG("vp8 fence sequence %x at output pic %x\n",
-			  fence->sequence);
+		VSP_DEBUG("vp8 fence sequence %x\n", fence->sequence);
 		pic_param->input_frame.surface_id = fence->sequence;
 		vsp_priv->last_sequence = fence->sequence;
 
@@ -984,17 +989,21 @@ int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	if (VAEntrypointEncSlice == ctx_type) {
 		vsp_priv->context_vp8_num++;
 		if (vsp_priv->context_vp8_num > MAX_VP8_CONTEXT_NUM) {
-			DRM_ERROR("VSP: Only support dual vp8 encoding!\n");
+			DRM_ERROR("VSP: Only support 3 vp8 encoding!\n");
+			/* store the 4th vp8 encoding fd for remove context use */
+			vsp_priv->vp8_filp[3] = filp;
 			return -1;
 		}
 
-		/* store the fd of 2 vp8 encoding processes */
+		/* store the fd of 3 vp8 encoding processes */
 		if (vsp_priv->vp8_filp[0] == NULL) {
 			vsp_priv->vp8_filp[0] = filp;
 		} else if (vsp_priv->vp8_filp[1] == NULL) {
 			vsp_priv->vp8_filp[1] = filp;
+		} else if (vsp_priv->vp8_filp[2] == NULL) {
+			vsp_priv->vp8_filp[2] = filp;
 		} else {
-			DRM_ERROR("VSP: The current 2 vp8 contexts have not been removed\n");
+			DRM_ERROR("VSP: The current 3 vp8 contexts have not been removed\n");
 		}
 	} else if (ctx_type == VAEntrypointVideoProc) {
 		vsp_priv->context_vpp_num++;
@@ -1020,6 +1029,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	int count = 0;
 	struct vss_command_t *cur_cmd;
 	bool tmp = true;
+	int i = 0;
 
 	dev_priv = dev->dev_private;
 	if (dev_priv == NULL) {
@@ -1034,10 +1044,10 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	}
 
 	if (vsp_priv->ctrl == NULL) {
-		if (filp == vsp_priv->vp8_filp[0])
-			vsp_priv->vp8_filp[0] = NULL;
-		else
-			vsp_priv->vp8_filp[1] = NULL;
+		for (i = 0; i < MAX_VP8_CONTEXT_NUM + 1; i++) {
+			if (filp == vsp_priv->vp8_filp[i])
+				vsp_priv->vp8_filp[i] = NULL;
+		}
 
 		if (VAEntrypointEncSlice == ctx_type)
 			vsp_priv->context_vp8_num--;
@@ -1049,7 +1059,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 
 	VSP_DEBUG("ctx_type=%d\n", ctx_type);
 
-	if (VAEntrypointEncSlice == ctx_type) {
+	if (VAEntrypointEncSlice == ctx_type && filp != vsp_priv->vp8_filp[3]) {
 		/* power on again to send VssGenDestroyContext to firmware */
 		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
 			tmp = -EBUSY;
@@ -1071,14 +1081,14 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		cur_cmd->reserved7 = 0;
 
 		/* judge which vp8 process should be remove context */
-		if (filp == vsp_priv->vp8_filp[0]) {
-			cur_cmd->buffer = 1;
-			vsp_priv->vp8_filp[0] = NULL;
-		} else if (filp == vsp_priv->vp8_filp[1]) {
-			cur_cmd->buffer = 2;
-			vsp_priv->vp8_filp[1] = NULL;
-		} else {
-			VSP_DEBUG("support dual VP8 encoding at most\n");
+		for (i = 0; i< MAX_VP8_CONTEXT_NUM; i++) {
+			/* context_id=1 for filp[0] */
+			/* context_id=2 for filp[1] */
+			/* context_id=3 for filp[2] */
+			if (filp == vsp_priv->vp8_filp[i]) {
+				cur_cmd->buffer = i + 1;
+				vsp_priv->vp8_filp[i] = NULL;
+			}
 		}
 
 		vsp_priv->ctrl->cmd_wr =
@@ -1094,6 +1104,11 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		}
 
 		vsp_priv->context_vp8_num--;
+	} else if(VAEntrypointEncSlice == ctx_type && filp == vsp_priv->vp8_filp[3]) {
+		/* driver support 3 vp8 encoding simultaneously at most */
+		/* clear the 4th vp8 encoding fd */
+		vsp_priv->context_vp8_num--;
+		vsp_priv->vp8_filp[3] = NULL;
 	} else if (ctx_type == VAEntrypointVideoProc)
 		vsp_priv->context_vpp_num--;
 
