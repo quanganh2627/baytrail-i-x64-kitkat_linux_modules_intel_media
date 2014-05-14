@@ -688,7 +688,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 				break;
 			}
 
-			if (index < 0 || pipe < 0 || pipe > MAX_PIPE_NUM) {
+			if (index < 0 || pipe < 0 || pipe >= MAX_PIPE_NUM) {
 				DRM_ERROR("Invalid index = %d, pipe = %d\n",
 						index, pipe);
 				continue;
