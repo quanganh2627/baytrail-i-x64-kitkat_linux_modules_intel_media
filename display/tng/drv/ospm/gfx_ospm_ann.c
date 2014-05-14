@@ -665,7 +665,10 @@ static bool ospm_slc_power_up(struct drm_device *dev,
 	PSB_DEBUG_PM("Post-power-up status = 0x%08x\n",
 		intel_mid_msgbus_read32(PUNIT_PORT, NC_PM_SSS));
 
+	/* Bypass SLC for high WIDI D0i0 residency */
+	/*
 	return !ret;
+	*/
 
 	if (!ret) {
 		uint32_t reg, data;
