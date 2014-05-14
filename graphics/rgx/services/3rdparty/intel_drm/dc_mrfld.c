@@ -1132,28 +1132,27 @@ create_error:
 	return eRes;
 }
 
+/* TODO: refine function name: buffers will be copied in ahBuffers */
 static PVRSRV_ERROR DC_MRFLD_ContextConfigureCheck(
 				IMG_HANDLE hDisplayContext,
 				IMG_UINT32 ui32PipeCount,
 				PVRSRV_SURFACE_CONFIG_INFO *pasSurfAttrib,
-				IMG_HANDLE **pahBuffers)
+				IMG_HANDLE *ahBuffers)
 {
 	DC_MRFLD_DISPLAY_CONTEXT *psDisplayContext =
 		(DC_MRFLD_DISPLAY_CONTEXT *)hDisplayContext;
 	DC_MRFLD_DEVICE *psDevice;
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom;
 	DC_MRFLD_BUFFER *psBuffer;
-	IMG_HANDLE *ahBuffers;
 	int err;
-	int i;
+	int i, j;
 
-	if (!psDisplayContext || !pasSurfAttrib || !pahBuffers || !(*pahBuffers))
+	if (!psDisplayContext || !pasSurfAttrib || !ahBuffers)
 		return PVRSRV_ERROR_INVALID_PARAMS;
 
 	DRM_DEBUG("%s\n", __func__);
 
 	psDevice = psDisplayContext->psDevice;
-	ahBuffers = *pahBuffers;
 
 	/*TODO: handle ui32PipeCount = 0*/
 
@@ -1164,12 +1163,15 @@ static PVRSRV_ERROR DC_MRFLD_ContextConfigureCheck(
 		}
 		psBuffer = OSAllocMem(sizeof(DC_MRFLD_BUFFER));
 		if (psBuffer == IMG_NULL) {
+			for (j = 0; j < i; j++) {
+				if (ahBuffers[j]) {
+					OSFreeMem(ahBuffers[j]);
+				}
+			}
 			return PVRSRV_ERROR_OUT_OF_MEMORY;
 		}
 		OSMemCopy(psBuffer, ahBuffers[i], sizeof(DC_MRFLD_BUFFER));
-		if (psBuffer) {
-			psBuffer->ui32ContextCount = 0;
-		}
+		psBuffer->ui32ContextCount = 0;
 		ahBuffers[i] = psBuffer;
 	}
 
@@ -1207,7 +1209,6 @@ static PVRSRV_ERROR DC_MRFLD_ContextConfigureCheck(
 		psBuffer->eFlipOp = DC_MRFLD_FLIP_CONTEXT;
 	}
 
-	*pahBuffers = ahBuffers;
 	return PVRSRV_OK;
 }
 

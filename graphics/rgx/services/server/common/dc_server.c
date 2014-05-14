@@ -1334,7 +1334,7 @@ PVRSRV_ERROR DCDisplayContextConfigureCheck(DC_DISPLAY_CONTEXT *psDisplayContext
 		eError = psDevice->psFuncTable->pfnContextConfigureCheck(psDisplayContext->hDisplayContext,
 																ui32PipeCount,
 																pasSurfAttrib,
-																&ahBuffers);
+																ahBuffers);
 		if (eError != PVRSRV_OK)
 		{
 			goto FailConfigCheck;
@@ -1543,20 +1543,6 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 			goto FailBufferArrayCreate;
 		}
 	
-		/* Do we need to check if this is valid config? */
-		if (psDevice->psFuncTable->pfnContextConfigureCheck)
-		{
-	
-			eError = psDevice->psFuncTable->pfnContextConfigureCheck(psDisplayContext->hDisplayContext,
-																	ui32PipeCount,
-																	pasSurfAttrib,
-																	&ahBuffers);
-			if (eError != PVRSRV_OK)
-			{
-				goto FailConfigCheck;
-			}
-		}
-	
 		/* Map all the buffers that are going to be used */
 		for (i=0;i<ui32PipeCount;i++)
 		{
@@ -1621,6 +1607,21 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 	/* Copy over device buffer handle buffer array */
 	if (ui32PipeCount != 0)
 	{
+		/* this check must be the last setup step,
+		 * becasue it will allocate a copy of buffer
+		 * */
+		if (psDevice->psFuncTable->pfnContextConfigureCheck)
+		{
+			eError = psDevice->psFuncTable->pfnContextConfigureCheck(psDisplayContext->hDisplayContext,
+																	ui32PipeCount,
+																	pasSurfAttrib,
+																	ahBuffers);
+			if (eError != PVRSRV_OK)
+			{
+				goto FailConfigCheck;
+			}
+		}
+
 		psReadyData->pahBuffer = (IMG_HANDLE)pui8ReadyData;
 		ui32CopySize = sizeof(IMG_HANDLE) * ui32PipeCount;
 		OSMemCopy(psReadyData->pahBuffer, ahBuffers, ui32CopySize);
@@ -1671,6 +1672,7 @@ PVRSRV_ERROR DCDisplayContextConfigure(DC_DISPLAY_CONTEXT *psDisplayContext,
 
 	return PVRSRV_OK;
 
+FailConfigCheck:
 FailCommandAlloc:
 FailMapBuffer:
 	if (ui32PipeCount != 0)
@@ -1680,7 +1682,6 @@ FailMapBuffer:
 			_DCBufferUnmap(papsBuffers[i]);
 		}
 	}
-FailConfigCheck:
 	if (ui32PipeCount != 0)
 	{
 		_DCDeviceBufferArrayDestroy(ahBuffers);

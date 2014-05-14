@@ -258,7 +258,7 @@ typedef PVRSRV_ERROR (*ContextCreate)(IMG_HANDLE hDeviceData,
 typedef PVRSRV_ERROR (*ContextConfigureCheck)(IMG_HANDLE hDisplayContext,
 											  IMG_UINT32 ui32PipeCount,
 											  PVRSRV_SURFACE_CONFIG_INFO *pasSurfAttrib,
-											  IMG_HANDLE **ahBuffers);
+											  IMG_HANDLE *ahBuffers);
 
 /*************************************************************************/ /*!
 @Function       ContextConfigure
