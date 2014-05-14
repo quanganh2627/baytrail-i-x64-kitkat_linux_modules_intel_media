@@ -30,7 +30,7 @@
 static int mipi_reset_gpio;
 
 static u8 sharp_mode_set_data[7][3] = {
-			{0x10, 0x00, 0x3a},
+			{0x10, 0x00, 0x3f},
 			{0x10, 0x01, 0x00},
 			{0x10, 0x07, 0x00},
 			{0x70, 0x00, 0x70},
@@ -114,7 +114,7 @@ void mdfld_dsi_sharp25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_confi
 	/*setup mipi port configuration*/
 	hw_ctx->mipi = MIPI_PORT_EN | PASS_FROM_SPHY_TO_AFE |
 		dsi_config->lane_config |
-		DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE;
+		DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE | DUAL_LINK_MODE_PIXEL_ALTER;
 }
 
 static int mdfld_dsi_sharp25x16_detect(struct mdfld_dsi_config *dsi_config)
