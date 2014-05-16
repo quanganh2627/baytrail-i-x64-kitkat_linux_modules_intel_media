@@ -1141,6 +1141,8 @@ static inline struct drm_psb_private *psb_priv(struct drm_device *dev)
 extern irqreturn_t psb_irq_handler(DRM_IRQ_ARGS);
 extern int psb_irq_enable_dpst(struct drm_device *dev);
 extern int psb_irq_disable_dpst(struct drm_device *dev);
+extern int psb_dpst_diet_save(struct drm_device *dev);
+extern int psb_dpst_diet_restore(struct drm_device *dev);
 extern void psb_irq_preinstall(struct drm_device *dev);
 extern int psb_irq_postinstall(struct drm_device *dev);
 extern void psb_irq_uninstall(struct drm_device *dev);
@@ -1239,6 +1241,7 @@ struct backlight_device *psb_get_backlight_device(void);
 #define PSB_D_WARN    (1 << 13)
 #define PSB_D_MIPI    (1 << 14)
 #define PSB_D_BL    (1 << 15)
+#define PSB_D_DPST    (1 << 16)
 
 #ifndef DRM_DEBUG_CODE
 /* To enable debug printout, set drm_psb_debug in psb_drv.c
@@ -1285,6 +1288,8 @@ extern int drm_topaz_sbuswa;
 	PSB_DEBUG(PSB_D_MIPI, _fmt, ##_arg)
 #define PSB_DEBUG_BL(_fmt, _arg...) \
         PSB_DEBUG(PSB_D_BL, _fmt, ##_arg)
+#define PSB_DEBUG_DPST(_fmt, _arg...) \
+        PSB_DEBUG(PSB_D_DPST, _fmt, ##_arg)
 
 #if DRM_DEBUG_CODE
 #define PSB_DEBUG(_flag, _fmt, _arg...)					\
