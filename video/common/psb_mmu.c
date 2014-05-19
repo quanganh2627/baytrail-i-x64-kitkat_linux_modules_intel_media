@@ -111,7 +111,7 @@ static inline uint32_t psb_mmu_pd_index(uint32_t offset)
 }
 
 #if defined(CONFIG_X86)
-static inline void psb_clflush(void *addr)
+static inline void psb_clflush(volatile void *addr)
 {
 	__asm__ __volatile__("clflush (%0)\n" : : "r"(addr) : "memory");
 }
@@ -220,7 +220,7 @@ static void psb_virtual_addr_clflush(struct psb_mmu_driver *driver,
 {
 	int i, j;
 	uint8_t *clf = (uint8_t*)vaddr;
-	uint32_t clflush_add = driver->clflush_add >> PAGE_SHIFT;
+	uint32_t clflush_add = (driver->clflush_add * sizeof(uint32_t)) >> PAGE_SHIFT;
 	uint32_t clflush_count = PAGE_SIZE / clflush_add;
 
 	DRM_INFO("clflush pages %d\n", num_pages);
