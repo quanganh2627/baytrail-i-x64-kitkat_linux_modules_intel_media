@@ -396,10 +396,11 @@ static void clear_plane_flip_state(int pipe)
 	}
 }
 
-static void disable_unused_planes(int pipe)
+static bool disable_unused_planes(int pipe)
 {
 	int i, j;
 	struct plane_state *pstate;
+	bool ret = false;
 
 	for (i = 1; i < DC_PLANE_MAX; i++) {
 		for (j = 0; j < MAX_PLANE_INDEX; j++) {
@@ -412,10 +413,14 @@ static void disable_unused_planes(int pipe)
 			DRM_DEBUG("plane (%d %d) active:%d, flip_active:%d\n",
 				  i, j, pstate->active, pstate->flip_active);
 
-			if (pstate->active && !pstate->flip_active)
+			if (pstate->active && !pstate->flip_active) {
 				disable_plane(pstate);
+				ret = true;
+			}
 		}
 	}
+
+	return ret;
 }
 
 static void free_flip_states_on_pipe(struct drm_device *psDrmDev, int pipe)
@@ -779,7 +784,11 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 		} else if (!psFlip->bActivePipes[i] && gpsDevice->bFlipEnabled[i]) {
 			/* give a chance to disable planes on inactive pipe */
 			clear_plane_flip_state(i);
-			disable_unused_planes(i);
+			if (disable_unused_planes(i)) {
+				if (i != DC_PIPE_B) {
+					send_wms = true;
+				}
+			}
 
 			/*
 			 * NOTE:To inactive pipe, need to free the attached
