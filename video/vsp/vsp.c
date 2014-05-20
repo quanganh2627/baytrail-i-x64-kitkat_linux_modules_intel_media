@@ -510,7 +510,7 @@ int vsp_send_command(struct drm_device *dev,
 				cur_cell_cmd->context, cur_cell_cmd->type,
 				cur_cell_cmd->buffer, cur_cell_cmd->size,
 				cur_cell_cmd->buffer_id, cur_cell_cmd->irq);
-			VSP_DEBUG("send %.8x cmd to VSP",
+			VSP_DEBUG("send %.8x cmd to VSP\n",
 					cur_cell_cmd->type);
 
 			num_cmd++;
@@ -1060,6 +1060,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	VSP_DEBUG("ctx_type=%d\n", ctx_type);
 
 	if (VAEntrypointEncSlice == ctx_type && filp != vsp_priv->vp8_filp[3]) {
+		mutex_lock(&vsp_priv->vsp_mutex);
 		/* power on again to send VssGenDestroyContext to firmware */
 		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
 			tmp = -EBUSY;
@@ -1070,6 +1071,12 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		}
 
 		VSP_DEBUG("VP8 send the last command here to destroy context buffer\n");
+		/* Update cmd_wr for VP8 and FRC/VPP switch context case */
+		if (vsp_priv->acc_num_cmd >= 1) {
+			vsp_priv->ctrl->cmd_wr = (vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
+			vsp_priv->acc_num_cmd = 0;
+		}
+
 		cur_cmd = vsp_priv->cmd_queue + vsp_priv->ctrl->cmd_wr % VSP_CMD_QUEUE_SIZE;
 
 		cur_cmd->context = VSP_API_GENERIC_CONTEXT_ID;
@@ -1093,6 +1100,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 
 		vsp_priv->ctrl->cmd_wr =
 			(vsp_priv->ctrl->cmd_wr + 1) % VSP_CMD_QUEUE_SIZE;
+		mutex_unlock(&vsp_priv->vsp_mutex);
 
 		/* Wait all the cmd be finished */
 		while (vsp_priv->vp8_cmd_num > 0 && count++ < 20000) {
@@ -1498,8 +1506,7 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	/* command queue */
 	VSP_DEBUG("command queue:\n");
 	for (i = 0; i < VSP_CMD_QUEUE_SIZE; i++) {
-		cmd_p = &(vsp_priv->cmd_queue[i]);
-		VSP_DEBUG("cmd[%d]:%.8x %.8x %.8x %.8x %.8x %.8x %.8x %.8x", i,
+		VSP_DEBUG("cmd[%d]:%.8x %.8x %.8x %.8x %.8x %.8x %.8x %.8x\n", i,
 			vsp_priv->cmd_queue[i].context,
 			vsp_priv->cmd_queue[i].type,
 			vsp_priv->cmd_queue[i].buffer,
@@ -1513,8 +1520,7 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	/* response queue */
 	VSP_DEBUG("ack queue:\n");
 	for (i = 0; i < VSP_ACK_QUEUE_SIZE; i++) {
-		cmd_p = &(vsp_priv->ack_queue[i]);
-		VSP_DEBUG("ack[%d]:%.8x %.8x %.8x %.8x %.8x %.8x %.8x %.8x", i,
+		VSP_DEBUG("ack[%d]:%.8x %.8x %.8x %.8x %.8x %.8x %.8x %.8x\n", i,
 			vsp_priv->ack_queue[i].context,
 			vsp_priv->ack_queue[i].type,
 			vsp_priv->ack_queue[i].buffer,
