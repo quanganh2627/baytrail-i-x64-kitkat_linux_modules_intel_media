@@ -2939,7 +2939,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			if (IS_MOFD(dev))
 				mutex_lock(&dev->mode_config.mutex);
 
-			if (dev->vblank_enabled[pipe] && ((pipe == 1) ||
+			if (dev_priv->vsync_enabled[pipe] && ((pipe == 1) ||
 						(dsi_config &&
 						 dsi_config->dsi_hw_context.panel_on))) {
 				vblwait.request.type =
@@ -2992,6 +2992,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 						__func__, pipe);
 				return 0;
 			}
+#if 0
 			mdfld_dsi_dsr_forbid(dsi_config);
 			ret = drm_vblank_get(dev, pipe);
 			if (ret != 0) {
@@ -2999,7 +3000,9 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 						__func__, pipe);
 				mdfld_dsi_dsr_allow(dsi_config);
 			} else
-				dev_priv->vsync_enabled[pipe] = true;
+#endif
+			dev_priv->vsync_enabled[pipe] = true;
+			ret = 0;
 		}
 
 		if (arg->vsync_operation_mask & VSYNC_DISABLE) {
@@ -3009,8 +3012,10 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				return 0;
 			}
 			dev_priv->vsync_enabled[pipe] = false;
+#if 0
 			drm_vblank_put(dev, pipe);
 			mdfld_dsi_dsr_allow(dsi_config);
+#endif
 			ret = 0;
 		}
 	}
