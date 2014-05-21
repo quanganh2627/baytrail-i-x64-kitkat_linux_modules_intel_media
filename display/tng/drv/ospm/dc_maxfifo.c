@@ -92,21 +92,83 @@ static ssize_t _show_sysfs_state (struct device *kdev,
 					struct device_attribute *attr, char *buf);
 static inline bool _maxfifo_create_sysfs_entries(struct drm_device * dev);
 
+#ifndef ENABLE_HW_REPEAT_FRAME
+int maxfifo_entry_delay = 150;
+EXPORT_SYMBOL(maxfifo_entry_delay);
+module_param_named(maxfifo_delay, maxfifo_entry_delay, int, 0600);
+
+static void maxfifo_timer_func(unsigned long data)
+{
+	maxfifo_report_repeat_frame_interrupt((struct drm_device *)data);
+}
+
+static int maxfifo_timer_init(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct timer_list *maxfifo_timer = &dev_priv->maxfifo_timer;
+
+	init_timer(maxfifo_timer);
+
+	maxfifo_timer->data = (unsigned long)dev;
+	maxfifo_timer->function = maxfifo_timer_func;
+	maxfifo_timer->expires = jiffies + maxfifo_entry_delay*HZ/1000;
+
+	return 0;
+}
+
+void maxfifo_timer_start(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct timer_list *maxfifo_timer = &dev_priv->maxfifo_timer;
+	struct dc_maxfifo * maxfifo_info =
+		(struct dc_maxfifo *)
+		((struct drm_psb_private *)dev->dev_private)->dc_maxfifo_info;
+
+	if(maxfifo_info->repeat_frame_interrupt_on)
+		mod_timer(maxfifo_timer, jiffies + maxfifo_entry_delay*HZ/1000);
+}
+
+void maxfifo_timer_stop(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+
+	del_timer(&dev_priv->maxfifo_timer);
+}
+#endif
+
 
 void enable_repeat_frame_intr(struct drm_device *dev)
 {
+#ifndef ENABLE_HW_REPEAT_FRAME
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct dc_maxfifo * maxfifo_info =
+		(struct dc_maxfifo *)
+		((struct drm_psb_private *)dev->dev_private)->dc_maxfifo_info;
+
+	maxfifo_info->repeat_frame_interrupt_on = true;
+#else
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		mrfl_enable_repeat_frame_intr(dev, MAXFIFO_IDLE_FRAME_COUNT);
 		power_island_put(OSPM_DISPLAY_A);
 	}
+#endif
 }
 
 void disable_repeat_frame_intr(struct drm_device *dev)
 {
+#ifndef ENABLE_HW_REPEAT_FRAME
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct dc_maxfifo * maxfifo_info =
+		(struct dc_maxfifo *)
+		((struct drm_psb_private *)dev->dev_private)->dc_maxfifo_info;
+
+	maxfifo_info->repeat_frame_interrupt_on = false;
+#else
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		mrfl_disable_repeat_frame_intr(dev);
 		power_island_put(OSPM_DISPLAY_A);
 	}
+#endif
 }
 
 static void _maxfifo_send_hwc_uevent(struct drm_device * dev)
@@ -132,10 +194,15 @@ void maxfifo_report_repeat_frame_interrupt(struct drm_device * dev)
 	struct dc_maxfifo * maxfifo_info =
 		(struct dc_maxfifo *)
 		((struct drm_psb_private *)dev->dev_private)->dc_maxfifo_info;
+#ifdef ENABLE_HW_REPEAT_FRAME
 	mrfl_disable_repeat_frame_intr(dev);
+#else
+	maxfifo_info->repeat_frame_interrupt_on = false;
+#endif
 	if (maxfifo_info)
 		schedule_work(&maxfifo_info->repeat_frame_interrupt_work);
 }
+
 bool enter_s0i1_display_mode(struct drm_device *dev)
 {
 	struct drm_psb_private * dev_priv = dev->dev_private;
@@ -194,6 +261,9 @@ bool enter_maxfifo_mode(struct drm_device *dev)
 	if (!maxfifo_info)
 		return false;
 
+#ifndef ENABLE_HW_REPEAT_FRAME
+	maxfifo_timer_stop(dev);
+#endif
 	mutex_lock(&maxfifo_info->maxfifo_mtx);
 	regs_to_set = maxfifo_info->regs_to_set;
 
@@ -276,6 +346,10 @@ int dc_maxfifo_init(struct drm_device *dev)
 	INIT_WORK(&maxfifo_info->repeat_frame_interrupt_work,
 			_maxfifo_send_hwc_event_work);
 
+#ifndef ENABLE_HW_REPEAT_FRAME
+	maxfifo_info->repeat_frame_interrupt_on = false;
+	maxfifo_timer_init(dev);
+#endif
 	_maxfifo_create_sysfs_entries(dev);
 	/*Initialize the sysfs entries*/
 

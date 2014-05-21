@@ -379,6 +379,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	if (!pipe_stat_val) {
 		pipe_stat_val = REG_READ(pipe_stat_reg);
 	}
+#ifdef ENABLE_HW_REPEAT_FRAME
 	/* In the case of the repeated frame count interrupt, we need to disable
 	   the repeat_frame_count_threshold register as otherwise we keep getting
 	   an interrupt
@@ -391,6 +392,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		PSB_WVDC32(PIPEA_REPEAT_FRM_CNT_TRESHOLD_DISABLE,
 				PIPEA_REPEAT_FRM_CNT_TRESHOLD_REG);
 	}
+#endif
 
 	/* clear the 2nd level interrupt status bits */
 	PSB_WVDC32(pipe_stat_val, pipe_stat_reg);
@@ -459,10 +461,12 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 			wake_up_interruptible(&dev_priv->eof_wait);
 	}
 
+#ifdef ENABLE_HW_REPEAT_FRAME
 	if ((pipe == MDFLD_PIPE_A) &&
                (pipe_stat_val & PIPE_REPEATED_FRAME_STATUS)) {
 		maxfifo_report_repeat_frame_interrupt(dev);
 	}
+#endif
 
 #ifdef CONFIG_SUPPORT_HDMI
 	if (pipe == 1) { /* HDMI is only on PIPE B */
@@ -1184,6 +1188,7 @@ void mdfld_disable_te(struct drm_device *dev, int pipe)
 	PSB_DEBUG_ENTRY("%s: Disabled TE for pipe %d\n", __func__, pipe);
 }
 
+#ifdef ENABLE_HW_REPEAT_FRAME
 int mrfl_enable_repeat_frame_intr(struct drm_device *dev, int idle_frame_count)
 {
 	struct drm_psb_private *dev_priv =
@@ -1232,6 +1237,7 @@ void mrfl_disable_repeat_frame_intr(struct drm_device *dev)
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 	PSB_DEBUG_PM("Disabled Repeat Frame Interrupt\n");
 }
+#endif
 
 int mid_irq_enable_hdmi_audio(struct drm_device *dev)
 {

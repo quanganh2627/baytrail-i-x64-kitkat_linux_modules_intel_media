@@ -34,6 +34,9 @@
 #include "dc_mrfld.h"
 #include "pwr_mgmt.h"
 #include "psb_drv.h"
+#ifndef ENABLE_HW_REPEAT_FRAME
+#include "dc_maxfifo.h"
+#endif
 
 #if !defined(SUPPORT_DRM)
 #error "SUPPORT_DRM must be set"
@@ -580,6 +583,11 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 			drm_vblank_count(gpsDevice->psDrmDevice, iPipe);
 
 	bUpdated = IMG_TRUE;
+#ifndef ENABLE_HW_REPEAT_FRAME
+	/* maxfifo is only enabled in mipi only mode */
+	if (iPipe == DC_PIPE_A)
+		maxfifo_timer_start(gpsDevice->psDrmDevice);
+#endif
 err_out:
 	power_island_put(psFlip->uiPowerIslands);
 	return bUpdated;

@@ -1092,6 +1092,7 @@ struct drm_psb_private {
 *	pfn_screen_event_handler pvr_screen_event_handler;
 */
 	struct timer_list hdmi_timer;
+	struct timer_list maxfifo_timer;
 	/* fix Lock screen flip in resume issue */
 	unsigned long init_screen_start;
 	unsigned long init_screen_offset;
