@@ -1049,6 +1049,10 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 			if (p_funcs->set_brightness(dsi_config, 0))
 				DRM_ERROR("Failed to set panel brightness\n");
 		mdfld_dsi_dsr_allow_locked(dsi_config);
+
+		/* Make the pending flip request as completed. */
+		DCUnAttachPipe(dsi_config->pipe);
+		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	} else {
 		mdfld_generic_dsi_dbi_set_power(encoder, false);
 
