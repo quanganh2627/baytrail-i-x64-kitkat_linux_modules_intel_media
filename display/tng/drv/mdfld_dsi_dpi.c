@@ -886,6 +886,7 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_device *dev;
 	struct drm_psb_private *dev_priv;
+	struct panel_funcs *p_funcs;
 
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
@@ -896,7 +897,8 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
 
-	PSB_DEBUG_ENTRY("%s\n", (mode == DRM_MODE_DPMS_ON ? "on" : "off"));
+	PSB_DEBUG_ENTRY("%s\n", (mode == DRM_MODE_DPMS_ON ? "on" :
+		DRM_MODE_DPMS_STANDBY == mode ? "standby" : "off"));
 
 	mutex_lock(&dev_priv->dpms_mutex);
 	DCLockMutex();
@@ -905,6 +907,18 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 		mdfld_dsi_dpi_set_power(encoder, true);
 		DCAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOn(dsi_config->pipe);
+		if (p_funcs && p_funcs->set_brightness)
+			if (p_funcs->set_brightness(dsi_config,
+				psb_brightness))
+				DRM_ERROR("Failed to set panel brightness\n");
+	} else if (mode == DRM_MODE_DPMS_STANDBY) {
+		if (p_funcs && p_funcs->set_brightness)
+			if (p_funcs->set_brightness(dsi_config, 0))
+				DRM_ERROR("Failed to set panel brightness\n");
+
+		/* Make the pending flip request as completed. */
+		DCUnAttachPipe(dsi_config->pipe);
+		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	} else {
 		mdfld_dsi_dpi_set_power(encoder, false);
 
