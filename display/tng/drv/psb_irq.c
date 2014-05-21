@@ -450,7 +450,8 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	if (pipe_stat_val & PIPE_TE_STATUS) {
 		dev_priv->te_pipe = pipe;
 		drm_handle_vblank(dev, pipe);
-		queue_work(dev_priv->vsync_wq, &dev_priv->te_work);
+		if (dev_priv->te_work.func)
+			queue_work(dev_priv->vsync_wq, &dev_priv->te_work);
 	}
 
 	if (pipe == 0) { /* only for pipe A */
