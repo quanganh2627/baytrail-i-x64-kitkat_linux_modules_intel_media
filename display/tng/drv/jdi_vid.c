@@ -353,9 +353,9 @@ power_off_err:
 static int mdfld_dsi_jdi_set_brightness(struct mdfld_dsi_config *dsi_config,
 		int level)
 {
-	struct mdfld_dsi_pkg_sender *sender =
+    struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
-	int duty_val = 0;
+	u8 duty_val = 0;
 
 	PSB_DEBUG_ENTRY("level = %d\n", level);
 
@@ -364,18 +364,10 @@ static int mdfld_dsi_jdi_set_brightness(struct mdfld_dsi_config *dsi_config,
 		return -EINVAL;
 	}
 
-	duty_val = (0xFFF * level) / 100;
-
-	/*
-	 * Note: the parameters of write_display_brightness in JDI R69001 spec
-	 * map DBV[7:4] as MSB.
-	 */
-	jdi_write_display_brightness[0] = 0x51;
-	jdi_write_display_brightness[1] = duty_val & 0xF;
-	jdi_write_display_brightness[2] = ((duty_val & 0xFF0) >> 4);
-	jdi_write_display_brightness[3] = 0x0;
-	mdfld_dsi_send_mcs_long_hs(sender, jdi_write_display_brightness, 4, 0);
-
+	duty_val = (0xFF * level) / 100;
+	mdfld_dsi_send_mcs_short_hs(sender,
+			0x51, duty_val, 1,
+			MDFLD_DSI_SEND_PACKAGE);
 	return 0;
 }
 
