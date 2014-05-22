@@ -1843,7 +1843,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	*/
 	dpst_init(dev, 5, 1);
 
-	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
+	if (get_panel_type(dev, 0) != SDC_25x16_CMD)
+		mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 	if (IS_FLDS(dev) &&
 			(is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI)) {
 		INIT_WORK(&dev_priv->te_work, mdfld_te_handler_work);
