@@ -325,6 +325,7 @@ static void ann_dc_setup(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(DSPDCNTR, 0x0);
 	REG_WRITE(DSPECNTR, 0x0);
 	REG_WRITE(DSPFCNTR, 0x0);
+	REG_WRITE(GCI_CTRL, REG_READ(GCI_CTRL) | 1);
 
 	power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
 
