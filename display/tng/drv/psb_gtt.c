@@ -949,6 +949,11 @@ static int psb_gtt_mm_alloc_mem(struct psb_gtt_mm *mm,
 	struct drm_mm_node *tmp_node;
 	int ret;
 
+	if (IS_ANN(dev)) {
+		if (align < 32)
+			align = 32;
+	}
+
 	do {
 		ret = drm_mm_pre_get(&mm->base);
 		if (unlikely(ret)) {
@@ -1386,11 +1391,6 @@ int psb_gtt_map_vaddr(struct drm_device *dev,
 	}
 
 	DRM_DEBUG("get %d pages\n", pages);
-
-	if (IS_ANN(dev)) {
-		if (page_align < 32)
-			page_align = 32;
-	}
 
 	/*alloc memory in TT apeture*/
 	ret = psb_gtt_mm_alloc_mem(mm, pages, page_align, &node);
