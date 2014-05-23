@@ -43,6 +43,8 @@
 #include "psb_irq.h"
 #include "psb_intel_hdmi.h"
 
+#include "mdfld_dsi_pkg_sender.h"
+
 #define KEEP_UNUSED_CODE 0
 
 extern struct drm_device *gpDrmDevice;
@@ -50,6 +52,24 @@ extern int drm_psb_smart_vsync;
 /*
  * inline functions
  */
+
+static inline void update_te_counter(struct drm_device *dev, uint32_t pipe)
+{
+	struct mdfld_dsi_pkg_sender *sender;
+	struct mdfld_dsi_dbi_output **dbi_outputs;
+	struct mdfld_dsi_dbi_output *dbi_output;
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct mdfld_dbi_dsr_info *dsr_info = dev_priv->dbi_dsr_info;
+
+	if (!dsr_info)
+		return;
+
+	dbi_outputs = dsr_info->dbi_outputs;
+	dbi_output = pipe ? dbi_outputs[1] : dbi_outputs[0];
+	sender = mdfld_dsi_encoder_get_pkg_sender(&dbi_output->base);
+	mdfld_dsi_report_te(sender);
+}
 
 static inline u32 psb_pipestat(int pipe)
 {
@@ -451,9 +471,9 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 
 	if (pipe_stat_val & PIPE_TE_STATUS) {
 		dev_priv->te_pipe = pipe;
+		update_te_counter(dev, pipe);
 		drm_handle_vblank(dev, pipe);
-		if (dev_priv->te_work.func)
-			queue_work(dev_priv->vsync_wq, &dev_priv->te_work);
+		queue_work(dev_priv->vsync_wq, &dev_priv->te_work);
 	}
 
 	if (pipe == 0) { /* only for pipe A */

@@ -1354,6 +1354,29 @@ int mdfld_dsi_send_dcs(struct mdfld_dsi_pkg_sender *sender,
 		if (is_dual_dsi(dev))
 			loop_num = 2;
 		mutex_lock(&sender->lock);
+
+		/*handle DSI error*/
+		if (dsi_error_handler(sender)) {
+			mutex_unlock(&sender->lock);
+			DRM_ERROR("Error handling failed\n");
+			return  -EAGAIN;
+		}
+		/**
+		 * check the whether is there any write_mem_start already being
+		 * sent in this between current te_seq and next te.
+		 * if yes, simply reject the rest of write_mem_start because it
+		 * is unnecessary. otherwise, go ahead and kick of a
+		 * write_mem_start.
+		 */
+		if (atomic64_read(&sender->last_screen_update) ==
+			atomic64_read(&sender->te_seq)) {
+			mutex_unlock(&sender->lock);
+			if (dev_priv->b_async_flip_enable)
+				DRM_INFO("reject write_mem_start last_screen_update[%lld], te_seq[%lld]\n",
+						atomic64_read(&sender->last_screen_update), atomic64_read(&sender->te_seq));
+			return -EAGAIN;
+		}
+
 		for(i = 0; i < loop_num; i++) {
 			if (i != 0)
 				offset = MIPIC_REG_OFFSET;
