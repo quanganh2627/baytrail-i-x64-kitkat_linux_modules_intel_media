@@ -385,6 +385,7 @@ static void sdc16x25_8_cmd_get_panel_info(int pipe, struct panel_info *pi)
 	if (pipe == 0) {
 		pi->width_mm = 130;
 		pi->height_mm = 181;
+		pi->panel_180_rotation = true;
 	}
 }
 

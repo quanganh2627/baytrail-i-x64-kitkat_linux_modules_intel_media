@@ -929,6 +929,7 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 
 	width_mm = dsi_panel_info.width_mm;
 	height_mm = dsi_panel_info.height_mm;
+	dev_priv->panel_180_rotation = dsi_panel_info.panel_180_rotation;
 
 	dsi_config->mode = dsi_config->fixed_mode;
 	dsi_config->connector = dsi_connector;

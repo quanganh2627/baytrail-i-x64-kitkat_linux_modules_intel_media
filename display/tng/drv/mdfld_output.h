@@ -67,6 +67,7 @@ struct panel_info {
 	u32 width_mm;
 	u32 height_mm;
 
+	bool panel_180_rotation;
 	/*other infos*/
 };
 

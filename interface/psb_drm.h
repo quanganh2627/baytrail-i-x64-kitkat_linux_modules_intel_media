@@ -990,6 +990,9 @@ struct drm_psb_idle_ctrl {
 /****BEGIN HDMI TEST IOCTLS ****/
 #define DRM_PSB_HDMITEST                0x3A
 
+/* GET PANEL ORIENTATION INFO */
+#define DRM_PSB_PANEL_ORIENTATION       0x3B
+
 /* read an hdmi test register */
 #define HT_READ                         1
 /* write an hdmi test register */

@@ -1117,6 +1117,7 @@ struct drm_psb_private {
 	struct pci_dev *pci_root;
 	bool bUseHFPLL;
 	bool bRereadZero;
+	bool panel_180_rotation;
 };
 
 struct psb_mmu_driver;

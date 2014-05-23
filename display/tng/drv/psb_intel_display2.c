@@ -1120,6 +1120,7 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	struct psb_framebuffer *mdfld_fb;
 	struct psb_intel_mode_device *mode_dev;
 	struct mdfld_dsi_hw_context *ctx;
+	struct drm_psb_private *dev_priv;
 	int fb_bpp;
 	int fb_pitch;
 	int fb_depth;
@@ -1144,6 +1145,7 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	fb_pitch = crtc->fb->pitches[0];
 	fb_depth = crtc->fb->depth;
 	dev = crtc->dev;
+	dev_priv = dev->dev_private;
 
 	mutex_lock(&dsi_config->context_lock);
 
@@ -1185,7 +1187,10 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 	ctx->dspstride = fb_pitch;
 
 	ctx->dspsurf = mode_dev->bo_offset(dev, mdfld_fb);
-	ctx->dsplinoff = y * fb_pitch + x * (fb_bpp / 8);
+	if (dev_priv->panel_180_rotation && dsi_config->pipe == 0)
+		ctx->dsplinoff = y * fb_pitch + x * (fb_bpp / 8) + (mode->crtc_vdisplay - 1) * fb_pitch + (mode->crtc_hdisplay - 1) * (fb_bpp / 8);
+	else
+		ctx->dsplinoff = y * fb_pitch + x * (fb_bpp / 8);
 
 	switch (fb_bpp) {
 	case 8:
@@ -1209,6 +1214,9 @@ static int mdfld_crtc_dsi_mode_set(struct drm_crtc *crtc,
 
 	if (dsi_config->pipe == 2)
 		ctx->dspcntr |= (0x2 << 24);
+
+	if (dev_priv->panel_180_rotation && dsi_config->pipe == 0)
+		ctx->dspcntr |= (0x1 << 15);
 
 	/*
 	 * Setup pipe configuration for different panels

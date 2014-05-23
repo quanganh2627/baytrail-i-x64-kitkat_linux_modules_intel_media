@@ -540,6 +540,10 @@ MODULE_DEVICE_TABLE(pci, pciidlist);
 	DRM_IOWR(DRM_PSB_VSYNC_SET + DRM_COMMAND_BASE,		\
 			struct drm_psb_vsync_set_arg)
 
+#define DRM_IOCTL_PSB_PANEL_ORIENTATION \
+	DRM_IOR(DRM_PSB_PANEL_ORIENTATION + DRM_COMMAND_BASE,          \
+			int)
+
 struct user_printk_arg {
 	char string[512];
 };
@@ -589,6 +593,8 @@ static int psb_dpu_dsr_on_ioctl(struct drm_device *dev, void *data,
 				struct drm_file *file_priv);
 
 static int psb_dpu_dsr_off_ioctl(struct drm_device *dev, void *data,
+				 struct drm_file *file_priv);
+static int psb_get_panel_orientation_ioctl(struct drm_device *dev, void *data,
 				 struct drm_file *file_priv);
 #ifdef CONFIG_SUPPORT_HDMI
 static int psb_disp_ioctl(struct drm_device *dev, void *data,
@@ -797,6 +803,9 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 		psb_panel_query_ioctl, DRM_AUTH),
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_IDLE_CTRL,
 		psb_idle_ioctl, DRM_AUTH),
+
+	PSB_IOCTL_DEF(DRM_IOCTL_PSB_PANEL_ORIENTATION,
+		psb_get_panel_orientation_ioctl, DRM_AUTH),
 
 };
 
@@ -3138,6 +3147,19 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 		} else
 			DRM_INFO("%s: pipe %d is disabled!\n", __func__, pipe);
 	}
+	return 0;
+}
+
+static int psb_get_panel_orientation_ioctl(struct drm_device *dev, void *data,
+						 struct drm_file *file_priv)
+{
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	int *arg = data;
+
+	if (dev_priv->panel_180_rotation)
+            *arg = 1; // panel orientation 180
+        else
+            *arg = 0;
 	return 0;
 }
 
