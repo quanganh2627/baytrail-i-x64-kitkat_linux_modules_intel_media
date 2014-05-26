@@ -961,7 +961,7 @@ _FreeOSPage(IMG_UINT32 ui32CPUCacheFlags,
 	{
 #if defined(CONFIG_X86)
 		pvPageVAddr = page_address(psPage);
-		if (bUnsetMemoryType == IMG_TRUE)
+		if (pvPageVAddr && (bUnsetMemoryType == IMG_TRUE))
 		{
 			int ret;
 
@@ -1004,7 +1004,7 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 
     gfp_flags = GFP_KERNEL | __GFP_NOWARN | __GFP_NOMEMALLOC;
 
-#if defined(CONFIG_X86)
+#if defined(CONFIG_X86_64)
     gfp_flags |= __GFP_DMA32;
 #else
     gfp_flags |= __GFP_HIGHMEM;
