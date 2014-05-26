@@ -781,6 +781,13 @@ void psb_irq_turn_on_dpst(struct drm_device *dev)
 	/* FIXME: revisit the power island when touching the DPST feature. */
 	if (power_island_get(OSPM_DISPLAY_A)) {
 
+		PSB_WVDC32(ctx->histogram_logic_ctrl, HISTOGRAM_LOGIC_CONTROL);
+		PSB_WVDC32(ctx->histogram_intr_ctrl, HISTOGRAM_INT_CONTROL);
+
+		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
+		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
+		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
+/*
 		PSB_WVDC32(BIT31, HISTOGRAM_LOGIC_CONTROL);
 		hist_reg = PSB_RVDC32(HISTOGRAM_LOGIC_CONTROL);
 		ctx->histogram_logic_ctrl = hist_reg;
@@ -794,20 +801,16 @@ void psb_irq_turn_on_dpst(struct drm_device *dev)
 			   PWM_PHASEIN_INT_ENABLE, PWM_CONTROL_LOGIC);
 		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
 
-		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
-		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
-		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
-
 		hist_reg = PSB_RVDC32(HISTOGRAM_INT_CONTROL);
 		PSB_WVDC32(hist_reg | HISTOGRAM_INT_CTRL_CLEAR,
 			   HISTOGRAM_INT_CONTROL);
 		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
 		PSB_WVDC32(pwm_reg | 0x80010100 | PWM_PHASEIN_ENABLE,
 			   PWM_CONTROL_LOGIC);
+*/
 
 		power_island_put(OSPM_DISPLAY_A);
 	}
-
 }
 
 int psb_irq_enable_dpst(struct drm_device *dev)
@@ -825,8 +828,6 @@ void psb_irq_turn_off_dpst(struct drm_device *dev)
 	    (struct drm_psb_private *)dev->dev_private;
 	struct mdfld_dsi_config *dsi_config = NULL;
 	unsigned long irqflags;
-	u32 hist_reg;
-	u32 pwm_reg;
 
 	if (!dev_priv)
 		return;
@@ -839,16 +840,17 @@ void psb_irq_turn_off_dpst(struct drm_device *dev)
 	if (power_island_get(OSPM_DISPLAY_A)) {
 
 		PSB_WVDC32(0x00000000, HISTOGRAM_INT_CONTROL);
-		hist_reg = PSB_RVDC32(HISTOGRAM_INT_CONTROL);
 
 		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 		psb_disable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
 		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 
+/*
 		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
 		PSB_WVDC32(pwm_reg & !(PWM_PHASEIN_INT_ENABLE),
 			   PWM_CONTROL_LOGIC);
 		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
+*/
 
 		power_island_put(OSPM_DISPLAY_A);
 	}

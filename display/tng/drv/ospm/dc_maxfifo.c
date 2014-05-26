@@ -267,6 +267,7 @@ bool enter_maxfifo_mode(struct drm_device *dev)
 	mutex_lock(&maxfifo_info->maxfifo_mtx);
 	regs_to_set = maxfifo_info->regs_to_set;
 
+	psb_irq_disable_dpst(dev);
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		if (regs_to_set & DC_MAXFIFO_REGSTOSET_DSPSRCTRL_ENABLE) {
 			dspsrctrl_val |= DSPSRCTRL_MAXFIFO_ENABLE;
@@ -300,7 +301,7 @@ bool exit_maxfifo_mode(struct drm_device *dev)
 	if (!maxfifo_info)
 		return false;
 
-
+	psb_irq_enable_dpst(dev);
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		PSB_WVDC32(dspsrctrl_val, DSPSRCTRL_REG);
 		unsigned long irqflags;
