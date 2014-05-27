@@ -31,6 +31,7 @@
 #include "psb_intel_reg.h"
 
 #include <linux/device.h>
+#include <linux/intel_mid_pm.h>
 
 #define MAXFIFO_IDLE_FRAME_COUNT	10
 
@@ -144,11 +145,15 @@ bool enter_s0i1_display_mode(struct drm_device *dev)
 
 	if (maxfifo_info &&
 		(maxfifo_info->s0i1_disp_state == S0i1_DISP_STATE_READY)){
+
+		pmu_set_s0i1_disp_vote(true);
+/*
 		u32 dsp_ss_pm_val;
 
 		dsp_ss_pm_val = intel_mid_msgbus_read32(PUNIT_PORT, DSP_SS_PM);
 		dsp_ss_pm_val |= PUNIT_DSPSSPM_ENABLE_S0i1_DISPLAY;
 		intel_mid_msgbus_write32(PUNIT_PORT, DSP_SS_PM, dsp_ss_pm_val);
+*/
 		maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_ENTERED;
 		PSB_DEBUG_PM("Enabled S0i1-Display Punit DSPSSMP Register\n");
 	}
@@ -163,11 +168,15 @@ bool exit_s0i1_display_mode(struct drm_device *dev)
 		(struct dc_maxfifo *) dev_priv->dc_maxfifo_info;
 	if (maxfifo_info &&
 		(maxfifo_info->s0i1_disp_state == S0i1_DISP_STATE_ENTERED)){
+
+		pmu_set_s0i1_disp_vote(false);
+/*
 		u32 dsp_ss_pm_val;
 
 		dsp_ss_pm_val = intel_mid_msgbus_read32(PUNIT_PORT, DSP_SS_PM);
 		dsp_ss_pm_val &= ~PUNIT_DSPSSPM_ENABLE_S0i1_DISPLAY;
 		intel_mid_msgbus_write32(PUNIT_PORT, DSP_SS_PM, dsp_ss_pm_val);
+*/
 		maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_NOT_READY;
 		PSB_DEBUG_PM(" Disabled S0i1-Display in Punit DSPSSMP Register\n");
 	}
