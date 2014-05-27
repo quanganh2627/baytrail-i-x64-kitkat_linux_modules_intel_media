@@ -1459,6 +1459,18 @@ static IMG_BOOL _DCDisplayContextFlush( PDLLIST_NODE psNode, IMG_PVOID pvCallbac
 		PVR_DPF((PVR_DBG_ERROR, "DCDisplayContextFlush: Failed to flush after > 500 milliseconds"));
 	}
 	
+	PVR_DPF((PVR_DBG_ERROR, "DCDisplayContextFlush: inserting NULL flip"));
+
+	/* Check if we need to do any CPU cache operations before sending the NULL flip */
+	psData = PVRSRVGetPVRSRVData();
+	OSCPUOperation(psData->uiCacheOp);
+	psData->uiCacheOp = PVRSRV_CACHE_OP_NONE;
+
+	/* The next Config may be dependent on the single Config currently in the DC */
+	/* Issue a NULL flip to free it */
+	_DCDisplayContextAcquireRef(psDisplayContext);
+	_DCDisplayContextConfigure( (IMG_PVOID)&sReadyData, (IMG_PVOID)&sCompleteData );
+
 	/* re-enable the MISR/SCP */
 	psDisplayContext->bPauseMISR = IMG_FALSE;
 	
