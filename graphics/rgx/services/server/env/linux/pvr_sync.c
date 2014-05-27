@@ -1112,13 +1112,13 @@ IMG_VOID PVRSyncUpdateAllTimelines(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle)
 {
 	IMG_BOOL bSignal;
 	struct PVR_SYNC_TIMELINE *psPVRTl;
-	struct list_head *psTlEntry, *psPtEntry;
+	struct list_head *psTlEntry, *psPtEntry, *n;
 	unsigned long flags;
 
 	PVR_UNREFERENCED_PARAMETER(hCmdCompHandle);
 
 	mutex_lock(&gTlListLock);
-	list_for_each(psTlEntry, &gTlList)
+	list_for_each_safe(psTlEntry, n, &gTlList)
 	{
 		bSignal = IMG_FALSE;
 		psPVRTl =
@@ -1151,8 +1151,13 @@ IMG_VOID PVRSyncUpdateAllTimelines(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle)
 		}
 		spin_unlock_irqrestore(&psPVRTl->obj.active_list_lock, flags);
 
-		if (bSignal)
+		if (bSignal) {
+			/* Unlock cause this timeline entry may get released in
+			 * PVRSyncReleaseTimeline which needs to hold the lock as well. */
+			mutex_unlock(&gTlListLock);
 			sync_timeline_signal((struct sync_timeline *)psPVRTl);
+			mutex_lock(&gTlListLock);
+		}
 	}
 	mutex_unlock(&gTlListLock);
 }
