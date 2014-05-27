@@ -129,7 +129,7 @@ static inline void psb_mmu_clflush(struct psb_mmu_driver *driver,
 
 static void psb_page_clflush(struct psb_mmu_driver *driver, struct page* page)
 {
-	uint32_t clflush_add = driver->clflush_add >> PAGE_SHIFT;
+	uint32_t clflush_add = (driver->clflush_add * sizeof(uint32_t)) >> PAGE_SHIFT;
 	uint32_t clflush_count = PAGE_SIZE / clflush_add;
 	int i;
 	uint8_t *clf;
@@ -223,7 +223,7 @@ static void psb_virtual_addr_clflush(struct psb_mmu_driver *driver,
 	uint32_t clflush_add = (driver->clflush_add * sizeof(uint32_t)) >> PAGE_SHIFT;
 	uint32_t clflush_count = PAGE_SIZE / clflush_add;
 
-	DRM_INFO("clflush pages %d\n", num_pages);
+	DRM_DEBUG("clflush pages %d\n", num_pages);
 	mb();
 	for (i = 0; i < num_pages; ++i) {
 		for (j = 0; j < clflush_count; ++j) {
@@ -426,7 +426,7 @@ static struct psb_mmu_pt *psb_mmu_alloc_pt(struct psb_mmu_pd *pd)
 {
 	struct psb_mmu_pt *pt = kmalloc(sizeof(*pt), GFP_KERNEL);
 	void *v;
-	uint32_t clflush_add = pd->driver->clflush_add >> PAGE_SHIFT;
+	uint32_t clflush_add = (pd->driver->clflush_add * sizeof(uint32_t)) >> PAGE_SHIFT;
 	uint32_t clflush_count = PAGE_SIZE / clflush_add;
 	spinlock_t *lock = &pd->driver->lock;
 	uint8_t *clf;
