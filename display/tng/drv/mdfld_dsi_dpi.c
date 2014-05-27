@@ -319,7 +319,7 @@ static void ann_dc_setup(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(CURCCNTR, 0x0);
 	REG_WRITE(IEP_OVA_CTRL, 0x0);
 	REG_WRITE(IEP_OVA_CTRL, 0x0);
-	REG_WRITE(DSPACNTR, 0x0);
+
 	REG_WRITE(DSPBCNTR, 0x0);
 	REG_WRITE(DSPCCNTR, 0x0);
 	REG_WRITE(DSPDCNTR, 0x0);
