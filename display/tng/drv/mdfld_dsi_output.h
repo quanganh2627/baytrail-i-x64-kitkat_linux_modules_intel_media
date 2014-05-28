@@ -580,5 +580,4 @@ extern int mdfld_dsi_get_power_mode(struct mdfld_dsi_config *dsi_config,
 extern mdfld_dsi_encoder_t is_panel_vid_or_cmd(struct drm_device *dev);
 extern void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 		struct drm_display_mode *mode);
-extern bool display_need_180_rotation(struct drm_psb_private *dev_priv);
 #endif /*__MDFLD_DSI_OUTPUT_H__*/

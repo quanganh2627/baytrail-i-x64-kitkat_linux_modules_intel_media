@@ -494,12 +494,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 			psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
 		}
 	}
-	if (display_need_180_rotation(dev_priv)) {
-		ctx->dspcntr |= DISPPLANE_180_ROTATION;
-		ctx->dsplinoff = (((ctx->pipesrc & 0xfff) + 1) *
-							(((ctx->pipesrc >> 16) & 0xfff) + 1) *
-							(dsi_config->bpp / 8 + 1));
-	}
+
 	/*Setup plane*/
 	REG_WRITE(regs->dspsize_reg, ctx->dspsize);
 	REG_WRITE(regs->dspsurf_reg, ctx->dspsurf);

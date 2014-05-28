@@ -32,7 +32,6 @@
 #include "mdfld_dsi_output.h"
 #include "pwr_mgmt.h"
 #include "mdfld_dsi_dbi_dsr.h"
-#include "mdfld_dsi_dbi.h"
 #include <linux/kernel.h>
 #include <string.h>
 #include "android_hdmi.h"
@@ -252,11 +251,7 @@ void DCCBFlipSprite(struct drm_device *dev,
 	} else {
 		DRM_ERROR("%s: invalid index\n", __func__);
 	}
-	if (display_need_180_rotation(dev_priv)) {
-		ctx->pos = ctx->rotate_pos;
-		ctx->linoff = ctx->rotate_linoff;
-		ctx->cntr |= DISPPLANE_180_ROTATION;
-	}
+
 	/* asign sprite to pipe */
 	ctx->cntr &= ~DISPPLANE_SEL_PIPE_MASK;
 
@@ -325,11 +320,6 @@ void DCCBFlipPrimary(struct drm_device *dev,
 	if (ctx->index == 0) {
 		reg_offset = 0;
 		dsi_config = dev_priv->dsi_configs[0];
-		if (display_need_180_rotation(dev_priv)) {
-			ctx->pos = ctx->rotate_pos;
-			ctx->linoff = ctx->rotate_linoff;
-			ctx->cntr |= DISPPLANE_180_ROTATION;
-		}
 		pipe = 0;
 	} else if (ctx->index == 1) {
 		reg_offset = 0x1000;

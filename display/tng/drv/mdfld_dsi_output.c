@@ -882,6 +882,7 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 	}
 
 	dev_priv = dev->dev_private;
+
 	/*create a new connetor*/
 	dsi_connector = kzalloc(sizeof(struct mdfld_dsi_connector), GFP_KERNEL);
 	if (!dsi_connector) {
@@ -1028,6 +1029,7 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 	/*init dsr*/
 	if (mdfld_dsi_dsr_init(dsi_config))
 		DRM_INFO("%s: Failed to initialize DSR\n", __func__);
+
 	PSB_DEBUG_ENTRY("successfully\n");
 	return 0;
 
@@ -1051,6 +1053,7 @@ dsi_init_err1:
 		else
 			dev_priv->dsi_configs[0] = NULL;
 	}
+
 dsi_init_err0:
 	if (dsi_connector)
 		kfree(dsi_connector);
@@ -1111,35 +1114,4 @@ void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 	}
 
 	return;
-}
-bool display_need_180_rotation(struct drm_psb_private *dev_priv)
-{
-	struct panel_funcs *p_funcs;
-	struct mdfld_dsi_config *dsi_config = NULL;
-	struct mdfld_dsi_dbi_output *dbi_output = NULL;
-	struct mdfld_dsi_dpi_output *dpi_output = NULL;
-	struct mdfld_dsi_encoder *encoder;
-
-	if (dev_priv == NULL)
-		return false;
-	dsi_config = dev_priv->dsi_configs[0];
-	if (dsi_config == NULL)
-		return false;
-	encoder = dsi_config->encoders[dsi_config->type];
-
-	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {
-		dbi_output = MDFLD_DSI_DBI_OUTPUT(encoder);
-		p_funcs = dbi_output ? dbi_output->p_funcs : NULL;
-	} else if (dsi_config->type == MDFLD_DSI_ENCODER_DPI) {
-		dpi_output = MDFLD_DSI_DPI_OUTPUT(encoder);
-		p_funcs = dpi_output ? dpi_output->p_funcs : NULL;
-	} else {
-		DRM_ERROR("Invalid parameter\n");
-		return false;
-	}
-	if (p_funcs && p_funcs->need_180_rotation &&
-		p_funcs->need_180_rotation())
-		return true;
-	else
-		return false;
 }
