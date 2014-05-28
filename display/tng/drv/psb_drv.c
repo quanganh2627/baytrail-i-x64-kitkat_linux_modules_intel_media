@@ -2910,7 +2910,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 	union drm_wait_vblank vblwait;
 	u32 vbl_count = 0;
 	s64 nsecs = 0;
-	int ret = 0;
+	int ret = -EINVAL;
 	struct android_hdmi_priv *hdmi_priv = dev_priv->hdmi_priv;
 
 	if (arg->vsync_operation_mask) {
@@ -2970,17 +2970,19 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				} else if (ret == -EINTR)
 					ret = 0;
 
+				getrawmonotonic(&now);
+				nsecs = timespec_to_ns(&now);
+
 				mdfld_dsi_dsr_allow(dsi_config);
+			} else {
+				DRM_ERROR(KERN_ERR "ERR: ASK for a VSYNC "
+						"without enable.\n");
 			}
 
 			if (IS_MOFD(dev))
 				mutex_unlock(&dev->mode_config.mutex);
 
-			getrawmonotonic(&now);
-			nsecs = timespec_to_ns(&now);
-
 			arg->vsync.timestamp = (uint64_t)nsecs;
-
 			return ret;
 		}
 
@@ -3009,6 +3011,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			dev_priv->vsync_enabled[pipe] = false;
 			drm_vblank_put(dev, pipe);
 			mdfld_dsi_dsr_allow(dsi_config);
+			ret = 0;
 		}
 	}
 
