@@ -363,7 +363,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 		case JDI_7x12_VID:
 				clock.p1 = 5;
 				clk_n = 1;
-				clock.m = 130;
+				clock.m = 144;
 				break;
 		default:
 			/* for JDI_7x12_CMD */
