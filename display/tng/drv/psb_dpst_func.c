@@ -318,27 +318,33 @@ int psb_diet_enable(struct drm_device *dev, void *data)
 /* dsr lock and power island lock should be hold before calling this function */
 int psb_dpst_diet_save(struct drm_device *dev)
 {
+	struct drm_psb_private *dev_priv = NULL;
 	struct dpst_ie_histogram_control ie_hist_cont_reg;
 	uint32_t blm_hist_ctl = HISTOGRAM_LOGIC_CONTROL;
 	uint32_t iebdr_reg = HISTOGRAM_BIN_DATA;
 	int dpst3_bin_count = 32;
 	u32 i;
 
+	if (!dev)
+		return 0;
+
+	dev_priv = psb_priv(dev);
+	if (!dev_priv || !dev_priv->psb_dpst_state)
+		return 0;
+
 	ie_hist_cont_reg.data = PSB_RVDC32(blm_hist_ctl);
 	ie_hist_cont_reg.bin_reg_func_select = 1;
 	ie_hist_cont_reg.bin_reg_index = 0;
 	PSB_WVDC32(ie_hist_cont_reg.data, blm_hist_ctl);
 	for (i = 0; i <= dpst3_bin_count; i++)
-	{
 		diet_saved[i] = PSB_RVDC32(iebdr_reg);
-	}
 	dpst_print("diet saved\n");
 }
 
 /* dsr lock and power island lock should be hold before calling this function */
 int psb_dpst_diet_restore(struct drm_device *dev)
 {
-	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct drm_psb_private *dev_priv = NULL;
 	struct mdfld_dsi_config *dsi_config = NULL;
 	struct mdfld_dsi_hw_context *ctx = NULL;
 	struct dpst_ie_histogram_control ie_hist_cont_reg;
@@ -346,9 +352,13 @@ int psb_dpst_diet_restore(struct drm_device *dev)
 	uint32_t blm_hist_ctl = HISTOGRAM_LOGIC_CONTROL;
 	uint32_t iebdr_reg = HISTOGRAM_BIN_DATA;
 	int dpst3_bin_count = 32;
-	 u32 temp =0;
+	u32 temp =0;
 
-	if (!dev_priv)
+	if (!dev)
+		return 0;
+
+	dev_priv = psb_priv(dev);
+	if (!dev_priv || !dev_priv->psb_dpst_state)
 		return 0;
 
 	dsi_config = dev_priv->dsi_configs[0];
