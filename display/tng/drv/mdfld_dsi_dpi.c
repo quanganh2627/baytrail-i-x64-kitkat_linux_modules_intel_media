@@ -33,6 +33,8 @@
 #include "psb_irq.h"
 #include "dispmgrnl.h"
 #include "mrfld_clock.h"
+#include "android_hdmi.h"
+#include "otm_hdmi.h"
 
 #define KEEP_UNUSED_CODE 0
 
@@ -342,7 +344,7 @@ static void ann_dc_setup(struct mdfld_dsi_config *dsi_config)
  * NOTE: do NOT modify this function
  */
 static int __dpi_panel_power_on(struct mdfld_dsi_config *dsi_config,
-		struct panel_funcs *p_funcs)
+		struct panel_funcs *p_funcs, bool first_boot)
 {
 	u32 val = 0;
 	struct mdfld_dsi_hw_registers *regs;
@@ -366,7 +368,6 @@ static int __dpi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
 	power_island = pipe_to_island(dsi_config->pipe);
-
 	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
 		power_island |= OSPM_DISPLAY_MIO;
 	if (is_dual_dsi(dev))
@@ -374,6 +375,8 @@ static int __dpi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 
 	if (!power_island_get(power_island))
 		return -EAGAIN;
+	if (android_hdmi_is_connected(dev) && first_boot)
+			otm_hdmi_power_islands_on();
 
 reset_recovery:
 	--reset_count;
@@ -802,7 +805,8 @@ static int __mdfld_dsi_dpi_set_power(struct drm_encoder *encoder, bool on)
 				 "panel is already powered on\n");
 			goto fun_exit;
 		}
-
+		if (android_hdmi_is_connected(dev))
+			otm_hdmi_power_islands_off();
 		/* power down islands turned on by firmware */
 		power_island_put(OSPM_DISPLAY_A | OSPM_DISPLAY_C |
 				 OSPM_DISPLAY_MIO);
@@ -813,7 +817,7 @@ static int __mdfld_dsi_dpi_set_power(struct drm_encoder *encoder, bool on)
 		/* panel is already on */
 		if (dsi_config->dsi_hw_context.panel_on)
 			goto fun_exit;
-		if (__dpi_panel_power_on(dsi_config, p_funcs)) {
+		if (__dpi_panel_power_on(dsi_config, p_funcs, dpi_output->first_boot)) {
 			DRM_ERROR("Faild to turn on panel\n");
 			goto set_power_err;
 		}
@@ -1197,11 +1201,9 @@ struct mdfld_dsi_encoder *mdfld_dsi_dpi_init(struct drm_device *dev,
 		else
 			dsi_connector->status = connector_status_disconnected;
 	}
-
 	/*init DSI controller*/
 	if (p_funcs->dsi_controller_init)
 		p_funcs->dsi_controller_init(dsi_config);
-
 	/**
 	 * TODO: can we keep these code out of display driver as
 	 * it will make display driver hard to be maintained
@@ -1222,7 +1224,6 @@ struct mdfld_dsi_encoder *mdfld_dsi_dpi_init(struct drm_device *dev,
 	dpi_output->dev = dev;
 	dpi_output->p_funcs = p_funcs;
 	dpi_output->first_boot = 1;
-
 	/*get fixed mode*/
 	fixed_mode = dsi_config->fixed_mode;
 
