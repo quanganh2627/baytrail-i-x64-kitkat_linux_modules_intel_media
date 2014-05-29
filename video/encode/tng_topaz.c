@@ -3669,6 +3669,7 @@ int tng_topaz_power_up(
 	enum drm_tng_topaz_codec codec)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	u32 reg_val = 0;
 	u32 count = 3000;
 
@@ -3721,6 +3722,9 @@ int tng_topaz_power_up(
 	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
 		PSB_DEBUG_TOPAZ("Topaz: NOPM policy, but still need powerup here\n");
 
+	/* Reduce D0i0 residency, original it is 0 set by GFX driver */
+	topaz_priv->dev->pdev->d3_delay = 10;
+
 	if (!power_island_get(OSPM_VIDEO_ENC_ISLAND)) {
 		DRM_ERROR("Failed to power on ENC island\n");
 		return -1;
@@ -3747,8 +3751,11 @@ int tng_topaz_power_off(struct drm_device *dev)
 
 	if (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM)
 		PSB_DEBUG_TOPAZ("TOPAZ: skip power off since NOPM policy\n");
-	else
+	else {
 		power_island_put(OSPM_VIDEO_ENC_ISLAND);
+		/* Restore delay to 0 */
+		topaz_priv->dev->pdev->d3_delay = 0;
+	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: power off end\n");
 
