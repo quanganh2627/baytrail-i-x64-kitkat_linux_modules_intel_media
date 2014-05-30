@@ -468,8 +468,8 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	IMG_PIXFMT eFormat;
 	IMG_UINT32 ulStride;
 	IMG_BOOL bUpdated;
-	IMG_BOOL bEnabled;
 	int i, j;
+	unsigned long flags;
 
 	if (!gpsDevice || !psFlip) {
 		DRM_ERROR("%s: Invalid Flip\n", __func__);
@@ -517,17 +517,27 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 
 	clear_plane_flip_state(iPipe);
 
-	/* Delay the Flip if we are close the Vblank interval since we
-	 * do not want to update plane registers during the vblank period
-	 */
-	DCCBAvoidFlipInVblankInterval(gpsDevice->psDrmDevice, iPipe);
-
 	list_for_each_entry(plane,
 			    &(psFlip->asPipeInfo[iPipe].flip_planes), list) {
 		zorder = &plane->flip_ctx->zorder;
 
-		bEnabled = enable_plane(plane);
-		if (!bEnabled)
+		enable_plane(plane);
+	}
+
+	/* Delay the Flip if we are close the Vblank interval since we
+	 * do not want to update plane registers during the vblank period
+	 */
+	DCCBAvoidFlipInVblankInterval(gpsDevice->psDrmDevice, iPipe);
+	local_irq_save(flags);
+
+	list_for_each_entry(plane,
+			    &(psFlip->asPipeInfo[iPipe].flip_planes), list) {
+		int type = plane->type;
+		int index = plane->index;
+		struct plane_state *pstate =
+			&gpsDevice->plane_states[type][index];
+
+		if (!pstate->active)
 			continue;
 
 		switch (plane->type) {
@@ -552,6 +562,8 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 			break;
 		}
 	}
+
+	local_irq_restore(flags);
 
 	if (zorder)
 		_Setup_ZOrder(gpsDevice, zorder, iPipe);
