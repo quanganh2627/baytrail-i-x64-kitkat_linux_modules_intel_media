@@ -565,14 +565,17 @@ IMG_VOID _DevmemImportStructDevUnmap(DEVMEM_IMPORT *psImport)
 	    RA_Free(psHeap->psQuantizedVMRA,
 	            psDeviceImport->sDevVAddr.uiAddr);
 
+		OSLockRelease(psDeviceImport->hLock);
+
 		_DevmemImportStructRelease(psImport);
 
 		OSLockAcquire(psHeap->hLock);
 		psHeap->uiImportCount--;
 		OSLockRelease(psHeap->hLock);
+	} else {
+		OSLockRelease(psDeviceImport->hLock);
 	}
 
-	OSLockRelease(psDeviceImport->hLock);
 }
 
 /*
@@ -655,10 +658,14 @@ IMG_VOID _DevmemImportStructCPUUnmap(DEVMEM_IMPORT *psImport)
 					psCPUImport->hOSMMapData,
 					psCPUImport->pvCPUVAddr,
 					(IMG_SIZE_T)psImport->uiSize);
+
+		OSLockRelease(psCPUImport->hLock);
+
 		_DevmemImportStructRelease(psImport);
+	} else {
+		OSLockRelease(psCPUImport->hLock);
 	}
 
-	OSLockRelease(psCPUImport->hLock);
 }
 
 
