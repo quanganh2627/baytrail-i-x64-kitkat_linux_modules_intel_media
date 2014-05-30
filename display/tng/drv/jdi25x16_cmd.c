@@ -455,7 +455,7 @@ int jdi25x16_cmd_set_brightness(
 		return -EINVAL;
 	}
 
-	duty_val = (0xFF * level) / 100;
+	duty_val = (0xFF * level) / 255;
 	for (i = 0; i < 2; i++) {
 		if (i == 0)
 			sender->work_for_slave_panel = false;

@@ -314,7 +314,7 @@ int sdc25x16_cmd_set_brightness(
 		return -EINVAL;
 	}
 
-	duty_val = (0xFF * level) / 100;
+	duty_val = (0xFF * level) / 255;
 	mdfld_dsi_send_mcs_short_hs(sender,
 		write_display_brightness, duty_val, 1,
 		MDFLD_DSI_SEND_PACKAGE);

@@ -922,15 +922,21 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 		mdfld_dsi_dpi_set_power(encoder, true);
 		DCAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOn(dsi_config->pipe);
-		if (p_funcs && p_funcs->set_brightness)
-			if (p_funcs->set_brightness(dsi_config,
-				psb_brightness))
-				DRM_ERROR("Failed to set panel brightness\n");
-	} else if (mode == DRM_MODE_DPMS_STANDBY) {
-		if (p_funcs && p_funcs->set_brightness)
-			if (p_funcs->set_brightness(dsi_config, 0))
-				DRM_ERROR("Failed to set panel brightness\n");
 
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
+		struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
+		struct backlight_device bd;
+		bd.props.brightness = ctx->lastbrightnesslevel;
+		psb_set_brightness(&bd);
+#endif
+	} else if (mode == DRM_MODE_DPMS_STANDBY) {
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
+		struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
+		struct backlight_device bd;
+		ctx->lastbrightnesslevel = psb_get_brightness(&bd);
+		bd.props.brightness = 0;
+		psb_set_brightness(&bd);
+#endif
 		/* Make the pending flip request as completed. */
 		DCUnAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOff(dsi_config->pipe);

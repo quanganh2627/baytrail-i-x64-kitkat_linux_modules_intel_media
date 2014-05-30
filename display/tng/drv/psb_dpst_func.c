@@ -595,8 +595,8 @@ int dpst_disable(struct drm_device *dev)
 	if(!dev_priv)
 		return 0;
 
-	dev_priv->blc_adj2 = *arg;
 	dpst_print("adjust percentage: %d.%d\n", *arg / 100, *arg % 100);
+	dev_priv->blc_adj2 = (*arg * 255 / 100) * 255 / 100;
 
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
 	bd.props.brightness = psb_get_brightness(&bd);

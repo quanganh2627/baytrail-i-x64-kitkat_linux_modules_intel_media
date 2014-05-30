@@ -3216,8 +3216,8 @@ static int psb_blc_proc_show(struct seq_file *seq, void *v)
 	int final_brightness = 0;
 
 	user_brightness = psb_get_brightness(NULL);
-	final_brightness = (user_brightness * dev_priv->blc_adj1) / 100;
-	final_brightness = (final_brightness * dev_priv->blc_adj2) / 100;
+	final_brightness = (user_brightness * dev_priv->blc_adj1) / 255;
+	final_brightness = (final_brightness * dev_priv->blc_adj2) / 255;
 
 	DRM_INFO("%i\n", final_brightness);
 	seq_printf(seq, "%i\n", final_brightness);

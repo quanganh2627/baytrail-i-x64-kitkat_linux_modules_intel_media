@@ -364,7 +364,7 @@ static int mdfld_dsi_jdi_set_brightness(struct mdfld_dsi_config *dsi_config,
 		return -EINVAL;
 	}
 
-	duty_val = (0xFF * level) / 100;
+	duty_val = (0xFF * level) / 255;
 	mdfld_dsi_send_mcs_short_hs(sender,
 			0x51, duty_val, 1,
 			MDFLD_DSI_SEND_PACKAGE);
