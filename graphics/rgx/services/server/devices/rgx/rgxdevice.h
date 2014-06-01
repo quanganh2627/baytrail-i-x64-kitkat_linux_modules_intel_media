@@ -70,15 +70,12 @@ typedef struct {
 #define RGXKM_DEVICE_STATE_FTRACE_EN				(0x1 << 1)		/*!< Used to enable device FTrace thread to consume HWPerf data */
 #define RGXKM_DEVICE_STATE_DISABLE_DW_LOGGING_EN 	(0x1 << 2)		/*!< Used to disable the Devices Watchdog logging */
 
-#define RGXFWIF_GPU_STATS_WINDOW_SIZE_US					1000000
-#define RGXFWIF_GPU_STATS_MAX_VALUE_OF_STATE				10000
-
 /*!
  ******************************************************************************
  * GPU DVFS History CB
  *****************************************************************************/
 
-#define RGX_GPU_DVFS_HIST_SIZE 100  /* History size must NOT be greater than 16384 (2^14) */
+#define RGX_GPU_DVFS_HIST_SIZE 200  /* History size must NOT be greater than 4096 (2^12) */
 
 typedef struct _RGX_GPU_DVFS_HIST_
 {
@@ -88,11 +85,14 @@ typedef struct _RGX_GPU_DVFS_HIST_
 
 typedef struct _RGXFWIF_GPU_UTIL_STATS_
 {
-	IMG_BOOL				bPoweredOn;			/* if TRUE, device is powered on and statistic are valid. 
-													It might be FALSE if DVFS frequency is not provided by system layer (see RGX_TIMING_INFORMATION::ui32CoreClockSpeed) */
-	IMG_UINT32				ui32GpuStatActive;	/* GPU active  ratio expressed in 0,01% units */
-	IMG_UINT32				ui32GpuStatBlocked; /* GPU blocked ratio expressed in 0,01% units */
-	IMG_UINT32				ui32GpuStatIdle;    /* GPU idle    ratio expressed in 0,01% units */
+	IMG_BOOL                bValid;                                 /* If TRUE, statistics are valid.
+It might be FALSE if DVFS frequency is not provided by system layer (see RGX_TIMING_INFORMATION::ui32CoreClockSpeed)
+or if the driver couldn't acquire the PowerLock */
+	IMG_BOOL                bIncompleteData;                /* TRUE when the host couldn't find enough data to cover the whole time window, so the returned values could be wrong */
+	IMG_UINT32              ui32GpuStatActiveHigh;  /* GPU active high ratio expressed in 0,01% units */
+	IMG_UINT32              ui32GpuStatActiveLow;   /* GPU active low (i.e. TLA active only) ratio expressed in 0,01% units */
+	IMG_UINT32              ui32GpuStatBlocked;             /* GPU blocked ratio expressed in 0,01% units */
+	IMG_UINT32              ui32GpuStatIdle;                /* GPU idle ratio expressed in 0,01% units */
 } RGXFWIF_GPU_UTIL_STATS;
 
 typedef struct _RGX_REG_CONFIG_

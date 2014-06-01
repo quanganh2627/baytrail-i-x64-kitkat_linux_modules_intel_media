@@ -554,6 +554,66 @@ static PVRSRV_ERROR RGXStop(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	return PVRSRV_OK;
 }
 
+static IMG_VOID _RGXFWCBEntryAdd(PVRSRV_DEVICE_NODE    *psDeviceNode, IMG_UINT64 ui64TimeStamp, IMG_UINT32 ui32Type)
+{
+       PVRSRV_RGXDEV_INFO              *psDevInfo = psDeviceNode->pvDevice;
+       RGXFWIF_GPU_UTIL_FWCB   *psRGXFWIfGpuUtilFWCb = psDevInfo->psRGXFWIfGpuUtilFWCb;
+
+       switch(ui32Type)
+       {
+               case RGXFWIF_GPU_UTIL_FWCB_TYPE_CRTIME:
+                       {
+                               RGX_GPU_DVFS_HIST               *psGpuDVFSHistory = psDevInfo->psGpuDVFSHistory;
+                               RGX_DATA                                *psRGXData = (RGX_DATA*)psDeviceNode->psDevConfig->hDevData;
+
+                               /* Advance DVFS history ID */
+                               psGpuDVFSHistory->ui32CurrentDVFSId++;
+                               if (psGpuDVFSHistory->ui32CurrentDVFSId >= RGX_GPU_DVFS_HIST_SIZE)
+                               {
+                                       psGpuDVFSHistory->ui32CurrentDVFSId = 0;
+                               }
+
+                               /* Update DVFS history ID that is used by the Host to populate state changes CB */
+                               psRGXFWIfGpuUtilFWCb->ui32CurrentDVFSId = psGpuDVFSHistory->ui32CurrentDVFSId;
+
+                               /* Store new DVFS freq into DVFS history entry */
+                               psGpuDVFSHistory->aui32DVFSClockCB[psGpuDVFSHistory->ui32CurrentDVFSId] = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
+                       }
+                       /* 'break;' missing on purpose */
+
+               case RGXFWIF_GPU_UTIL_FWCB_TYPE_END_CRTIME:
+                       /* The DVFS history ID in this case is the same as the last one set by the Firmware,
+                        * no need to add an identical copy in the DVFS history buffer */
+
+                       /* Populate DVFS history entry (the GPU state is the same as in the last FW entry in this CB) */
+                       psRGXFWIfGpuUtilFWCb->aui64CB[psRGXFWIfGpuUtilFWCb->ui32WriteOffset] =
+                                       ((ui64TimeStamp << RGXFWIF_GPU_UTIL_FWCB_TIMER_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_CR_TIMER_MASK) |
+                                       (((IMG_UINT64)psRGXFWIfGpuUtilFWCb->ui32LastGpuUtilState << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_STATE_MASK) |
+                                       (((IMG_UINT64)ui32Type << RGXFWIF_GPU_UTIL_FWCB_TYPE_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_TYPE_MASK) |
+                                       (((IMG_UINT64)psRGXFWIfGpuUtilFWCb->ui32CurrentDVFSId << RGXFWIF_GPU_UTIL_FWCB_ID_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_ID_MASK);
+                       break;
+
+               case RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON:
+               case RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_OFF:
+                       /* Populate DVFS history entry (the GPU state is the same as in the last FW entry in this CB) */
+                       psRGXFWIfGpuUtilFWCb->aui64CB[psRGXFWIfGpuUtilFWCb->ui32WriteOffset] =
+                                       ((ui64TimeStamp << RGXFWIF_GPU_UTIL_FWCB_TIMER_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_OS_TIMER_MASK) |
+                                       (((IMG_UINT64)psRGXFWIfGpuUtilFWCb->ui32LastGpuUtilState << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_STATE_MASK) |
+                                       (((IMG_UINT64)ui32Type << RGXFWIF_GPU_UTIL_FWCB_TYPE_SHIFT) & RGXFWIF_GPU_UTIL_FWCB_TYPE_MASK);
+                       break;
+
+               default:
+                       PVR_DPF((PVR_DBG_ERROR,"RGXFWCBEntryAdd: Wrong entry type"));
+                       break;
+       }
+
+       psRGXFWIfGpuUtilFWCb->ui32WriteOffset++;
+       if(psRGXFWIfGpuUtilFWCb->ui32WriteOffset >= RGXFWIF_GPU_UTIL_FWCB_SIZE)
+       {
+               psRGXFWIfGpuUtilFWCb->ui32WriteOffset = 0;
+       }
+}
+
 /*
 	RGXPrePowerState
 */
@@ -632,6 +692,14 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 				{
 					psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
 
+                                       IMG_UINT64 ui64CRTimeStamp = (OSReadHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_TIMER) & ~RGX_CR_TIMER_VALUE_CLRMSK) >> RGX_CR_TIMER_VALUE_SHIFT;
+                                       IMG_UINT64 ui64OSTimeStamp = OSClockus64();
+
+                                       /* Add two entries to the GPU utilisation FWCB (current CR timestamp and current OS timestamp)
+                                        * so that RGXGetGpuUtilStats() can link a power-on period to a previous power-off period (this one) */
+                                       _RGXFWCBEntryAdd(psDeviceNode, ui64CRTimeStamp, RGXFWIF_GPU_UTIL_FWCB_TYPE_END_CRTIME);
+                                       _RGXFWCBEntryAdd(psDeviceNode, ui64OSTimeStamp, RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_OFF);
+
 					eError = RGXStop(psDevInfo);
 					if (eError != PVRSRV_OK)
 					{
@@ -681,22 +749,16 @@ PVRSRV_ERROR RGXPostPowerState (IMG_HANDLE				hDevHandle,
 		PVRSRV_DEVICE_NODE	 *psDeviceNode = hDevHandle;
 		PVRSRV_RGXDEV_INFO	 *psDevInfo = psDeviceNode->pvDevice;
 		PVRSRV_DEVICE_CONFIG *psDevConfig = psDeviceNode->psDevConfig;
-		RGX_DATA			 *psRGXData = (RGX_DATA*)psDevConfig->hDevData;
 
 		if (eCurrentPowerState == PVRSRV_DEV_POWER_STATE_OFF)
 		{
-			/* Reset DVFS history */
-			psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId = 0;
-			psDevInfo->psGpuDVFSHistory->aui32DVFSClockCB[0] = psRGXData->psRGXTimingInfo->ui32CoreClockSpeed;
+                       IMG_UINT64 ui64CRTimeStamp = (OSReadHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_TIMER) & ~RGX_CR_TIMER_VALUE_CLRMSK) >> RGX_CR_TIMER_VALUE_SHIFT;
+                       IMG_UINT64 ui64OSTimeStamp = OSClockus64();
 
-			/* Reset FW CB of GPU state transitions history */
-			psDevInfo->psRGXFWIfGpuUtilFWCb->ui32LastGpuUtilState = RGXFWIF_GPU_UTIL_FWCB_STATE_RESERVED;
-			psDevInfo->psRGXFWIfGpuUtilFWCb->ui32WriteOffset = 0;
-			psDevInfo->psRGXFWIfGpuUtilFWCb->ui32CurrentDVFSId = 0;
-			psDevInfo->psRGXFWIfGpuUtilFWCb->aui64CB[0] = 
-				RGXFWIF_GPU_UTIL_FWCB_STATE_RESERVED << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT;
-			psDevInfo->psRGXFWIfGpuUtilFWCb->aui64CB[RGXFWIF_GPU_UTIL_FWCB_SIZE-1] = 
-				RGXFWIF_GPU_UTIL_FWCB_STATE_RESERVED << RGXFWIF_GPU_UTIL_FWCB_STATE_SHIFT;
+                       /* Add two entries to the GPU utilisation FWCB (current OS timestamp and current CR timestamp)
+                        * so that RGXGetGpuUtilStats() can link a power-on (this one) period to a  previous power-off period */
+                       _RGXFWCBEntryAdd(psDeviceNode, ui64OSTimeStamp, RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON);
+                       _RGXFWCBEntryAdd(psDeviceNode, ui64CRTimeStamp, RGXFWIF_GPU_UTIL_FWCB_TYPE_CRTIME);
 
 			psDevInfo->bIgnoreFurtherIRQs = IMG_TRUE;
 			/*
@@ -856,32 +918,6 @@ PVRSRV_ERROR RGXPostClockSpeedChange (IMG_HANDLE				hDevHandle,
 	RGXFWIF_TRACEBUF	*psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
 
     if ((eCurrentPowerState != PVRSRV_DEV_POWER_STATE_OFF) 
-		&& (psFWTraceBuf->ePowState == RGXFWIF_POW_FORCED_IDLE) 
-		&& bIdleDevice)
-	{
-		RGXFWIF_KCCB_CMD	sPowCmd;
-
-		/* Send the IDLE request to the FW */
-		sPowCmd.eCmdType = RGXFWIF_KCCB_CMD_POW;
-		sPowCmd.uCmdData.sPowData.ePowType = RGXFWIF_POW_FORCED_IDLE_REQ;
-		sPowCmd.uCmdData.sPowData.uPoweReqData.bCancelForcedIdle = IMG_TRUE;
-
-		SyncPrimSet(psDevInfo->psPowSyncPrim, 0);
-
-		/* Send one forced IDLE command to GP */
-		eError = RGXSendCommandRaw(psDevInfo,
-				RGXFWIF_DM_GP,
-				&sPowCmd,
-				sizeof(sPowCmd),
-				PDUMP_FLAGS_POWERTRANS);
-		if (eError != PVRSRV_OK)
-		{
-			PVR_DPF((PVR_DBG_ERROR,"RGXPostClockSpeedChange: Failed to send Cancel IDLE request for DM%d", RGXFWIF_DM_GP));
-			return eError;
-		}
-	}
-
-    if ((eCurrentPowerState != PVRSRV_DEV_POWER_STATE_OFF) 
 		&& (psFWTraceBuf->ePowState != RGXFWIF_POW_OFF))
 	{
 		sCOREClkSpeedChangeCmd.eCmdType = RGXFWIF_KCCB_CMD_CORECLKSPEEDCHANGE;
@@ -906,6 +942,33 @@ PVRSRV_ERROR RGXPostClockSpeedChange (IMG_HANDLE				hDevHandle,
 		PVR_DPF((PVR_DBG_MESSAGE,"RGXPostClockSpeedChange: RGX clock speed changed to %uHz",
 				psRGXData->psRGXTimingInfo->ui32CoreClockSpeed));
 	}
+
+       if ((eCurrentPowerState != PVRSRV_DEV_POWER_STATE_OFF) 
+               && (psFWTraceBuf->ePowState == RGXFWIF_POW_FORCED_IDLE) 
+               && bIdleDevice)
+       {
+               RGXFWIF_KCCB_CMD        sPowCmd;
+
+               /* Send the IDLE request to the FW */
+               sPowCmd.eCmdType = RGXFWIF_KCCB_CMD_POW;
+               sPowCmd.uCmdData.sPowData.ePowType = RGXFWIF_POW_FORCED_IDLE_REQ;
+               sPowCmd.uCmdData.sPowData.uPoweReqData.bCancelForcedIdle = IMG_TRUE;
+
+               SyncPrimSet(psDevInfo->psPowSyncPrim, 0);
+
+               /* Send one forced IDLE command to GP */
+               eError = RGXSendCommandRaw(psDevInfo,
+                               RGXFWIF_DM_GP,
+                               &sPowCmd,
+                               sizeof(sPowCmd),
+                               PDUMP_FLAGS_POWERTRANS);
+
+               if (eError != PVRSRV_OK)
+               {
+                       PVR_DPF((PVR_DBG_ERROR,"RGXPostClockSpeedChange: Failed to send Cancel IDLE request for DM%d", RGXFWIF_DM_GP));
+                       return eError;
+               }
+       }
 
 	return eError;
 }
