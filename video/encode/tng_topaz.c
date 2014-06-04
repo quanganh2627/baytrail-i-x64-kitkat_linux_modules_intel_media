@@ -2395,7 +2395,7 @@ static uint16_t tng__rand(struct psb_video_ctx * video_ctx)
     return ret;
 }
 
-static uint32_t tng_setup_cir_buf (
+static int32_t tng_fill_input_control (
 	struct drm_device *dev,
 	struct drm_file *file_priv,
 	int8_t slot_num,
@@ -2431,7 +2431,7 @@ static uint32_t tng_setup_cir_buf (
 	}
 	video_ctx->pseudo_rand_seed = pseudo_rand_seed;
 
-	PSB_DEBUG_TOPAZ("TOPAZ: cir=%d, initqp=%d, minqp=%d, \
+	PSB_DEBUG_TOPAZ("TOPAZ: Fill input control, cir=%d, initqp=%d, minqp=%d, \
 		slot=%d, bufsize=%d, pseudo=%d, mb_w=%d, mb_h=%d\n", \
 		ir, init_qp, min_qp, slot_num, buf_size, pseudo_rand_seed, mb_w, mb_h);
 
@@ -2502,6 +2502,344 @@ static uint32_t tng_setup_cir_buf (
 	return 0;
 }
 
+static int32_t tng_update_air_send (
+	struct drm_device *dev,
+	struct drm_file *file_priv,
+	uint8_t slot_num,
+	int16_t skip_count,
+	int32_t air_per_frame,
+	uint32_t buf_size,
+	uint32_t frame_count)
+{
+	int32_t ret;
+	bool is_iomem;
+	uint16_t ui16IntraParam;
+	uint32_t ui32CurrentCnt, ui32SentCnt;
+	uint32_t ui32MBMaxSize;
+	uint16_t *pui16MBParam;
+	uint32_t ui32NewScanPos;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+	struct psb_video_ctx *video_ctx;
+
+	ui16IntraParam = (0 << 7) | (0 << 4);
+
+	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
+	if (video_ctx == NULL) {
+		DRM_ERROR("Failed to get video contex from filp\n");
+		return -1;
+	}
+
+	if (skip_count >= 0)
+		video_ctx->air_info.air_skip_cnt = skip_count;
+	else
+		video_ctx->air_info.air_skip_cnt = (frame_count & 0x7) + 1; // Pseudorandom skip.
+
+	if (frame_count < 1) {
+		video_ctx->air_info.air_per_frame = air_per_frame;
+		return 0;
+	}
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Update air send, slot_num=%d, skip_count=%d, air_per_frame=%d, buf_size=%d, frame_count=%d\n", \
+		slot_num, video_ctx->air_info.air_skip_cnt, video_ctx->air_info.air_per_frame, buf_size, frame_count);
+
+	ret = ttm_bo_reserve(video_ctx->cir_input_ctrl_bo, true, true, false, 0);
+	if (ret) {
+		DRM_ERROR("TOPAZ: reserver failed.\n");
+		return -1;
+	}
+
+	ret = ttm_bo_kmap(video_ctx->cir_input_ctrl_bo, 0,
+			video_ctx->cir_input_ctrl_bo->num_pages,
+			&video_ctx->cir_input_ctrl_kmap);
+	if (ret) {
+		DRM_ERROR("TOPAZ: Failed to map cir input ctrl bo\n");
+		ttm_bo_unref(&video_ctx->cir_input_ctrl_bo);
+		return -1;
+	}
+
+	video_ctx->cir_input_ctrl_addr = (uint32_t*)(ttm_kmap_obj_virtual(
+		&video_ctx->cir_input_ctrl_kmap, &is_iomem) + slot_num * buf_size);
+    
+	// get the buffer
+	pui16MBParam = (uint16_t*) video_ctx->cir_input_ctrl_addr;
+
+	//fill data 
+	ui32MBMaxSize = (uint32_t)(topaz_priv->frame_w / 16) * (IMG_UINT32)(topaz_priv->frame_h / 16);
+
+	ui32CurrentCnt = 0;
+    
+	ui32NewScanPos = (uint32_t) (video_ctx->air_info.air_scan_pos + video_ctx->air_info.air_skip_cnt) % ui32MBMaxSize;
+	ui32CurrentCnt = ui32SentCnt = 0;
+
+	while (ui32CurrentCnt < ui32MBMaxSize &&
+		((video_ctx->air_info.air_per_frame == 0) ||
+		ui32SentCnt < (uint32_t) video_ctx->air_info.air_per_frame)) {
+
+		uint16_t ui16MBParam;
+
+		if (video_ctx->air_info.air_table[ui32NewScanPos] >= 0) {
+			// Mark the entry as 'touched'
+			video_ctx->air_info.air_table[ui32NewScanPos] = -1 - video_ctx->air_info.air_table[ui32NewScanPos];
+    
+			if (video_ctx->air_info.air_table[ui32NewScanPos] < -1) {
+				ui16MBParam = pui16MBParam[ui32NewScanPos] & (0xFF << 10);
+				ui16MBParam |= ui16IntraParam;
+				pui16MBParam[ui32NewScanPos] = ui16MBParam;
+				video_ctx->air_info.air_table[ui32NewScanPos]++;
+				ui32NewScanPos += video_ctx->air_info.air_skip_cnt;
+				ui32SentCnt++;
+			}
+			ui32CurrentCnt++;
+		}
+    
+		ui32NewScanPos++;
+		ui32NewScanPos = ui32NewScanPos % ui32MBMaxSize;
+		if (ui32NewScanPos == video_ctx->air_info.air_scan_pos) {
+			/* we have looped around */ 
+			break;
+		}
+	}
+    
+	video_ctx->air_info.air_scan_pos = ui32NewScanPos;
+    
+	ttm_bo_unreserve(video_ctx->cir_input_ctrl_bo);
+	ttm_bo_kunmap(&video_ctx->cir_input_ctrl_kmap);
+	return 0;
+}
+
+static int32_t tng_air_buf_clear(
+	struct drm_device *dev,
+	struct drm_file *file_priv)
+{
+	struct psb_video_ctx *video_ctx;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+
+	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
+	if (video_ctx == NULL) {
+		DRM_ERROR("Failed to get video contex from filp\n");
+		return -1;
+	}
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Clear AIR buffer\n");
+	memset(video_ctx->air_info.air_table, 0, (topaz_priv->frame_h * topaz_priv->frame_w) >> 8);
+
+	return 0;
+}
+
+static int32_t tng_update_air_calc(
+	struct drm_device *dev,
+	struct drm_file *file_priv,
+	uint8_t slot_num,
+	uint32_t buf_size,
+	int32_t sad_threshold,
+	uint8_t enable_sel_states_flag)
+{
+	int32_t ret;
+	bool is_iomem;
+	uint8_t *pSADPointer;
+	uint8_t *pvSADBuffer;
+	uint8_t ui8IsAlreadyIntra;
+	uint32_t ui32MBFrameWidth;
+	uint32_t ui32MBPictureHeight;
+	uint16_t ui16IntraParam;
+	uint32_t ui32MBx, ui32MBy;
+	uint32_t ui32SADParam;
+	uint32_t ui32tSAD_Threshold, ui32tSAD_ThresholdLo, ui32tSAD_ThresholdHi;
+	uint32_t ui32MaxMBs, ui32NumMBsOverThreshold, ui32NumMBsOverLo, ui32NumMBsOverHi;
+	struct psb_video_ctx *video_ctx;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+	IMG_BEST_MULTIPASS_MB_PARAMS *psBestMB_Params;
+	IMG_FIRST_STAGE_MB_PARAMS *psFirstMB_Params;
+	uint8_t *pFirstPassOutBuf = NULL;
+	uint8_t *pBestMBDecisionCtrlBuf;
+
+	ui16IntraParam = (0 << 7) | (0 << 4);
+	ui32NumMBsOverThreshold = ui32NumMBsOverLo = ui32NumMBsOverHi = 0;
+
+	PSB_DEBUG_TOPAZ("TOPAZ: Update air calc, slot_num=%d, buf_size=%d, sad_threshold=%d, enable_sel_states_flag=%08x\n", \
+		slot_num, buf_size, sad_threshold, enable_sel_states_flag);
+
+	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
+	if (video_ctx == NULL) {
+		DRM_ERROR("Failed to get video contex from filp\n");
+		return -1;
+	}
+
+	/* Map first pass out params */
+	/*
+	ret = ttm_bo_reserve(video_ctx->bufs_first_pass_out_params_bo, true, true, false, 0);
+	if (ret) {
+		DRM_ERROR("TOPAZ: reserver failed.\n");
+		return -1;
+	}
+
+	ret = ttm_bo_kmap(video_ctx->bufs_first_pass_out_params_bo, 0,
+			video_ctx->bufs_first_pass_out_params_bo->num_pages,
+			&video_ctx->bufs_first_pass_out_params_kmap);
+	if (ret) {
+		DRM_ERROR("TOPAZ: Failed to map first pass out param bo\n");
+		ttm_bo_unref(&video_ctx->bufs_first_pass_out_params_bo);
+		return -1;
+	}
+
+	video_ctx->bufs_first_pass_out_params_addr = (uint32_t*)(ttm_kmap_obj_virtual(
+		&video_ctx->bufs_first_pass_out_params_kmap, &is_iomem) + slot_num * buf_size);
+
+	pFirstPassOutBuf = (uint8_t *)video_ctx->bufs_first_pass_out_params_addr;
+	*/
+
+	/* Map first pass out best multipass params */
+	ret = ttm_bo_reserve(video_ctx->bufs_first_pass_out_best_multipass_param_bo, true, true, false, 0);
+	if (ret) {
+		DRM_ERROR("TOPAZ: reserver failed.\n");
+		return -1;
+	}
+
+	ret = ttm_bo_kmap(video_ctx->bufs_first_pass_out_best_multipass_param_bo, 0,
+			video_ctx->bufs_first_pass_out_best_multipass_param_bo->num_pages,
+			&video_ctx->bufs_first_pass_out_best_multipass_param_kmap);
+	if (ret) {
+		DRM_ERROR("TOPAZ: Failed to map first pass out best multipass param bo\n");
+		ttm_bo_unref(&video_ctx->bufs_first_pass_out_best_multipass_param_bo);
+		return -1;
+	}
+	video_ctx->bufs_first_pass_out_best_multipass_param_addr = (uint32_t*)(ttm_kmap_obj_virtual(
+		&video_ctx->bufs_first_pass_out_best_multipass_param_kmap, &is_iomem) + slot_num * buf_size);
+
+	pBestMBDecisionCtrlBuf = (uint8_t *)video_ctx->bufs_first_pass_out_best_multipass_param_addr;
+
+	//fill data 
+	ui32MBFrameWidth  = (topaz_priv->frame_w / 16);
+	ui32MBPictureHeight = (topaz_priv->frame_h / 16);
+	
+	// get the SAD results buffer (either IPE0 and IPE1 results or, preferably, the more accurate Best Multipass SAD results)
+	if (pBestMBDecisionCtrlBuf) {
+		pvSADBuffer = pBestMBDecisionCtrlBuf;
+
+		if (enable_sel_states_flag & ESF_MP_BEST_MOTION_VECTOR_STATS)
+		{
+			// The actual Param structures (which contain SADs) are located after the Multipass Motion Vector entries
+			pvSADBuffer += (ui32MBPictureHeight * (ui32MBFrameWidth) * sizeof(IMG_BEST_MULTIPASS_MB_PARAMS_IPMV));
+		}
+	} else {
+		pvSADBuffer = pFirstPassOutBuf;
+	}
+
+	if (video_ctx->air_info.air_per_frame == 0)
+		ui32MaxMBs = ui32MBFrameWidth * ui32MBPictureHeight; // Default to ALL MB's in frame
+	else if (video_ctx->air_info.air_per_frame < 0)
+		video_ctx->air_info.air_per_frame = ui32MaxMBs = ((ui32MBFrameWidth * ui32MBPictureHeight) + 99) / 100; // Default to 1% of MB's in frame (min 1)
+	else
+		ui32MaxMBs = video_ctx->air_info.air_per_frame;
+
+	pSADPointer = (uint8_t *)pvSADBuffer;
+
+	video_ctx->air_info.sad_threshold = sad_threshold;
+	if (video_ctx->air_info.sad_threshold >= 0)
+		ui32tSAD_Threshold = (uint16_t)video_ctx->air_info.sad_threshold;
+	else {
+		// Running auto adjust threshold adjust mode
+		if (video_ctx->air_info.sad_threshold == -1) {
+			// This will occur only the first time
+			if (pBestMBDecisionCtrlBuf) {
+				psBestMB_Params=(IMG_BEST_MULTIPASS_MB_PARAMS *) pSADPointer; // Auto seed the threshold with the first value
+				ui32SADParam = psBestMB_Params->ui32SAD_Inter_MBInfo & IMG_BEST_MULTIPASS_SAD_MASK;
+			} else {
+				psFirstMB_Params = (IMG_FIRST_STAGE_MB_PARAMS *) pSADPointer; // Auto seed the threshold with the first value
+                		ui32SADParam = (uint32_t) psFirstMB_Params->ui16Ipe0Sad;
+            		}
+            		video_ctx->air_info.sad_threshold = -1 - ui32SADParam; // Negative numbers indicate auto-adjusting threshold
+        	}
+		ui32tSAD_Threshold = (int32_t) - (video_ctx->air_info.sad_threshold + 1);
+	}
+
+	ui32tSAD_ThresholdLo = ui32tSAD_Threshold / 2;
+	ui32tSAD_ThresholdHi = ui32tSAD_Threshold + ui32tSAD_ThresholdLo;
+
+	// This loop could be optimised to a single counter if necessary, retaining for clarity
+	for (ui32MBy = 0; ui32MBy < ui32MBPictureHeight; ui32MBy++) {
+		for( ui32MBx=0; ui32MBx<ui32MBFrameWidth; ui32MBx++) {
+			psBestMB_Params = (IMG_BEST_MULTIPASS_MB_PARAMS *) pSADPointer;
+			pSADPointer = (uint8_t *) &(psBestMB_Params[1]);
+			//pSADPointer += sizeof(IMG_BEST_MULTIPASS_MB_PARAMS);
+
+			// Turn all negative table values to positive (reset 'touched' state of a block that may have been set in APP_SendAIRInpCtrlBuf())
+			if (video_ctx->air_info.air_table[ui32MBy *  ui32MBFrameWidth + ui32MBx] < 0)
+				video_ctx->air_info.air_table[ui32MBy *  ui32MBFrameWidth + ui32MBx] = -1 - video_ctx->air_info.air_table[ui32MBy *  ui32MBFrameWidth + ui32MBx];
+
+			// This will read the SAD value from the buffer (either IPE0 SAD or the superior Best multipass parameter structure SAD value)
+			if (pBestMBDecisionCtrlBuf) {
+				psBestMB_Params = (IMG_BEST_MULTIPASS_MB_PARAMS *) pSADPointer;
+				ui32SADParam = psBestMB_Params->ui32SAD_Inter_MBInfo & IMG_BEST_MULTIPASS_SAD_MASK;
+				if ((psBestMB_Params->ui32SAD_Intra_MBInfo & IMG_BEST_MULTIPASS_MB_TYPE_MASK) >> IMG_BEST_MULTIPASS_MB_TYPE_SHIFT == 1)
+					ui8IsAlreadyIntra = 1;
+				else
+					ui8IsAlreadyIntra = 0;
+
+				pSADPointer = (uint8_t *) &(psBestMB_Params[1]);
+			} else {
+				psFirstMB_Params = (IMG_FIRST_STAGE_MB_PARAMS *) pSADPointer;
+				ui32SADParam = (uint32_t) psFirstMB_Params->ui16Ipe0Sad;
+				ui32SADParam += (uint32_t) psFirstMB_Params->ui16Ipe1Sad;
+				ui32SADParam /= 2;
+				ui8IsAlreadyIntra = 0; // We don't have the information to determine this
+				pSADPointer = (uint8_t *) &(psFirstMB_Params[1]);
+			}
+
+			if (ui32SADParam >= ui32tSAD_ThresholdLo) {
+				ui32NumMBsOverLo++;
+
+				if (ui32SADParam >= ui32tSAD_Threshold) {
+				// if (!ui8IsAlreadyIntra) // Don't mark this block if it's just been encoded as an Intra block anyway
+				// (results seem better without this condition anyway)
+					video_ctx->air_info.air_table[ui32MBy *  ui32MBFrameWidth + ui32MBx]++;
+					ui32NumMBsOverThreshold++;
+					if (ui32SADParam >= ui32tSAD_ThresholdHi)
+						ui32NumMBsOverHi++;
+				}
+			}
+		}
+		if ((uint32_t)pSADPointer % 64)
+			pSADPointer = (uint8_t *) ALIGN_64(((uint32_t) pSADPointer));
+	}
+
+	// Test and process running adaptive threshold case
+	if (video_ctx->air_info.sad_threshold < 0) {
+		// Adjust our threshold (to indicate it's auto-adjustable store it as a negative value minus 1)
+		if (ui32NumMBsOverLo <= ui32MaxMBs)
+			video_ctx->air_info.sad_threshold = (int32_t) - ((int32_t)ui32tSAD_ThresholdLo) - 1;
+		else {
+			if (ui32NumMBsOverHi >= ui32MaxMBs)
+				video_ctx->air_info.sad_threshold = (int32_t) - ((int32_t)ui32tSAD_ThresholdHi) - 1;
+			else {
+				if (ui32MaxMBs < ui32NumMBsOverThreshold) {
+					video_ctx->air_info.sad_threshold = ((int32_t)ui32tSAD_ThresholdHi - (int32_t)ui32tSAD_Threshold);
+					video_ctx->air_info.sad_threshold *= ((int32_t)ui32MaxMBs - (int32_t)ui32NumMBsOverThreshold);
+					video_ctx->air_info.sad_threshold /= ((int32_t)ui32NumMBsOverHi - (int32_t)ui32NumMBsOverThreshold);
+					video_ctx->air_info.sad_threshold += ui32tSAD_Threshold;
+				} else {
+                    			video_ctx->air_info.sad_threshold = ((int32_t)ui32tSAD_Threshold - (int32_t)ui32tSAD_ThresholdLo);
+                    			video_ctx->air_info.sad_threshold *= ((int32_t)ui32MaxMBs - (int32_t)ui32NumMBsOverLo);
+                    			video_ctx->air_info.sad_threshold /= ((int32_t)ui32NumMBsOverThreshold - (int32_t)ui32NumMBsOverLo);
+                    			video_ctx->air_info.sad_threshold += ui32tSAD_ThresholdLo;
+                		}
+                		video_ctx->air_info.sad_threshold = -video_ctx->air_info.sad_threshold - 1;
+			}
+		}
+	}
+	/*
+	ttm_bo_unreserve(video_ctx->bufs_first_pass_out_params_bo);
+	ttm_bo_kunmap(&video_ctx->bufs_first_pass_out_params_kmap);
+	*/
+	ttm_bo_unreserve(video_ctx->bufs_first_pass_out_best_multipass_param_bo);
+	ttm_bo_kunmap(&video_ctx->bufs_first_pass_out_best_multipass_param_kmap);
+
+	return 0;
+}
+
 static int32_t tng_setup_WB_mem(
 	struct drm_device *dev,
 	struct drm_file *file_priv,
@@ -2516,6 +2854,8 @@ static int32_t tng_setup_WB_mem(
 	uint32_t wb_handle;
 	uint32_t mtx_ctx_handle;
 	uint32_t cir_input_ctrl_handle;
+	uint32_t bufs_first_pass_out_params_handle;
+	uint32_t bufs_first_pass_out_best_multipass_param_handle;
 	uint8_t *ptmp = NULL;
 	const uint8_t pas_val = (uint8_t) ~0x0;
 
@@ -2619,6 +2959,24 @@ static int32_t tng_setup_WB_mem(
 		return -1;
 	}
 
+	bufs_first_pass_out_params_handle = *((uint32_t *)command + 6);
+
+	video_ctx->bufs_first_pass_out_params_bo = ttm_buffer_object_lookup(tfile, bufs_first_pass_out_params_handle);
+	if (unlikely(video_ctx->bufs_first_pass_out_params_bo == NULL)) {
+		DRM_ERROR("TOPAZ: Failed to lookup air first pass out parameter handle\n");
+		return -1;
+	}
+	video_ctx->bufs_first_pass_out_params_addr = NULL;
+
+	bufs_first_pass_out_best_multipass_param_handle = *((uint32_t *)command + 7);
+
+	video_ctx->bufs_first_pass_out_best_multipass_param_bo = ttm_buffer_object_lookup(tfile, bufs_first_pass_out_best_multipass_param_handle);
+	if (unlikely(video_ctx->bufs_first_pass_out_best_multipass_param_bo == NULL)) {
+		DRM_ERROR("TOPAZ: Failed to lookup air first pass out best multipass parameter handle\n");
+		return -1;
+	}
+	video_ctx->bufs_first_pass_out_best_multipass_param_addr = NULL;
+
 	return ret;
 }
 
@@ -2634,6 +2992,10 @@ static int tng_setup_new_context_secure(
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	int32_t ret = 0;
 	bool is_iomem;
+
+	topaz_priv->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
+	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
+				& 0xffff0000)  >> 16) ;
 
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 	if (video_ctx == NULL) {
@@ -2657,6 +3019,12 @@ static int tng_setup_new_context_secure(
 	video_ctx->high_cmd_count = 0;
 	video_ctx->low_cmd_count = 0xa5a5a5a5 % MAX_TOPAZ_CMD_COUNT;
 	video_ctx->last_cir_index = -1;
+	video_ctx->air_info.air_scan_pos = 0;
+	video_ctx->air_info.air_table = kzalloc((topaz_priv->frame_h * topaz_priv->frame_w) >> 8, GFP_KERNEL);
+	if (!video_ctx->air_info.air_table) {
+		DRM_ERROR("TOPAZ: Failed to alloc memory for AIR table\n");
+		return -1;
+	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: new context %08x(%s)(cur context = %08x)\n",
 		(unsigned int)video_ctx, codec_to_string(codec), \
@@ -2699,10 +3067,6 @@ static int tng_setup_new_context_secure(
 		video_ctx->bias_reg = NULL;
 	}
 
-	topaz_priv->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
-	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
-				& 0xffff0000)  >> 16) ;
-
 	ret = tng_topaz_power_up(dev, codec);
 	if (ret) {
 		DRM_ERROR("TOPAZ: failed power up\n");
@@ -2730,6 +3094,10 @@ static int tng_setup_new_context(
 	int32_t ret = 0;
 	bool is_iomem;
 
+	topaz_priv->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
+	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
+				& 0xffff0000)  >> 16) ;
+
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 	if (video_ctx == NULL) {
 		DRM_ERROR("Failed to get video contex from filp");
@@ -2745,6 +3113,12 @@ static int tng_setup_new_context(
 	video_ctx->high_cmd_count = 0;
 	video_ctx->low_cmd_count = 0xa5a5a5a5 % MAX_TOPAZ_CMD_COUNT;
 	video_ctx->last_cir_index = -1;
+	video_ctx->air_info.air_scan_pos = 0;
+	video_ctx->air_info.air_table = (int8_t *)kzalloc((topaz_priv->frame_h * topaz_priv->frame_w) >> 8, GFP_KERNEL);
+	if (!video_ctx->air_info.air_table) {
+		DRM_ERROR("TOPAZ: Failed to alloc memory for AIR table\n");
+		return -1;
+	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: new context %08x(%s)(cur context = %08x)\n",
 		(unsigned int)video_ctx, codec_to_string(codec), \
@@ -2803,10 +3177,6 @@ static int tng_setup_new_context(
 	} else {
 		video_ctx->bias_reg = NULL;
 	}
-
-	topaz_priv->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
-	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
-				& 0xffff0000)  >> 16) ;
 
 	if (Is_Secure_Fw()) {
 		ret = tng_topaz_power_up(dev, codec);
@@ -3063,17 +3433,57 @@ tng_topaz_send(
 			cur_cmd_size += 2;
 			break;
 
-		case MTX_CMDID_SW_SETUP_CIR:
-			ret = tng_setup_cir_buf(dev, file_priv,
+		case MTX_CMDID_SW_FILL_INPUT_CTRL:
+			ret = tng_fill_input_control (dev, file_priv,
 					*((uint32_t *)command + 1),//slot
 					*((uint32_t *)command + 3),//ir
 					*((uint32_t *)command + 4),//initqp
 					*((uint32_t *)command + 5),//minqp
 					*((uint32_t *)command + 6),//bufsize
 					*((uint32_t *)command + 7));//seed
+                        if (ret) {
+                                DRM_ERROR("Failed to fill " \
+                                        "input control buffer");
+                                return ret;
+                        }
 			cur_cmd_size = 8;
 			break;
-
+		case MTX_CMDID_SW_UPDATE_AIR_SEND:
+			ret = tng_update_air_send (dev, file_priv,
+					*((uint32_t *)command + 1),//slot
+					*((uint32_t *)command + 3),//air_skip_count
+					*((uint32_t *)command + 4),//air_per_frame
+					*((uint32_t *)command + 5),//bufsize
+					*((uint32_t *)command + 6));//frame_count
+                        if (ret) {
+                                DRM_ERROR("Failed to update air " \
+                                        "send");
+                                return ret;
+                        }
+			cur_cmd_size = 7;
+			break;
+		case MTX_CMDID_SW_AIR_BUF_CLEAR:
+			ret = tng_air_buf_clear(dev, file_priv);
+                        if (ret) {
+                                DRM_ERROR("Failed to clear " \
+                                        "AIR buffer");
+                                return ret;
+                        }
+			cur_cmd_size = 3;
+			break;
+		case MTX_CMDID_SW_UPDATE_AIR_CALC:
+			ret = tng_update_air_calc(dev, file_priv,
+					*((uint32_t *)command + 1),//slot
+					*((uint32_t *)command + 3),//buf_size
+					*((uint32_t *)command + 4),//sad_threashold
+					*((uint32_t *)command + 5));//enable_seld_stats_flag
+                        if (ret) {
+                                DRM_ERROR("Failed to update " \
+                                        "air calc");
+                                return ret;
+                        }
+			cur_cmd_size = 6;
+			break;
 		case MTX_CMDID_PAD:
 			/*Ignore this command, which is used to skip
 			 * some commands in user space*/
@@ -3164,7 +3574,7 @@ tng_topaz_send(
 			/* Calculate command size */
 			switch (cur_cmd_id) {
 			case MTX_CMDID_SETVIDEO:
-				cur_cmd_size = (video_ctx->codec == IMG_CODEC_JPEG) ? (4 + 1) : (5 + 1);
+				cur_cmd_size = (video_ctx->codec == IMG_CODEC_JPEG) ? (6 + 1) : (7 + 1);
 				break;
 			case MTX_CMDID_SETUP_INTERFACE:
 			case MTX_CMDID_SHUTDOWN:
@@ -3289,11 +3699,29 @@ int tng_topaz_remove_ctx(
 		video_ctx->mtx_ctx_bo = NULL;
 	}
 
-		if (video_ctx->cir_input_ctrl_bo) {
-			PSB_DEBUG_TOPAZ("TOPAZ: unref cir input ctrl bo\n");
-			ttm_bo_unref(&video_ctx->cir_input_ctrl_bo);
-			video_ctx->cir_input_ctrl_bo = NULL;
-		}
+	if (video_ctx->cir_input_ctrl_bo) {
+		PSB_DEBUG_TOPAZ("TOPAZ: unref cir input ctrl bo\n");
+		ttm_bo_unref(&video_ctx->cir_input_ctrl_bo);
+		video_ctx->cir_input_ctrl_bo = NULL;
+	}
+
+	if (video_ctx->bufs_first_pass_out_best_multipass_param_bo) {
+		PSB_DEBUG_TOPAZ("TOPAZ: unref first pass out best multipass param bo\n");
+		ttm_bo_unref(&video_ctx->bufs_first_pass_out_best_multipass_param_bo);
+		video_ctx->bufs_first_pass_out_best_multipass_param_bo = NULL;
+	}
+
+	if (video_ctx->bufs_first_pass_out_params_bo) {
+		PSB_DEBUG_TOPAZ("TOPAZ: unref first pass out param bo\n");
+		ttm_bo_unref(&video_ctx->bufs_first_pass_out_params_bo);
+		video_ctx->bufs_first_pass_out_params_bo = NULL;
+	}
+
+	if (video_ctx->air_info.air_table) {
+		PSB_DEBUG_TOPAZ("TOPAZ: free air table\n");
+		kfree(video_ctx->air_info.air_table);
+		video_ctx->air_info.air_table = NULL;
+	}
 
 	video_ctx->status = 0;
 	video_ctx->codec = 0;
