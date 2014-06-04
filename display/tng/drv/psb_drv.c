@@ -2951,8 +2951,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					vblwait.request.type |=
 						_DRM_VBLANK_SECONDARY;
 
-				mdfld_dsi_dsr_forbid(dsi_config);
-
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
 				if (ret && (ret != -EINTR)) {
@@ -2972,8 +2970,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 
 				getrawmonotonic(&now);
 				nsecs = timespec_to_ns(&now);
-
-				mdfld_dsi_dsr_allow(dsi_config);
 			} else {
 				DRM_ERROR(KERN_ERR "ERR: ASK for a VSYNC "
 						"without enable.\n");
@@ -2992,8 +2988,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 						__func__, pipe);
 				return 0;
 			}
-#if 0
 			mdfld_dsi_dsr_forbid(dsi_config);
+#if 0
 			ret = drm_vblank_get(dev, pipe);
 			if (ret != 0) {
 				DRM_ERROR("%s: fail to enable vsync on pipe %d\n",
@@ -3014,8 +3010,8 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			dev_priv->vsync_enabled[pipe] = false;
 #if 0
 			drm_vblank_put(dev, pipe);
-			mdfld_dsi_dsr_allow(dsi_config);
 #endif
+			mdfld_dsi_dsr_allow(dsi_config);
 			ret = 0;
 		}
 	}
