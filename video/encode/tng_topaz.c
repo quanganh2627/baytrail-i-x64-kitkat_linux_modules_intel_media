@@ -230,17 +230,24 @@ struct psb_video_ctx *get_ctx_from_fp(
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct psb_video_ctx *pos;
+	unsigned long irq_flags;
 	int entrypoint;
+
+	spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
 
 	list_for_each_entry(pos, &dev_priv->video_ctx, head) {
 		if (pos->filp == filp) {
 			entrypoint = pos->ctx_type & 0xff;
 			if (entrypoint == VAEntrypointEncSlice ||
-			    entrypoint == VAEntrypointEncPicture)
+			    entrypoint == VAEntrypointEncPicture) {
+				spin_unlock_irqrestore(&dev_priv->video_ctx_lock, \
+					irq_flags);
 				return pos;
+			}
 		}
 	}
 
+	spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
 	return NULL;
 }
 
