@@ -269,12 +269,15 @@ void display_power_work(struct work_struct *work)
 
 	mutex_lock(&gpsDevice->sFlipQueueLock);
 
-	if (!pstate->active && !pstate->powered_off) {
-		DRM_DEBUG("power off island %#x for plane (%d %d)\n",
-			 pstate->extra_power_island,
-			 pstate->type, pstate->index);
-		power_island_put(pstate->extra_power_island);
-		pstate->powered_off = true;
+	if (!pstate->active) {
+		if (pstate->extra_power_island  && !pstate->powered_off) {
+			DRM_DEBUG("power off island %#x for plane (%d %d)\n",
+				 pstate->extra_power_island,
+				 pstate->type, pstate->index);
+			power_island_put(pstate->extra_power_island);
+			pstate->powered_off = true;
+		}
+		pstate->disabled = true;
 	}
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
@@ -335,7 +338,7 @@ static void disable_plane(struct plane_state *pstate)
 		return;
 	}
 
-	if (pstate->extra_power_island) {
+	{
 		struct power_off_req *req = kzalloc(sizeof(*req), GFP_KERNEL);
 
 		if (!req) {
@@ -351,7 +354,7 @@ static void disable_plane(struct plane_state *pstate)
 		req->pstate = pstate;
 
 		queue_delayed_work(dev_priv->power_wq, &req->work,
-				msecs_to_jiffies(32));
+				msecs_to_jiffies(50));
 	}
 
 	pstate->active = false;
@@ -958,20 +961,6 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 					DCCBDsrAllow(psDrmDev, iPipe);
 				break;
 			}
-		}
-	}
-
-	/* vblank indicates the plane has been disabled successfully */
-	for (i = 1; i < DC_PLANE_MAX; i++) {
-		for (j = 0; j < MAX_PLANE_INDEX; j++) {
-			pstate = &gpsDevice->plane_states[i][j];
-
-			/* if already disabled or not on this pipe */
-			if (pstate->disabled || pstate->attached_pipe != iPipe)
-				continue;
-
-			if (!pstate->active)
-				pstate->disabled = true;
 		}
 	}
 
