@@ -917,6 +917,10 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 #endif
 	} else if (arg->engine == VSP_ENGINE_VPP) {
 #ifdef SUPPORT_VSP
+		ret = mutex_lock_interruptible(&vsp_priv->vsp_mutex);
+		if (unlikely(ret != 0))
+			goto out_err0;
+
 		if (unlikely(vsp_priv->fw_loaded == 0)) {
 			ret = vsp_init_fw(dev);
 			if (ret != 0) {
@@ -1083,6 +1087,10 @@ out_err1:
 		mutex_unlock(&msvdx_priv->msvdx_mutex);
 	if (arg->engine == LNC_ENGINE_ENCODE)
 		mutex_unlock(&dev_priv->cmdbuf_mutex);
+#ifdef SUPPORT_VSP
+	if (arg->engine == VSP_ENGINE_VPP)
+		mutex_unlock(&vsp_priv->vsp_mutex);
+#endif
 out_err0:
 	ttm_read_unlock(&dev_priv->ttm_lock);
 #ifndef MERRIFIELD

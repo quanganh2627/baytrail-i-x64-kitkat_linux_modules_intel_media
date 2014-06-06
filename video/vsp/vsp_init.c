@@ -66,6 +66,7 @@ int vsp_init(struct drm_device *dev)
 	bool is_iomem;
 	int ret;
 	unsigned int context_size;
+	int i = 0;
 
 	VSP_DEBUG("init vsp private data structure\n");
 	vsp_priv = kmalloc(sizeof(struct vsp_private), GFP_KERNEL);
@@ -92,9 +93,7 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->current_sequence = 0;
 	vsp_priv->vsp_state = VSP_STATE_DOWN;
 	vsp_priv->dev = dev;
-	vsp_priv->coded_buf = NULL;
 
-	vsp_priv->context_num = 0;
 	atomic_set(&dev_priv->vsp_mmu_invaldc, 0);
 
 	dev_priv->vsp_private = vsp_priv;
@@ -206,9 +205,10 @@ int vsp_init(struct drm_device *dev)
 	vsp_priv->setting = ttm_kmap_obj_virtual(&vsp_priv->setting_kmap,
 						 &is_iomem);
 
-	vsp_priv->vp8_filp[0] = NULL;
-	vsp_priv->vp8_filp[1] = NULL;
+	for (i = 0; i < MAX_VP8_CONTEXT_NUM + 1; i++)
+		vsp_priv->vp8_filp[i] = NULL;
 	vsp_priv->context_vp8_num = 0;
+	vsp_priv->context_vpp_num = 0;
 
 	vsp_priv->vp8_cmd_num = 0;
 
