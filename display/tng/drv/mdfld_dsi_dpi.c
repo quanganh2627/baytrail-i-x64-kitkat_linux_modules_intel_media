@@ -897,6 +897,7 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_device *dev;
 	struct drm_psb_private *dev_priv;
+	struct mdfld_dsi_dpi_output *dpi_output;
 	struct panel_funcs *p_funcs;
 
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
@@ -907,6 +908,9 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	}
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
+
+	dpi_output = MDFLD_DSI_DPI_OUTPUT(dsi_encoder);
+	p_funcs = dpi_output->p_funcs;
 
 	PSB_DEBUG_ENTRY("%s\n", (mode == DRM_MODE_DPMS_ON ? "on" :
 		DRM_MODE_DPMS_STANDBY == mode ? "standby" : "off"));
