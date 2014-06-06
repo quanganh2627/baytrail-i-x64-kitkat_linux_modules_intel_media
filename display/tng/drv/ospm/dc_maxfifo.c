@@ -197,7 +197,8 @@ void maxfifo_report_repeat_frame_interrupt(struct drm_device * dev)
 #ifdef ENABLE_HW_REPEAT_FRAME
 	mrfl_disable_repeat_frame_intr(dev);
 #else
-	maxfifo_info->repeat_frame_interrupt_on = false;
+	if (maxfifo_info)
+		maxfifo_info->repeat_frame_interrupt_on = false;
 #endif
 	if (maxfifo_info)
 		schedule_work(&maxfifo_info->repeat_frame_interrupt_work);
