@@ -301,7 +301,7 @@ PVRSRV_ERROR LinuxEventObjectSignal(IMG_HANDLE hOSEventObjectList)
 		psLinuxEventObject = (PVRSRV_LINUX_EVENT_OBJECT *)list_entry(psListEntry, PVRSRV_LINUX_EVENT_OBJECT, sList);
 
 		atomic_inc(&psLinuxEventObject->sTimeStamp);
-		wake_up_interruptible(&psLinuxEventObject->sWait);
+		wake_up(&psLinuxEventObject->sWait);
 	}
 	read_unlock_bh(&psLinuxEventObjectList->sLock);
 
@@ -345,7 +345,7 @@ PVRSRV_ERROR LinuxEventObjectWait(IMG_HANDLE hOSEventObject, IMG_UINT32 ui32MSTi
 
 	do
 	{
-		prepare_to_wait(&psLinuxEventObject->sWait, &sWait, TASK_INTERRUPTIBLE);
+		prepare_to_wait(&psLinuxEventObject->sWait, &sWait, TASK_UNINTERRUPTIBLE);
 		ui32TimeStamp = (IMG_UINT32)atomic_read(&psLinuxEventObject->sTimeStamp);
 
 		
