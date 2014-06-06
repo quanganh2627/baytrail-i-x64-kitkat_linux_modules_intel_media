@@ -811,3 +811,14 @@ void DCCBDsrAllow(struct drm_device *dev, int pipe)
 
 	mdfld_dsi_dsr_allow(dsi_config);
 }
+
+/* below two functions are to resolve merrifield build issue */
+void DCCBExitMaxfifoMode(struct drm_device *dev)
+{
+	return;
+}
+
+void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
+{
+	return;
+}

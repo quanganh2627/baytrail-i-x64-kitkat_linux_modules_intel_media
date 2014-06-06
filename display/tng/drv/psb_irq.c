@@ -481,6 +481,12 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		dev_priv->vsync_pipe |= (1 << pipe);
 		drm_handle_vblank(dev, pipe);
 		queue_work(dev_priv->vsync_wq, &dev_priv->vsync_event_work);
+		if (dev_priv->s0i1_4_video_playback) {
+			hrtimer_start(&dev_priv->vsync_timer,
+			dev_priv->vsync_hrt_period,
+			HRTIMER_MODE_REL);
+			enter_s0i1_display_video_playback(dev);
+		}
 	}
 
 	if (pipe_stat_val & PIPE_TE_STATUS) {

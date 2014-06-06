@@ -1062,6 +1062,13 @@ struct drm_psb_private {
 	spinlock_t dsr_lock;
 	struct timer_list dsr_timer;
 
+	/* VSYNC HRT TIMER
+	 * W/A for system hang when s0i1 display is enabled
+	 */
+	ktime_t vsync_hrt_period;
+	struct hrtimer vsync_timer;
+	bool s0i1_4_video_playback;
+
 	bool dsi_device_ready;
 	bool hdmi_done_reading_edid;
 	bool um_start;

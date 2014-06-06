@@ -32,6 +32,7 @@
 #include "mdfld_dsi_output.h"
 #include "pwr_mgmt.h"
 #include "mdfld_dsi_dbi_dsr.h"
+#include "dc_maxfifo.h"
 #include <linux/kernel.h>
 #include <string.h>
 #include "android_hdmi.h"
@@ -704,6 +705,56 @@ void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe)
 
 	if (retry == 0)
 		DRM_ERROR("DBI FIFO not empty\n");
+}
+
+void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
+{
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct dc_maxfifo *maxfifo_info = dev_priv->dc_maxfifo_info;
+	u32 curr_state;
+	u32 curr_mode;
+
+	/* only video mode support for now */
+	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
+		return;
+	}
+
+	if (can_enter_maxfifo_s0i1_display(dev, req_mode)) {
+		PSB_DEBUG_PM("Enter Maxfifo mode: %d current state: %d\n", req_mode,
+					maxfifo_info->maxfifo_current_state);
+		if (maxfifo_info->maxfifo_current_state == -1) {/*Not enabled, so enable*/
+			/*check to see if pipe b is on. if yes, don't enable*/
+			if ((REG_READ(0x71008) & 0x80000000) == 0) {
+				enter_maxfifo_mode(dev, req_mode);
+				dev_priv->s0i1_4_video_playback = (req_mode == 0) ? false : true;
+			}
+
+		} else if (maxfifo_info->maxfifo_current_state != req_mode) {
+			DCCBExitMaxfifoMode(dev);
+		}
+	}
+}
+
+void DCCBExitMaxfifoMode(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *)dev->dev_private;
+	struct dc_maxfifo * maxfifo_info = dev_priv->dc_maxfifo_info;
+	u32 curr_state;
+
+	/* only video mode support for now */
+	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
+		return;
+	}
+
+	if (maxfifo_info->maxfifo_current_state != -1) {
+		PSB_DEBUG_PM("DCCB current mode: %d, Exit maxfifo mode\n",
+				maxfifo_info->maxfifo_current_state);
+		dev_priv->s0i1_4_video_playback = false;
+		exit_s0i1_display_video_playback(dev);
+		exit_maxfifo_mode(dev);
+	}
 }
 
 void DCCBUnblankDisplay(struct drm_device *dev)

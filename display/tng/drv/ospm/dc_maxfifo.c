@@ -64,22 +64,6 @@
 		DC_MAXFIFO_REGSTOSET_DSPSRCTRL_MAXFIFO |\
 		DC_MAXFIO_REGSTOSET_DSPSSM_S0i1_DISP )
 
-typedef enum {
-	S0i1_DISP_STATE_NOT_READY = 0,
-	S0i1_DISP_STATE_READY,
-	S0i1_DISP_STATE_ENTERED
-} S0i1_DISP_STATE;
-
-struct dc_maxfifo {
-	struct mutex maxfifo_mtx;
-
-	struct drm_device	*dev_drm;
-	bool repeat_frame_interrupt_on;
-	int  regs_to_set;
-	S0i1_DISP_STATE s0i1_disp_state;
-	struct work_struct repeat_frame_interrupt_work;
-};
-
 /* Sysfs Entries for Maxfifo mode
  */
 static ssize_t _show_sysfs_enable (struct device *kdev,
@@ -204,6 +188,67 @@ void maxfifo_report_repeat_frame_interrupt(struct drm_device * dev)
 		schedule_work(&maxfifo_info->repeat_frame_interrupt_work);
 }
 
+bool can_enter_maxfifo_s0i1_display(struct drm_device * dev, int mode)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct dc_maxfifo *maxfifo_info =
+		(struct dc_maxfifo *) dev_priv->dc_maxfifo_info;
+
+	if (mode == 0) { /* Request for SPRITE A only */
+		maxfifo_info->sa_count++;
+		maxfifo_info->so_count = 0;
+		maxfifo_info->ova_count = 0;
+		/* wait for 200 consecutive requests */
+		if (maxfifo_info->sa_count > 0) {
+			maxfifo_info->sa_count = 0;
+			maxfifo_info->so_count = 0;
+			maxfifo_info->ova_count = 0;
+			return true;
+		}
+        } else if (mode == 1) { /* Request for OVA + SPRITE A */
+		maxfifo_info->sa_count = 0;
+		maxfifo_info->so_count++;
+		maxfifo_info->ova_count = 0;
+		/* wait for 200 consecutive requests*/
+		if (maxfifo_info->so_count > 20) {
+			maxfifo_info->sa_count = 0;
+			maxfifo_info->so_count = 0;
+			maxfifo_info->ova_count = 0;
+			return true;
+		}
+        } else if (mode == 2) { /* Request for OVERLAY A only */
+		maxfifo_info->sa_count = 0;
+		maxfifo_info->so_count = 0;
+		maxfifo_info->ova_count++;
+		/* Wait for 200 consecutive requests */
+		if (maxfifo_info->ova_count > 20) {
+			maxfifo_info->sa_count = 0;
+			maxfifo_info->so_count = 0;
+			maxfifo_info->ova_count = 0;
+			return true;
+		}
+	} else {
+		maxfifo_info->sa_count = 0;
+		maxfifo_info->so_count = 0;
+		maxfifo_info->ova_count = 0;
+		return false;
+	}
+
+	return false;
+}
+
+void enter_s0i1_display_video_playback(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct dc_maxfifo *maxfifo_info =
+		(struct dc_maxfifo *) dev_priv->dc_maxfifo_info;
+	bool ret;
+
+	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_READY;
+	ret = enter_s0i1_display_mode(dev);
+	PSB_DEBUG_PM("Enabled S0i1 display for video playback\n");
+}
+
 bool enter_s0i1_display_mode(struct drm_device *dev)
 {
 	struct drm_psb_private * dev_priv = dev->dev_private;
@@ -229,6 +274,18 @@ bool enter_s0i1_display_mode(struct drm_device *dev)
 	return true;
 }
 
+void exit_s0i1_display_video_playback(struct drm_device *dev)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct dc_maxfifo *maxfifo_info =
+		(struct dc_maxfifo *) dev_priv->dc_maxfifo_info;
+	bool ret;
+
+	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_ENTERED;
+	ret = exit_s0i1_display_mode(dev);
+	PSB_DEBUG_PM("Disabled S0i1 Display for video mode\n");
+}
+
 bool exit_s0i1_display_mode(struct drm_device *dev)
 {
 	struct drm_psb_private * dev_priv = dev->dev_private;
@@ -252,7 +309,7 @@ bool exit_s0i1_display_mode(struct drm_device *dev)
 	return true;
 }
 
-bool enter_maxfifo_mode(struct drm_device *dev)
+bool enter_maxfifo_mode(struct drm_device *dev, int mode)
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct dc_maxfifo * maxfifo_info = dev_priv->dc_maxfifo_info;
@@ -275,9 +332,11 @@ bool enter_maxfifo_mode(struct drm_device *dev)
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		if (regs_to_set & DC_MAXFIFO_REGSTOSET_DSPSRCTRL_ENABLE) {
 			dspsrctrl_val |= DSPSRCTRL_MAXFIFO_ENABLE;
+			dspsrctrl_val |= mode << 24;
 			if (regs_to_set & DC_MAXFIFO_REGSTOSET_DSPSRCTRL_MAXFIFO)
 				dspsrctrl_val |= DSPSRCTRL_MAXFIFO_MODE_ALWAYS_MAXFIFO;
 			PSB_WVDC32(dspsrctrl_val, DSPSRCTRL_REG);
+			maxfifo_info->maxfifo_current_state = mode;
 		}
 
 		if (regs_to_set & DC_MAXFIO_REGSTOSET_DSPSSM_S0i1_DISP) {
@@ -312,6 +371,7 @@ bool exit_maxfifo_mode(struct drm_device *dev)
 	mutex_lock(&maxfifo_info->maxfifo_mtx);
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		PSB_WVDC32(dspsrctrl_val, DSPSRCTRL_REG);
+		maxfifo_info->maxfifo_current_state = -1;
 		unsigned long irqflags;
 
 		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
@@ -348,6 +408,11 @@ int dc_maxfifo_init(struct drm_device *dev)
 	mutex_init(&maxfifo_info->maxfifo_mtx);
 
 	mutex_lock(&maxfifo_info->maxfifo_mtx);
+
+	maxfifo_info->sa_count = 0;
+	maxfifo_info->so_count = 0;
+	maxfifo_info->ova_count = 0;
+	maxfifo_info->maxfifo_current_state = -1;
 
 	maxfifo_info->dev_drm = dev;
 	maxfifo_info->regs_to_set = TNG_MAXFIFO_REGS_TO_SET_DEFAULT;
@@ -407,7 +472,7 @@ static ssize_t _store_sysfs_enable (struct device *kdev,
 		maxfifo_info->regs_to_set = enable;
 		mutex_unlock(&maxfifo_info->maxfifo_mtx);
 		if (enable & 0x8)
-			enter_maxfifo_mode(dev);
+			enter_maxfifo_mode(dev, 0);
 		if (enable & 0x10)
 			exit_maxfifo_mode(dev);
 		if (enable & 0x20)

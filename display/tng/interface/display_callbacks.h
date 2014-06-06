@@ -59,6 +59,8 @@ void DCCBSetupZorder(struct drm_device *dev,
 			int pipe);
 void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe);
 void DCCBAvoidFlipInVblankInterval(struct drm_device *dev, int pipe);
+void DCCBEnterMaxfifoMode(struct drm_device *dev, int mode);
+void DCCBExitMaxfifoMode(struct drm_device *dev);
 int DCCBUpdateDbiPanel(struct drm_device *dev, int pipe);
 int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
 			int index);

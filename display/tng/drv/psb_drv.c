@@ -1458,6 +1458,20 @@ static int psb_driver_unload(struct drm_device *dev)
 	return 0;
 }
 
+static enum hrtimer_restart vsync_hrt_event_processor(struct hrtimer *hrt)
+{
+	struct drm_psb_private *dev_priv = container_of(hrt,
+						struct drm_psb_private,
+						vsync_timer);
+	struct drm_device *dev = dev_priv->dev;
+
+	if (dev_priv->s0i1_4_video_playback) {
+		exit_s0i1_display_video_playback(dev);
+	}
+
+	return HRTIMER_NORESTART;
+}
+
 static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 {
 	struct drm_psb_private *dev_priv;
@@ -1719,6 +1733,14 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	psb_mmu_set_pd_context(psb_mmu_get_default_pd(dev_priv->vsp_mmu), 0);
 #endif
 	spin_lock_init(&dev_priv->sequence_lock);
+
+	/*Setup high resolution timer for s0i1 display when vsync active*/
+	/*Start timer here well in advance of vsync starting*/
+	/*so timer will be ready to go when vsyncs start*/
+	dev_priv->s0i1_4_video_playback = false;
+	dev_priv->vsync_hrt_period = ktime_set(0, 15000 * NSEC_PER_USEC);
+	hrtimer_init(&dev_priv->vsync_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	dev_priv->vsync_timer.function = &vsync_hrt_event_processor;
 
 	PSB_DEBUG_INIT("Begin to init MSVDX/Topaz\n");
 
@@ -2164,7 +2186,7 @@ static int psb_idle_ioctl(struct drm_device *dev, void *data,
 		break;
 	case IDLE_CTRL_ENTER:
 		PSB_DEBUG_PM("IDLE_CTRL_ENTER\n");
-		enter_maxfifo_mode(dev);
+		enter_maxfifo_mode(dev, 0);
 		break;
 	case IDLE_CTRL_EXIT:
 		PSB_DEBUG_PM("IDLE_CTRL_EXIT\n");

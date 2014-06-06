@@ -87,6 +87,9 @@
 /* Include file for sending uevents */
 #include "psb_umevents.h"
 
+/* Include dc_maxfifo.h for disabling s0i1 display */
+#include "dc_maxfifo.h"
+
 /* External state dependency */
 extern int hdmi_state;
 
@@ -225,6 +228,8 @@ static irqreturn_t __hdmi_irq_handler_bottomhalf(void *data)
 {
 	struct android_hdmi_priv *hdmi_priv = data;
 	static int processed_hdmi_status = -1;
+	struct drm_device *dev = hdmi_priv->dev;
+	struct drm_psb_private *dev_priv = dev->dev_private;
 
 	if (hdmi_priv == NULL || !hdmi_priv->dev)
 		return IRQ_HANDLED;
@@ -311,6 +316,13 @@ static irqreturn_t __hdmi_irq_handler_bottomhalf(void *data)
 exit:
 		/* Notify user space */
 		pr_debug("%s: HDMI hot plug state  = %d\n", __func__, hdmi_status);
+
+		/* Turn off maxfifo/S0i1 display*/
+		if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DPI) {
+			dev_priv->s0i1_4_video_playback = false;
+			exit_s0i1_display_video_playback(dev);
+			exit_maxfifo_mode(dev);
+		}
 
 		if (hdmi_status) {
 			/* hdmi_state indicates that hotplug event happens */
