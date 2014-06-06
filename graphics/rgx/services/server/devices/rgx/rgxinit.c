@@ -660,9 +660,12 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 	/* Allocate DVFS History */
 	psDevInfo->psGpuDVFSHistory = OSAllocZMem(sizeof(*(psDevInfo->psGpuDVFSHistory)));
 
-       /* Reset DVFS history */
-       psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId = 0;
-       psDevInfo->psGpuDVFSHistory->aui32DVFSClockCB[0] = 0;
+	if (psDevInfo->psGpuDVFSHistory == IMG_NULL)
+		return PVRSRV_ERROR_OUT_OF_MEMORY;
+
+	/* Reset DVFS history */
+	psDevInfo->psGpuDVFSHistory->ui32CurrentDVFSId = 0;
+	psDevInfo->psGpuDVFSHistory->aui32DVFSClockCB[0] = 0;
 
 	/* Setup GPU Utilization stat update callback */
 #if !defined(NO_HARDWARE)
