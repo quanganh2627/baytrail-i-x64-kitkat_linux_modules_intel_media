@@ -919,6 +919,7 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 	dsi_config->dev = dev;
 
 	/*init fixed mode basing on DSI config type*/
+	dsi_panel_info.panel_180_rotation = false;
 	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {
 		dsi_config->fixed_mode = p_funcs->get_config_mode();
 		p_funcs->get_panel_info(pipe, &dsi_panel_info);
