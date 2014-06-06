@@ -316,12 +316,16 @@ void psb_remove_videoctx(struct drm_psb_private *dev_priv, struct file *filp)
 			if (dev_priv->last_topaz_ctx == found_ctx)
 				dev_priv->last_topaz_ctx = NULL;
 #ifdef SUPPORT_VSP
-		} else if (VAEntrypointVideoProc ==
+		} else if (
+			(VAEntrypointVideoProc ==
 					(found_ctx->ctx_type & 0xff)
-				|| (VAEntrypointEncSlice ==
+				&& 0xff ==
+					((found_ctx->ctx_type >> 8) & 0xff))
+			|| (VAEntrypointEncSlice ==
 					(found_ctx->ctx_type & 0xff)
 				&& VAProfileVP8Version0_3 ==
-					((found_ctx->ctx_type >> 8) & 0xff))) {
+					((found_ctx->ctx_type >> 8) & 0xff))
+			) {
 			ctx_type = found_ctx->ctx_type & 0xff;
 			PSB_DEBUG_PM("Remove vsp context.\n");
 			vsp_rm_context(dev_priv->dev, filp, ctx_type);

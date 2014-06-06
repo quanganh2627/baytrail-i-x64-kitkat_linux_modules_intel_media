@@ -310,11 +310,6 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	struct file *filp = priv->filp;
 	bool need_power_put = 0;
 
-	/* check if mmu should be invalidated */
-	invalid_mmu = atomic_cmpxchg(&dev_priv->vsp_mmu_invaldc, 1, 0);
-	if (invalid_mmu && psb_check_vsp_idle(dev) == 0)
-		vsp_priv->ctrl->mmu_tlb_soft_invalidate = 1;
-
 	memset(&cmd_kmap, 0, sizeof(cmd_kmap));
 	vsp_priv->vsp_cmd_num = 1;
 
@@ -1273,7 +1268,9 @@ int psb_check_vsp_idle(struct drm_device *dev)
 	int cmd_rd, cmd_wr;
 	unsigned int reg, mode;
 
-	if (vsp_priv->fw_loaded == 0 || vsp_priv->vsp_state == VSP_STATE_DOWN)
+	if (vsp_priv->fw_loaded == 0
+	    || vsp_priv->vsp_state == VSP_STATE_DOWN
+	    || vsp_priv->vsp_state == VSP_STATE_SUSPEND)
 		return 0;
 
 	cmd_rd = vsp_priv->ctrl->cmd_rd;

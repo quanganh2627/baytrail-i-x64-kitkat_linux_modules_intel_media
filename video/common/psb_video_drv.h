@@ -196,6 +196,7 @@ int tng_rawfw(struct drm_device *dev, uint8_t *name);
 
 /* Currently defined profiles */
 enum VAProfile {
+	VAProfileNone                   = -1,
 	VAProfileMPEG2Simple		= 0,
 	VAProfileMPEG2Main		= 1,
 	VAProfileMPEG4Simple		= 2,
