@@ -1394,6 +1394,9 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 		OSLockDestroy(psDevInfo->hLockFreeList);
 		OSLockDestroy(psDevInfo->hLockZSBuffer);
 
+		/* De-init */
+		OSWRLockDestroy(psDevInfo->hLockRenderList);
+
 		/* De-init HWPerf Ftrace thread resources for the RGX device */
 #if defined(SUPPORT_GPUTRACE_EVENTS)
 		RGXHWPerfFTraceGPUDeInit(psDevInfo);
@@ -1746,6 +1749,13 @@ PVRSRV_ERROR RGXRegisterDevice (PVRSRV_DEVICE_NODE *psDeviceNode)
 		return (PVRSRV_ERROR_OUT_OF_MEMORY);
 	}
 	OSMemSet (psDevInfo, 0, sizeof(*psDevInfo));
+
+	eError = OSWRLockCreate(&(psDevInfo->hLockRenderList));
+        if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to create render context list lock", __func__));
+		goto e0;
+	}
 
 	dllist_init(&(psDevInfo->sRenderCtxtListHead));
 	dllist_init(&(psDevInfo->sComputeCtxtListHead));

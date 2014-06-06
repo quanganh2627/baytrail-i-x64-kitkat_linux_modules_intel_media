@@ -52,7 +52,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "rgxscript.h"
 #include "cache_external.h"
 #include "device.h"
-
+#include "osfunc.h"
 
 typedef struct _RGX_SERVER_COMMON_CONTEXT_ RGX_SERVER_COMMON_CONTEXT;
 
@@ -277,6 +277,9 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 
 	IMG_BOOL				bIgnoreFurtherIRQs;
 	DLLIST_NODE				sMemoryContextList;
+
+	/* lock protect for RenderCtx list to avoid node remove/add during dump*/
+	POSWR_LOCK hLockRenderList;
 
 	/* Linked lists of contexts on this device */
 	DLLIST_NODE 		sRenderCtxtListHead;
