@@ -339,6 +339,8 @@ int psb_dpst_diet_save(struct drm_device *dev)
 	for (i = 0; i <= dpst3_bin_count; i++)
 		diet_saved[i] = PSB_RVDC32(iebdr_reg);
 	dpst_print("diet saved\n");
+
+	return 0;
 }
 
 /* dsr lock and power island lock should be hold before calling this function */
