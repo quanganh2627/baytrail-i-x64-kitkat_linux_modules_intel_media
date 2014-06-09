@@ -301,7 +301,7 @@ static void ann_dc_setup(struct mdfld_dsi_config *dsi_config)
 	power_island_get(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
 
 	REG_WRITE(DSPCLK_GATE_D, 0x0);
-	REG_WRITE(RAMCLK_GATE_D, 0xc0000);
+	REG_WRITE(RAMCLK_GATE_D, 0xc0000 | (1 << 11)); // FIXME: delay 1us for RDB done signal
 	REG_WRITE(PFIT_CONTROL, 0x20000000);
 	REG_WRITE(DSPIEDCFGSHDW, 0x0);
 	REG_WRITE(DSPARB2, 0x000A0200);
