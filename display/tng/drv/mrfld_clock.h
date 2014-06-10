@@ -50,6 +50,8 @@
 #define CKDP1X_GATE_EN		(1 << 9)
 #define CKDP2X_GATE_EN		(1 << 8)
 #define DISPLAY_FRE_EN		(1 << 7)
+#define DISPLAY_FREQ_FOR_200	4
+#define DISPLAY_FREQ_FOR_333	2
 #define DPLL_STAGER_CTL_REG1		0x0230
 #define DPLL_STAGER_CTL_REG2		0x0430
 #define DPLL_DIV_REG			0x800C

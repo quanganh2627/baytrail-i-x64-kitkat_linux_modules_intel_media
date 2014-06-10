@@ -522,9 +522,20 @@ bool enable_DSIPLL(struct drm_device *dev)
 		goto err_out;
 	ctx = &dsi_config->dsi_hw_context;
 
-	if (IS_ANN(dev))
-		intel_mid_msgbus_write32(CCK_PORT, FUSE_OVERRIDE_FREQ_CNTRL_REG5,
-			CKESC_GATE_EN | CKDP1X_GATE_EN | DISPLAY_FRE_EN | 0x2);
+	if (IS_ANN(dev)) {
+		int dspfreq;
+
+		if ((get_panel_type(dev, 0) == JDI_7x12_CMD) ||
+			(get_panel_type(dev, 0) == JDI_7x12_VID))
+			dspfreq = DISPLAY_FREQ_FOR_200;
+		else
+			dspfreq = DISPLAY_FREQ_FOR_333;
+
+		intel_mid_msgbus_write32(CCK_PORT,
+			FUSE_OVERRIDE_FREQ_CNTRL_REG5,
+			CKESC_GATE_EN | CKDP1X_GATE_EN | DISPLAY_FRE_EN
+			| dspfreq);
+	}
 
 	/* Prepare DSI  PLL register before enabling */
 	intel_mid_msgbus_write32(CCK_PORT, DSI_PLL_DIV_REG, 0);
