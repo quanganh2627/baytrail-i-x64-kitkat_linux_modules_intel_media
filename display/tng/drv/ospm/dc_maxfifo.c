@@ -309,19 +309,21 @@ bool exit_maxfifo_mode(struct drm_device *dev)
 	if (dev_priv->psb_dpst_state)
 		psb_irq_enable_dpst(dev);
 
+	mutex_lock(&maxfifo_info->maxfifo_mtx);
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		PSB_WVDC32(dspsrctrl_val, DSPSRCTRL_REG);
 		unsigned long irqflags;
 
 		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 		exit_s0i1_display_mode(dev);
-		maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_NOT_READY;
+		// ? maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_NOT_READY;
 		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 		PSB_DEBUG_PM("S0i1-Display-DISABLE : Reg DSPSRCTRL = %08x, "
 				"DSP_SS_PM = %08x\n", PSB_RVDC32(DSPSRCTRL_REG),
 				intel_mid_msgbus_read32(PUNIT_PORT, DSP_SS_PM));
 		power_island_put(OSPM_DISPLAY_A);
 	}
+	mutex_unlock(&maxfifo_info->maxfifo_mtx);
 	return true;
 }
 
