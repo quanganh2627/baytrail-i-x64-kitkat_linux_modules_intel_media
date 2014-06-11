@@ -133,6 +133,38 @@ static IMG_BOOL _Is_Valid_DC_Buffer(DC_BUFFER_IMPORT_INFO *psBufferInfo)
 }
 #endif /* if KEEP_UNUSED_CODE */
 
+static void
+pin_gtt_mapping(struct flip_plane *plane)
+{
+	DC_MRFLD_BUFFER *psBuffer = plane->flip_buf;
+	IMG_UINT32 key;
+
+	if (!psBuffer || psBuffer->eSource != DCMrfldEX_BUFFER_SOURCE_IMPORT) {
+		return;
+	}
+
+	key = psBuffer->sContext[0].gtt_key;
+
+	DCCBgetGttMapping(gpsDevice->psDrmDevice, psBuffer->ui32OwnerTaskID, key, NULL);
+}
+
+static void
+unpin_gtt_mapping(struct flip_plane *plane)
+{
+	DC_MRFLD_BUFFER *psBuffer = plane->flip_buf;
+	IMG_UINT32 key;
+
+	if (!psBuffer || psBuffer->eSource != DCMrfldEX_BUFFER_SOURCE_IMPORT) {
+		return;
+	}
+
+	key = psBuffer->sContext[0].gtt_key;
+
+	DCCBputGttMapping(gpsDevice->psDrmDevice, psBuffer->ui32OwnerTaskID, key);
+}
+
+
+
 static IMG_BOOL _Is_Task_KThread()
 {
 	/* skip task from user space and work queue */
@@ -298,6 +330,7 @@ static void free_flip(DC_MRFLD_FLIP *psFlip)
 		list_for_each_entry_safe(plane, tmp,
 				&psFlip->asPipeInfo[i].flip_planes, list) {
 			list_del(&plane->list);
+			unpin_gtt_mapping(plane);
 			kfree(plane);
 		}
 	}
@@ -808,6 +841,8 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 			flip_plane->attached_pipe = pipe;
 			flip_plane->flip_buf = pasBuffers[i];
 			flip_plane->flip_ctx = psSurfCustom;
+
+			pin_gtt_mapping(flip_plane);
 
 			list_add_tail(&flip_plane->list,
 				      &psFlip->asPipeInfo[pipe].flip_planes);

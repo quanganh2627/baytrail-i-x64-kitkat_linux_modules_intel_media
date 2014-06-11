@@ -88,4 +88,7 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe);
 
 void DCCBDsrForbid(struct drm_device *dev, int pipe);
 void DCCBDsrAllow(struct drm_device *dev, int pipe);
+
+int DCCBgetGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key, struct psb_gtt_mem_mapping **map);
+int DCCBputGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key);
 #endif				/* __DC_CALLBACKS_H__ */

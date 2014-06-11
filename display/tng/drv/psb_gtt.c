@@ -799,8 +799,14 @@ psb_gtt_mm_alloc_insert_mem_mapping(struct psb_gtt_mm *mm,
 	spin_lock(&mm->lock);
 	ret = psb_gtt_mm_get_mem_mapping_locked(ht, key, &mapping);
 	if (!ret) {
-		DRM_DEBUG("mapping entry for key %d exists, entry %p\n",
+		DRM_INFO("mapping entry for key %d exists, entry %p\n",
 			  key, mapping);
+		/*
+		 * FIXME: Normally we shouldn't fall into this,
+		 * If the entry exists, the allocated `node` will
+		 * not connect to this entry, A gtt space leak happens!!
+		 */
+		mapping->ref++;
 		*entry = mapping;
 		spin_unlock(&mm->lock);
 		return 0;
@@ -817,6 +823,7 @@ psb_gtt_mm_alloc_insert_mem_mapping(struct psb_gtt_mm *mm,
 	}
 
 	mapping->node = node;
+	mapping->ref = 1;
 
 	spin_lock(&mm->lock);
 	ret = psb_gtt_mm_insert_mem_mapping_locked(ht, key, mapping);
@@ -848,6 +855,10 @@ static struct psb_gtt_mem_mapping *psb_gtt_mm_remove_mem_mapping_locked(struct
 		return NULL;
 	}
 
+	if (--tmp->ref != 0) {
+		return tmp;
+	}
+
 	drm_ht_remove_item(ht, &tmp->item);
 
 	entry = container_of(ht, struct psb_gtt_hash_entry, ht);
@@ -867,6 +878,10 @@ static int psb_gtt_mm_remove_free_mem_mapping_locked(struct drm_open_hash *ht,
 	if (!entry) {
 		DRM_DEBUG("entry is NULL\n");
 		return -EINVAL;
+	}
+	if (entry->ref) {
+		DRM_DEBUG("mapping is still being used\n");
+		return -EBUSY;
 	}
 
 	*node = entry->node;
@@ -918,10 +933,8 @@ static int psb_gtt_remove_node(struct psb_gtt_mm *mm,
 		spin_unlock(&mm->lock);
 		return ret;
 	}
-	spin_unlock(&mm->lock);
 
 	/*remove mapping entry */
-	spin_lock(&mm->lock);
 	ret = psb_gtt_mm_remove_free_mem_mapping_locked(&hentry->ht, key, &tmp);
 	if (ret) {
 		DRM_DEBUG("remove_free failed\n");
@@ -1080,10 +1093,8 @@ static int psb_gtt_remove_node_anyused(struct psb_gtt_mm *mm,
 		spin_unlock(&mm->lock);
 		return ret;
 	}
-	spin_unlock(&mm->lock);
 
 	/*remove mapping entry*/
-	spin_lock(&mm->lock);
 	ret = psb_gtt_mm_remove_free_mem_mapping_anyused_locked(&hentry->ht,
 			&tmp);
 	if (ret) {
@@ -1266,6 +1277,10 @@ static int psb_gtt_unmap_common(struct drm_device *dev,
 				  (u32)hHandle,
 				  &node);
 	if (ret) {
+		/* we are not the last user */
+		if (ret == -EBUSY) {
+			ret = 0;
+		}
 		DRM_DEBUG("remove node failed\n");
 		return ret;
 	}
@@ -1383,6 +1398,11 @@ int psb_gtt_map_vaddr(struct drm_device *dev,
 	struct psb_gtt_mem_mapping *mapping = NULL;
 	int ret;
 
+	if (DCCBgetGttMapping(dev, gtt_get_tgid(), vaddr, &mapping) == 0) {
+		/* gtt mapping exists */
+		offset_pages = mapping->node->start;
+		goto get_mapping;
+	}
 	/*get pages*/
 	ret = psb_get_vaddr_pages(vaddr, size, &pfn_list, &pages);
 	if (ret) {
@@ -1427,6 +1447,7 @@ int psb_gtt_map_vaddr(struct drm_device *dev,
 	/*free pfn_list if allocated*/
 	kfree(pfn_list);
 
+get_mapping:
 	*offset = offset_pages;
 	return 0;
 
@@ -1587,4 +1608,43 @@ int DCCBgttCleanupMemoryOnTask(struct drm_device *dev, unsigned int ui32TaskId)
 		;
 
 	return 0;
+}
+
+int DCCBgetGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key, struct psb_gtt_mem_mapping **map)
+{
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct psb_gtt_mm *mm = dev_priv->gtt_mm;
+	struct psb_gtt_hash_entry *hentry;
+	struct psb_gtt_mem_mapping *mapping;
+	int ret = 0;
+
+	spin_lock(&mm->lock);
+
+	// get entry according to the thread id
+	ret = psb_gtt_mm_get_ht_by_pid_locked(mm, tgid, &hentry);
+	if (ret) {
+		DRM_DEBUG("Cannot find entry for pid %d\n", tgid);
+		goto unlock_exit;
+	}
+
+	// find the gtt mapping
+	ret = psb_gtt_mm_get_mem_mapping_locked(&hentry->ht, key, &mapping);
+	if (ret) {
+		DRM_DEBUG("Cannot find key %d\n", key);
+		goto unlock_exit;
+	}
+
+	mapping->ref++;
+	if (map) {
+		*map = mapping;
+	}
+
+unlock_exit:
+	spin_unlock(&mm->lock);
+	return ret;
+}
+
+int DCCBputGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key)
+{
+	return psb_gtt_unmap_common(dev, tgid, key);
 }

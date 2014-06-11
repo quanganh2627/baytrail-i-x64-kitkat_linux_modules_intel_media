@@ -1245,6 +1245,7 @@ typedef struct intel_dc_plane_zorder {
 typedef struct intel_dc_plane_ctx {
 	enum intel_dc_plane_types type;
 	struct intel_dc_plane_zorder zorder;
+	uint32_t gtt_key;
 	union {
 		struct intel_dc_overlay_ctx ov_ctx;
 		struct intel_dc_sprite_ctx sp_ctx;
