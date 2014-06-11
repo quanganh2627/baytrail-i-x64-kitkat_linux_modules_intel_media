@@ -851,6 +851,8 @@ void ospm_apm_power_down_vsp(struct drm_device *dev)
 
 	if (!any_island_on()) {
 		PSB_DEBUG_PM("Suspending PCI\n");
+		pm_qos_add_request(&dev_priv->s0ix_qos,
+			PM_QOS_CPU_DMA_LATENCY, CSTATE_EXIT_LATENCY_S0i1 - 1);
 		pm_runtime_put(&g_ospm_data->dev->pdev->dev);
 		wake_unlock(&dev_priv->ospm_wake_lock);
 	}
