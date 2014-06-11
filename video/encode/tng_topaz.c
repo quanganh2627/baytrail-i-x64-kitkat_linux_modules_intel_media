@@ -2653,7 +2653,7 @@ static int32_t tng_update_air_calc(
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	IMG_BEST_MULTIPASS_MB_PARAMS *psBestMB_Params;
 	IMG_FIRST_STAGE_MB_PARAMS *psFirstMB_Params;
-	uint8_t *pFirstPassOutBuf = NULL;
+	uint8_t *pFirstPassOutBuf;
 	uint8_t *pBestMBDecisionCtrlBuf;
 
 	ui16IntraParam = (0 << 7) | (0 << 4);
@@ -2669,7 +2669,6 @@ static int32_t tng_update_air_calc(
 	}
 
 	/* Map first pass out params */
-	/*
 	ret = ttm_bo_reserve(video_ctx->bufs_first_pass_out_params_bo, true, true, false, 0);
 	if (ret) {
 		DRM_ERROR("TOPAZ: reserver failed.\n");
@@ -2689,7 +2688,6 @@ static int32_t tng_update_air_calc(
 		&video_ctx->bufs_first_pass_out_params_kmap, &is_iomem) + slot_num * buf_size);
 
 	pFirstPassOutBuf = (uint8_t *)video_ctx->bufs_first_pass_out_params_addr;
-	*/
 
 	/* Map first pass out best multipass params */
 	ret = ttm_bo_reserve(video_ctx->bufs_first_pass_out_best_multipass_param_bo, true, true, false, 0);
@@ -2830,10 +2828,9 @@ static int32_t tng_update_air_calc(
 			}
 		}
 	}
-	/*
+
 	ttm_bo_unreserve(video_ctx->bufs_first_pass_out_params_bo);
 	ttm_bo_kunmap(&video_ctx->bufs_first_pass_out_params_kmap);
-	*/
 	ttm_bo_unreserve(video_ctx->bufs_first_pass_out_best_multipass_param_bo);
 	ttm_bo_kunmap(&video_ctx->bufs_first_pass_out_best_multipass_param_kmap);
 
