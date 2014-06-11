@@ -1003,6 +1003,13 @@ u32 psb_get_vblank_counter(struct drm_device *dev, int pipe)
 		goto psb_get_vblank_counter_exit;
 	}
 
+	/* we always get 0 reading these two registers on MOFD
+	 * and reading these registers can causes UI freeze
+	 * when connected with HDMI using 640x480p / 720x480p
+	 */
+	if (IS_MOFD(dev))
+		return 0;
+
 	/*
 	 * High & low register fields aren't synchronized, so make sure
 	 * we get a low value that's stable across two reads of the high
