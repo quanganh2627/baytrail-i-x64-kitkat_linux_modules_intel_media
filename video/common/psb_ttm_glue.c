@@ -444,6 +444,7 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 		}
 		INIT_LIST_HEAD(&video_ctx->head);
 		video_ctx->ctx_type = ctx_type;
+		video_ctx->cur_sequence = 0xffffffff;
 #ifdef MERRIFIELD
 		if (IS_ANN(dev))
 			ann_add_workaround_ctx(dev_priv, ctx_type);
