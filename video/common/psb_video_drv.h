@@ -261,14 +261,6 @@ struct psb_validate_buffer {
 #define	LOG2_WB_FIFO_SIZE	(5)
 #define	WB_FIFO_SIZE		(1 << (LOG2_WB_FIFO_SIZE))
 
-struct adaptive_intra_refresh_info_type{
-       int8_t *air_table;
-       int32_t air_per_frame;
-       int16_t air_skip_cnt;
-       uint16_t air_scan_pos;
-       int32_t sad_threshold;
-};
-
 struct psb_video_ctx {
 	struct list_head head;
 	struct file *filp; /* DRM device file pointer */
@@ -282,23 +274,11 @@ struct psb_video_ctx {
 	struct ttm_buffer_object *mtx_ctx_bo;
 	struct ttm_bo_kmap_obj mtx_ctx_kmap;
 	uint32_t setv_addr;
-
-	/* CIR parameters */
 	struct ttm_buffer_object *cir_input_ctrl_bo;
 	struct ttm_bo_kmap_obj cir_input_ctrl_kmap;
 	uint32_t *cir_input_ctrl_addr;
 	uint32_t pseudo_rand_seed;
 	int32_t last_cir_index;
-
-	/* AIR parameters */
-	struct adaptive_intra_refresh_info_type air_info;
-	struct ttm_buffer_object *bufs_first_pass_out_params_bo;
-	struct ttm_bo_kmap_obj bufs_first_pass_out_params_kmap;
-	uint32_t *bufs_first_pass_out_params_addr;
-	struct ttm_buffer_object *bufs_first_pass_out_best_multipass_param_bo;
-	struct ttm_bo_kmap_obj bufs_first_pass_out_best_multipass_param_kmap;
-	uint32_t *bufs_first_pass_out_best_multipass_param_addr;
-
 	/* Save state registers */
 	uint32_t *mtx_reg;
 	uint32_t *bias_reg;
