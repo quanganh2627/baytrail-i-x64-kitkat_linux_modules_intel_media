@@ -1118,7 +1118,7 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 	if (is_dual_dsi(dev) && IS_ANN(dev)) {
 		dev_priv->bUseHFPLL = false;
 		dev_priv->bRereadZero = false;
-	} else if (IS_TNG_B0(dev) || IS_ANN(dev)) {
+	} else if (IS_TNG_B0(dev) || IS_ANN_A0(dev)) {
 		if (dev_priv->mipi_encoder_type == MDFLD_DSI_ENCODER_DBI) {
 			if (IS_ANN(dev))
 				dev_priv->bUseHFPLL = false;

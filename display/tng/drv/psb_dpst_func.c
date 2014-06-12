@@ -60,6 +60,7 @@
 #define HSV
 #define dpst_print PSB_DEBUG_DPST
 
+static struct mutex dpst_mutex;
 static int blc_adj2;
 static u32 lut_adj[256];
 
@@ -103,6 +104,7 @@ int psb_hist_enable(struct drm_device *dev, void *data)
 		return 0;
 	ctx = &dsi_config->dsi_hw_context;
 
+	mutex_lock(&dpst_mutex);
 	/*
 	* FIXME: We need to force the Display to
 	* turn on but on TNG OSPM how we can force PIPEA to do it?
@@ -167,6 +169,8 @@ int psb_hist_enable(struct drm_device *dev, void *data)
 		power_island_put(OSPM_DISPLAY_A);
 	}
 
+	mutex_unlock(&dpst_mutex);
+
 	return 0;
 }
 
@@ -192,6 +196,7 @@ int psb_hist_enable(struct drm_device *dev, void *data)
 	if (!dsi_config)
 		return 0;
 
+	mutex_lock(&dpst_mutex);
 	/*
 	 * FIXME: We need to force the Display to
 	 * turn on but on TNG OSPM how we can force PIPEA to do it?
@@ -233,6 +238,8 @@ int psb_hist_enable(struct drm_device *dev, void *data)
 		power_island_put(OSPM_DISPLAY_A);
 	}
 
+	mutex_unlock(&dpst_mutex);
+
 	return 0;
 }
 
@@ -258,6 +265,8 @@ int psb_diet_enable(struct drm_device *dev, void *data)
 	if (!dsi_config)
 		return 0;
 	ctx = &dsi_config->dsi_hw_context;
+
+	mutex_lock(&dpst_mutex);
 
 	if (power_island_get(OSPM_DISPLAY_A))
 	{
@@ -312,6 +321,8 @@ int psb_diet_enable(struct drm_device *dev, void *data)
 		mdfld_dsi_dsr_allow(dsi_config);
 		power_island_put(OSPM_DISPLAY_A);
 	}
+
+	mutex_unlock(&dpst_mutex);
 
 	return 0;
 }
@@ -814,11 +825,12 @@ void dpst_disable_post_process(struct drm_device *dev)
 	};			/* switch */
 }
 
-
 /* Initialize the dpst data */
 int dpst_init(struct drm_device *dev, int level, int output_id)
 {
 	g_dev = dev;            /* hack for now - the work queue does not have the device */
+
+	mutex_init(&dpst_mutex);
 
 	dpst_save_bl_adj_factor(dev);
 	dpst_save_gamma_settings(dev);
