@@ -125,6 +125,10 @@ typedef struct {
 
 	struct plane_state plane_states[DC_PLANE_MAX][MAX_PLANE_INDEX];
 
+	/* Timer to retire blocked flips */
+        struct timer_list sFlipTimer;
+        struct work_struct flip_retire_work;
+
 } DC_MRFLD_DEVICE;
 
 typedef struct {

@@ -56,6 +56,9 @@ static DC_MRFLD_DEVICE *gpsDevice;
 #define DC_MRFLD_STRIDE_ALIGN 64
 #define DC_MRFLD_STRIDE_ALIGN_MASK (DC_MRFLD_STRIDE_ALIGN - 1)
 
+/* Timeout for Flip Watchdog */
+#define FLIP_TIMEOUT (HZ/4)
+
 struct power_off_req {
 	struct delayed_work work;
 	struct plane_state *pstate;
@@ -468,6 +471,65 @@ static void free_flip_states_on_pipe(struct drm_device *psDrmDev, int pipe)
 	return IMG_NULL;
 }
 
+static void timer_flip_handler(struct work_struct *work)
+{
+	struct list_head *psFlipQueue;
+	DC_MRFLD_FLIP *psFlip, *psTmp;
+	IMG_UINT32 eFlipState;
+	int iPipe;
+	bool bHasUpdatedFlip[MAX_PIPE_NUM] = { false };
+	bool bHasDisplayedFlip[MAX_PIPE_NUM] = { false };
+
+	if (!gpsDevice)
+		return IMG_TRUE;
+
+	/* acquire flip queue mutex */
+	mutex_lock(&gpsDevice->sFlipQueueLock);
+
+	/* check flip queue state */
+	for (iPipe=DC_PIPE_A; iPipe<=DC_PIPE_B; iPipe++) {
+		psFlipQueue = &gpsDevice->sFlipQueues[iPipe];
+
+		list_for_each_entry_safe(psFlip, psTmp, psFlipQueue, sFlips[iPipe])
+		{
+			eFlipState = psFlip->eFlipStates[iPipe];
+			if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
+				bHasUpdatedFlip[iPipe] = true;
+			} else if (eFlipState == DC_MRFLD_FLIP_DISPLAYED) {
+				bHasDisplayedFlip[iPipe] = true;
+			}
+		}
+
+		if (bHasUpdatedFlip[iPipe]) {
+			DRM_INFO("flip timer triggered, maybe vsync lost on pipe%d!\n", iPipe);
+		} else if (bHasDisplayedFlip[iPipe]) {
+			/* This can either be normal case, like enter dsr or idle state,
+			 * or be abnormal, if the flip is blocked somewhere for long time.
+			 */
+			DRM_DEBUG("flip timer triggered, no new flip come on pipe%d!\n", iPipe);
+		}
+
+		/* free all flips */
+		/* TODO: do we need to distinguish good cases like idle or dsr? */
+		if (bHasUpdatedFlip[iPipe] || bHasDisplayedFlip[iPipe])
+			free_flip_states_on_pipe(gpsDevice->psDrmDevice, iPipe);
+
+		if (list_empty_careful(psFlipQueue))
+			INIT_LIST_HEAD(&gpsDevice->sFlipQueues[iPipe]);
+	}
+
+	mutex_unlock(&gpsDevice->sFlipQueueLock);
+
+	return;
+}
+
+static void _Flip_Timer_Fn(unsigned long arg)
+{
+	DC_MRFLD_DEVICE *psDevice = (DC_MRFLD_DEVICE *)arg;
+
+        schedule_work(&psDevice->flip_retire_work);
+}
+
 static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 {
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom = NULL;
@@ -585,7 +647,11 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	psFlip->uiVblankCounters[iPipe] =
 			drm_vblank_count(gpsDevice->psDrmDevice, iPipe);
 
+	/*start Flip watch dog*/
+	mod_timer(&gpsDevice->sFlipTimer, FLIP_TIMEOUT + jiffies);
+
 	bUpdated = IMG_TRUE;
+
 #ifndef ENABLE_HW_REPEAT_FRAME
 	/* maxfifo is only enabled in mipi only mode */
 	if (iPipe == DC_PIPE_A)
@@ -988,6 +1054,11 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 
 			DCCBUpdateDbiPanel(gpsDevice->psDrmDevice, iPipe);
 		}
+	}
+
+	if (bNewFlipUpdated) {
+		/*start Flip watch dog*/
+		mod_timer(&gpsDevice->sFlipTimer, FLIP_TIMEOUT + jiffies);
 	}
 
 	if (list_empty_careful(psFlipQueue))
@@ -1727,6 +1798,12 @@ static PVRSRV_ERROR DC_MRFLD_init(struct drm_device *psDrmDev)
 
 	/*init ISR*/
 	DCCBInstallVSyncISR(psDrmDev, _Vsync_ISR);
+
+	/*init flip timer*/
+	psDevice->sFlipTimer.data = (unsigned long)psDevice;
+	psDevice->sFlipTimer.function = _Flip_Timer_Fn;
+	init_timer(&psDevice->sFlipTimer);
+	INIT_WORK(&psDevice->flip_retire_work, timer_flip_handler);
 
 	gpsDevice = psDevice;
 
