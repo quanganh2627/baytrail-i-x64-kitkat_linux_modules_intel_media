@@ -1160,13 +1160,15 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 
 	VSP_DEBUG("ctx_type=%d\n", ctx_type);
 
+	/* power on again to send VssGenDestroyContext to firmware */
+	if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
+		DRM_DEBUG_PM("The VSP power on fail!\n");
+		return ;
+	}
+
 	if (VAEntrypointEncSlice == ctx_type && filp != vsp_priv->vp8_filp[3]) {
 		vsp_priv->context_vp8_num--;
 		mutex_lock(&vsp_priv->vsp_mutex);
-		/* power on again to send VssGenDestroyContext to firmware */
-		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
-			tmp = -EBUSY;
-		}
 		if (vsp_priv->vsp_state == VSP_STATE_SUSPEND) {
 			tmp = vsp_resume_function(dev_priv);
 			VSP_DEBUG("The VSP is on suspend, send resume!\n");
