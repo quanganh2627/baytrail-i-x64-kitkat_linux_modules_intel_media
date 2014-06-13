@@ -2973,17 +2973,16 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					}
 				} else if (ret == -EINTR)
 					ret = 0;
-
-				getrawmonotonic(&now);
-				nsecs = timespec_to_ns(&now);
 			} else {
-				DRM_ERROR(KERN_ERR "ERR: ASK for a VSYNC "
-						"without enable.\n");
+				DRM_INFO("request VSYNC on pipe(%d) when vsync_enabled=%d.\n",
+						 pipe, dev_priv->vsync_enabled[pipe]);
 			}
 
 			if (IS_MOFD(dev))
 				mutex_unlock(&dev->mode_config.mutex);
 
+			getrawmonotonic(&now);
+			nsecs = timespec_to_ns(&now);
 			arg->vsync.timestamp = (uint64_t)nsecs;
 			return ret;
 		}
