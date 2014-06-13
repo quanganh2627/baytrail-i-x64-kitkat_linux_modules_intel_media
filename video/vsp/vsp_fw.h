@@ -708,6 +708,12 @@ struct VssWiDi_ComposeSequenceParameterBuffer {
 	unsigned int Video_OUT_Y_Buffer;
 	unsigned int Video_OUT_UV_Buffer;
 	unsigned int Video_OUT_V_Buffer;
+
+	unsigned int scaled_width;
+	unsigned int scaled_height;
+	unsigned int scalefactor_dx;
+	unsigned int scalefactor_dy;
+
 	/*Blending related params*/
 	int Is_Blending_Enabled;
 	int ROI_width;
