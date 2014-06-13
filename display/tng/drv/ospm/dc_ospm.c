@@ -30,6 +30,7 @@
 #include "pmu_tng.h"
 #include "tng_wa.h"
 #include "mrfld_clock.h"
+#include "mdfld_output.h"
 #include <asm/intel-mid.h>
 
 /***********************************************************
@@ -328,7 +329,10 @@ void ospm_mio_init(struct drm_device *dev,
 {
 	p_island->p_funcs->power_up = mio_power_up;
 	p_island->p_funcs->power_down = mio_power_down;
-	p_island->p_dependency = get_island_ptr(OSPM_DISPLAY_A);
+	if (get_panel_type(dev, 0) == SDC_25x16_CMD)
+		p_island->p_dependency = NULL;
+	else
+		p_island->p_dependency = get_island_ptr(OSPM_DISPLAY_A);
 }
 
 /***********************************************************

@@ -1855,8 +1855,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	*/
 	dpst_init(dev, 5, 1);
 
-	if (get_panel_type(dev, 0) != SDC_25x16_CMD)
-		mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
+	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:

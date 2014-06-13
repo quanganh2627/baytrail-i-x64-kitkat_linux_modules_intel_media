@@ -349,7 +349,7 @@ static void __dbi_set_properties(struct mdfld_dsi_config *dsi_config,
 }
 
 /* dbi interface power on*/
-int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
+int __dbi_power_on(struct mdfld_dsi_config *dsi_config, bool from_dsr)
 {
 	u32 val = 0;
 	struct mdfld_dsi_hw_registers *regs;
@@ -376,8 +376,9 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config)
 
 	power_island = pipe_to_island(dsi_config->pipe);
 
-	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
-		power_island |= OSPM_DISPLAY_MIO;
+	if ( (!from_dsr) || (get_panel_type(dev, 0) != SDC_25x16_CMD))
+		if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
+			power_island |= OSPM_DISPLAY_MIO;
 
 	if (is_dual_dsi(dev))
 	power_island |= OSPM_DISPLAY_C;
@@ -644,7 +645,7 @@ reset_recovery:
 	if (p_funcs && p_funcs->exit_deep_standby)
 		p_funcs->exit_deep_standby(dsi_config);
 
-	if (__dbi_power_on(dsi_config)) {
+	if (__dbi_power_on(dsi_config, false)) {
 		DRM_ERROR("Failed to init display controller!\n");
 		err = -EAGAIN;
 		goto power_on_err;
@@ -709,7 +710,7 @@ power_on_err:
 /**
  * Power off sequence for DBI interface
 */
-int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
+int __dbi_power_off(struct mdfld_dsi_config *dsi_config, bool from_dsr)
 {
 	struct mdfld_dsi_hw_registers *regs;
 	struct mdfld_dsi_hw_context *ctx;
@@ -812,9 +813,9 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config)
 power_off_err:
 
 	power_island = pipe_to_island(dsi_config->pipe);
-
-	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
-		power_island |= OSPM_DISPLAY_MIO;
+	if ( (!from_dsr) || (get_panel_type(dev, 0) != SDC_25x16_CMD))
+		if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
+			power_island |= OSPM_DISPLAY_MIO;
 	if (is_dual_dsi(dev))
 		power_island |= OSPM_DISPLAY_C;
 
@@ -869,7 +870,7 @@ static int __dbi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 	}
 
 	/*power off dbi interface*/
-	__dbi_power_off(dsi_config);
+	__dbi_power_off(dsi_config, false);
 
 power_off_err:
 	mdfld_dsi_dsr_allow_locked(dsi_config);
