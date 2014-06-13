@@ -480,6 +480,7 @@ static void timer_flip_handler(struct work_struct *work)
 	int iPipe;
 	bool bHasUpdatedFlip[MAX_PIPE_NUM] = { false };
 	bool bHasDisplayedFlip[MAX_PIPE_NUM] = { false };
+	bool bHasPendingCommand[MAX_PIPE_NUM] = { false };
 
 	if (!gpsDevice)
 		return IMG_TRUE;
@@ -501,18 +502,20 @@ static void timer_flip_handler(struct work_struct *work)
 			}
 		}
 
+		/* check if there are pending scp cmds */
+		psFlip = list_first_entry_or_null(psFlipQueue, DC_MRFLD_FLIP, sFlips[iPipe]);
+		if (psFlip && DCDisplayHasPendingCommand(psFlip->hConfigData))
+			bHasPendingCommand[iPipe] = true;
+
 		if (bHasUpdatedFlip[iPipe]) {
 			DRM_INFO("flip timer triggered, maybe vsync lost on pipe%d!\n", iPipe);
-		} else if (bHasDisplayedFlip[iPipe]) {
-			/* This can either be normal case, like enter dsr or idle state,
-			 * or be abnormal, if the flip is blocked somewhere for long time.
-			 */
-			DRM_DEBUG("flip timer triggered, no new flip come on pipe%d!\n", iPipe);
+		} else if (bHasDisplayedFlip[iPipe] && bHasPendingCommand[iPipe]) {
+			DRM_INFO("flip timer triggered, scp cmd pending on pipe%d!\n", iPipe);
 		}
 
-		/* free all flips */
-		/* TODO: do we need to distinguish good cases like idle or dsr? */
-		if (bHasUpdatedFlip[iPipe] || bHasDisplayedFlip[iPipe])
+		/* free all flips whenever vysnc lost or scp cmd pending */
+		if ((bHasUpdatedFlip[iPipe]) ||
+		    (bHasDisplayedFlip[iPipe] && bHasPendingCommand[iPipe]))
 			free_flip_states_on_pipe(gpsDevice->psDrmDevice, iPipe);
 
 		if (list_empty_careful(psFlipQueue))

@@ -838,6 +838,11 @@ IMG_VOID SCPCommandComplete(SCP_CONTEXT *psContext)
 	}
 }
 
+IMG_EXPORT IMG_BOOL SCPHasPendingCommand(SCP_CONTEXT *psContext)
+{
+	return psContext && (psContext->ui32DepOffset != psContext->ui32WriteOffset);
+}
+
 IMG_EXPORT
 IMG_VOID IMG_CALLCONV SCPDumpStatus(SCP_CONTEXT *psContext)
 {

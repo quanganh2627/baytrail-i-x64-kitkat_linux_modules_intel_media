@@ -2173,6 +2173,19 @@ IMG_VOID DCDisplayConfigurationRetired(IMG_HANDLE hConfigData)
 	PVRSRVCheckStatus(IMG_NULL);
 }
 
+IMG_BOOL DCDisplayHasPendingCommand(IMG_HANDLE hConfigData)
+{
+	DC_CMD_COMP_DATA *psData = hConfigData;
+	DC_DISPLAY_CONTEXT *psDisplayContext = psData->psDisplayContext;
+	IMG_BOOL bRet;
+
+	_DCDisplayContextAcquireRef(psDisplayContext);
+	bRet = SCPHasPendingCommand(psDisplayContext->psSCPContext);
+	_DCDisplayContextReleaseRef(psDisplayContext);
+
+	return bRet;
+}
+
 PVRSRV_ERROR DCImportBufferAcquire(IMG_HANDLE hImport,
 								   IMG_DEVMEM_LOG2ALIGN_T uiLog2PageSize,
 								   IMG_UINT32 *pui32PageCount,
