@@ -932,14 +932,6 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 		if (unlikely(ret != 0))
 			goto out_err0;
 
-		if (unlikely(vsp_priv->fw_loaded == 0)) {
-			ret = tng_securefw(dev, "vsp", "VSP", TNG_IMR11L_MSG_REGADDR);
-			if (ret != 0) {
-				DRM_ERROR("VSP: failed to init firmware\n");
-				goto out_err1;
-			}
-		}
-
 		context = &dev_priv->vsp_context;
 #endif
 	} else {

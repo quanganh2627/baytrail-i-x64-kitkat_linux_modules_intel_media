@@ -1106,6 +1106,18 @@ int vsp_new_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		ret = -1;
 	}
 
+	VSP_DEBUG("context_vp8_num %d, context_vpp_num %d\n",
+			vsp_priv->context_vp8_num, vsp_priv->context_vpp_num);
+
+	/* load VSP firmware now */
+	if (unlikely(vsp_priv->fw_loaded == 0)) {
+		ret = tng_securefw(dev, "vsp", "VSP", TNG_IMR11L_MSG_REGADDR);
+		if (ret != 0) {
+			DRM_ERROR("VSP: failed to init firmware\n");
+			return ret;
+		}
+	}
+
 	return ret;
 }
 
@@ -1138,7 +1150,8 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		}
 
 		if (VAEntrypointEncSlice == ctx_type)
-			vsp_priv->context_vp8_num--;
+			if (vsp_priv->context_vp8_num > 0)
+				vsp_priv->context_vp8_num--;
 		else if (ctx_type == VAEntrypointVideoProc)
 			if (vsp_priv->context_vpp_num > 0)
 				vsp_priv->context_vpp_num--;
@@ -1148,6 +1161,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 	VSP_DEBUG("ctx_type=%d\n", ctx_type);
 
 	if (VAEntrypointEncSlice == ctx_type && filp != vsp_priv->vp8_filp[3]) {
+		vsp_priv->context_vp8_num--;
 		mutex_lock(&vsp_priv->vsp_mutex);
 		/* power on again to send VssGenDestroyContext to firmware */
 		if (power_island_get(OSPM_VIDEO_VPP_ISLAND) == false) {
@@ -1198,8 +1212,6 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		if (count == 20000) {
 			DRM_ERROR("Failed to handle sigint event\n");
 		}
-
-		vsp_priv->context_vp8_num--;
 	} else if(VAEntrypointEncSlice == ctx_type && filp == vsp_priv->vp8_filp[3]) {
 		/* driver support 3 vp8 encoding simultaneously at most */
 		/* clear the 4th vp8 encoding fd */
@@ -1210,6 +1222,8 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 
 	/* Return if there is any context is running */
 	if (vsp_priv->context_vp8_num > 0 || vsp_priv->context_vpp_num > 0) {
+		VSP_DEBUG("context_vp8_num %d, context_vpp_num %d\n",
+			vsp_priv->context_vp8_num, vsp_priv->context_vpp_num);
 		return;
 	}
 

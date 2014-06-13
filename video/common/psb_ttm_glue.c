@@ -475,13 +475,15 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 #endif
 
 #ifdef SUPPORT_VSP
-		if (VAEntrypointVideoProc == (ctx_type & 0xff)
+		if ((VAEntrypointVideoProc == (ctx_type & 0xff)
+				&& 0xff == ((ctx_type >> 8) & 0xff))
 			|| (VAEntrypointEncSlice == (ctx_type & 0xff)
 				&& VAProfileVP8Version0_3 ==
 					((ctx_type >> 8) & 0xff))) {
 			ret = vsp_new_context(dev, filp, ctx_type & 0xff);
 			if (ret)
 				break;
+
 		}
 #endif
 #endif
