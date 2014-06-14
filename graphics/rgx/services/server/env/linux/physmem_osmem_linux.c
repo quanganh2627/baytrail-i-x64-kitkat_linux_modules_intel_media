@@ -47,6 +47,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "img_types.h"
 #include "pvr_debug.h"
 #include "pvrsrv_error.h"
+#include "dc_server.h"
+#include "dc_mrfld.h"
 #include "pvrsrv_memallocflags.h"
 
 /* services/server/include/ */
@@ -488,6 +490,61 @@ static void DisableOOMKiller(void)
 	current->flags |= PF_DUMPCORE;
 }
 
+static void _ResolveBufferPoolSize(void)
+{
+	IMG_UINT32 ui32DcDeviceCount = 0;
+	IMG_UINT32 ui32DcDeviceIndex = 0;
+	DC_DEVICE* psDcDevice = NULL;
+	IMG_UINT32 ui32NumPanels = 0;
+	PVRSRV_PANEL_INFO asPanelInfo;
+
+	// enum and retrieve primary DC.
+	if (PVRSRV_OK != DCDevicesEnumerate(1, &ui32DcDeviceCount, &ui32DcDeviceIndex))
+		return;
+
+	// acquire primary DC device.
+	if (PVRSRV_OK != DCDeviceAcquire(ui32DcDeviceIndex, &psDcDevice))
+		return;
+
+	if (PVRSRV_OK == DCPanelQuery(psDcDevice, 1, &ui32NumPanels, &asPanelInfo)){
+		IMG_UINT32 ui32Width = asPanelInfo.sSurfaceInfo.sDims.ui32Width;
+		IMG_UINT32 ui32Height = asPanelInfo.sSurfaceInfo.sDims.ui32Height;
+		IMG_UINT32 ui32Format = asPanelInfo.sSurfaceInfo.sFormat.ePixFormat;
+		IMG_UINT32 k = 10;
+		IMG_UINT32 ui32Bpp = 0;
+		IMG_UINT32 ui32SizeInPages = 0;
+
+		/*
+		 * refer to DC_MRFLD_Supported_PixelFormats[]
+		 */
+		switch (ui32Format) {
+		case IMG_PIXFMT_B5G6R5_UNORM:
+		case IMG_PIXFMT_YUV420_2PLANE:
+			ui32Bpp = 2;
+			break;
+		case IMG_PIXFMT_B8G8R8A8_UNORM:
+		default:
+			ui32Bpp = 4;
+			break;
+		}
+
+		/*
+		 * BufferPoolSizeInPage = k * w * h * Bpp / PAGE_SIZE
+		 * For example, a 1920x1080x32bpp screen will get:
+		 * 10 * 1920 * 1080 * 4 / 4096 = 20250 pages (~80M)
+		 */
+		ui32SizeInPages = k*ui32Width*ui32Height*ui32Bpp/PAGE_SIZE;
+		if (g_ui32PagePoolMaxEntries < ui32SizeInPages)
+			g_ui32PagePoolMaxEntries = ui32SizeInPages;
+
+		PVR_DPF((PVR_DBG_MESSAGE,
+				 "%s: ui32Width(%d), ui32Height(%d), ui32Bpp(%d), g_ui32PagePoolMaxEntries(%d).",
+				 __func__, ui32Width, ui32Height, ui32Bpp, g_ui32PagePoolMaxEntries));
+	}
+
+	DCDeviceRelease(psDcDevice);
+}
+
 static IMG_VOID _InitPagePool(IMG_VOID)
 {
 	IMG_UINT32 ui32Flags = 0;
@@ -496,6 +553,9 @@ static IMG_VOID _InitPagePool(IMG_VOID)
 #if defined(DEBUG_LINUX_SLAB_ALLOCATIONS)
 	ui32Flags |= SLAB_POISON|SLAB_RED_ZONE;
 #endif
+
+	// resolve buffer pool size dynamically.
+	_ResolveBufferPoolSize();
 	g_psLinuxPagePoolCache = kmem_cache_create("img-pp", sizeof(LinuxPagePoolEntry), 0, ui32Flags, NULL);
 
 #if defined(PHYSMEM_SUPPORTS_SHRINKER)
