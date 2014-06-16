@@ -286,7 +286,8 @@ int psb_diet_enable(struct drm_device *dev, void *data)
 				}
 				printk("\n");
 			}
-			for (i = 0; i <= dpst3_bin_count; i++)
+			PSB_WVDC32(0x200, iebdr_reg);
+			for (i = 1; i <= dpst3_bin_count; i++)
 			{
 				PSB_WVDC32(arg[i], iebdr_reg);
 			}
@@ -339,6 +340,7 @@ int psb_dpst_diet_save(struct drm_device *dev)
 	for (i = 0; i <= dpst3_bin_count; i++)
 		diet_saved[i] = PSB_RVDC32(iebdr_reg);
 	dpst_print("diet saved\n");
+		diet_saved[0] = 0x200;
 
 	return 0;
 }
