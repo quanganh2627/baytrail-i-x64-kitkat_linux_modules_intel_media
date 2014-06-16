@@ -333,6 +333,10 @@ static void PVRSyncValueStr(struct sync_pt *psPt,
 {
         struct PVR_SYNC_PT *psPVRPt = (struct PVR_SYNC_PT *)psPt;
 
+		if (!psPVRPt->psSyncData) {
+			return;
+		}
+
         /* This output is very compressed cause in the systrace case we just have
          * 32 chars and when printing it to /d/sync there are only 64 chars
          * available. Prints:
