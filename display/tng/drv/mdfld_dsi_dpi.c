@@ -1106,6 +1106,13 @@ void mdfld_dsi_dpi_save(struct drm_encoder *encoder)
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
 	DCLockMutex();
+
+	/* give time to the last flip to take effective,
+	 * if we disable hardware too quickly, overlay hardware may crash,
+	 * causing pipe hang next time when we try to use overlay
+	 */
+	msleep(50);
+
 	__mdfld_dsi_dpi_set_power(encoder, false);
 
 	drm_handle_vblank(dev, pipe);
