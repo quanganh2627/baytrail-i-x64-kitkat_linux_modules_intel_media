@@ -262,11 +262,6 @@ _AddEntryToPool(struct page *psPage, IMG_UINT32 ui32CPUCacheFlags)
 	LinuxPagePoolEntry *psEntry;
 	struct list_head *psPoolHead = IMG_NULL;
 
-	if (!_GetPoolListHead(ui32CPUCacheFlags, &psPoolHead))
-	{
-		return IMG_FALSE;
-	}
-
 	psEntry = _LinuxPagePoolEntryAlloc();
 	if (psEntry == NULL)
 	{
@@ -281,6 +276,14 @@ _AddEntryToPool(struct page *psPage, IMG_UINT32 ui32CPUCacheFlags)
 	}
 
 	_PagePoolLock();
+
+	if (!_GetPoolListHead(ui32CPUCacheFlags, &psPoolHead))
+	{
+		_PagePoolUnlock();
+		_LinuxPagePoolEntryFree(psEntry);
+		return IMG_FALSE;
+	}
+
 	/* zero pages locate at the begin, others at the end */
 	if (psEntry->bPageZero) {
 		list_add(&psEntry->sPagePoolItem, psPoolHead);
@@ -308,20 +311,20 @@ static inline struct page *
 _RemoveFirstEntryFromPool(IMG_UINT32 ui32CPUCacheFlags, IMG_BOOL bFlush)
 {
 	LinuxPagePoolEntry *psPagePoolEntry;
-	struct page *psPage;
+	struct page *psPage = NULL;
 	struct list_head *psPoolHead = IMG_NULL;
+
+	_PagePoolLock();
 
 	if (!_GetPoolListHead(ui32CPUCacheFlags, &psPoolHead))
 	{
-		return NULL;
+		goto unlock_exit;
 	}
 
-	_PagePoolLock();
 	if (list_empty(psPoolHead) ||
 		(bFlush && g_ui32ZeroPageEntries == 0))
 	{
-		_PagePoolUnlock();
-		return NULL;
+		goto unlock_exit;
 	}
 
 	PVR_ASSERT(g_ui32PagePoolEntryCount > 0);
@@ -329,8 +332,7 @@ _RemoveFirstEntryFromPool(IMG_UINT32 ui32CPUCacheFlags, IMG_BOOL bFlush)
 		psPagePoolEntry = list_first_entry(psPoolHead, LinuxPagePoolEntry, sPagePoolItem);
 		if (!psPagePoolEntry->bPageZero) {
 			/* we don't have zero pages at this list */
-			_PagePoolUnlock();
-			return NULL;
+			goto unlock_exit;
 		}
 	} else {
 		psPagePoolEntry = list_entry(psPoolHead->prev, LinuxPagePoolEntry, sPagePoolItem);
@@ -338,8 +340,9 @@ _RemoveFirstEntryFromPool(IMG_UINT32 ui32CPUCacheFlags, IMG_BOOL bFlush)
 	_RemoveEntryFromPoolUnlocked(psPagePoolEntry);
 	psPage = psPagePoolEntry->psPage;
 	_LinuxPagePoolEntryFree(psPagePoolEntry);
-	_PagePoolUnlock();
 
+unlock_exit:
+	_PagePoolUnlock();
 	return psPage;
 }
 
