@@ -58,8 +58,13 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "dfrgx_interface.h"
 #include "rgxpowermon.h"
 #include <linux/kernel.h>
+#include <linux/workqueue.h>
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
+
+struct workqueue_struct *rgxPowerRequestWq;
+struct work_struct rgxPowerRequestWork;
+IMG_HANDLE rgxPowerRequestData;
 
 #if ! defined(FIX_HW_BRN_37453)
 /*!
@@ -1032,10 +1037,7 @@ PVRSRV_ERROR RGXDustCountChange(IMG_HANDLE				hDevHandle,
 	return PVRSRV_OK;
 }
 
-/*
-	RGXActivePowerRequest
-*/
-PVRSRV_ERROR RGXActivePowerRequest(IMG_HANDLE hDevHandle)
+PVRSRV_ERROR RGX_Do_ActivePowerRequest(IMG_HANDLE hDevHandle)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;
 	PVRSRV_DEVICE_NODE	*psDeviceNode = hDevHandle;
@@ -1043,17 +1045,12 @@ PVRSRV_ERROR RGXActivePowerRequest(IMG_HANDLE hDevHandle)
 	PVRSRV_RGXDEV_INFO *psDevInfo = psDeviceNode->pvDevice;
 	RGXFWIF_TRACEBUF *psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
 
-	PDUMPPOWCMDSTART();
-
-	OSAcquireBridgeLock();
-	OSSetKeepPVRLock();
-
 	/* Powerlock to avoid further requests from racing with the FW hand-shake from now on
 	   (previous kicks to this point are detected by the FW) */
 	eError = PVRSRVPowerLock();
 	if(eError != PVRSRV_OK)
 	{
-		PVR_DPF((PVR_DBG_ERROR,"RGXActivePowerRequest: Failed to acquire PowerLock (device index: %d, error: %s)", 
+		PVR_DPF((PVR_DBG_ERROR,"RGX_Do_ActivePowerRequest: Failed to acquire PowerLock (device index: %d, error: %s)",
 					psDeviceNode->sDevId.ui32DeviceIndex,
 					PVRSRVGetErrorStringKM(eError)));
 		goto _RGXActivePowerRequest_PowerLock_failed;
@@ -1065,7 +1062,7 @@ PVRSRV_ERROR RGXActivePowerRequest(IMG_HANDLE hDevHandle)
 
 		psDevInfo->ui32ActivePMReqTotal++;
 
-		PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGXActivePowerRequest: FW set APM, handshake to power off");
+		PDUMPCOMMENTWITHFLAGS(PDUMP_FLAGS_POWERTRANS, "RGX_Do_ActivePowerRequest: FW set APM, handshake to power off");
 
 		eError = 
 			PVRSRVSetDevicePowerStateKM(psDeviceNode->sDevId.ui32DeviceIndex,
@@ -1086,13 +1083,60 @@ PVRSRV_ERROR RGXActivePowerRequest(IMG_HANDLE hDevHandle)
 	PVRSRVPowerUnlock();
 
 _RGXActivePowerRequest_PowerLock_failed:
-	OSSetReleasePVRLock();
-	OSReleaseBridgeLock();
-	
+
+	return eError;
+}
+
+/*
+	RGXActivePowerRequest
+*/
+PVRSRV_ERROR RGXActivePowerRequest(IMG_HANDLE hDevHandle)
+{
+	PVRSRV_ERROR eError = PVRSRV_OK;
+	PDUMPPOWCMDSTART();
+
+	/* check if can acquire the bridge lock */
+	if (OSTryAcquireBridgeLock()) {
+		OSSetKeepPVRLock();
+
+		eError = RGX_Do_ActivePowerRequest(hDevHandle);
+
+		OSSetReleasePVRLock();
+		OSReleaseBridgeLock();
+	} else {
+	/* failed to get the bridge lock, schedule the power request to work queue */
+		rgxPowerRequestData = hDevHandle;
+		queue_work(rgxPowerRequestWq, &rgxPowerRequestWork);
+	}
+
 	PDUMPPOWCMDEND();
 
 	return eError;
 
+}
+
+IMG_VOID RGXActivePowerRequestEntry(IMG_HANDLE data)
+{
+	PVRSRV_ERROR eError = PVRSRV_OK;
+	PDUMPPOWCMDSTART();
+
+	OSAcquireBridgeLock();
+	OSSetKeepPVRLock();
+
+	eError = RGX_Do_ActivePowerRequest(rgxPowerRequestData);
+
+	OSSetReleasePVRLock();
+	OSReleaseBridgeLock();
+
+	PDUMPPOWCMDEND();
+
+}
+
+
+IMG_VOID RGXInitPowerRequestWQ (IMG_VOID)
+{
+	rgxPowerRequestWq = alloc_workqueue("rgxPowerRequestWq", WQ_UNBOUND, 1);
+	INIT_WORK(&rgxPowerRequestWork, RGXActivePowerRequestEntry);
 }
 
 

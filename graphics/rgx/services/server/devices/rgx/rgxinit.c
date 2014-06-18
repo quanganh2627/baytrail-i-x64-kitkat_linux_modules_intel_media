@@ -691,6 +691,8 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 			psDevInfo->pfnActivePowerCheck = RGXCheckFWActivePowerState;
 			/* Prevent the device being woken up before there is something to do. */
 			eDefaultPowerState = PVRSRV_DEV_POWER_STATE_OFF;
+
+			RGXInitPowerRequestWQ();
 		}
 	}
 #endif
