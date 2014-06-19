@@ -106,7 +106,7 @@ static int sharp10x19_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		/* CABC */
 		cmd = 0x55;
 		ret = mdfld_dsi_send_mcs_short_hs(sender,
-						  cmd, 0x0, 1, MDFLD_DSI_SEND_PACKAGE);
+						  cmd, STILL_IMAGE, 1, MDFLD_DSI_SEND_PACKAGE);
 		if (ret)
 			goto err_out;
 
