@@ -465,6 +465,7 @@ static void free_flip_states_on_pipe(struct drm_device *psDrmDev, int pipe)
 					psFlip->hConfigData);
 			/* free it */
 			free_flip(psFlip);
+			psFlip = NULL;
 		}
 	}
 
@@ -883,6 +884,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 		DCDisplayConfigurationRetired(psFlip->hConfigData);
 		/* free it */
 		free_flip(psFlip);
+		psFlip = NULL;
 	}
 
 	if (send_wms) {
@@ -1015,6 +1017,7 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 							psFlip->hConfigData);
 					/* free it */
 					free_flip(psFlip);
+					psFlip = NULL;
 				}
 			} else if (eFlipState == DC_MRFLD_FLIP_DC_UPDATED) {
 
@@ -1045,6 +1048,7 @@ static int _Vsync_ISR(struct drm_device *psDrmDev, int iPipe)
 						psNextFlip->hConfigData);
 				/* free it */
 				free_flip(psNextFlip);
+				psNextFlip = NULL;
 			}
 		} else if (iPipe == DC_PIPE_A) {
 			mutex_unlock(&gpsDevice->sFlipQueueLock);
@@ -1896,6 +1900,7 @@ void DCUnAttachPipe(uint32_t iPipe)
 					psFlip->hConfigData);
 			/* free it */
 			free_flip(psFlip);
+			psFlip = NULL;
 		}
 	}
 
