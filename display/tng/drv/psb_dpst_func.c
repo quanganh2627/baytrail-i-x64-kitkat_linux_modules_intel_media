@@ -59,6 +59,7 @@
 
 #define HSV
 #define dpst_print PSB_DEBUG_DPST
+#define DPST_START_PERCENTAGE  10000
 
 static struct mutex dpst_mutex;
 static int blc_adj2;
@@ -644,22 +645,35 @@ int dpst_disable(struct drm_device *dev)
 
 static void dpst_save_bl_adj_factor(struct drm_device *dev)
 {
-    struct drm_psb_private *dev_priv = dev->dev_private;
+	struct drm_psb_private *dev_priv = dev->dev_private;
 
-    if (!dev_priv)
-	return;
-    blc_adj2 = dev_priv->blc_adj2;
+	if (!dev_priv)
+		return;
+
+	blc_adj2 = DPST_START_PERCENTAGE;
 }
 
 static void dpst_restore_bl_adj_factor(struct drm_device *dev)
 {
-    struct drm_psb_private *dev_priv = dev->dev_private;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	int i = 0;
 
-    if (!dev_priv)
-	return;
+	if (!dev_priv)
+		return;
 
-    if (blc_adj2 != dev_priv->blc_adj2 && blc_adj2 != 0)
-        psb_dpst_bl(dev, &blc_adj2);
+	/*compute the original adj in function psb_dpst_bl*/
+	dev_priv->blc_adj2 = ((dev_priv->blc_adj2 * 100) / 255) *100 /255;
+
+	if (blc_adj2 != dev_priv->blc_adj2 && blc_adj2 != 0)
+	{
+		for(i = dev_priv->blc_adj2; i <= blc_adj2; i = i+30)
+		{
+			psb_dpst_bl(dev, &i);
+			msleep(100);
+		}
+		i = blc_adj2;
+		psb_dpst_bl(dev, &i);
+	}
 }
 
 static void dpst_save_gamma_settings(struct drm_device *dev)
