@@ -88,7 +88,6 @@ int send_hist(void)
 /* IOCTL - moved to standard calls for Kernel Integration */
 int psb_hist_enable(struct drm_device *dev, void *data)
 {
-	u32 irqCtrl = 0;
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct dpst_guardband guardband_reg;
 	struct dpst_ie_histogram_control ie_hist_cont_reg;
@@ -139,10 +138,6 @@ int psb_hist_enable(struct drm_device *dev, void *data)
 			ctx->histogram_intr_ctrl = guardband_reg.data;
 			dpst_print("guardband 0x%x\n", guardband_reg.data);
 
-			irqCtrl = PSB_RVDC32(PIPEASTAT);
-			ctx->pipestat = (irqCtrl | PIPE_DPST_EVENT_ENABLE);
-			PSB_WVDC32(ctx->pipestat, PIPEASTAT);
-
 			/* Wait for two vblanks */
 		} else {
 			guardband_reg.data = PSB_RVDC32(HISTOGRAM_INT_CONTROL);
@@ -158,10 +153,6 @@ int psb_hist_enable(struct drm_device *dev, void *data)
 			ctx->histogram_logic_ctrl = ie_hist_cont_reg.data;
 			dpst_print("disabled: hist_ctl 0x%x\n", ie_hist_cont_reg.data);
 
-			irqCtrl = PSB_RVDC32(PIPEASTAT);
-			irqCtrl &= ~PIPE_DPST_EVENT_ENABLE;
-			PSB_WVDC32(irqCtrl, PIPEASTAT);
-			ctx->pipestat = irqCtrl;
 			dpst_disable_post_process(g_dev);
 		}
 
@@ -629,6 +620,7 @@ int dpst_disable(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	int i = 0;
 
+	DRM_ERROR("GAMMA tuning is not expected in DPST on Moorefield.\n");
 //      int32_t obj_id;
 
 //      obj_id = lut_arg->output_id;
@@ -743,7 +735,7 @@ static void dpst_restore_gamma_settings(struct drm_device *dev)
 void dpst_disable_post_process(struct drm_device *dev)
 {
 	dpst_restore_bl_adj_factor(dev);
-	dpst_restore_gamma_settings(dev);
+	//dpst_restore_gamma_settings(dev);
 }
 
  void dpst_execute_recv_command(struct dispmgr_command_hdr *cmd_hdr)
@@ -833,7 +825,7 @@ int dpst_init(struct drm_device *dev, int level, int output_id)
 	mutex_init(&dpst_mutex);
 
 	dpst_save_bl_adj_factor(dev);
-	dpst_save_gamma_settings(dev);
+	//dpst_save_gamma_settings(dev);
 
 	return 0;
 }
