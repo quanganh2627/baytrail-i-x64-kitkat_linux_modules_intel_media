@@ -537,6 +537,8 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 	dev_priv = dev->dev_private;
 	pipe = setting_data->pipe;
 
+	drm_psb_set_gamma_pipe = setting_data->pipe;
+
 	if (pipe == 0)
 		dsi_config = dev_priv->dsi_configs[0];
 	else if (pipe == 2)
@@ -628,9 +630,7 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 
 			if (setting_data->type == GAMMA_REG_SETTING) {
 				if (i != 1024) {
-					REG_WRITE(regs->palette_reg + j, 0);
 					ctx->palette[(i / 8) * 2] = 0;
-					REG_WRITE(regs->palette_reg + j + 4, temp);
 					ctx->palette[(i / 8) * 2 + 1] = temp;
 				} else {
 					REG_WRITE(regs->gamma_red_max_reg, MAX_GAMMA);
@@ -660,8 +660,8 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 				even_part = int_red_1_0 | fra_red | int_green_1_0 |
 					fra_green | int_blue_1_0 | fra_blue;
 				if (i != 1024) {
-					REG_WRITE(regs->palette_reg + j, even_part);
-					REG_WRITE(regs->palette_reg + j + 4, odd_part);
+					ctx->palette[(i / 8) * 2] = even_part;
+					ctx->palette[(i / 8) * 2 + 1] = odd_part;
 				} else {
 					REG_WRITE(regs->gamma_red_max_reg,
 							(integer_part << 6) |
@@ -682,23 +682,17 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 
 			j = j + 8;
 		}
-                /* save palette (gamma) */
+		/* save palette (gamma) */
                 for (i = 0; i < 256; i++)
                         gamma_setting_save[i] = ctx->palette[i];
 
-		/*enable*/
-		val = REG_READ(regs->pipeconf_reg);
-		val |= (PIPEACONF_GAMMA);
-		REG_WRITE(regs->pipeconf_reg, val);
-		ctx->pipeconf = val;
-		REG_WRITE(regs->dspcntr_reg, REG_READ(regs->dspcntr_reg) |
-				DISPPLANE_GAMMA_ENABLE);
-		ctx->dspcntr = REG_READ(regs->dspcntr_reg) | DISPPLANE_GAMMA_ENABLE;
-		REG_READ(regs->dspcntr_reg);
-                drm_psb_set_gamma_success = 1;
+		drm_psb_set_gamma_success = 1;
+		drm_psb_set_gamma_pending = 1;
 	} else {
 		drm_psb_enable_gamma = 0;
-                drm_psb_set_gamma_success = 0;
+		drm_psb_set_gamma_success = 0;
+		drm_psb_set_gamma_pending = 0;
+		drm_psb_set_gamma_pipe = MDFLD_PIPE_MAX;
 
                 /*reset gamma setting*/
                 for (i = 0; i < 256; i++)

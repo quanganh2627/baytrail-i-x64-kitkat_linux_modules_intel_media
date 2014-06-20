@@ -366,6 +366,10 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	unsigned long irq_flags;
 	uint32_t mipi_intr_stat_val = 0;
 	uint32_t mipi_intr_stat_reg = 0;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_registers *regs = NULL;
+	struct mdfld_dsi_hw_context *ctx = NULL;
+	u32 val = 0;
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irq_flags);
 
@@ -474,6 +478,26 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		update_te_counter(dev, pipe);
 		drm_handle_vblank(dev, pipe);
 		queue_work(dev_priv->vsync_wq, &dev_priv->te_work);
+	}
+
+	if (pipe == drm_psb_set_gamma_pipe && drm_psb_set_gamma_pending) {
+		dsi_config = dev_priv->dsi_configs[pipe];
+		regs = &dsi_config->regs;
+		ctx = &dsi_config->dsi_hw_context;
+
+		for (i = 0; i < 256; i++)
+			REG_WRITE(regs->palette_reg + i*4, gamma_setting_save[i] );
+
+		val = REG_READ(regs->pipeconf_reg);
+		val |= (PIPEACONF_GAMMA);
+		REG_WRITE(regs->pipeconf_reg, val);
+		ctx->pipeconf = val;
+		REG_WRITE(regs->dspcntr_reg, REG_READ(regs->dspcntr_reg) |
+				DISPPLANE_GAMMA_ENABLE);
+		ctx->dspcntr = REG_READ(regs->dspcntr_reg) | DISPPLANE_GAMMA_ENABLE;
+		REG_READ(regs->dspcntr_reg);
+		drm_psb_set_gamma_pending = 0 ;
+		drm_psb_set_gamma_pipe = MDFLD_PIPE_MAX;
 	}
 
 	if (pipe == 0) { /* only for pipe A */

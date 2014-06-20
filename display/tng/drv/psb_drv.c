@@ -110,6 +110,8 @@ int drm_psb_enable_pr2_cabc = 1;
 int drm_psb_enable_gamma;
 int drm_psb_enable_color_conversion;
 int drm_psb_set_gamma_success = 0;
+int drm_psb_set_gamma_pending = 0;
+int drm_psb_set_gamma_pipe = MDFLD_PIPE_MAX;
 int gamma_setting_save[256] = {0};
 int csc_setting_save[6] = {0};
 /*EXPORT_SYMBOL(drm_psb_debug);*/

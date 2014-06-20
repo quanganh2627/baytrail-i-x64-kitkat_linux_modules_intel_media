@@ -66,6 +66,8 @@ extern int drm_psb_te_timer_delay;
 extern int drm_psb_enable_gamma;
 extern int drm_psb_enable_color_conversion;
 extern int drm_psb_set_gamma_success;
+extern int drm_psb_set_gamma_pending;
+extern int drm_psb_set_gamma_pipe;
 extern int gamma_setting_save[256];
 extern int csc_setting_save[6];
 extern u32 DISP_PLANEB_STATUS;
@@ -413,6 +415,7 @@ typedef enum {
 	MDFLD_PIPE_A = 0,
 	MDFLD_PIPE_B,
 	MDFLD_PIPE_C,
+	MDFLD_PIPE_MAX,
 } mdfld_pipe_num;
 
 struct drm_psb_private {
