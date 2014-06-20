@@ -109,6 +109,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/jdi_cmd.o \
 	$(DISPLAYDIR)/cmi_vid.o \
 	$(DISPLAYDIR)/cmi_cmd.o \
+	$(DISPLAYDIR)/sharp10x19_vid.o \
 	$(DISPLAYDIR)/sharp10x19_cmd.o \
 	$(DISPLAYDIR)/sharp25x16_vid.o \
 	$(DISPLAYDIR)/sharp25x16_cmd.o \

@@ -112,6 +112,7 @@ static const struct mrst_limit_t mrfld_limits[] = {
 	{			/* MRFLD_LIMT_DSIPLL_83 */
 	 .dot = {.min = MRFLD_DOT_MIN,.max = MRFLD_DOT_MAX},
 	 .m = {.min = MRFLD_DSIPLL_M_MIN_83,.max = MRFLD_DSIPLL_M_MAX_83},
+
 	 .p1 = {.min = MRFLD_DSIPLL_P1_MIN_83,.max = MRFLD_DSIPLL_P1_MAX_83},
 	 },
 	{			/* MRFLD_LIMT_DSIPLL_100 */
@@ -337,6 +338,7 @@ void mrfld_setup_pll(struct drm_device *dev, int pipe, int clk)
 				clock.p1 = 3;
 				clock.m = 126;
 				break;
+		case SHARP_10x19_VID:
 		case SHARP_10x19_CMD:
 				clock.p1 = 3;
 				clock.m = 137;

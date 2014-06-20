@@ -38,6 +38,7 @@
 #include "displays/cmi_vid.h"
 #include "displays/cmi_cmd.h"
 #include "displays/sharp10x19_cmd.h"
+#include "displays/sharp10x19_vid.h"
 #include "displays/sharp25x16_vid.h"
 #include "displays/sharp25x16_cmd.h"
 #include "displays/sdc16x25_8_cmd.h"
@@ -53,6 +54,7 @@ static struct intel_mid_panel_list panel_list[] = {
 	{CMI_7x12_VID, MDFLD_DSI_ENCODER_DPI, cmi_vid_init},
 	{CMI_7x12_CMD, MDFLD_DSI_ENCODER_DBI, cmi_cmd_init},
 	{SHARP_10x19_CMD, MDFLD_DSI_ENCODER_DBI, sharp10x19_cmd_init},
+	{SHARP_10x19_VID, MDFLD_DSI_ENCODER_DPI, sharp10x19_vid_init},
 	{SHARP_10x19_DUAL_CMD, MDFLD_DSI_ENCODER_DBI, sharp10x19_cmd_init},
 	{SHARP_25x16_VID, MDFLD_DSI_ENCODER_DPI, sharp25x16_vid_init},
 	{SHARP_25x16_CMD, MDFLD_DSI_ENCODER_DBI, sharp25x16_cmd_init},
