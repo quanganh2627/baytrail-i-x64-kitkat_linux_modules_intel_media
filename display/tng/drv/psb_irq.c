@@ -883,7 +883,8 @@ void psb_irq_turn_off_dpst(struct drm_device *dev)
 	/* FIXME: revisit the power island when touching the DPST feature. */
 	if (power_island_get(OSPM_DISPLAY_A)) {
 
-		PSB_WVDC32(0x00000000, HISTOGRAM_INT_CONTROL);
+               PSB_WVDC32(PSB_RVDC32(HISTOGRAM_INT_CONTROL) & 0x7fffffff,
+			HISTOGRAM_INT_CONTROL);
 
 		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 		psb_disable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
