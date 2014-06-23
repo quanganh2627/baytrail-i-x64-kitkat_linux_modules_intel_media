@@ -622,7 +622,7 @@ int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 	PSB_WVDC32(0, DSPAPOS + reg_offset);
 	PSB_WVDC32((63 << 16) | 63, DSPASIZE + reg_offset);
 	PSB_WVDC32((64 << 2), DSPASTRIDE + reg_offset);
-	PSB_WVDC32(0x18000000 | (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset)),
+	PSB_WVDC32(0x1c000000 | (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset)),
 		DSPACNTR + reg_offset);
 	if (enabled == 0) {
 		PSB_WVDC32((PSB_RVDC32(DSPACNTR + reg_offset) | 0x00000004),
