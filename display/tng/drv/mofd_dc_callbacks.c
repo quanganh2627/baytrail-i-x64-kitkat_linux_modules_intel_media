@@ -195,6 +195,7 @@ void DCCBFlipOverlay(struct drm_device *dev,
 	struct mdfld_dsi_config *dsi_config = NULL;
 	struct mdfld_dsi_hw_context *dsi_ctx;
 	u32 ovadd_reg = OV_OVADD;
+	u32 ovadd;
 
 	if (!dev || !ctx)
 		return;
@@ -221,8 +222,15 @@ void DCCBFlipOverlay(struct drm_device *dev,
 			dsi_ctx->ovcadd = ctx->ovadd;
 	}
 
-	/*Flip surf*/
-	PSB_WVDC32(ctx->ovadd, ovadd_reg);
+	ovadd = PSB_RVDC32(ovadd_reg);
+	if ((ovadd & BIT15) &&
+		((ovadd & OV_PIPE_SELECT) != (ctx->ovadd & OV_PIPE_SELECT))) {
+		PSB_WVDC32(ovadd & (~BIT15), ovadd_reg);
+		DRM_INFO("overlay dynamic switch, disable first, ovadd 0x%x, flip 0x%x\n",
+				ovadd, ctx->ovadd);
+	} else {
+		PSB_WVDC32(ctx->ovadd, ovadd_reg);
+	}
 }
 
 void DCCBFlipSprite(struct drm_device *dev,
