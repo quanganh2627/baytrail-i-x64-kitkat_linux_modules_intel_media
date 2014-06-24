@@ -294,7 +294,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 	RGXFWIF_GPU_UTIL_FWCB	*psUtilFWCb = psDevInfo->psRGXFWIfGpuUtilFWCb;
 	IMG_UINT32				ui32StatActiveLow = 0, ui32StatActiveHigh = 0, ui32StatBlocked = 0, ui32StatIdle = 0;
 	IMG_UINT32				ui32StatCumulative = 0;
-	IMG_UINT32				ui32WOffSample;
+        IMG_UINT32                              ui32WOffSample, ui32PrevWOffSample, ui32PriorWOffSample;
 	IMG_UINT32				ui32WOffSampleSaved;
 	IMG_UINT64				ui64CurrentTimer;
 	IMG_UINT32				ui32Remainder;
@@ -338,7 +338,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
                ui32WOffSample = RGXFWIF_GPU_UTIL_FWCB_SIZE;
        }
        ui32WOffSample--;
-	ui32WOffSampleSaved = ui32WOffSample;
+       ui32WOffSampleSaved = ui32PrevWOffSample = ui32PriorWOffSample = ui32WOffSample;
 
 	do
 	{
@@ -373,6 +373,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
                                                /* CR timer value of current FW CB entry should always be smaller than in the next entry in the CB.
                                                 * Also, a regular CRTIME entry should be followed by another CRTIME entry or by an END_CRTIME entry.
                                                 * If these are not the cases, then we have a FW CB overlap. */
+                                               PVR_DPF((PVR_DBG_ERROR,"RGXGetGpuUtilStats: CB overlap\n"));
                                                goto gpuutilstats_endloop;
                                        }
 
@@ -390,14 +391,29 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 
                                case RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_OFF:
 
+					if(ui32NextType != RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON)
+					{
+						/* CB overlap: The host has started the power-off sequence while still computing the GPU utilisation */
+						PVR_DPF((PVR_DBG_ERROR,"RGXGetGpuUtilStats: CB overlap\n"));
+						goto gpuutilstats_endloop;
+					}
+
                                        /* Calculate the difference between OS timers at power-on/power-off transitions */
                                        ui64Period = ui64CurrentTimer - RGXFWIF_GPU_UTIL_FWCB_ENTRY_OS_TIMER(ui64FWCbEntryCurrent);
 
                                        break;
 
-                               case RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON:
                                case RGXFWIF_GPU_UTIL_FWCB_TYPE_END_CRTIME:
 
+					if(ui32NextType != RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_OFF)
+					{
+						/* CB overlap: The host has started the power-off sequence while still computing the GPU utilisation */
+						PVR_DPF((PVR_DBG_ERROR,"RGXGetGpuUtilStats: CB overlap\n"));
+						goto gpuutilstats_endloop;
+					}
+					/* 'break;' missing on purpose */
+
+                               case RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON:
                                        /* Update "now" to the Timer of current entry */
                                        if(ui32Type == RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON)
                                        {
@@ -458,6 +474,8 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 		}
 
 		/* Move to next-previous state transition */
+               ui32PriorWOffSample = ui32PrevWOffSample;
+               ui32PrevWOffSample = ui32WOffSample;
                if(ui32WOffSample == 0)
                {
                        ui32WOffSample = RGXFWIF_GPU_UTIL_FWCB_SIZE;
@@ -466,9 +484,14 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 
                /* Remember the next-previous entry type */
                ui32NextType = ui32Type;
+
+               ui32WOffSampleSaved = psUtilFWCb->ui32WriteOffset;
 	}
-	/* break if we wrapped up the CB or we have already calculated the whole window */
-	while ((ui32WOffSample != ui32WOffSampleSaved) && (ui32StatCumulative < RGXFWIF_GPU_STATS_WINDOW_SIZE_US));
+	/* break if we wrapped up or overlapped the CB or we have already calculated the whole window */
+	while ((ui32WOffSample != ui32WOffSampleSaved) &&
+		   (ui32PrevWOffSample != ui32WOffSampleSaved) &&
+		   (ui32PriorWOffSample != ui32WOffSampleSaved) &&
+		   (ui32StatCumulative < RGXFWIF_GPU_STATS_WINDOW_SIZE_US));
 
 gpuutilstats_endloop:
 
