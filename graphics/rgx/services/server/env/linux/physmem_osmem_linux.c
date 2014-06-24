@@ -946,6 +946,8 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 		}
 #endif
 	}
+
+#if 0
    else
    {
        /*
@@ -985,6 +987,7 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
            kunmap(psPage);
        }
    }
+#endif
 
 	if(IMG_NULL == (*ppsPage = psPage)){
 		return PVRSRV_ERROR_OUT_OF_MEMORY; 
