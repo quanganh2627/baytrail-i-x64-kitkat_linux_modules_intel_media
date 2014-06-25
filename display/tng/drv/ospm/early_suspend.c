@@ -82,6 +82,8 @@ static void gfx_early_suspend(struct early_suspend *h)
 	dev_priv->early_suspended = true;
 
 	mutex_unlock(&dev->mode_config.mutex);
+	psb_dpst_notify_change_um(DPST_EVENT_HIST_INTERRUPT,
+						  dev_priv->psb_dpst_state);
 }
 
 static void gfx_late_resume(struct early_suspend *h)
