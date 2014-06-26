@@ -636,6 +636,8 @@ int dpst_disable(struct drm_device *dev)
 
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
 	bd.props.brightness = psb_get_brightness(&bd);
+	if ( 0 == bd.props.brightness)
+	    return 0;
 	psb_set_brightness(&bd);
 #endif				/*  */
 	    return 0;
