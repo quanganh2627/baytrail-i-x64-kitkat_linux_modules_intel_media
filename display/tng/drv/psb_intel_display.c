@@ -827,8 +827,6 @@ int mdfld_intel_crtc_set_color_conversion(struct drm_device *dev,
 		val |= (PIPEACONF_COLOR_MATRIX_ENABLE);
 		REG_WRITE(regs->pipeconf_reg, val);
 		ctx->pipeconf = val;
-		val = REG_READ(regs->dspcntr_reg);
-		REG_WRITE(regs->dspcntr_reg, val);
 	} else {
 		drm_psb_enable_color_conversion = 0;
 
@@ -841,8 +839,6 @@ int mdfld_intel_crtc_set_color_conversion(struct drm_device *dev,
 		val &= ~(PIPEACONF_COLOR_MATRIX_ENABLE);
 		REG_WRITE(regs->pipeconf_reg, val);
 		ctx->pipeconf = val;
-		val = REG_READ(regs->dspcntr_reg);
-		REG_WRITE(regs->dspcntr_reg, val);
 	}
 
 	mdfld_dsi_dsr_update_panel_fb(dsi_config);
