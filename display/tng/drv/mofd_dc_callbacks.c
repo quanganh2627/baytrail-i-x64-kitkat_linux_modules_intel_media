@@ -512,6 +512,7 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 	u32 power_islands = OSPM_DISPLAY_A;
 	int retry;
 	int pipe;
+	uint32_t pipeconf = PIPEACONF;
 
 	if (index != 0 && index != 1) {
 		DRM_ERROR("Invalid overlay index %d\n", index);
@@ -541,11 +542,21 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 		}
 	}
 
+	if (pipe == 1)
+		power_islands |= OSPM_DISPLAY_B;
+	else if (pipe == 2)
+		power_islands |= OSPM_DISPLAY_C;
 
 	if (power_island_get(power_islands)) {
 		/*make sure previous flip was done*/
 		//_OverlayWaitFlip(dev, ovstat_reg, index, pipe);
 		//_OverlayWaitVblank(dev, pipe);
+
+		pipeconf = PIPEACONF + 0x1000 * pipe;
+		if (PSB_RVDC32(pipeconf) & BIT31) {
+			/* avoid writing ovadd during vblank perioid */
+			DCCBAvoidFlipInVblankInterval(dev, pipe);
+		}
 
 		PSB_WVDC32(ctx, ovadd_reg);
 
