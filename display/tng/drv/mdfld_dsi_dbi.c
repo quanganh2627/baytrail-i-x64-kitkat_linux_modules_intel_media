@@ -95,6 +95,9 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 	struct drm_crtc *crtc = dbi_output->base.base.crtc;
 	struct psb_intel_crtc *psb_crtc =
 		(crtc) ? to_psb_intel_crtc(crtc) : NULL;
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	struct mdfld_dsi_config *dsi_config;
+	struct mdfld_dsi_dsr *dsr;
 	int pipe = dbi_output->channel_num ? 2 : 0;
 	u32 dpll_reg = MRST_DPLL_A;
 	u32 dspcntr_reg = DSPACNTR;
@@ -107,6 +110,10 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 		DRM_ERROR("pkg sender is NULL\n");
 		return;
 	}
+
+	dsi_config = dev_priv->dsi_configs[pipe];
+	if (dsi_config)
+		dsr = dsi_config->dsr;
 
 	/* if mode setting on-going, back off */
 
@@ -150,6 +157,15 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 			   MDFLD_DSI_SEND_PACKAGE);
 	dbi_output->dsr_fb_update_done = true;
 	mdfld_dsi_cmds_kick_out(sender);
+
+	/**
+	 * reset dsr free count, otherwise enter_dsr may happen
+	 * right after resume, but dc will fetch data however dc
+	 * is swithed off. This will cause fifo not empty.
+	 * reset dsr free count to avoid this case.
+	 */
+	if (dsr)
+		dsr->free_count = 0;
 }
 
 /* Perodically update dbi panel */
