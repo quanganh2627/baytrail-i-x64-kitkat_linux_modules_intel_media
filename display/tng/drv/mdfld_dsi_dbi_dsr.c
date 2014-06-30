@@ -296,6 +296,9 @@ int mdfld_dsi_dsr_forbid_locked(struct mdfld_dsi_config *dsi_config)
 		return -EINVAL;
 	}
 
+	if (dsi_config->type == MDFLD_DSI_ENCODER_DPI)
+		return 0;
+
 	dsr = dsi_config->dsr;
 
 	/*if no dsr attached, return 0*/
@@ -335,6 +338,9 @@ int mdfld_dsi_dsr_forbid(struct mdfld_dsi_config *dsi_config)
 	if (!dsi_config)
 		return -EINVAL;
 
+	if (dsi_config->type == MDFLD_DSI_ENCODER_DPI)
+		return 0;
+
 	mutex_lock(&dsi_config->context_lock);
 
 	err = mdfld_dsi_dsr_forbid_locked(dsi_config);
@@ -352,6 +358,9 @@ int mdfld_dsi_dsr_allow_locked(struct mdfld_dsi_config *dsi_config)
 		DRM_ERROR("Invalid parameter\n");
 		return -EINVAL;
 	}
+
+	if (dsi_config->type == MDFLD_DSI_ENCODER_DPI)
+		return 0;
 
 	dsr = dsi_config->dsr;
 
@@ -382,6 +391,9 @@ int mdfld_dsi_dsr_allow(struct mdfld_dsi_config *dsi_config)
 	if (!dsi_config)
 		return -EINVAL;
 
+	if (dsi_config->type == MDFLD_DSI_ENCODER_DPI)
+		return 0;
+
 	mutex_lock(&dsi_config->context_lock);
 
 	err = mdfld_dsi_dsr_allow_locked(dsi_config);
@@ -401,6 +413,9 @@ void mdfld_dsi_dsr_enable(struct mdfld_dsi_config *dsi_config)
 		DRM_ERROR("Invalid parameter\n");
 		return;
 	}
+
+	if (dsi_config->type == MDFLD_DSI_ENCODER_DPI)
+		return;
 
 	dsr = dsi_config->dsr;
 
