@@ -578,11 +578,13 @@ struct VssVp8encSequenceParameterBuffer {
 	uint32_t cyclic_intra_refresh;
 	uint32_t concatenate_partitions;
 	uint32_t recon_buffer_mode;
+	uint32_t generate_skip_frames;
+	uint32_t max_num_dropped_frames;
 	uint32_t ts_number_layers;
 	uint32_t ts_target_bitrate[3];
 	uint32_t ts_rate_decimator[3];
 	uint32_t ts_periodicity;
-	uint32_t ts_layer_id[32];
+	uint8_t ts_layer_id[32];
 	struct VssProcPictureVP8 ref_frame_buffers[4];
 };
 
@@ -596,8 +598,9 @@ struct VssVp8encEncodedFrame {
 	uint32_t quantizer[4];
 	uint32_t frame_flags;
 	uint32_t partition_id;
-	uint32_t buffer_level;
+	uint32_t buffer_level[3];
 	uint32_t quality;
+	uint32_t overflow_bytes;
 	uint32_t surfaceId_of_ref_frame[4];
 	uint32_t reserved[15];
 	uint32_t coded_data[1];
@@ -694,16 +697,16 @@ struct VssWiDi_ComposeSequenceParameterBuffer {
 	int Video_IN_xsize;
 	int Video_IN_ysize;
 	int Video_IN_stride;
-	int Video_IN_yuv_format; 
+	int Video_IN_yuv_format;
 
 	unsigned int Video_IN_Y_Buffer;
 	unsigned int Video_IN_UV_Buffer;
-        unsigned int Video_IN_U_Buffer;
+	unsigned int Video_IN_U_Buffer;
 	unsigned int Video_IN_V_Buffer;
 	int Video_OUT_xsize;
 	int Video_OUT_ysize;
 	int Video_OUT_stride;
-	int Video_OUT_yuv_format; 
+	int Video_OUT_yuv_format;
 
 	unsigned int Video_OUT_Y_Buffer;
 	unsigned int Video_OUT_UV_Buffer;
@@ -731,6 +734,8 @@ struct VssWiDi_ComposeSequenceParameterBuffer {
 	int Video_TotalMBCount;
 	int CSC_FormatSelect; /* 0: YUV420NV12; 1: YUV444; */
 	int CSC_InputFormatSelect; // 0: RGB Planar; 1: RGBA Interleaved
+
+	unsigned int bypass_mode;
 };
 
 #pragma pack()
