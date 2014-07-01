@@ -598,6 +598,7 @@ int hdmi_audio_suspend(void *drv_data, hdmi_audio_event_t event);
 int hdmi_audio_resume(void *drv_data);
 int hdmi_audio_mode_change(struct snd_pcm_substream *substream);
 extern struct snd_pcm_ops snd_intelhad_playback_ops;
+extern struct mutex had_mutex;
 
 int snd_intelhad_init_audio_ctrl(struct snd_pcm_substream *substream,
 					struct snd_intelhad *intelhaddata,

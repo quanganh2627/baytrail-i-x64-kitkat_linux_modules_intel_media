@@ -49,7 +49,7 @@
 #define MAX_PB_STREAMS		1
 #define MAX_CAP_STREAMS		0
 #define HDMI_AUDIO_DRIVER	"hdmi-audio"
-static DEFINE_MUTEX(had_mutex);
+DEFINE_MUTEX(had_mutex);
 
 /*standard module options for ALSA. This module supports only one card*/
 static int hdmi_card_index = SNDRV_DEFAULT_IDX1;
@@ -1288,6 +1288,7 @@ static int snd_intelhad_close(struct snd_pcm_substream *substream)
 		return 0;
 	}
 
+	mutex_lock(&had_mutex);
 	intelhaddata->stream_info.buffer_rendered = 0;
 	intelhaddata->stream_info.buffer_ptr = 0;
 	intelhaddata->stream_info.str_id = 0;
@@ -1296,6 +1297,7 @@ static int snd_intelhad_close(struct snd_pcm_substream *substream)
 	/* Check if following drv_status modification is required - VA */
 	if (intelhaddata->drv_status != HAD_DRV_DISCONNECTED)
 		intelhaddata->drv_status = HAD_DRV_CONNECTED;
+	mutex_unlock(&had_mutex);
 	kfree(runtime->private_data);
 	runtime->private_data = NULL;
 	ospm_power_using_hw_end(OSPM_DISPLAY_ISLAND);
