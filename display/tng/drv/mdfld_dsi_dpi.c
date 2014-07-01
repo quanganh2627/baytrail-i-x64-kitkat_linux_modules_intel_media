@@ -905,6 +905,9 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 
 	if (mode == DRM_MODE_DPMS_ON) {
 		mdfld_dsi_dpi_set_power(encoder, true);
+
+		drm_vblank_on(dev, dsi_config->pipe);
+
 		DCAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOn(dsi_config->pipe);
 
@@ -1131,6 +1134,8 @@ void mdfld_dsi_dpi_restore(struct drm_encoder *encoder)
 
 	DCLockMutex();
 	__mdfld_dsi_dpi_set_power(encoder, true);
+
+	drm_vblank_on(dev, pipe);
 
 	DCAttachPipe(pipe);
 	DC_MRFLD_onPowerOn(pipe);

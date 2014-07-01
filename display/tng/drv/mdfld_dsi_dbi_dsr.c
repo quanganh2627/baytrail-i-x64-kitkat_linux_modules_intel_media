@@ -39,6 +39,8 @@ static int exit_dsr_locked(struct mdfld_dsi_config *dsi_config)
 	dev = dsi_config->dev;
 	err =  __dbi_power_on(dsi_config);
 
+	drm_vblank_on(dev, dsi_config->pipe);
+
 	DC_MRFLD_onPowerOn(dsi_config->pipe);
 
 	return err;

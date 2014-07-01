@@ -1049,6 +1049,9 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 	p_funcs = dbi_output->p_funcs;
 	if (mode == DRM_MODE_DPMS_ON) {
 		mdfld_generic_dsi_dbi_set_power(encoder, true);
+
+		drm_vblank_on(dev, dsi_config->pipe);
+
 		DCAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOn(dsi_config->pipe);
 
@@ -1139,6 +1142,8 @@ void mdfld_generic_dsi_dbi_restore(struct drm_encoder *encoder)
 
 	DCLockMutex();
 	mdfld_generic_dsi_dbi_set_power(encoder, true);
+
+	drm_vblank_on(dev, pipe);
 
 	DCAttachPipe(pipe);
 	DC_MRFLD_onPowerOn(pipe);
