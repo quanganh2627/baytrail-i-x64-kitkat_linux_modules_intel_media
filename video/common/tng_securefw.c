@@ -391,12 +391,13 @@ static void tng_securefw_postvsp(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 
-	vsp_priv->fw_loaded = VSP_FW_LOADED;
-	vsp_priv->vsp_state = VSP_STATE_DOWN;
-
 	vsp_priv->ctrl = (struct vsp_ctrl_reg *) (dev_priv->vsp_reg +
 						  VSP_CONFIG_REG_SDRAM_BASE +
 						  VSP_CONFIG_REG_START);
+
+	vsp_priv->fw_loaded = VSP_FW_LOADED;
+	vsp_priv->vsp_state = VSP_STATE_DOWN;
+
 }
 
 int tng_securefw(struct drm_device *dev, char *fw_basename, char *island_name, int imrl_reg)

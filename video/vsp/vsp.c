@@ -1364,7 +1364,7 @@ void vsp_irq_task(struct work_struct *work)
 	struct drm_psb_private *dev_priv;
 	uint32_t sequence;
 
-	if (!vsp_priv)
+	if (!vsp_priv || vsp_priv->fw_loaded == VSP_FW_NONE)
 		return;
 
 	dev = vsp_priv->dev;
