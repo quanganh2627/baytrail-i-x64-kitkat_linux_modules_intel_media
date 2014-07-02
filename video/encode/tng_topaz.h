@@ -197,6 +197,8 @@ struct tng_topaz_private {
 
 	struct ttm_object_file *tfile;
 
+	uint8_t vec_err;
+
 	spinlock_t ctx_spinlock;
 };
 

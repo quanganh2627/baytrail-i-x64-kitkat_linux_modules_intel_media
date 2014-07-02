@@ -758,6 +758,7 @@ static int tng_topaz_save_command(
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct tng_topaz_cmd_queue *topaz_cmd;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
+	int32_t ret = 0;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: queue command,sequence: %08x..\n",
 		sequence);
@@ -782,11 +783,13 @@ static int tng_topaz_save_command(
 	if (!topaz_priv->topaz_busy) {
 		/* topaz_priv->topaz_busy = 1; */
 		PSB_DEBUG_TOPAZ("TOPAZ: need immediate dequeue...\n");
-		tng_topaz_dequeue_send(dev);
+		ret = tng_topaz_dequeue_send(dev);
+		if (ret)
+			return -1;
 		PSB_DEBUG_TOPAZ("TOPAZ: after dequeue command\n");
 	}
 
-	return 0;
+	return ret;
 }
 
 int tng_cmdbuf_video(struct drm_file *file_priv,
@@ -802,13 +805,20 @@ int tng_cmdbuf_video(struct drm_file *file_priv,
 	struct ttm_fence_object *fence = NULL;
 	int32_t ret = 0;
 
+	if (topaz_priv->vec_err == 1) {
+		DRM_ERROR("TOPAZ: VEC has error, bypass submit cmd");
+		return -1;
+	}
+
 	PSB_DEBUG_TOPAZ("TOPAZ : enter %s cmdsize: %d\n", __func__,
 			  arg->cmdbuf_size);
 
 	ret = tng_submit_encode_cmdbuf(dev, file_priv, cmd_buffer,
 		arg->cmdbuf_offset, arg->cmdbuf_size, fence);
-	if (ret)
+	if (ret) {
+		topaz_priv->vec_err = 1;
 		return ret;
+	}
 
 	/* workaround for interrupt issue */
 	psb_fence_or_sync(file_priv, LNC_ENGINE_ENCODE,
@@ -1126,6 +1136,10 @@ static int32_t tng_restore_bias_table(
 	int32_t ret = 0;
 
 	p_command = video_ctx->bias_reg;
+	if (p_command == NULL) {
+		DRM_ERROR("TOPAZ: Failed to get BIAS reg pointer");
+		return -1;
+	}
 
 	size = *p_command++;
 
@@ -1256,6 +1270,10 @@ int32_t tng_topaz_restore_mtx_state(struct drm_device *dev)
 
 	/* restore register */
 	mtx_reg_state = (uint32_t *)(topaz_priv->topaz_mtx_reg_state[0]);
+	if (mtx_reg_state == NULL) {
+		DRM_ERROR("TOPAZ: Failed to get MTX register state pointer");
+		return -1;
+	}
 
 	/* Restore the MMU Control Registers */
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MMU_DIR_LIST_BASE(0),
@@ -1681,6 +1699,10 @@ int tng_topaz_save_mtx_state(struct drm_device *dev)
 	}
 
 	mtx_reg_state = (uint32_t *)(topaz_priv->topaz_mtx_reg_state[0]);
+	if (mtx_reg_state == NULL) {
+		DRM_ERROR("TOPAZ: Failed to get MTX register state pointer");
+		return -1;
+	}
 
 	/* Save the MMU Control Registers */
 	MULTICORE_READ32(TOPAZHP_TOP_CR_MMU_DIR_LIST_BASE(0), mtx_reg_state);
@@ -3789,6 +3811,11 @@ int tng_topaz_dequeue_send(struct drm_device *dev)
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	int32_t ret = 0;
 
+	if (topaz_priv->vec_err == 1) {
+		DRM_ERROR("TOPAZ: VEC has error, bypass dequeue and send cmd");
+		return -1;
+	}
+
 	/* Avoid race condition with queue buffer when topaz_busy = 1 */
 	mutex_lock(&topaz_priv->topaz_mutex);
 	if (list_empty(&topaz_priv->topaz_queue)) {
@@ -3801,6 +3828,12 @@ int tng_topaz_dequeue_send(struct drm_device *dev)
 
 	topaz_cmd = list_first_entry(&topaz_priv->topaz_queue,
 			struct tng_topaz_cmd_queue, head);
+
+	if (topaz_priv->saved_queue == NULL ||
+	    topaz_priv->saved_cmd == NULL) {
+		DRM_ERROR("TOPAZ: Failed to get saved queue/cmd pointer");
+		return -1;
+	}
 
 	memset(topaz_priv->saved_queue, 0, sizeof(struct tng_topaz_cmd_queue));
 	memset(topaz_priv->saved_cmd, 0, MAX_CMD_SIZE);
@@ -3827,8 +3860,9 @@ int tng_topaz_dequeue_send(struct drm_device *dev)
 		topaz_priv->saved_queue->cmd_size,
 		topaz_priv->saved_queue->sequence);
 	if (ret) {
-		DRM_ERROR("TOPAZ: tng_topaz_send failed.\n");
-		ret = -EINVAL;
+		DRM_ERROR("TOPAZ: tng_topaz_send in dequeue failed.\n");
+		topaz_priv->vec_err = 1;
+		return -EINVAL;
 	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: dequeue command of sequence %08x " \
