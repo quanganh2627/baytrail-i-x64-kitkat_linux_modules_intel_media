@@ -255,6 +255,9 @@ struct mdfld_dsi_hw_context {
 	/* gamma and csc */
 	u32 palette[256];
 	u32 color_coef[6];
+	u32 gamma_red_max;
+	u32 gamma_green_max;
+	u32 gamma_blue_max;
 
 	/*pipe regs*/
 	u32 htotal;

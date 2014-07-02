@@ -633,9 +633,9 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 					ctx->palette[(i / 8) * 2] = 0;
 					ctx->palette[(i / 8) * 2 + 1] = temp;
 				} else {
-					REG_WRITE(regs->gamma_red_max_reg, MAX_GAMMA);
-					REG_WRITE(regs->gamma_green_max_reg, MAX_GAMMA);
-					REG_WRITE(regs->gamma_blue_max_reg, MAX_GAMMA);
+					ctx->gamma_red_max = MAX_GAMMA;
+					ctx->gamma_green_max = MAX_GAMMA;
+					ctx->gamma_blue_max = MAX_GAMMA;
 				}
 			} else {
 				if (temp < 0)
@@ -663,20 +663,17 @@ int mdfld_intel_crtc_set_gamma(struct drm_device *dev,
 					ctx->palette[(i / 8) * 2] = even_part;
 					ctx->palette[(i / 8) * 2 + 1] = odd_part;
 				} else {
-					REG_WRITE(regs->gamma_red_max_reg,
-							(integer_part << 6) |
-							(fraction_part));
-					REG_WRITE(regs->gamma_green_max_reg,
-							(integer_part << 6) |
-							(fraction_part));
-					REG_WRITE(regs->gamma_blue_max_reg,
-							(integer_part << 6) |
-							(fraction_part));
+					ctx->gamma_red_max = (integer_part << 6) |
+							(fraction_part);
+					ctx->gamma_green_max = (integer_part << 6) |
+							(fraction_part);
+					ctx->gamma_blue_max = (integer_part << 6) |
+							(fraction_part);
 					printk(KERN_ALERT
 							"max (red %x, green 0x%x, blue 0x%x)\n",
-						REG_READ(regs->gamma_red_max_reg),
-						REG_READ(regs->gamma_green_max_reg),
-						REG_READ(regs->gamma_blue_max_reg));
+						ctx->gamma_red_max,
+						ctx->gamma_green_max,
+						ctx->gamma_blue_max);
 				}
 			}
 
