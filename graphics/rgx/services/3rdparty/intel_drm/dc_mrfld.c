@@ -928,13 +928,14 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 	if (send_wms) {
 
 		/* Ensure that *psFlip is not freed while lock is not held. */
-		psFlip->uiRefCount++;
+		if (psFlip)
+			psFlip->uiRefCount++;
 
 		mutex_unlock(&gpsDevice->sFlipQueueLock);
 		DCCBWaitForDbiFifoEmpty(gpsDevice->psDrmDevice, DC_PIPE_A);
 		mutex_lock(&gpsDevice->sFlipQueueLock);
 
-		if (--psFlip->uiRefCount == 0) {
+		if (psFlip != NULL && --psFlip->uiRefCount == 0) {
 			DCDisplayConfigurationRetired(psFlip->hConfigData);
 			/* free it */
 			free_flip(psFlip);
