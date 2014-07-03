@@ -491,7 +491,11 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	}
 
 	if (pipe == drm_psb_set_gamma_pipe && drm_psb_set_gamma_pending) {
-		dsi_config = dev_priv->dsi_configs[pipe];
+		if (pipe == 0)
+			dsi_config = dev_priv->dsi_configs[0];
+		else
+			dsi_config = dev_priv->dsi_configs[1];
+
 		regs = &dsi_config->regs;
 		ctx = &dsi_config->dsi_hw_context;
 

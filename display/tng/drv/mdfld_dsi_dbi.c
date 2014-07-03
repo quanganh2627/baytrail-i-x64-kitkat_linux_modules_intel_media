@@ -97,7 +97,7 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 		(crtc) ? to_psb_intel_crtc(crtc) : NULL;
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct mdfld_dsi_config *dsi_config;
-	struct mdfld_dsi_dsr *dsr;
+	struct mdfld_dsi_dsr *dsr = NULL;
 	int pipe = dbi_output->channel_num ? 2 : 0;
 	u32 dpll_reg = MRST_DPLL_A;
 	u32 dspcntr_reg = DSPACNTR;
@@ -111,7 +111,7 @@ void intel_dsi_dbi_update_fb(struct mdfld_dsi_dbi_output *dbi_output)
 		return;
 	}
 
-	dsi_config = dev_priv->dsi_configs[pipe];
+	dsi_config = pipe ? dev_priv->dsi_configs[1] : dev_priv->dsi_configs[0];
 	if (dsi_config)
 		dsr = dsi_config->dsr;
 
