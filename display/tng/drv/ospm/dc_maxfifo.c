@@ -316,7 +316,7 @@ bool exit_maxfifo_mode(struct drm_device *dev)
 
 		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 		exit_s0i1_display_mode(dev);
-		// ? maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_NOT_READY;
+		maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_NOT_READY;
 		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 		PSB_DEBUG_PM("S0i1-Display-DISABLE : Reg DSPSRCTRL = %08x, "
 				"DSP_SS_PM = %08x\n", PSB_RVDC32(DSPSRCTRL_REG),
