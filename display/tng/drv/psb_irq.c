@@ -510,15 +510,11 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		val |= (PIPEACONF_GAMMA);
 		REG_WRITE(regs->pipeconf_reg, val);
 		ctx->pipeconf = val;
-		REG_WRITE(regs->dspcntr_reg, REG_READ(regs->dspcntr_reg) |
-				DISPPLANE_GAMMA_ENABLE);
-		ctx->dspcntr = REG_READ(regs->dspcntr_reg) | DISPPLANE_GAMMA_ENABLE;
-		REG_READ(regs->dspcntr_reg);
 		drm_psb_set_gamma_pending = 0 ;
 		drm_psb_set_gamma_pipe = MDFLD_PIPE_MAX;
 	}
 
-	if (pipe == 0) { /* only for pipe A */
+	if (pipe == 0) { /* only for PIPE A */
 		if (pipe_stat_val & PIPE_FRAME_DONE_STATUS)
 			wake_up_interruptible(&dev_priv->eof_wait);
 	}
