@@ -789,7 +789,7 @@ static IMG_VOID _RGXDumpRGXDebugSummary(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrint
 	PVR_DUMPDEBUG_LOG(("RGX FW State: %s (HWRState 0x%08x)", pszState, psRGXFWIfTraceBuf->ui32HWRStateFlags));
 	PVR_DUMPDEBUG_LOG(("RGX FW Power State: %s (APM %s: %d ok, %d denied, %d other, %d total)", 
 	                  pszPowStateName[psRGXFWIfTraceBuf->ePowState],
-	                  (psDevInfo->pfnActivePowerCheck)?"enabled":"disabled",
+	                  (psDevInfo->pvAPMISRData)?"enabled":"disabled",
 	                  psDevInfo->ui32ActivePMReqOk,
 	                  psDevInfo->ui32ActivePMReqDenied,
 	                  psDevInfo->ui32ActivePMReqTotal - psDevInfo->ui32ActivePMReqOk - psDevInfo->ui32ActivePMReqDenied,

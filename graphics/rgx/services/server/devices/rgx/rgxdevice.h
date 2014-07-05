@@ -213,6 +213,7 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 
 	IMG_VOID				*pvLISRData;
 	IMG_VOID				*pvMISRData;
+	IMG_VOID				*pvAPMISRData;
 	
 	DEVMEM_MEMDESC			*psRGXBIFFaultAddressMemDesc;
 
@@ -254,7 +255,6 @@ typedef struct _PVRSRV_RGXDEV_INFO_
 	PSYNC_PRIM_CONTEXT		hSyncPrimContext;
 	PVRSRV_CLIENT_SYNC_PRIM *psPowSyncPrim;
 
-	IMG_VOID				(*pfnActivePowerCheck) (PVRSRV_DEVICE_NODE *psDeviceNode);
 	IMG_UINT32				ui32ActivePMReqOk;
 	IMG_UINT32				ui32ActivePMReqDenied;
 	IMG_UINT32				ui32ActivePMReqTotal;

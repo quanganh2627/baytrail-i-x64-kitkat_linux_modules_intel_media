@@ -261,12 +261,18 @@ static IMG_BOOL RGX_LISRHandler (IMG_VOID *pvData)
 		g_ui32HostSampleIRQCount = psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount;
 
 		OSScheduleMISR(psDevInfo->pvMISRData);
+
+		if (psDevInfo->pvAPMISRData != IMG_NULL)
+		{
+			OSScheduleMISR(psDevInfo->pvAPMISRData);
+		}
 	}
 	return bInterruptProcessed;
 }
 
-static IMG_VOID RGXCheckFWActivePowerState(PVRSRV_DEVICE_NODE *psDeviceNode)
+static IMG_VOID RGXCheckFWActivePowerState(IMG_VOID *psDevice)
 {
+	PVRSRV_DEVICE_NODE	*psDeviceNode = psDevice;
 	PVRSRV_RGXDEV_INFO *psDevInfo = psDeviceNode->pvDevice;
 	RGXFWIF_TRACEBUF *psFWTraceBuf = psDevInfo->psRGXFWIfTraceBuf;
 	PVRSRV_ERROR eError = PVRSRV_OK;
@@ -540,7 +546,6 @@ gpuutilstats_endloop:
 static IMG_VOID RGX_MISRHandler (IMG_VOID *pvData)
 {
 	PVRSRV_DEVICE_NODE	*psDeviceNode = pvData;
-	PVRSRV_RGXDEV_INFO  *psDevInfo = psDeviceNode->pvDevice;
 
 	/* Inform other services devices that we have finished an operation */
 	PVRSRVCheckStatus(psDeviceNode);
@@ -552,12 +557,6 @@ static IMG_VOID RGX_MISRHandler (IMG_VOID *pvData)
 
 	/* Process all firmware CCBs for pending commands */
 	RGXCheckFirmwareCCBs(psDeviceNode->pvDevice);
-
-	/* Check APM state */
-	if (psDevInfo->pfnActivePowerCheck)
-	{
-		psDevInfo->pfnActivePowerCheck(psDeviceNode);
-	}
 }
 #endif
 
@@ -711,7 +710,12 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 
 		if (bEnableAPM)
 		{
-			psDevInfo->pfnActivePowerCheck = RGXCheckFWActivePowerState;
+			eError = OSInstallMISR(&psDevInfo->pvAPMISRData, RGXCheckFWActivePowerState, psDeviceNode);
+			if (eError != PVRSRV_OK)
+			{
+				return eError;
+			}
+
 			/* Prevent the device being woken up before there is something to do. */
 			eDefaultPowerState = PVRSRV_DEV_POWER_STATE_OFF;
 		}
@@ -736,6 +740,10 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 	eError = RGXInstallProcessQueuesMISR(&psDevInfo->hProcessQueuesMISR, psDeviceNode);
 	if (eError != PVRSRV_OK)
 	{
+		if (psDevInfo->pvAPMISRData != IMG_NULL)
+		{
+			(IMG_VOID) OSUninstallMISR(psDevInfo->pvAPMISRData);
+		}
 		return eError;
 	}
 
@@ -744,6 +752,10 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 									RGX_MISRHandler, psDeviceNode);
 	if (eError != PVRSRV_OK)
 	{
+		if (psDevInfo->pvAPMISRData != IMG_NULL)
+		{
+			(IMG_VOID) OSUninstallMISR(psDevInfo->pvAPMISRData);
+		}
 		(IMG_VOID) OSUninstallMISR(psDevInfo->hProcessQueuesMISR);
 		return eError;
 	}
@@ -752,6 +764,10 @@ PVRSRV_ERROR PVRSRVRGXInitDevPart2KM (PVRSRV_DEVICE_NODE	*psDeviceNode,
 								 RGX_LISRHandler, psDeviceNode);
 	if (eError != PVRSRV_OK)
 	{
+		if (psDevInfo->pvAPMISRData != IMG_NULL)
+		{
+			(IMG_VOID) OSUninstallMISR(psDevInfo->pvAPMISRData);
+		}
 		(IMG_VOID) OSUninstallMISR(psDevInfo->hProcessQueuesMISR);
 		(IMG_VOID) OSUninstallMISR(psDevInfo->pvMISRData);
 		return eError;
@@ -1397,6 +1413,10 @@ PVRSRV_ERROR DevDeInitRGX (PVRSRV_DEVICE_NODE *psDeviceNode)
 		(IMG_VOID) OSUninstallDeviceLISR(psDevInfo->pvLISRData);
 		(IMG_VOID) OSUninstallMISR(psDevInfo->pvMISRData);
 		(IMG_VOID) OSUninstallMISR(psDevInfo->hProcessQueuesMISR);
+		if (psDevInfo->pvAPMISRData != IMG_NULL)
+		{
+			(IMG_VOID) OSUninstallMISR(psDevInfo->pvAPMISRData);
+		}
 #endif /* !NO_HARDWARE */
 
 		/* Remove the device from the power manager */
