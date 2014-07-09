@@ -657,14 +657,12 @@ enum VssGenCommandType {
  * WiDi Compose data structures
  ****************************/
 enum VssWiDi_ComposeCommandType {
-	VssWiDi_ComposeSetSequenceParametersCommand = 200,
-	VssWiDi_ComposeFrameCommand,
+	VssWiDi_ComposeFrameCommand = 200,
 	VssWiDi_ComposeEndOfSequenceCommand
 };
 
 enum VssWiDi_ComposeResponseType {
-	VssWiDi_ComposeSetSequenceParametersResponse = 250,
-	VssWiDi_ComposeFrameResponse,
+	VssWiDi_ComposeFrameResponse = 250,
 };
 
 enum VssWiDi_ColorFormat {
@@ -684,19 +682,17 @@ struct VssWiDi_ComposeSequenceParameterBuffer {
 	unsigned int RGBA_Buffer;
 	unsigned int Y_Buffer;
 	unsigned int UV_Buffer;
-	unsigned int U_Buffer;
-	unsigned int V_Buffer;
 	unsigned int A_Buffer;
 	int ActualWidth;
 	int ActualHeight;
 	int ProcessedWidth;
 	int ProcessedHeight;
-	int TotalMBCount;
 	int Stride;
 	/*Video related*/
 	int Video_IN_xsize;
 	int Video_IN_ysize;
-	int Video_IN_stride;
+	int Video_IN_Y_stride;
+	int Video_IN_UV_stride;
 	int Video_IN_yuv_format;
 
 	unsigned int Video_IN_Y_Buffer;
@@ -705,35 +701,38 @@ struct VssWiDi_ComposeSequenceParameterBuffer {
 	unsigned int Video_IN_V_Buffer;
 	int Video_OUT_xsize;
 	int Video_OUT_ysize;
-	int Video_OUT_stride;
+	int Video_OUT_Y_stride;
+	int Video_OUT_UV_stride;
 	int Video_OUT_yuv_format;
 
 	unsigned int Video_OUT_Y_Buffer;
 	unsigned int Video_OUT_UV_Buffer;
 	unsigned int Video_OUT_V_Buffer;
 
-	unsigned int scaled_width;
-	unsigned int scaled_height;
-	unsigned int scalefactor_dx;
-	unsigned int scalefactor_dy;
+	/* scaling parameters */
+	unsigned int ROI_scaling_ip_width;
+	unsigned int  ROI_scaling_ip_height;
+	unsigned int ROI_scaling_ip_x;
+	unsigned int ROI_scaling_ip_y;
+	unsigned int ROI_scaling_op_width;
+	unsigned int ROI_scaling_op_height;
+	unsigned int ROI_scaling_op_x;
+	unsigned int ROI_scaling_op_y;
+
+	/*expecting from driver for float reasons*/
+	unsigned int YUVscalefactor_dx;
+	unsigned int YUVscalefactor_dy;
 
 	/*Blending related params*/
 	int Is_Blending_Enabled;
-	int ROI_width;
-	int ROI_height;
-	int ROI_x1;
-	int ROI_y1;
-	int ROI_x2;
-	int ROI_y2;
-	int alpha1;
-	int alpha2;
-	int Is_video_the_back_ground;
-	int Is_source_1_image_available;
-	int Is_source_2_image_available;
-	int Is_alpha_channel_available;
-	int Video_TotalMBCount;
-	int CSC_FormatSelect; /* 0: YUV420NV12; 1: YUV444; */
-	int CSC_InputFormatSelect; // 0: RGB Planar; 1: RGBA Interleaved
+    unsigned int alpha1;
+    unsigned int alpha2;
+    unsigned int Is_video_the_back_ground;
+    unsigned int Is_source_1_image_available;
+    unsigned int Is_source_2_image_available;
+    unsigned int Is_alpha_channel_available;
+    unsigned int CSC_FormatSelect;
+    unsigned int CSC_InputFormatSelect;
 
 	unsigned int bypass_mode;
 };

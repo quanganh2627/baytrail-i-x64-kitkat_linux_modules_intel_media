@@ -224,11 +224,6 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 
 			break;
 		}
-		case VssWiDi_ComposeSetSequenceParametersResponse:
-		{
-			VSP_DEBUG("The Compose respose value is %d\n", msg->buffer);
-			break;
-		}
 		case VssWiDi_ComposeFrameResponse:
 		{
 			VSP_DEBUG("Compose sequence %x is done!!\n", msg->buffer);
