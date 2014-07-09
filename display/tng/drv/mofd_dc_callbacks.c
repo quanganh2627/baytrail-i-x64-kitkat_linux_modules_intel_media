@@ -996,6 +996,8 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe)
 	if (dev_priv->early_suspended)
 		return 0;
 
+	if((pipe == 1) && (!hdmi_state))
+		return 0;
 	/* get display a for register reading */
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		if ((pipe != 1) && dev_priv->dsi_configs) {
