@@ -1419,6 +1419,23 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 					}
 				}
 				
+				if(psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue)
+				{
+					aPts[*pui32NumSyncs].ui32FWAddr      = psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr;
+					aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK;
+					aPts[*pui32NumSyncs].ui32FenceValue  = psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue;
+					aPts[*pui32NumSyncs].ui32UpdateValue = psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue;
+					++*pui32NumSyncs;
+
+					if (*pui32NumSyncs == ui32MaxNumSyncs)
+					{
+						PVR_DPF((PVR_DBG_WARNING, "%s: To less space on fence query for all "
+								 "the sync points in this fence", __func__));
+						goto err_put;
+					}
+
+				}
+
 				eError = PVRSRVServerSyncQueueHWOpKM(psPVRPt->psSyncData->psSyncKernel->psCleanUpSync,
 													 IMG_TRUE,
 													 &ui32Dummy,
