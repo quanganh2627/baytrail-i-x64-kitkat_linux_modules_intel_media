@@ -380,6 +380,10 @@ sharp10x19_cmd_set_brightness( struct mdfld_dsi_config *dsi_config, int level)
 				MDFLD_DSI_SEND_PACKAGE);
 		sender->work_for_slave_panel = false;
 	}
+
+	/* give some time for new backlight value to take effect */
+	msleep(20);
+
 	return 0;
 }
 
