@@ -1724,6 +1724,7 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	/*initialize the MSI for MRST */
 	if (IS_MID(dev)) {
+		pci_set_master(dev->pdev);
 		if (pci_enable_msi(dev->pdev)) {
 			DRM_ERROR("Enable MSI failed!\n");
 		} else {
