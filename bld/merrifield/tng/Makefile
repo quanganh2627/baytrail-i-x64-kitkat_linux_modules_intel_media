@@ -100,6 +100,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/mdfld_dsi_esd.o \
 	$(DISPLAYDIR)/mdfld_dsi_dbi_dsr.o \
 	$(DISPLAYDIR)/dispmgrnl.o \
+	$(DISPLAYDIR)/dsp_sysfs_attrs.o \
 	$(DISPLAYDIR)/mdfld_dsi_pkg_sender.o \
 	$(DISPLAYDIR)/mrfld_clock.o \
 	$(DISPLAYDIR)/psb_irq.o \

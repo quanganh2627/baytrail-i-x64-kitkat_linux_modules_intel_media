@@ -32,6 +32,7 @@
 #include "psb_intel_reg.h"
 #include "psb_msvdx.h"
 #include "psb_video_drv.h"
+#include "dsp_sysfs_attrs.h"
 
 #ifdef SUPPORT_VSP
 #include "vsp.h"
@@ -1336,6 +1337,8 @@ static int psb_driver_unload(struct drm_device *dev)
 	/*Fristly, unload pvr driver */
 	PVRSRVDrmUnload(dev);
 
+	dsp_sysfs_attr_uninit(dev);
+
 	/*TODO: destroy DSR/DPU infos here */
 	psb_backlight_exit();	/*writes minimum value to backlight HW reg */
 
@@ -1850,6 +1853,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	/* init display manager */
 	dispmgr_start(dev);
 
+	(void) dsp_sysfs_attr_init(dev);
+
 	/* SH START DPST
 	* SH This hooks dpst with the device.
 	*/
@@ -2126,6 +2131,12 @@ static int psb_disable_ied_session_ioctl(struct drm_device *dev, void *data,
 	return 0;
 }
 
+
+/**
+ * psb_panel_query_ioctl() - Store 1 if panel is video mode, else 0.
+ * The return value is stored in the ioctl output structure, interpreted as
+ * a uint32.
+ */
 static int psb_panel_query_ioctl(struct drm_device *dev, void *data,
 				struct drm_file *file_priv) {
 

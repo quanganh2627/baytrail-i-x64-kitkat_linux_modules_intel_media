@@ -115,6 +115,35 @@ mdfld_dsi_encoder_t is_panel_vid_or_cmd(struct drm_device *dev)
 	return 0;
 }
 
+
+/**
+ * panel_mode_string() - Returns panel mode as a string.
+ * @dev
+ * Function return value: "video", "command", or "unknown".
+ */
+const char *panel_mode_string(struct drm_device *dev)
+{
+	mdfld_dsi_encoder_t enctyp;
+	const char *pms;
+
+	enctyp = is_panel_vid_or_cmd(dev);
+
+	switch (enctyp) {
+	case MDFLD_DSI_ENCODER_DPI:
+		pms = "video";
+		break;
+	case MDFLD_DSI_ENCODER_DBI:
+		pms = "command";
+		break;
+	default:
+		pms = "unknown";
+		break;
+	}
+
+	return pms;
+}
+
+
 void init_panel(struct drm_device *dev, int mipi_pipe, enum panel_type p_type)
 {
 	struct drm_psb_private *dev_priv =
