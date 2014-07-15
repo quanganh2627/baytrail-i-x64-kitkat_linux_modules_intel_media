@@ -370,9 +370,32 @@ enum enum_ports {
 
 #define IS_ANN(dev) (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE)
 
+/*
+ * Checking for Anniedale and Anniedale revision ID
+ *
+ * Note: Argument "dev" defined for these macros is not used.  It is OK to
+ * specify "dev" as null.
+ *
+ * Stepping:  The "CPU ID" stepping value.  Not used here. A0==0, B0==0, K0==1
+ * Note: Function intel_mid_soc_stepping returns the Revision ID (not the
+ * stepping).
+ *
+ * Revision ID: A way to differentiate between SOC variants.
+ * The Revision ID can be read from defined PCI devices.
+ * For Anniedale A0, B0, and K0, the three defined PCI devices are
+ * 00:00:0 (ASA-CUnit), 00:02:0 (Gunit (Display and Graphics)), and
+ * 00:03:0 (Iunit (ISP)).
+ * For these three pci devices on Anniedale, the revision ID is the same.
+ * So, device 00:00:0 is a suitable surrogate for obtaining a Revision ID upon
+ * which decisions can be made. Anniedale Revision IDs:
+ * (Yes, that's 2 for B0 and 1 for K0).
+ * 0 --> A0
+ * 2 --> B0
+ * 1 --> K0
+ */
 #define IS_ANN_A0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE) && (intel_mid_soc_stepping() == 0))
 
-#define IS_ANN_B0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE) && (intel_mid_soc_stepping() == 1))
+#define IS_ANN_B0(dev) ((intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE) && (intel_mid_soc_stepping() == 2))
 
 #define IS_MOFD(dev) (intel_mid_identify_cpu() == INTEL_MID_CPU_CHIP_ANNIEDALE)
 
