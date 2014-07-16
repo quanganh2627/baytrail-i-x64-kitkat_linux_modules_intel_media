@@ -253,8 +253,25 @@ static int mdfld_dsi_sharp10x19_power_off(
 		DRM_ERROR("%s: %d: Enter Sleep Mode\n", __func__, __LINE__);
 		goto power_off_err;
 	}
-	/* Wait for 3 frames after enter_sleep_mode. */
-	msleep(100);
+	msleep(60);
+	err = mdfld_dsi_send_gen_short_hs(sender,
+		access_protect, 4, 2,
+		MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Access Protect\n", __func__, __LINE__);
+		goto power_off_err;
+	}
+	err = mdfld_dsi_send_gen_short_hs(sender, low_power_mode, 1, 2,
+					  MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Low Power Mode\n", __func__, __LINE__);
+		goto power_off_err;
+	}
+	if (bias_en_gpio)
+		gpio_set_value_cansleep(bias_en_gpio, 0);
+	if (mipi_reset_gpio)
+		gpio_set_value_cansleep(mipi_reset_gpio, 0);
+	usleep_range(1000, 1500);
 	return 0;
 
 power_off_err:
@@ -343,6 +360,23 @@ static void _get_panel_reset_gpio()
 	}
 
 }
+static void __vpro2_power_ctrl(bool on)
+{
+	u8 addr, value;
+	addr = 0xad;
+	if (intel_scu_ipc_ioread8(addr, &value))
+		DRM_ERROR("%s: %d: failed to read vPro2\n", __func__, __LINE__);
+
+	/* Control vPROG2 power rail with 2.85v. */
+	if (on)
+		value |= 0x1;
+	else
+		value &= ~0x1;
+
+	if (intel_scu_ipc_iowrite8(addr, value))
+		DRM_ERROR("%s: %d: failed to write vPro2\n",
+				__func__, __LINE__);
+}
 
 static int mdfld_dsi_sharp10x19_panel_reset(struct mdfld_dsi_config *dsi_config)
 {
@@ -351,6 +385,7 @@ static int mdfld_dsi_sharp10x19_panel_reset(struct mdfld_dsi_config *dsi_config)
 
 	PSB_DEBUG_ENTRY("\n");
 
+	__vpro2_power_ctrl(true);
 	usleep_range(2000, 2500);
 	if (bias_en_gpio == 0) {
 		bias_en_gpio = 189;
