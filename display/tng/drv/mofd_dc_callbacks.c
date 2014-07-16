@@ -637,26 +637,38 @@ int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 		reg_offset = 0x2000;
 	}
 
-	if (dsi_config) {
-		dsi_ctx = &dsi_config->dsi_hw_context;
-		dsi_ctx->dsppos = 0;
-		dsi_ctx->dspsize = (63 << 16) | 63;
-		dsi_ctx->dspstride = (64 << 2);
-		dsi_ctx->dspcntr = DISPPLANE_32BPP;
-		dsi_ctx->dspcntr |= DISPPLANE_PREMULT_DISABLE;
-		dsi_ctx->dspcntr |= (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset));
-		dsi_ctx->dsplinoff = 0;
-		dsi_ctx->dspsurf = pg->reserved_gtt_start;
-	}
+	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
+		if (dsi_config) {
+			dsi_ctx = &dsi_config->dsi_hw_context;
+			dsi_ctx->dsppos = 0;
+			dsi_ctx->dspsize = (63 << 16) | 63;
+			dsi_ctx->dspstride = (64 << 2);
+			dsi_ctx->dspcntr = DISPPLANE_32BPP;
+			dsi_ctx->dspcntr |= DISPPLANE_PREMULT_DISABLE;
+			dsi_ctx->dspcntr |= (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset));
+			dsi_ctx->dsplinoff = 0;
+			dsi_ctx->dspsurf = pg->reserved_gtt_start;
+		}
 
-	PSB_WVDC32(0, DSPAPOS + reg_offset);
-	PSB_WVDC32((63 << 16) | 63, DSPASIZE + reg_offset);
-	PSB_WVDC32((64 << 2), DSPASTRIDE + reg_offset);
-	PSB_WVDC32(0x1c800000 | (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset)),
+		PSB_WVDC32(0, DSPAPOS + reg_offset);
+		PSB_WVDC32((63 << 16) | 63, DSPASIZE + reg_offset);
+		PSB_WVDC32((64 << 2), DSPASTRIDE + reg_offset);
+		PSB_WVDC32(0x1c800000 | (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset)),
 		DSPACNTR + reg_offset);
-	PSB_WVDC32(0, DSPALINOFF + reg_offset);
-	PSB_WVDC32(0, DSPATILEOFF + reg_offset);
-	PSB_WVDC32(pg->reserved_gtt_start, DSPASURF + reg_offset);
+		PSB_WVDC32(0, DSPALINOFF + reg_offset);
+		PSB_WVDC32(0, DSPATILEOFF + reg_offset);
+		PSB_WVDC32(pg->reserved_gtt_start, DSPASURF + reg_offset);
+	} else {
+
+		if (dsi_config) {
+			dsi_ctx = &dsi_config->dsi_hw_context;
+			dsi_ctx->dspcntr &= ~DISPLAY_PLANE_ENABLE;
+
+		}
+		PSB_WVDC32(PSB_RVDC32(DSPACNTR + reg_offset) & ~DISPLAY_PLANE_ENABLE,
+			   DSPACNTR + reg_offset);
+		PSB_WVDC32(PSB_RVDC32(DSPASURF + reg_offset), DSPASURF + reg_offset);
+	}
 
 	return 0;
 }
