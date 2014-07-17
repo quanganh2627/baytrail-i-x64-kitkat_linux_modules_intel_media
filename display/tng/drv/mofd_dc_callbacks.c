@@ -856,7 +856,7 @@ void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
 			/*check to see if pipe b is on. if yes, don't enable*/
 			if ((REG_READ(0x71008) & 0x80000000) == 0) {
 				enter_maxfifo_mode(dev, req_mode);
-				dev_priv->s0i1_4_video_playback = (req_mode == 0) ? false : true;
+				dev_priv->s0i1_4_video_playback = true;
 			}
 
 		} else if (maxfifo_info->maxfifo_current_state != req_mode) {

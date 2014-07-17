@@ -456,13 +456,15 @@ static int get_maxfifo_s0i1_plane_config_state()
 	}
 
 	if (overlay_only_flag == true && sprite_only_flag == false)
-		return 0x02;
+		return MAXFIFO_MODE_OVERLAY_ONLY;
 
-	/*if (overlay_only_flag == false && sprite_only_flag == true)
-		return 0x00;*/
+	if (overlay_only_flag == false && sprite_only_flag == true)
+		return MAXFIFO_MODE_SPRITE_ONLY;
 
-	/*if (overlay_only_flag == true && sprite_only_flag == true)
-		return 0x01;*/
+	/*
+	 * if (overlay_only_flag == true && sprite_only_flag == true)
+	 *	return MAXFIFO_MODE_SPRITE_OVERLAY;
+	 */
 
 	if (overlay_only_flag == false && sprite_only_flag == false)
 		return -1;
