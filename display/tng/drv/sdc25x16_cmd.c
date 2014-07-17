@@ -57,96 +57,162 @@ static	u8 sdc_set_300nit[34] = { 0x83,
 								0x00};
 static	u8 sdc_set_AID[] = { 0x85, 0x06, 0x00 };
 
+static	u8 sdc_gamma_setting[] = { 0x82, 0x1f};
+static	u8 sdc_AOR_setting[] = { 0x85, 0x6, 0};
+static	u8 sdc_global_para_53[] = { 0xb0, 0x34};
+static	u8 sdc_ELVSS_para[] = { 0xbb, 0xF};
+static	u8 sdc_global_para_47[] = { 0xb0, 0x2e};
+static	u8 sdc_gamma_update[] = { 0xbb, 0x1};
+
+static	u8 sdc_300_ELVSS[] = { 0xbb, 0x19};
+
+
+static	u8 sdc_global_para_70[] = { 0xb0, 0x45};
+static	u8 sdc_set_ACL_off[] = { 0xbb, 0x10};
+static	u8 sdc_set_ACL_on[] = { 0xbb, 0x12};
+
+static u8 sdc_brightness_list[21][5] = {
+			{0x1f, 0x06, 0x00, 0x00, 0x0f},
+			{0x00, 0x06, 0x00, 0x19, 0x1b},
+			{0x01, 0x06, 0x00, 0x1a, 0x1c},
+			{0x02, 0x06, 0x00, 0x1c, 0x1e},
+			{0x03, 0x06, 0x00, 0x1d, 0x1f},
+			{0x04, 0x58, 0x00, 0x1d, 0x1f},
+			{0x05, 0x87, 0x00, 0x1d, 0x1f},
+			{0x06, 0xad, 0x00, 0x1d, 0x1f},
+			{0x07, 0xad, 0x00, 0x1f, 0x1f},
+			{0x08, 0xad, 0x00, 0x1f, 0x1f},
+			{0x09, 0xad, 0x00, 0x1f, 0x1f},
+			{0x0a, 0xad, 0x00, 0x1f, 0x1f},
+			{0x0b, 0xad, 0x00, 0x1f, 0x1f},
+			{0x0c, 0xad, 0x00, 0x1f, 0x1f},
+			{0x0d, 0xb3, 0x00, 0x1f, 0x1f},
+			{0x0e, 0xd2, 0x00, 0x1f, 0x1f},
+			{0x0f, 0xe8, 0x00, 0x1f, 0x1f},
+			{0x10, 0xfe, 0x00, 0x1f, 0x1f},
+			{0x11, 0x11, 0x01, 0x1f, 0x1f},
+			{0x12, 0x23, 0x01, 0x1f, 0x1f},
+			{0x13, 0x32, 0x01, 0x1f, 0x1f}
+			};
+
+static
+int sdc25x16_set_dimming(struct mdfld_dsi_pkg_sender *sender,
+	int index)
+{
+	int err = 0;
+
+	PSB_DEBUG_ENTRY("\n");
+	sdc_gamma_setting[1] = sdc_brightness_list[index][0];
+	sdc_AOR_setting[1] = sdc_brightness_list[index][1];
+	sdc_AOR_setting[2] = sdc_brightness_list[index][2];
+	sdc_ELVSS_para[1] = sdc_brightness_list[index][3];
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_gamma_setting,
+			2, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: sdc_gamma_setting\n",
+		__func__, __LINE__);
+		goto set_dimming_err;
+	}
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_AOR_setting,
+			3, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: sdc_gamma_setting\n",
+		__func__, __LINE__);
+		goto set_dimming_err;
+	}
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_global_para_53,
+			2, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: sdc_global_para_53\n",
+		__func__, __LINE__);
+		goto set_dimming_err;
+	}
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_ELVSS_para,
+			2, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: sdc_ELVSS_para\n",
+		__func__, __LINE__);
+		goto set_dimming_err;
+	}
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_global_para_47,
+			2, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: sdc_global_para_47\n",
+		__func__, __LINE__);
+		goto set_dimming_err;
+	}
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_gamma_update,
+			2, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: sdc_gamma_update\n",
+		__func__, __LINE__);
+		goto set_dimming_err;
+	}
+
+	return 0;
+set_dimming_err:
+	err = -EIO;
+	return err;
+}
+
 static
 int sdc25x16_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 {
 	struct mdfld_dsi_pkg_sender *sender
 		= mdfld_dsi_get_pkg_sender(dsi_config);
 	int err = 0;
+	int i;
 
 	PSB_DEBUG_ENTRY("\n");
 	if (!sender) {
 		DRM_ERROR("Cannot get sender\n");
 		return -EINVAL;
 	}
-	err = mdfld_dsi_send_gen_long_hs(sender,
-			sdc_set_300nit,
-			34, MDFLD_DSI_SEND_PACKAGE);
+	i = 10;
+	err = sdc25x16_set_dimming(sender, i);
 	if (err) {
-		DRM_ERROR("%s: %d: Set 300nit\n",
+		DRM_ERROR("%s: %d: brightness setting error\n",
 		__func__, __LINE__);
 		goto ic_init_err;
 	}
 	err = mdfld_dsi_send_gen_long_hs(sender,
-			sdc_set_AID,
-			3, MDFLD_DSI_SEND_PACKAGE);
+			sdc_global_para_70,
+			2, MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
-		DRM_ERROR("%s: %d: Set AID\n",
+		DRM_ERROR("%s: %d: sdc_global_para_70\n",
 		__func__, __LINE__);
 		goto ic_init_err;
 	}
-
-	err = mdfld_dsi_send_gen_short_hs(sender,
-			0xB0, 0x34, 2,
-			MDFLD_DSI_SEND_PACKAGE);
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_set_ACL_on,
+			2, MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
-		DRM_ERROR("%s: %d: Set global para.53rd\n",
+		DRM_ERROR("%s: %d: sdc_set_ACL_on\n",
 		__func__, __LINE__);
 		goto ic_init_err;
 	}
-
-	err = mdfld_dsi_send_gen_short_hs(sender,
-			0xBB, 0x19, 2,
-			MDFLD_DSI_SEND_PACKAGE);
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_global_para_47,
+			2, MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
-		DRM_ERROR("%s: %d: Set ELVSS\n",
+		DRM_ERROR("%s: %d: sdc_global_para_47\n",
 		__func__, __LINE__);
 		goto ic_init_err;
 	}
-	err = mdfld_dsi_send_gen_short_hs(sender,
-			0xB0, 0x2E, 2,
-			MDFLD_DSI_SEND_PACKAGE);
+	err = mdfld_dsi_send_gen_long_hs(sender,
+			sdc_gamma_update,
+			2, MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
-		DRM_ERROR("%s: %d: Set global para.47th\n",
+		DRM_ERROR("%s: %d: sdc_gamma_update\n",
 		__func__, __LINE__);
 		goto ic_init_err;
 	}
-	err = mdfld_dsi_send_gen_short_hs(sender,
-			0xBB, 0x01, 2,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Gamma Update\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
-	msleep(5);
-	/* Sleep Out */
-	err = mdfld_dsi_send_mcs_short_hs(sender, exit_sleep_mode, 0, 0,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Exit Sleep Mode\n", __func__, __LINE__);
-		goto ic_init_err;
-	}
-
-	msleep(80);
-	err = mdfld_dsi_send_mcs_short_hs(sender,
-			write_display_brightness, 0xff, 1,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Brightness\n",
-		__func__, __LINE__);
-		goto ic_init_err;
-	}
-	/* Write control display */
-	err = mdfld_dsi_send_mcs_short_hs(sender, write_ctrl_display,
-			0x20, 1,
-			MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Write Control Display\n", __func__,
-				__LINE__);
-		goto ic_init_err;
-	}
-
 	err = mdfld_dsi_send_mcs_long_hs(sender,
 			sdc_column_addr,
 			5, MDFLD_DSI_SEND_PACKAGE);
@@ -305,7 +371,7 @@ int sdc25x16_cmd_set_brightness(
 {
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
-	u8 duty_val = 0;
+	int i = 0;
 
 	PSB_DEBUG_ENTRY("level = %d\n", level);
 
@@ -313,11 +379,8 @@ int sdc25x16_cmd_set_brightness(
 		DRM_ERROR("Failed to get DSI packet sender\n");
 		return -EINVAL;
 	}
-
-	duty_val = (0xFF * level) / 255;
-	mdfld_dsi_send_mcs_short_hs(sender,
-		write_display_brightness, duty_val, 1,
-		MDFLD_DSI_SEND_PACKAGE);
+	i = 20 - (20 * level)/ 255;
+	sdc25x16_set_dimming(sender, i);
 	return 0;
 }
 
