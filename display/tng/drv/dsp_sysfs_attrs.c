@@ -43,6 +43,40 @@
 #define DSP_SYSFS_ATTRS_GROUP_NAME "display"
 
 
+struct cabc_namval_s {
+	const char *nvnam;
+	int         nvval;
+};
+
+static const struct cabc_namval_s cabc_nvtab[] = {
+	{ "off", CABC_MODE_OFF, },
+	{ "ui_image", CABC_MODE_UI_IMAGE, },
+	{ "still_image", CABC_MODE_STILL_IMAGE, },
+	{ "moving_image", CABC_MODE_MOVING_IMAGE, },
+};
+static const int cabc_nvcnt = ARRAY_SIZE(cabc_nvtab);
+
+
+static const char *_cabc_code_to_text(char *sbuf, size_t slen, int cabc_mode)
+{
+	const char *pstr;
+	int i;
+
+	for (i = 0 ; ; i++) {
+		if (i >= cabc_nvcnt) {
+			snprintf(sbuf, slen, "unknown=0x%x", cabc_mode);
+			pstr = sbuf;
+		}
+		if (cabc_nvtab[i].nvval == cabc_mode) {
+			pstr = cabc_nvtab[i].nvnam;
+			break;
+		}
+	}
+
+	return pstr;
+}
+
+
 /*
  * _sysfs_support_fbc_show() - Return 1 if FBC/FBDC supported, else 0.
  * @kdev - Pointer to struct device
@@ -93,13 +127,175 @@ static ssize_t _sysfs_panel_mode_show(struct device *kdev,
 }
 
 
+/*
+ * _sysfs_cabc_mode_show() - Show cabc mode.
+ * @kdev - Pointer to struct device
+ * @attr - pointer to struct device_attribute
+ * @buf - Pointer to output buffer to receive character string.
+ * The buffer length is PAGE_SIZE bytes.
+ */
+static ssize_t _sysfs_cabc_mode_show(struct device *kdev,
+	struct device_attribute *attr, char *buf)
+{
+	struct drm_minor *minor;
+	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
+	struct mdfld_dsi_config *dsi_config;
+	const int buflen = PAGE_SIZE;
+	const char *pstr;
+	char sbuf[32];
+	int cabc_mode;
+
+	minor = container_of(kdev, struct drm_minor, kdev);
+	dev = minor->dev;
+	if (!dev)
+		return -ENODEV;
+
+	dev_priv = dev->dev_private;
+	if (!dev_priv)
+		return -ENODEV;
+
+	dsi_config = dev_priv->dsi_configs[0];
+	if (!dsi_config)
+		return -ENODEV;
+
+	cabc_mode = dsi_config->cabc_mode;
+
+	pstr = _cabc_code_to_text(sbuf, sizeof(sbuf), cabc_mode);
+
+	return scnprintf(buf, buflen, "%s\n", pstr);
+}
+
+
+/*
+ * _sysfs_cabc_mode_store() - set cabc mode
+ * @kdev - Pointer to struct device
+ * @attr - pointer to struct device_attribute
+ * @buf - Pointer to input buffer containing character string.
+ * @count - Number of characters in buffer.
+ * The buffer length is PAGE_SIZE bytes.
+ */
+static ssize_t _sysfs_cabc_mode_store(struct device *kdev,
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct drm_minor *minor;
+	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
+	struct mdfld_dsi_config *dsi_config;
+	int ilen;
+	int ret;
+	int i;
+	u8 cabc_mode;
+
+	minor = container_of(kdev, struct drm_minor, kdev);
+	dev = minor->dev;
+	if (!dev)
+		return -ENODEV;
+
+	dev_priv = dev->dev_private;
+	if (!dev_priv)
+		return -ENODEV;
+
+	dsi_config = dev_priv->dsi_configs[0];
+	if (!dsi_config)
+		return -ENODEV;
+
+	ilen = count;
+	if (ilen < 3)
+		return -EINVAL;
+
+	if (buf[ilen-1] == '\n')
+		ilen--;
+	if (buf[ilen-1] == '\r')
+		ilen--;
+
+	for (i = 0 ; ; i++) {
+		if (i >= cabc_nvcnt)
+			return -EINVAL;
+		if (strncmp(buf, cabc_nvtab[i].nvnam, ilen) == 0) {
+			cabc_mode = cabc_nvtab[i].nvval;
+			break;
+		}
+	}
+
+	dsi_config->cabc_mode = cabc_mode;
+
+	ret = mdfld_dsi_set_cabc_mode(dev, dsi_config, cabc_mode);
+	if (ret < 0)
+		return -EINVAL;
+
+	return count;
+}
+
+
+/*  INCLUDE_CABC_TEST - Non-zero to include test file.  Presently, this
+    does not work, with the apparent problem an ETIMEDOUT error return from
+    __read_panel_data. */
+#define INCLUDE_CABC_TEST 0
+
+#if INCLUDE_CABC_TEST
+/*
+ * _sysfs_cabc_test_show() - Show cabc hw state.
+ * Same as _sysfs_cabc_mode_show, except show hw state instead of sw state.
+ * @kdev - Pointer to struct device
+ * @attr - pointer to struct device_attribute
+ * @buf - Pointer to output buffer to receive character string.
+ * The buffer length is PAGE_SIZE bytes.
+ */
+static ssize_t _sysfs_cabc_test_show(struct device *kdev,
+	struct device_attribute *attr, char *buf)
+{
+	struct drm_minor *minor;
+	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
+	struct mdfld_dsi_config *dsi_config;
+	const int buflen = PAGE_SIZE;
+	const char *pstr;
+	char sbuf[32];
+	int cabc_mode;
+
+	minor = container_of(kdev, struct drm_minor, kdev);
+	dev = minor->dev;
+	if (!dev)
+		return -ENODEV;
+
+	dev_priv = dev->dev_private;
+	if (!dev_priv)
+		return -ENODEV;
+
+	dsi_config = dev_priv->dsi_configs[0];
+	if (!dsi_config)
+		return -ENODEV;
+
+	cabc_mode = mdfld_dsi_get_cabc_mode(dev, dsi_config);
+	if (cabc_mode < 0)
+		pstr = "(unavailable)";
+	else
+		pstr = _cabc_code_to_text(sbuf, sizeof(sbuf), cabc_mode);
+
+	return scnprintf(buf, buflen, "%s\n", pstr);
+}
+#endif /* if INCLUDE_CABC_TEST */
+
+
 static DEVICE_ATTR(panel_mode, S_IRUGO, _sysfs_panel_mode_show, NULL);
 
 static DEVICE_ATTR(support_fbc, S_IRUGO, _sysfs_support_fbc_show, NULL);
 
+static DEVICE_ATTR(cabc_mode, S_IRUGO | S_IWUGO,
+	_sysfs_cabc_mode_show, _sysfs_cabc_mode_store);
+
+#if INCLUDE_CABC_TEST
+static DEVICE_ATTR(cabc_test, S_IRUGO, _sysfs_cabc_test_show, NULL);
+#endif /* if INCLUDE_CABC_TEST */
+
 static struct attribute *dsp_sysfs_attr_list[] = {
 	&dev_attr_panel_mode.attr,
 	&dev_attr_support_fbc.attr,
+	&dev_attr_cabc_mode.attr,
+#if INCLUDE_CABC_TEST
+	&dev_attr_cabc_test.attr,
+#endif /* if INCLUDE_CABC_TEST */
 	NULL
 };
 

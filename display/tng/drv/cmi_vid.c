@@ -158,7 +158,7 @@ static int mdfld_dsi_cmi_ic_init(struct mdfld_dsi_config *dsi_config)
 		return -EIO;
 
 	mdfld_dsi_send_mcs_short_hs(sender,
-			write_ctrl_cabc, 0x2, STILL_IMAGE, 0);
+			write_ctrl_cabc, dsi_config->cabc_mode, 1, 0);
 	wait_timeout = jiffies + (HZ / 100);
 	while (time_before_eq(jiffies, wait_timeout))
 		cpu_relax();

@@ -91,7 +91,7 @@ int jdi_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 	}
 
 	err = mdfld_dsi_send_mcs_short_hs(sender,
-			write_ctrl_cabc, STILL_IMAGE, 1,
+			write_ctrl_cabc, dsi_config->cabc_mode, 1,
 			MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
 		DRM_ERROR("%s: %d: Write Control CABC\n",
@@ -639,5 +639,6 @@ void jdi_cmd_init(struct drm_device *dev,
 			jdi_cmd_set_brightness;
 	p_funcs->exit_deep_standby =
 			jdi_cmd_exit_deep_standby;
-
+	p_funcs->drv_set_cabc_mode = display_cmn_set_cabc_mode;
+	p_funcs->drv_get_cabc_mode = display_cmn_get_cabc_mode;
 }

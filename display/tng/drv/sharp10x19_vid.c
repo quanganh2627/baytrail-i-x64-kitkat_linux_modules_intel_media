@@ -73,9 +73,10 @@ static int mdfld_dsi_sharp10x19_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		DRM_ERROR("%s: %d: Set backlight\n", __func__, __LINE__);
 		goto ic_init_err;
 	}
+
 	err = mdfld_dsi_send_mcs_short_hs(sender,
-						  write_ctrl_cabc, 0, 1,
-						  MDFLD_DSI_SEND_PACKAGE);
+		write_ctrl_cabc, dsi_config->cabc_mode, 1,
+		MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
 		DRM_ERROR("%s: %d: write_ctrl_cabc\n", __func__, __LINE__);
 		goto ic_init_err;
@@ -104,6 +105,10 @@ mdfld_sharp10x19_dpi_controller_init(
 	int mipi_pixel_format = 0x4;
 
 	PSB_DEBUG_ENTRY("\n");
+
+	/* Override global default to set special initial cabc mode for
+	 * this display type. */
+	dsi_config->cabc_mode = CABC_MODE_OFF;
 
 	/*reconfig lane configuration*/
 	dsi_config->lane_count = 4;
@@ -431,4 +436,6 @@ void sharp10x19_vid_init(struct drm_device *dev,
 	p_funcs->drv_ic_init = mdfld_dsi_sharp10x19_drv_ic_init;
 	p_funcs->set_brightness =
 		mdfld_dsi_sharp10x19_set_brightness;
+	p_funcs->drv_set_cabc_mode = display_cmn_set_cabc_mode;
+	p_funcs->drv_get_cabc_mode = display_cmn_get_cabc_mode;
 }

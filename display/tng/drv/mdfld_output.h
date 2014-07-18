@@ -100,6 +100,9 @@ struct panel_funcs {
 	int (*set_brightness)(struct mdfld_dsi_config *dsi_config, int level);
 	int (*drv_ic_init)(struct mdfld_dsi_config *dsi_config);
 	int (*drv_set_panel_mode)(struct mdfld_dsi_config *dsi_config);
+	int (*drv_set_cabc_mode)(struct mdfld_dsi_config *dsi_config,
+		u8 cabc_mode);
+	int (*drv_get_cabc_mode)(struct mdfld_dsi_config *dsi_config);
 };
 
 struct intel_mid_panel_list {

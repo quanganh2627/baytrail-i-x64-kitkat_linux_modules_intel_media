@@ -1117,3 +1117,138 @@ void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 
 	return;
 }
+
+
+/*
+ * mdfld_dsi_set_cabc_mode() - Set cabc hw mode.
+ * @dev - Pointer to struct drm_device
+ * @dsi_config
+ * @cabc_mode
+ * Function return value: < 0 if error
+ */
+int mdfld_dsi_set_cabc_mode(struct drm_device *dev, struct mdfld_dsi_config *dsi_config, u8 cabc_mode)
+{
+	struct mdfld_dsi_dpi_output *dpi_output;
+	struct mdfld_dsi_dbi_output *dbi_output;
+	struct mdfld_dsi_encoder *encoder;
+	struct panel_funcs *p_funcs;
+	u32 power_island = 0;
+	int err;
+	u8 mode;
+
+	if (!dev || !dsi_config) {
+		DRM_ERROR("Invalid parameter\n");
+		return -EIO;
+	}
+
+	encoder = dsi_config->encoders[dsi_config->type];
+
+	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {
+		dbi_output = MDFLD_DSI_DBI_OUTPUT(encoder);
+		p_funcs = dbi_output ? dbi_output->p_funcs : NULL;
+	} else if (dsi_config->type == MDFLD_DSI_ENCODER_DPI) {
+		dpi_output = MDFLD_DSI_DPI_OUTPUT(encoder);
+		p_funcs = dpi_output ? dpi_output->p_funcs : NULL;
+	} else {
+		DRM_ERROR("Invalid parameter\n");
+		return -EIO;
+	}
+
+	if (!p_funcs || !p_funcs->drv_set_cabc_mode) {
+		DRM_INFO("Cannot set panel cabc mode\n");
+		return -EIO;
+	}
+
+	if (!dsi_config->dsi_hw_context.panel_on)
+		return -EIO;
+
+	power_island = pipe_to_island(dsi_config->pipe);
+
+	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
+		power_island |= OSPM_DISPLAY_MIO;
+
+	if (!power_island_get(power_island))
+		return -EIO;
+
+	mutex_lock(&dsi_config->context_lock);
+
+	mdfld_dsi_dsr_forbid_locked(dsi_config);
+
+	err = p_funcs->drv_set_cabc_mode(dsi_config, cabc_mode);
+	if (err)
+		DRM_ERROR("Failed to set panel cabc mode\n");
+
+	mdfld_dsi_dsr_allow_locked(dsi_config);
+	mutex_unlock(&dsi_config->context_lock);
+	power_island_put(power_island);
+
+	return err;
+}
+
+
+/*
+ * mdfld_dsi_get_cabc_mode() - Return cabc hw mode.
+ * @dev - Pointer to struct drm_device
+ * @dsi_config
+ * Function return value: < 0 if error, or cabc mode.
+ */
+int mdfld_dsi_get_cabc_mode(struct drm_device *dev, struct mdfld_dsi_config *dsi_config)
+{
+	struct mdfld_dsi_dpi_output *dpi_output;
+	struct mdfld_dsi_dbi_output *dbi_output;
+	struct mdfld_dsi_encoder *encoder;
+	struct panel_funcs *p_funcs;
+	u32 power_island = 0;
+	int ret;
+
+	if (!dev || !dsi_config) {
+		DRM_ERROR("%s:%u: Invalid parameter\n", __func__, __LINE__);
+		return -EIO;
+	}
+
+	encoder = dsi_config->encoders[dsi_config->type];
+
+	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {
+		dbi_output = MDFLD_DSI_DBI_OUTPUT(encoder);
+		p_funcs = dbi_output ? dbi_output->p_funcs : NULL;
+	} else if (dsi_config->type == MDFLD_DSI_ENCODER_DPI) {
+		dpi_output = MDFLD_DSI_DPI_OUTPUT(encoder);
+		p_funcs = dpi_output ? dpi_output->p_funcs : NULL;
+	} else {
+		DRM_ERROR("%s:%u: bad config type\n", __func__, __LINE__);
+		return -EIO;
+	}
+
+	if (!p_funcs || !p_funcs->drv_get_cabc_mode) {
+		DRM_ERROR("%s:%u: no dispatch function\n", __func__, __LINE__);
+		return -EIO;
+	}
+
+	if (!dsi_config->dsi_hw_context.panel_on) {
+		DRM_ERROR("%s:%u: not panel_on\n", __func__, __LINE__);
+		return -EIO;
+	}
+
+	power_island = pipe_to_island(dsi_config->pipe);
+
+	if (power_island & (OSPM_DISPLAY_A | OSPM_DISPLAY_C))
+		power_island |= OSPM_DISPLAY_MIO;
+
+	if (!power_island_get(power_island)) {
+		DRM_ERROR("%s:%u: power_island_get failed\n", __func__, __LINE__);
+		return -EIO;
+	}
+
+	mutex_lock(&dsi_config->context_lock);
+	mdfld_dsi_dsr_forbid_locked(dsi_config);
+
+	ret = p_funcs->drv_get_cabc_mode(dsi_config);
+	if (ret < 0)
+		DRM_ERROR("%s:%u: drv_get_cabc_mode failed\n", __func__, __LINE__);
+
+	mdfld_dsi_dsr_allow_locked(dsi_config);
+	mutex_unlock(&dsi_config->context_lock);
+	power_island_put(power_island);
+
+	return ret;
+}

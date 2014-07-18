@@ -106,6 +106,7 @@ $(DRIVER_NAME)-objs += \
 	$(DISPLAYDIR)/psb_irq.o \
 	$(DISPLAYDIR)/tng_wa.o \
 	$(DISPLAYDIR)/pmu_tng.o \
+	$(DISPLAYDIR)/cmn_cabc.o \
 	$(DISPLAYDIR)/jdi_vid.o \
 	$(DISPLAYDIR)/jdi_cmd.o \
 	$(DISPLAYDIR)/cmi_vid.o \

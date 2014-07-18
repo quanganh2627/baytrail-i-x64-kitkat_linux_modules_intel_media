@@ -80,9 +80,10 @@ int mdfld_dsi_jdi_ic_init(struct mdfld_dsi_config *dsi_config)
 		goto ic_init_err;
 	}
 
-    /* Write control CABC */
-	err = mdfld_dsi_send_mcs_short_hs(sender, write_ctrl_cabc, STILL_IMAGE,
-			1, MDFLD_DSI_SEND_PACKAGE);
+	/* Write control CABC */
+	err = mdfld_dsi_send_mcs_short_hs(sender,
+		write_ctrl_cabc, dsi_config->cabc_mode, 1,
+		MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
 		DRM_ERROR("%s: %d: Write Control CABC\n", __func__, __LINE__);
 		goto ic_init_err;
@@ -121,6 +122,10 @@ void mdfld_dsi_jdi_dsi_controller_init(struct mdfld_dsi_config *dsi_config)
 	int ip_tg_config = 0x4;
 
 	PSB_DEBUG_ENTRY("\n");
+
+	/* Override global default to set special initial cabc mode for
+	 * this display type. */
+	dsi_config->cabc_mode = CABC_MODE_OFF;
 
 	/*reconfig lane configuration*/
 	dsi_config->lane_count = 3;
@@ -497,4 +502,6 @@ void jdi_vid_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 	p_funcs->power_on = mdfld_dsi_jdi_power_on;
 	p_funcs->power_off = mdfld_dsi_jdi_power_off;
 	p_funcs->set_brightness = mdfld_dsi_jdi_set_brightness;
+	p_funcs->drv_set_cabc_mode = display_cmn_set_cabc_mode;
+	p_funcs->drv_get_cabc_mode = display_cmn_get_cabc_mode;
 }

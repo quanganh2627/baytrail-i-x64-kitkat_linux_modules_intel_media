@@ -286,7 +286,7 @@ int mdfld_cmi_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 
 	/* turn CABC on*/
 	mdfld_dsi_send_mcs_short_hs(sender,
-			write_ctrl_cabc, STILL_IMAGE, 1,
+			write_ctrl_cabc, dsi_config->cabc_mode, 1,
 			MDFLD_DSI_SEND_PACKAGE);
 
 	mdfld_dsi_send_mcs_long_hs(sender, cmi_mcs_protect_on, 4, 0);
@@ -500,7 +500,7 @@ static int mdfld_dsi_cmi_cmd_power_off(struct mdfld_dsi_config *dsi_config)
 
 	/* turn off cabc */
 	err = mdfld_dsi_send_mcs_short_hs(sender,
-		write_ctrl_cabc, 0, 1,
+		write_ctrl_cabc, CABC_MODE_OFF, 1,
 		MDFLD_DSI_SEND_PACKAGE);
 
 	/*turn off backlight*/

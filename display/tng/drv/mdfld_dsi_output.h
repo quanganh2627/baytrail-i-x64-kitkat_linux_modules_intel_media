@@ -456,6 +456,7 @@ struct mdfld_dsi_config {
 	struct mutex context_lock;
 	struct mdfld_dsi_hw_context dsi_hw_context;
 
+	u8 cabc_mode;
 	int pipe;
 	int changed;
 
@@ -586,4 +587,13 @@ extern const char *panel_mode_string(struct drm_device *dev);
 
 extern void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 		struct drm_display_mode *mode);
+
+extern int mdfld_dsi_set_cabc_mode(struct drm_device *dev,
+	struct mdfld_dsi_config *dsi_config, u8 cabc_mode);
+extern int mdfld_dsi_get_cabc_mode(struct drm_device *dev,
+	struct mdfld_dsi_config *dsi_config);
+
+extern int display_cmn_set_cabc_mode(struct mdfld_dsi_config *dsi_config, u8 cabc_mode);
+extern int display_cmn_get_cabc_mode(struct mdfld_dsi_config *dsi_config);
+
 #endif /*__MDFLD_DSI_OUTPUT_H__*/

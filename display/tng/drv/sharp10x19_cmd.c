@@ -104,9 +104,9 @@ static int sharp10x19_cmd_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 			goto err_out;
 
 		/* CABC */
-		cmd = 0x55;
 		ret = mdfld_dsi_send_mcs_short_hs(sender,
-						  cmd, STILL_IMAGE, 1, MDFLD_DSI_SEND_PACKAGE);
+			write_ctrl_cabc, dsi_config->cabc_mode, 1,
+			MDFLD_DSI_SEND_PACKAGE);
 		if (ret)
 			goto err_out;
 
@@ -624,4 +624,6 @@ void sharp10x19_cmd_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 	p_funcs->detect = sharp10x19_cmd_panel_connection_detect;
 	p_funcs->set_brightness = sharp10x19_cmd_set_brightness;
 	p_funcs->exit_deep_standby = sharp10x19_cmd_exit_deep_standby;
+	p_funcs->drv_set_cabc_mode = display_cmn_set_cabc_mode;
+	p_funcs->drv_get_cabc_mode = display_cmn_get_cabc_mode;
 }

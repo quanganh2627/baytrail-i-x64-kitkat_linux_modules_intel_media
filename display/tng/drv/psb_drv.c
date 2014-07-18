@@ -1884,6 +1884,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 
+	dev_priv->dsi_configs[0]->cabc_mode = CABC_MODE_STILL_IMAGE;
+
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:
 	psb_driver_unload(dev);
@@ -3888,7 +3890,7 @@ static int csc_control_write(struct file *file, const char *buffer,
 			mdfld_intel_crtc_set_gamma(dev, &gamma);
 			break;
 		default:
-			printk("invalied parameters\n");
+			printk("invalid parameters\n");
 		}
 	}
 	return count;
@@ -3978,11 +3980,12 @@ static void psb_shutdown(struct pci_dev *pdev)
 
 static int psb_proc_init(struct drm_minor *minor)
 {
-        struct proc_dir_entry *csc_setting;
+	struct proc_dir_entry *csc_setting;
+
 #ifdef CONFIG_SUPPORT_HDMI
 	psb_hdmi_proc_init(minor);
 #endif
-        csc_setting = proc_create_data(CSC_PROC_ENTRY, 0644, minor->proc_root, &psb_csc_proc_fops, minor);
+	csc_setting = proc_create_data(CSC_PROC_ENTRY, 0644, minor->proc_root, &psb_csc_proc_fops, minor);
 
 	return 0;
 }
