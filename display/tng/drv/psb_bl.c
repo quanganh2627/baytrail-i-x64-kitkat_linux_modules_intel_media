@@ -119,9 +119,16 @@ int psb_get_brightness(struct backlight_device *bd)
 	return psb_brightness;
 }
 
+/* alway return 0 */
+int psb_check_fb(struct backlight_device *bd, struct fb_info *info)
+{
+	return 0;
+}
+
 const struct backlight_ops psb_ops = {
 	.get_brightness = psb_get_brightness,
 	.update_status = psb_set_brightness,
+	.check_fb = psb_check_fb,
 };
 
 static int device_backlight_init(struct drm_device *dev)
