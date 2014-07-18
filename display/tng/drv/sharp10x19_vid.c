@@ -298,8 +298,8 @@ static
 void sharp10x19_get_panel_info(int pipe,
 				struct panel_info *pi)
 {
-	pi->width_mm = PANEL_4DOT3_WIDTH;
-	pi->height_mm = PANEL_4DOT3_HEIGHT;
+	pi->width_mm = 58;
+	pi->height_mm = 103;
 }
 
 int mdfld_dsi_sharp10x19_set_brightness(struct mdfld_dsi_config *dsi_config,
