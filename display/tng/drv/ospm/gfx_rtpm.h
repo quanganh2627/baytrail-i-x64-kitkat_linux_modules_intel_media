@@ -37,6 +37,7 @@ void rtpm_uninit(struct drm_device *dev);
 /*
 * GFX-Runtime PM callbacks
 */
+int rtpm_suspend_if_runtime_active(struct device *dev);
 int rtpm_suspend(struct device *dev);
 int rtpm_resume(struct device *dev);
 int rtpm_idle(struct device *dev);

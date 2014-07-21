@@ -4047,6 +4047,7 @@ static void psb_debugfs_cleanup(struct drm_minor *minor)
 }
 #endif
 static const struct dev_pm_ops psb_pm_ops = {
+	.suspend = rtpm_suspend_if_runtime_active,
 	.runtime_suspend = rtpm_suspend,
 	.runtime_resume = rtpm_resume,
 	.runtime_idle = rtpm_idle,
