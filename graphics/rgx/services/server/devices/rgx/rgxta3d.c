@@ -2438,6 +2438,11 @@ PVRSRV_ERROR PVRSRVRGXDestroyRenderContextKM(RGX_SERVER_RENDER_CONTEXT *psRender
 {
 	PVRSRV_ERROR				eError;
 
+	PVRSRV_RGXDEV_INFO 	*psDevInfo = psRenderContext->psDeviceNode->pvDevice;
+	OSWRLockAcquireWrite(psDevInfo->hLockRenderList);
+	dllist_remove_node(&(psRenderContext->sListNode));
+	OSWRLockReleaseWrite(psDevInfo->hLockRenderList);
+
 	/* Cleanup the TA if we haven't already */
 	if ((psRenderContext->ui32CleanupStatus & RC_CLEANUP_TA_COMPLETE) == 0)
 	{
@@ -2477,10 +2482,6 @@ PVRSRV_ERROR PVRSRVRGXDestroyRenderContextKM(RGX_SERVER_RENDER_CONTEXT *psRender
 	if (psRenderContext->ui32CleanupStatus == (RC_CLEANUP_3D_COMPLETE | RC_CLEANUP_TA_COMPLETE))
 	{
 		RGXFWIF_FWRENDERCONTEXT	*psFWRenderContext;
-		PVRSRV_RGXDEV_INFO 	*psDevInfo = psRenderContext->psDeviceNode->pvDevice;
-		OSWRLockAcquireWrite(psDevInfo->hLockRenderList);
-		dllist_remove_node(&(psRenderContext->sListNode));
-		OSWRLockReleaseWrite(psDevInfo->hLockRenderList);
 
 		/* Update SPM statistics */
 		eError = DevmemAcquireCpuVirtAddr(psRenderContext->psFWRenderContextMemDesc,
@@ -2519,6 +2520,10 @@ PVRSRV_ERROR PVRSRVRGXDestroyRenderContextKM(RGX_SERVER_RENDER_CONTEXT *psRender
 	return PVRSRV_OK;
 
 e0:
+	OSWRLockAcquireWrite(psDevInfo->hLockRenderList);
+	dllist_add_to_tail(&(psDevInfo->sRenderCtxtListHead), &(psRenderContext->sListNode));
+	OSWRLockReleaseWrite(psDevInfo->hLockRenderList);
+
 	return eError;
 }
 
