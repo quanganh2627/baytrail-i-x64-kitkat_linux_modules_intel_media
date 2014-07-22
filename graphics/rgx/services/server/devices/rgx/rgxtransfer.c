@@ -368,6 +368,10 @@ PVRSRV_ERROR PVRSRVRGXDestroyTransferContextKM(RGX_SERVER_TQ_CONTEXT *psTransfer
 	PVRSRV_ERROR eError;
 	PVRSRV_RGXDEV_INFO *psDevInfo = psTransferContext->psDeviceNode->pvDevice;
 
+	OSWRLockAcquireWrite(psDevInfo->hTransferCtxListLock, DEVINFO_TRANSFERLIST);
+	dllist_remove_node(&(psTransferContext->sListNode));
+	OSWRLockReleaseWrite(psDevInfo->hTransferCtxListLock);
+
 	if (psTransferContext->ui32Flags & RGX_SERVER_TQ_CONTEXT_FLAGS_2D)
 	{
 		eError = _Destroy2DTransferContext(&psTransferContext->s2DData,
@@ -394,10 +398,6 @@ PVRSRV_ERROR PVRSRVRGXDestroyTransferContextKM(RGX_SERVER_TQ_CONTEXT *psTransfer
 		psTransferContext->ui32Flags &= ~RGX_SERVER_TQ_CONTEXT_FLAGS_3D;
 	}
 
-	OSWRLockAcquireWrite(psDevInfo->hTransferCtxListLock, DEVINFO_TRANSFERLIST);
-	dllist_remove_node(&(psTransferContext->sListNode));
-	OSWRLockReleaseWrite(psDevInfo->hTransferCtxListLock);
-
 	DevmemFwFree(psTransferContext->psFWFrameworkMemDesc);
 	SyncPrimFree(psTransferContext->psCleanupSync);
 
@@ -408,6 +408,9 @@ PVRSRV_ERROR PVRSRVRGXDestroyTransferContextKM(RGX_SERVER_TQ_CONTEXT *psTransfer
 fail_destroy2d:
 fail_destroy3d:
 	PVR_ASSERT(eError != PVRSRV_OK);
+	OSWRLockAcquireWrite(psDevInfo->hTransferCtxListLock, DEVINFO_TRANSFERLIST);
+	dllist_add_to_tail(&(psDevInfo->sTransferCtxtListHead), &(psTransferContext->sListNode));
+	OSWRLockReleaseWrite(psDevInfo->hTransferCtxListLock);
 	return eError;
 }
 
