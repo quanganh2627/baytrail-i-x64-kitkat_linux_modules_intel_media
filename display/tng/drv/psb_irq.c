@@ -1244,6 +1244,8 @@ void mdfld_disable_te(struct drm_device *dev, int pipe)
 	struct drm_psb_private *dev_priv =
 	    (struct drm_psb_private *)dev->dev_private;
 	unsigned long irqflags;
+	struct mdfld_dsi_config *dsi_config = dev_priv->dsi_configs[0];
+	struct mdfld_dsi_pkg_sender *sender;
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 
@@ -1251,6 +1253,19 @@ void mdfld_disable_te(struct drm_device *dev, int pipe)
 	psb_disable_pipestat(dev_priv, pipe, PIPE_FRAME_DONE_ENABLE);
 	psb_disable_pipestat(dev_priv, pipe, 
 		(PIPE_TE_ENABLE | PIPE_DPST_EVENT_ENABLE));
+
+	if (dsi_config) {
+		/*
+		 * reset te_seq, which make sure te_seq is really
+		 * increased by next te enable.
+		 * reset te_seq to 1 instead of 0 will make sure
+		 * that last_screen_update and te_seq are alwasys
+		 * unequal when exiting from DSR.
+		 */
+		sender = mdfld_dsi_get_pkg_sender(dsi_config);
+		atomic64_set(&sender->last_screen_update, 0);
+		atomic64_set(&sender->te_seq, 1);
+	}
 
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 	PSB_DEBUG_ENTRY("%s: Disabled TE for pipe %d\n", __func__, pipe);

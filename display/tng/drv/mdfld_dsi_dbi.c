@@ -666,6 +666,9 @@ reset_recovery:
 	dsr_info = dev_priv->dbi_dsr_info;
 	dbi_outputs = dsr_info->dbi_outputs;
 	dbi_output = dsi_config->pipe ? dbi_outputs[1] : dbi_outputs[0];
+	/* init te_seq and last_screen_update */
+	atomic64_set(&sender->last_screen_update, 0);
+	atomic64_set(&sender->te_seq, 1);
 
 	if (!IS_ANN(dev))
 		intel_dsi_dbi_update_fb(dbi_output);
