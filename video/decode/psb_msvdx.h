@@ -264,8 +264,6 @@ struct msvdx_private {
 	struct ttm_buffer_object *term_buf;
 	uint32_t term_buf_addr;
 #endif
-
-	atomic_t vc1_workaround_ctx;
 };
 
 struct psb_msvdx_cmd_queue {

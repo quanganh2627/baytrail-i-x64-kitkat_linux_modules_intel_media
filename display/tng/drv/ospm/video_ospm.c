@@ -149,31 +149,6 @@ void ospm_vsp_init(struct drm_device *dev,
 }
 
 /***********************************************************
- * slc workaround for ved
- ***********************************************************/
-/**
- * apply_ved_slc_workaround
- *
- * bypass SLC for ved if there is ctx that needs the workaround
- */
-#define GFX_WRAPPER_GBYPASSENABLE_SW 0x160854
-static void apply_ved_slc_workaround(struct drm_device *dev)
-{
-	struct drm_psb_private *dev_priv = psb_priv(dev);
-	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
-
-	if (atomic_read(&msvdx_priv->vc1_workaround_ctx)) {
-		uint32_t reg, data;
-
-		/* soc.gfx_wrapper.gbypassenable_sw = 1 */
-		reg = GFX_WRAPPER_GBYPASSENABLE_SW - GFX_WRAPPER_OFFSET;
-		data = WRAPPER_REG_READ(reg);
-		data |= 0x1; /* Disable Bypass SLC for VED on MOFD */
-		WRAPPER_REG_WRITE(reg, data);
-	}
-}
-
-/***********************************************************
  * ved islands
  ***********************************************************/
 /**
@@ -190,8 +165,6 @@ static bool ved_power_up(struct drm_device *dev,
 	/* struct drm_psb_private *dev_priv = dev->dev_private; */
 
 	PSB_DEBUG_PM("powering up ved\n");
-	apply_ved_slc_workaround(dev);
-
 #ifndef USE_GFX_INTERNAL_PM_FUNC
 	pm_ret = pmu_nc_set_power_state(PMU_DEC, OSPM_ISLAND_UP, VED_SS_PM0);
 #else
