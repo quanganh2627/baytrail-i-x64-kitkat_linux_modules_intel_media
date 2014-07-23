@@ -80,7 +80,7 @@ static int mdfld_dsi_sharp10x19_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		goto ic_init_err;
 	}
 	err = mdfld_dsi_send_mcs_short_hs(sender,
-						  write_ctrl_cabc, STILL_IMAGE, 1,
+						  write_ctrl_cabc, 0, 1,
 						  MDFLD_DSI_SEND_PACKAGE);
 	if (err) {
 		DRM_ERROR("%s: %d: write_ctrl_cabc\n", __func__, __LINE__);
