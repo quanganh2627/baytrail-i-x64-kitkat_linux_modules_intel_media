@@ -64,6 +64,8 @@ void DCCBExitMaxfifoMode(struct drm_device *dev);
 int DCCBUpdateDbiPanel(struct drm_device *dev, int pipe);
 int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
 			int index);
+void DCCBOverlayWaitDisableDone(struct drm_device *dev, int index, int pipe);
+void DCCBOverlayWaitFlipDone(struct drm_device *dev, int index, int pipe);
 int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
 int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,

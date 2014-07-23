@@ -2067,10 +2067,23 @@ void DC_MRFLD_onPowerOff(uint32_t iPipe)
 			pstate = &gpsDevice->plane_states[i][j];
 
 			/* if already inactive or not on this pipe */
-			if (!pstate->active || pstate->attached_pipe != iPipe)
+			if (pstate->attached_pipe != iPipe)
 				continue;
 
+                        if (!pstate->active){
+                                if(i == DC_OVERLAY_PLANE)
+                                        DCCBOverlayWaitDisableDone(gpsDevice->psDrmDevice,j,iPipe);
+
+                                continue;
+                        }
+
+                        if(i == DC_OVERLAY_PLANE)
+                                DCCBOverlayWaitFlipDone(gpsDevice->psDrmDevice,j,iPipe);
+
 			disable_plane(pstate);
+
+                        if(i == DC_OVERLAY_PLANE)
+                                DCCBOverlayWaitDisableDone(gpsDevice->psDrmDevice,j,iPipe);
 
 			/* turn off extra power island here */
 			if (!pstate->powered_off &&

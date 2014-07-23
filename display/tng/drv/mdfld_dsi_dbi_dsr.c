@@ -53,6 +53,7 @@ static int enter_dsr_locked(struct mdfld_dsi_config *dsi_config, int level)
 	struct drm_psb_private *dev_priv;
 	struct drm_device *dev;
 	struct mdfld_dsi_pkg_sender *sender;
+	struct mdfld_dsi_dsr *dsr;
 	int err;
 	pm_message_t state;
 
@@ -142,6 +143,8 @@ static int enter_dsr_locked(struct mdfld_dsi_config *dsi_config, int level)
 		return err;
 	}
 
+	dsr = dsi_config->dsr;
+	dsr->dsr_state = DSR_ENTERED_LEVEL0;
 	/*
 	 * To set the vblank_enabled to false with drm_vblank_off(), as
 	 * vblank_disable_and_save() would be scheduled late (<= 5s), and it
@@ -281,7 +284,6 @@ int mdfld_dsi_dsr_report_te(struct mdfld_dsi_config *dsi_config)
 			PSB_DEBUG_ENTRY("Failed to enter DSR\n");
 			goto report_te_out;
 		}
-		dsr->dsr_state = dsr_level;
 	}
 report_te_out:
 	mutex_unlock(&dsi_config->context_lock);

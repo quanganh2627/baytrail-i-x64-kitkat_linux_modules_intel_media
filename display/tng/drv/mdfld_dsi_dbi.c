@@ -1113,6 +1113,7 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 	pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
 
 	DCLockMutex();
+	DC_MRFLD_onPowerOff(pipe);
 	mdfld_generic_dsi_dbi_set_power(encoder, false);
 
 	drm_handle_vblank(dev, pipe);
@@ -1122,7 +1123,6 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
-	DC_MRFLD_onPowerOff(pipe);
 	DCUnLockMutex();
 }
 

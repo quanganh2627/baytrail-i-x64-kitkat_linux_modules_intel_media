@@ -409,12 +409,34 @@ void DCCBSetupZorder(struct drm_device *dev,
 	PSB_WVDC32(PSB_RVDC32(sprite_surf_reg), sprite_surf_reg);
 }
 
+static void _OverlayWaitVblank(struct drm_device *dev, int pipe)
+{
+	union drm_wait_vblank vblwait;
+	int ret;
+
+	vblwait.request.type =
+		(_DRM_VBLANK_RELATIVE |
+		 _DRM_VBLANK_NEXTONMISS);
+	vblwait.request.sequence = 1;
+
+	if (pipe == 1)
+		vblwait.request.type |=
+			_DRM_VBLANK_SECONDARY;
+
+	ret = drm_wait_vblank(dev, (void *)&vblwait, 0);
+	if (ret) {
+		DRM_ERROR("%s: fail to wait vsync of pipe %d\n", __func__, pipe);
+	}
+}
+
 static void _OverlayWaitFlip(
 	struct drm_device *dev, u32 ovstat_reg, int index, int pipe)
 {
 	int retry;
 	int ret = -EBUSY;
+        bool is_cmd_mode;
 
+        is_cmd_mode = is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI;
 	if (DCCBEnableVSyncInterrupt(dev, pipe) != 0) {
 		DRM_ERROR("%s: failed to enable vblank on pipe %d\n",
 			__func__, pipe);
@@ -423,9 +445,11 @@ static void _OverlayWaitFlip(
 
 	/* HDMI pipe can run as low as 24Hz */
 	retry = 600;
-	if (pipe != 1) {
+	if (pipe != 1)
+	{
 		retry = 200;  /* 60HZ for MIPI */
-		DCCBDsrForbid(dev, pipe);
+		if(is_cmd_mode)
+			DCCBDsrForbid(dev, pipe);
 	}
 	/**
 	 * make sure overlay command buffer
@@ -433,7 +457,10 @@ static void _OverlayWaitFlip(
 	 * overlay command buffer.
 	 */
 	while (--retry) {
-		if (pipe != 1 && ret == -EBUSY) {
+		if (pipe != 1 && ret == -EBUSY && is_cmd_mode)
+		{
+			_OverlayWaitVblank(dev, pipe);
+			DCCBWaitForDbiFifoEmpty(dev, pipe);
 			ret = DCCBUpdateDbiPanel(dev, pipe);
 		}
 		if (BIT31 & PSB_RVDC32(ovstat_reg))
@@ -442,13 +469,122 @@ static void _OverlayWaitFlip(
 	}
 
 	DCCBDisableVSyncInterrupt(dev, pipe);
-	if (pipe != 1)
+	if (pipe != 1 && is_cmd_mode)
 		DCCBDsrAllow(dev, pipe);
 
 	if (!retry)
 		DRM_ERROR("OVADD %d flip timeout on pipe %d!\n", index, pipe);
 }
 
+static void _OverlayWaitDisable(struct drm_device *dev, u32 ovadd_reg,
+			int index, int pipe)
+{
+	int retry;
+	int ret = -EBUSY;
+	bool is_cmd_mode;
+
+	is_cmd_mode = is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI;
+	/* HDMI pipe can run as low as 24Hz */
+	retry = 600;
+	if (pipe != 1)
+	{
+		retry = 200;  /* 60HZ for MIPI */
+		if(is_cmd_mode)
+			DCCBDsrForbid(dev, pipe);
+	}
+	/**
+	 * make sure overlay command buffer
+	 * was copied before updating the system
+	 * overlay command buffer.
+	 */
+	while (--retry) {
+		if (pipe != 1 && ret == -EBUSY && is_cmd_mode)
+		{
+			_OverlayWaitVblank(dev, pipe);
+			DCCBWaitForDbiFifoEmpty(dev, pipe);
+			ret = DCCBUpdateDbiPanel(dev, pipe);
+		}
+		if (!(BIT15 & PSB_RVDC32(ovadd_reg)))
+			break;
+		udelay(100);
+	}
+
+	if (pipe != 1 && is_cmd_mode)
+		DCCBDsrAllow(dev, pipe);
+
+	if (!retry)
+		DRM_ERROR("OVADD %d wait disable timeout on pipe %d!\n", index, pipe);
+}
+static bool DCCBIsEnterDsrState(struct drm_device *dev, int pipe)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_dsr *dsr = NULL;
+
+	if ((pipe != PIPEB) &&
+		(is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI))
+	{
+		if (pipe == 0)
+			dsi_config = dev_priv->dsi_configs[0];
+		else if (pipe == 2)
+			dsi_config = dev_priv->dsi_configs[1];
+
+		if(!dsi_config)
+			return false;
+
+		dsr = dsi_config->dsr;
+		if(!dsr)
+			return false;
+
+		if(dsr->dsr_state == DSR_ENTERED_LEVEL0)
+			return true;
+	}
+
+	return false;
+}
+void DCCBOverlayWaitFlipDone(struct drm_device *dev, int index, int pipe)
+{
+	u32 ovstat_reg = OV_DOVASTA;
+
+	if(index != 0 && index != 1 )
+		return;
+
+        if (index)
+		ovstat_reg = OVC_DOVCSTA;
+
+	if((pipe == PIPEB) && (!hdmi_state))
+		return;
+
+	if(DCCBIsEnterDsrState(dev,pipe))
+		return;
+
+	/*wait for overlay flipped*/
+	if (!(BIT31 & PSB_RVDC32(ovstat_reg)))
+		_OverlayWaitFlip(dev, ovstat_reg, index, pipe);
+
+}
+
+void DCCBOverlayWaitDisableDone(struct drm_device *dev, int index, int pipe)
+{
+	u32 ovadd_reg = OV_OVADD;
+	if(index != 0 && index != 1 )
+		return;
+
+        if (index)
+		ovadd_reg = OVC_OVADD;
+
+	if((pipe == PIPEB) && (!hdmi_state))
+		return;
+
+	if(DCCBIsEnterDsrState(dev,pipe))
+		return;
+
+	/*wait for overlay disable done*/
+	if (BIT15 & PSB_RVDC32(ovadd_reg))
+		_OverlayWaitDisable(dev, ovadd_reg, index, pipe);
+
+
+}
 static int _GetPipeFromOvadd(u32 ovadd)
 {
 	int ov_pipe_sel = (ovadd & OV_PIPE_SELECT) >> OV_PIPE_SELECT_POS;
