@@ -2977,9 +2977,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 			dsi_config = dev_priv->dsi_configs[1];
 
 		if (arg->vsync_operation_mask & VSYNC_WAIT) {
-			if (IS_MOFD(dev))
-				mutex_lock(&dev->mode_config.mutex);
-
 			if (dev_priv->vsync_enabled[pipe] && ((pipe == 1) ||
 						(dsi_config &&
 						 dsi_config->dsi_hw_context.panel_on))) {
@@ -3012,9 +3009,6 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 				DRM_INFO("request VSYNC on pipe(%d) when vsync_enabled=%d.\n",
 						 pipe, dev_priv->vsync_enabled[pipe]);
 			}
-
-			if (IS_MOFD(dev))
-				mutex_unlock(&dev->mode_config.mutex);
 
 			getrawmonotonic(&now);
 			nsecs = timespec_to_ns(&now);
