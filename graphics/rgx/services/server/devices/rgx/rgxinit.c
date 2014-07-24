@@ -324,18 +324,9 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 	/* take the power lock as we might issue an OSReadHWReg64 below */
 	PVRSRVForcedPowerLock();
 
-	PVRSRVGetDevicePowerState(psDeviceNode->sDevId.ui32DeviceIndex, &ePowerState);
-       if (ePowerState != PVRSRV_DEV_POWER_STATE_ON)   /* GPU powered off */
-       {
-               ui64CurrentTimer = OSClockus64() & RGXFWIF_GPU_UTIL_FWCB_OS_TIMER_MASK;
-               ui32NextType = RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON;
-       }
-       else     
-	{
-               ui64CurrentTimer = (OSReadHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_TIMER) & ~RGX_CR_TIMER_VALUE_CLRMSK) >> RGX_CR_TIMER_VALUE_SHIFT;
-               ui32NextType = RGXFWIF_GPU_UTIL_FWCB_TYPE_CRTIME;
-	}
-	PVRSRVPowerUnlock();
+	/* Change the sequence to achieve the ui32WriteOffset and ui64CurrentTimer , or else
+           which cause the timestamp recorded in ring buffer with WriteOffset usually larger
+           than CurrentTimer and print overlap log*/
 
 	/* write offset is incremented after writing to FWCB, so subtract 1 */
        ui32WOffSample = psUtilFWCb->ui32WriteOffset;
@@ -345,6 +336,19 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
        }
        ui32WOffSample--;
        ui32WOffSampleSaved = ui32PrevWOffSample = ui32PriorWOffSample = ui32WOffSample;
+
+       PVRSRVGetDevicePowerState(psDeviceNode->sDevId.ui32DeviceIndex, &ePowerState);
+       if (ePowerState != PVRSRV_DEV_POWER_STATE_ON)   /* GPU powered off */
+       {
+               ui64CurrentTimer = OSClockus64() & RGXFWIF_GPU_UTIL_FWCB_OS_TIMER_MASK;
+               ui32NextType = RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON;
+       }
+       else
+       {
+               ui64CurrentTimer = (OSReadHWReg64(psDevInfo->pvRegsBaseKM, RGX_CR_TIMER) & ~RGX_CR_TIMER_VALUE_CLRMSK) >> RGX_CR_TIMER_VALUE_SHIFT;
+               ui32NextType = RGXFWIF_GPU_UTIL_FWCB_TYPE_CRTIME;
+       }
+       PVRSRVPowerUnlock();
 
 	do
 	{
@@ -379,7 +383,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
                                                /* CR timer value of current FW CB entry should always be smaller than in the next entry in the CB.
                                                 * Also, a regular CRTIME entry should be followed by another CRTIME entry or by an END_CRTIME entry.
                                                 * If these are not the cases, then we have a FW CB overlap. */
-                                               PVR_DPF((PVR_DBG_ERROR,"RGXGetGpuUtilStats: CB overlap\n"));
+                                               PVR_DPF((PVR_DBG_WARNING,"RGXGetGpuUtilStats: CB overlap in the case RGXFWIF_GPU_UTIL_FWCB_TYPE_CRTIME\n"));
                                                goto gpuutilstats_endloop;
                                        }
 
@@ -400,7 +404,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 					if(ui32NextType != RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_ON)
 					{
 						/* CB overlap: The host has started the power-off sequence while still computing the GPU utilisation */
-						PVR_DPF((PVR_DBG_ERROR,"RGXGetGpuUtilStats: CB overlap\n"));
+						PVR_DPF((PVR_DBG_WARNING,"RGXGetGpuUtilStats: CB overlap in the case RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_OFF\n"));
 						goto gpuutilstats_endloop;
 					}
 
@@ -414,7 +418,7 @@ static RGXFWIF_GPU_UTIL_STATS RGXGetGpuUtilStats(PVRSRV_DEVICE_NODE *psDeviceNod
 					if(ui32NextType != RGXFWIF_GPU_UTIL_FWCB_TYPE_POWER_OFF)
 					{
 						/* CB overlap: The host has started the power-off sequence while still computing the GPU utilisation */
-						PVR_DPF((PVR_DBG_ERROR,"RGXGetGpuUtilStats: CB overlap\n"));
+						PVR_DPF((PVR_DBG_WARNING,"RGXGetGpuUtilStats: CB overlap in the case RGXFWIF_GPU_UTIL_FWCB_TYPE_END_CRTIME\n"));
 						goto gpuutilstats_endloop;
 					}
 					/* 'break;' missing on purpose */
