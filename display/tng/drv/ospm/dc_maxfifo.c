@@ -77,7 +77,7 @@ static ssize_t _show_sysfs_state (struct device *kdev,
 static inline bool _maxfifo_create_sysfs_entries(struct drm_device * dev);
 
 #ifndef ENABLE_HW_REPEAT_FRAME
-int maxfifo_entry_delay = 150;
+int maxfifo_entry_delay = 600;
 EXPORT_SYMBOL(maxfifo_entry_delay);
 module_param_named(maxfifo_delay, maxfifo_entry_delay, int, 0600);
 

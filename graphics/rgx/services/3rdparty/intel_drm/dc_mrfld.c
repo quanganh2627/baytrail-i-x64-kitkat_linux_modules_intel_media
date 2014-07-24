@@ -57,7 +57,7 @@ static DC_MRFLD_DEVICE *gpsDevice;
 #define DC_MRFLD_STRIDE_ALIGN_MASK (DC_MRFLD_STRIDE_ALIGN - 1)
 
 /* Timeout for Flip Watchdog */
-#define FLIP_TIMEOUT (HZ/4)
+#define FLIP_TIMEOUT (HZ / 2)
 
 struct power_off_req {
 	struct delayed_work work;
