@@ -182,7 +182,9 @@ void mid_enable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 void mid_disable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 {
 	struct drm_device *dev = dev_priv->dev;
-	if (dev_priv->pipestat[pipe] == 0) {
+	/* DPST IRQ disable will be deferred to s0i1-display entry so that we can share
+	 * the disabling logic in video playback case */
+	if (0 == ((~PIPE_DPST_EVENT_ENABLE) & dev_priv->pipestat[pipe])) {
 		u32 pipe_event = mid_pipe_event(pipe);
 		dev_priv->vdc_irq_mask &= ~pipe_event;
 		PSB_WVDC32(~dev_priv->vdc_irq_mask, PSB_INT_MASK_R);
@@ -821,7 +823,7 @@ void psb_irq_uninstall_islands(struct drm_device *dev, int hw_islands)
 	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 }
 
-void psb_irq_turn_on_dpst(struct drm_device *dev)
+void psb_irq_turn_on_dpst_no_lock(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv =
 	    (struct drm_psb_private *)dev->dev_private;
@@ -843,50 +845,54 @@ void psb_irq_turn_on_dpst(struct drm_device *dev)
 
 	/* TODO: use DPST spinlock */
 	/* FIXME: revisit the power island when touching the DPST feature. */
-	if (power_island_get(OSPM_DISPLAY_A)) {
+	PSB_WVDC32(ctx->histogram_logic_ctrl, HISTOGRAM_LOGIC_CONTROL);
+	PSB_WVDC32(ctx->histogram_intr_ctrl, HISTOGRAM_INT_CONTROL);
 
-		PSB_WVDC32(ctx->histogram_logic_ctrl, HISTOGRAM_LOGIC_CONTROL);
-		PSB_WVDC32(ctx->histogram_intr_ctrl, HISTOGRAM_INT_CONTROL);
+	psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
+	/*
+	   PSB_WVDC32(BIT31, HISTOGRAM_LOGIC_CONTROL);
+	   hist_reg = PSB_RVDC32(HISTOGRAM_LOGIC_CONTROL);
+	   ctx->histogram_logic_ctrl = hist_reg;
+	   PSB_WVDC32(BIT31, HISTOGRAM_INT_CONTROL);
+	   hist_reg = PSB_RVDC32(HISTOGRAM_INT_CONTROL);
+	   ctx->histogram_intr_ctrl = hist_reg;
 
-		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
-		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
-		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
-/*
-		PSB_WVDC32(BIT31, HISTOGRAM_LOGIC_CONTROL);
-		hist_reg = PSB_RVDC32(HISTOGRAM_LOGIC_CONTROL);
-		ctx->histogram_logic_ctrl = hist_reg;
-		PSB_WVDC32(BIT31, HISTOGRAM_INT_CONTROL);
-		hist_reg = PSB_RVDC32(HISTOGRAM_INT_CONTROL);
-		ctx->histogram_intr_ctrl = hist_reg;
+	   PSB_WVDC32(0x80010100, PWM_CONTROL_LOGIC);
+	   pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
+	   PSB_WVDC32(pwm_reg | PWM_PHASEIN_ENABLE |
+	   PWM_PHASEIN_INT_ENABLE, PWM_CONTROL_LOGIC);
+	   pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
 
-		PSB_WVDC32(0x80010100, PWM_CONTROL_LOGIC);
-		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
-		PSB_WVDC32(pwm_reg | PWM_PHASEIN_ENABLE |
-			   PWM_PHASEIN_INT_ENABLE, PWM_CONTROL_LOGIC);
-		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
+	   hist_reg = PSB_RVDC32(HISTOGRAM_INT_CONTROL);
+	   PSB_WVDC32(hist_reg | HISTOGRAM_INT_CTRL_CLEAR,
+	   HISTOGRAM_INT_CONTROL);
+	   pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
+	   PSB_WVDC32(pwm_reg | 0x80010100 | PWM_PHASEIN_ENABLE,
+	   PWM_CONTROL_LOGIC);
+	 */
 
-		hist_reg = PSB_RVDC32(HISTOGRAM_INT_CONTROL);
-		PSB_WVDC32(hist_reg | HISTOGRAM_INT_CTRL_CLEAR,
-			   HISTOGRAM_INT_CONTROL);
-		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
-		PSB_WVDC32(pwm_reg | 0x80010100 | PWM_PHASEIN_ENABLE,
-			   PWM_CONTROL_LOGIC);
-*/
-
-		power_island_put(OSPM_DISPLAY_A);
-	}
 }
 
 int psb_irq_enable_dpst(struct drm_device *dev)
 {
-	/* enable DPST */
-	//mid_enable_pipe_event(dev_priv, 0);
-	psb_irq_turn_on_dpst(dev);
+	struct drm_psb_private *dev_priv =
+	    (struct drm_psb_private *)dev->dev_private;
+	unsigned long irqflags;
+
+	if (power_island_get(OSPM_DISPLAY_A)) {
+
+		/* enable DPST */
+		//mid_enable_pipe_event(dev_priv, 0);
+		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
+		psb_irq_turn_on_dpst_no_lock(dev);
+		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
+		power_island_put(OSPM_DISPLAY_A);
+	}
 
 	return 0;
 }
 
-void psb_irq_turn_off_dpst(struct drm_device *dev)
+void psb_irq_turn_off_dpst_no_lock(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv =
 	    (struct drm_psb_private *)dev->dev_private;
@@ -901,14 +907,10 @@ void psb_irq_turn_off_dpst(struct drm_device *dev)
 
 	/* TODO: use DPST spinlock */
 	/* FIXME: revisit the power island when touching the DPST feature. */
-	if (power_island_get(OSPM_DISPLAY_A)) {
-
                PSB_WVDC32(PSB_RVDC32(HISTOGRAM_INT_CONTROL) & 0x7fffffff,
 			HISTOGRAM_INT_CONTROL);
 
-		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 		psb_disable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
-		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 
 /*
 		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
@@ -917,15 +919,23 @@ void psb_irq_turn_off_dpst(struct drm_device *dev)
 		pwm_reg = PSB_RVDC32(PWM_CONTROL_LOGIC);
 */
 
-		power_island_put(OSPM_DISPLAY_A);
-	}
 
 }
 
 int psb_irq_disable_dpst(struct drm_device *dev)
 {
-	//mid_disable_pipe_event(dev_priv, 0);
-	psb_irq_turn_off_dpst(dev);
+	struct drm_psb_private *dev_priv =
+	    (struct drm_psb_private *)dev->dev_private;
+	unsigned long irqflags;
+
+	if (power_island_get(OSPM_DISPLAY_A)) {
+
+		spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
+		//mid_disable_pipe_event(dev_priv, 0);
+		psb_irq_turn_off_dpst_no_lock(dev);
+		spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
+		power_island_put(OSPM_DISPLAY_A);
+	}
 
 	return 0;
 }

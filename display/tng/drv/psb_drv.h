@@ -1182,8 +1182,8 @@ extern int psb_irq_postinstall(struct drm_device *dev);
 extern void psb_irq_uninstall(struct drm_device *dev);
 extern void psb_irq_preinstall_islands(struct drm_device *dev, int hw_islands);
 extern int psb_irq_postinstall_islands(struct drm_device *dev, int hw_islands);
-extern void psb_irq_turn_on_dpst(struct drm_device *dev);
-extern void psb_irq_turn_off_dpst(struct drm_device *dev);
+extern void psb_irq_turn_on_dpst_no_lock(struct drm_device *dev);
+extern void psb_irq_turn_off_dpst_no_lock(struct drm_device *dev);
 
 extern void psb_irq_uninstall_islands(struct drm_device *dev, int hw_islands);
 extern int psb_vblank_wait2(struct drm_device *dev, unsigned int *sequence);
