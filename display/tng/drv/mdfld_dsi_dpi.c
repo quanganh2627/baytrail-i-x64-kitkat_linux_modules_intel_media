@@ -279,7 +279,7 @@ static void ann_dc_setup(struct mdfld_dsi_config *dsi_config)
 	struct drm_device *dev = dsi_config->dev;
 	struct mdfld_dsi_hw_registers *regs = &dsi_config->regs;
 	struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
-
+	uint32_t pipeconf = 0;
 
 	DRM_INFO("restore some registers to default value\n");
 
@@ -313,6 +313,11 @@ static void ann_dc_setup(struct mdfld_dsi_config *dsi_config)
 	REG_WRITE(DSPECNTR, 0x0);
 	REG_WRITE(DSPFCNTR, 0x0);
 	REG_WRITE(GCI_CTRL, REG_READ(GCI_CTRL) | 1);
+
+	/* set frame start delay to 0x2 */
+	pipeconf = REG_READ(regs->pipeconf_reg);
+	pipeconf = (pipeconf & (~BIT27)) | BIT28;
+	REG_WRITE(regs->pipeconf_reg, pipeconf);
 
 	power_island_put(OSPM_DISPLAY_B | OSPM_DISPLAY_C);
 
@@ -500,7 +505,7 @@ reset_recovery:
 	 * Frame Start occurs on third HBLANK
 	 * after the start of VBLANK
 	 */
-	val |= BIT31 | BIT28;
+	val = (val & (~BIT27)) | BIT28 | BIT31;
 	REG_WRITE(regs->pipeconf_reg, val);
 	/*Wait for pipe enabling,when timing generator
 	  is wroking */
