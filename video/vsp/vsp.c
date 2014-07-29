@@ -1678,6 +1678,18 @@ void check_invalid_cmd_type(unsigned int cmd_type)
 		DRM_ERROR("state buffer size too small\n");
 		break;
 
+	case VssWiDi_ComposeInit:
+		DRM_ERROR("WiDi Composer init failure\n");
+		break;
+
+	case VssWiDi_ComposeFrameCommand:
+		DRM_ERROR("WiDi composer compose frame failure\n");
+		break;
+
+	case VssWiDi_ComposeEndOfSequenceCommand:
+		DRM_ERROR("WiDi composer end of sequence command failure\n");
+		break;
+
 	default:
 		DRM_ERROR("VSP: Unknown command type %x\n", cmd_type);
 		break;
@@ -1703,7 +1715,6 @@ void check_invalid_cmd_arg(unsigned int cmd_type)
 
 void handle_error_response(unsigned int error_type, unsigned int cmd_type)
 {
-
 	switch (error_type) {
 	case VssInvalidCommandType:
 		check_invalid_cmd_type(cmd_type);
@@ -1721,11 +1732,13 @@ void handle_error_response(unsigned int error_type, unsigned int cmd_type)
 		break;
 	case VssInvalidSequenceParameters_VP8:
 		check_invalid_cmd_type(cmd_type);
-		DRM_ERROR("VSP: Invalid sequence parameter\n");
+		DRM_ERROR("VSP: Invalid sequence parameter(vp8) or"
+			" invalid frame parameter(WiDi composer)\n");
 		break;
 	case VssInvalidPictureParameters_VP8:
 		check_invalid_cmd_type(cmd_type);
-		DRM_ERROR("VSP: Invalid picture parameter\n");
+		DRM_ERROR("VSP: Invalid picture parameter(vp8) or"
+			" init failure (WiDi composer)\n");
 		break;
 	case VssInitFailure_VP8:
 		check_invalid_cmd_type(cmd_type);
