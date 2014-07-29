@@ -867,6 +867,11 @@ ServerSyncCompleteOp(SERVER_SYNC_PRIMITIVE *psSync,
 	ServerSyncUnref(psSync);
 }
 
+IMG_UINT32 ServerSyncGetId(SERVER_SYNC_PRIMITIVE *psSync)
+{
+   return psSync->ui32UID;
+}
+
 IMG_UINT32 ServerSyncGetFWAddr(SERVER_SYNC_PRIMITIVE *psSync)
 {
 	return SyncPrimGetFirmwareAddr(psSync->psSync);
@@ -875,6 +880,11 @@ IMG_UINT32 ServerSyncGetFWAddr(SERVER_SYNC_PRIMITIVE *psSync)
 IMG_UINT32 ServerSyncGetValue(SERVER_SYNC_PRIMITIVE *psSync)
 {
 	return *psSync->psSync->pui32LinAddr;
+}
+
+IMG_UINT32 ServerSyncGetNextValue(SERVER_SYNC_PRIMITIVE *psSync)
+{
+   return psSync->ui32NextOp;
 }
 
 static IMG_BOOL _ServerSyncState(PDLLIST_NODE psNode, IMG_PVOID pvCallbackData)

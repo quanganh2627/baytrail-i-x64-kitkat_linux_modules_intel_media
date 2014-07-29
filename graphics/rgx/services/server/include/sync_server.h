@@ -202,7 +202,11 @@ PVRSRVSyncPrimOpCompleteKM(SERVER_OP_COOKIE *psServerCookie);
 PVRSRV_ERROR
 PVRSRVSyncPrimOpDestroyKM(SERVER_OP_COOKIE *psServerCookie);
 
+IMG_UINT32 ServerSyncGetId(SERVER_SYNC_PRIMITIVE *psSync);
+
 IMG_UINT32 ServerSyncGetFWAddr(SERVER_SYNC_PRIMITIVE *psSync);
+
+IMG_UINT32 ServerSyncGetNextValue(SERVER_SYNC_PRIMITIVE *psSync);
 
 IMG_UINT32 ServerSyncGetValue(SERVER_SYNC_PRIMITIVE *psSync);
 

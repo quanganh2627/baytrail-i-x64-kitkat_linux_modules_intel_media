@@ -59,8 +59,11 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define PVR_SYNC_IOC_CREATE_FENCE \
 	_IOWR(PVR_SYNC_IOC_MAGIC, 0, struct PVR_SYNC_CREATE_FENCE_IOCTL_DATA)
 
+#define PVR_SYNC_IOC_ENABLE_FENCING \
+    _IOWR(PVR_SYNC_IOC_MAGIC, 1, struct PVR_SYNC_ENABLE_FENCING_IOCTL_DATA)
+
 #define PVR_SYNC_IOC_DEBUG_FENCE \
-	_IOWR(PVR_SYNC_IOC_MAGIC, 1, struct PVR_SYNC_DEBUG_FENCE_IOCTL_DATA)
+	_IOWR(PVR_SYNC_IOC_MAGIC, 2, struct PVR_SYNC_DEBUG_FENCE_IOCTL_DATA)
 
 #define PVRSYNC_MODNAME "pvr_sync"
 
@@ -71,7 +74,16 @@ struct PVR_SYNC_CREATE_FENCE_IOCTL_DATA
 
 	/* Output */
 	int                      iFenceFd;
+    int                      bIdleFence;
 };
+
+struct PVR_SYNC_ENABLE_FENCING_IOCTL_DATA
+{
+   /* Input */
+   int bFencingEnabled;
+}
+__attribute__((packed, aligned(8)));
+
 
 typedef struct
 {

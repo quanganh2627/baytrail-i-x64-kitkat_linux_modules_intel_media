@@ -82,8 +82,23 @@ struct PVR_SYNC_TIMELINE
 	/* Global timeline list support */
     struct list_head sTlList;
 
-	IMG_UINT32 ui32Id;
-	atomic_t sValue;
+   /* Unique id for debugging purposes */
+   IMG_UINT32            ui32Id;
+
+   /* The sync point id counter */
+   IMG_UINT64            ui64LastStamp;
+
+   /* Timeline sync */
+   SERVER_SYNC_PRIMITIVE *psTlSync;
+
+   /* Id from the timeline server sync */
+   IMG_UINT32            ui32TlSyncId;
+
+   /* FWAddr used by the timeline server sync */
+   IMG_UINT32            ui32TlSyncVAddr;
+
+   /* Should we do timeline idle detection when creating a new fence? */
+   int                   bFencingEnabled;
 };
 
 struct PVR_SYNC_TL_TO_SIGNAL
@@ -100,8 +115,11 @@ struct PVR_SYNC_KERNEL_SYNC_PRIM
 	/* Base services sync prim structure */
 	SERVER_SYNC_PRIMITIVE *psSync;
 
+    /* Every sync data will get some unique id */
+    IMG_UINT32            ui32SyncId;
+
 	/* FWAddr used by the server sync */
-	IMG_UINT32            ui32SyncPrimVAddr;
+	IMG_UINT32            ui32SyncVAddr;
 
 	/* Internal sync update value. Currently always '1'.
 	 * This might change when/if we change to local syncs. */
@@ -141,13 +159,21 @@ struct PVR_SYNC_DATA
 	 */
 	struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel;
 
-	/* Every sync data will get some unique id */
-	IMG_UINT32 ui32Id;
-
 	/* The value when the this fence was taken according to the timeline this
 	 * fence belongs to. Defines somehow the age of the fence point. */
-	IMG_UINT32 ui32FenceValue;
-
+    IMG_UINT64            ui64Stamp;
+ 
+    /* The timeline fence value for this sync point. */
+    IMG_UINT32            ui32TlFenceValue;
+ 
+    /* The timeline update value for this sync point. */
+    IMG_UINT32            ui32TlUpdateValue;
+ 
+    /* Has this sync point signaled? */
+    atomic_t              sSignaled;
+ 
+    /* Was this sync used for "update" already */
+    atomic_t              sUpdated;
 	/* This refcount is incremented at create and dup time, and decremented
 	 * at free time. It ensures the object doesn't start the defer-free
 	 * process until it is no longer referenced.
@@ -158,14 +184,11 @@ struct PVR_SYNC_DATA
 /* This is the IMG extension of a sync_pt */
 struct PVR_SYNC_PT
 {
-	/* Private data */
+    /* Original sync struct */
 	struct sync_pt pt;
 
+    /* Private shared data */
 	struct PVR_SYNC_DATA *psSyncData;
-
-	IMG_BOOL bSignaled;
-
-	IMG_BOOL bUpdated;
 };
 
 /* Any sync point from a foreign (non-PVR) timeline needs to have a "shadow"
@@ -218,10 +241,13 @@ static char* _debugInfoTl(struct sync_timeline *tl)
 
 	szInfo[0] = '\0';
 
-	snprintf(szInfo, sizeof(szInfo), "id=%u n='%s' tv=%d",
+    snprintf(szInfo, sizeof(szInfo), "id=%u n='%s' id=%u fw=%08x tv=%u tv_next=%u",
 			 psPVRTl->ui32Id,
 			 tl->name,
-			 atomic_read(&psPVRTl->sValue));
+             psPVRTl->ui32TlSyncId,
+             psPVRTl->ui32TlSyncVAddr,
+             ServerSyncGetValue(psPVRTl->psTlSync),
+             ServerSyncGetNextValue(psPVRTl->psTlSync));
 
 	return szInfo;
 }
@@ -234,22 +260,32 @@ static char* _debugInfoPt(struct sync_pt *pt)
 	szInfo[0] = '\0';
 	szInfo1[0] = '\0';
 
-	if (psPVRPt->psSyncData->psSyncKernel->psCleanUpSync)
-	{
-		snprintf(szInfo1, sizeof(szInfo1), " # cleanup: fw=%08x v=%u",
-				 psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr,
-				 psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue);
-	}
-
-	snprintf(szInfo, sizeof(szInfo), "sync: id=%u%s tv=%u # fw=%08x v=%u r=%d%s p: %s",
-			 psPVRPt->psSyncData->ui32Id,
-			 psPVRPt->bSignaled ? "* " : " ",
-			 psPVRPt->psSyncData->ui32FenceValue,
-			 psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr,
-			 psPVRPt->psSyncData->psSyncKernel->ui32SyncValue,
-			 atomic_read(&psPVRPt->psSyncData->sRefCount),
-			 szInfo1,
-			 _debugInfoTl(pt->parent));
+    if (psPVRPt->psSyncData->psSyncKernel)
+    {
+        if (psPVRPt->psSyncData->psSyncKernel->psCleanUpSync)
+        {
+            snprintf(szInfo1, sizeof(szInfo1), " # cleanup: fw=%08x v=%u",
+                     psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr,
+                     psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue);
+        }
+ 
+        snprintf(szInfo, sizeof(szInfo), "sync(%llu): id=%u%s tv=%u # fw=%08x v=%u r=%d%s p: %s",
+                 psPVRPt->psSyncData->ui64Stamp,
+                 psPVRPt->psSyncData->psSyncKernel->ui32SyncId,
+                 atomic_read(&psPVRPt->psSyncData->sSignaled) ? "* " : " ",
+                 psPVRPt->psSyncData->ui32TlUpdateValue,
+                 psPVRPt->psSyncData->psSyncKernel->ui32SyncVAddr,
+                 psPVRPt->psSyncData->psSyncKernel->ui32SyncValue,
+                 atomic_read(&psPVRPt->psSyncData->sRefCount),
+                 szInfo1,
+                 _debugInfoTl(pt->parent));
+    }
+    else
+    {
+        snprintf(szInfo, sizeof(szInfo), "sync(%llu): tv=%u # idle",
+                 psPVRPt->psSyncData->ui64Stamp,
+                 psPVRPt->psSyncData->ui32TlUpdateValue);
+    }
 
 	return szInfo;
 }
@@ -272,11 +308,8 @@ static struct sync_pt *PVRSyncDup(struct sync_pt *sync_pt)
 		goto err_out;
 	}
 
+    atomic_inc(&psPVRPtOne->psSyncData->sRefCount);
 	psPVRPtTwo->psSyncData = psPVRPtOne->psSyncData;
-	psPVRPtTwo->bSignaled  = psPVRPtOne->bSignaled;
-	psPVRPtTwo->bUpdated   = psPVRPtOne->bUpdated;
-
-	atomic_inc(&psPVRPtTwo->psSyncData->sRefCount);
 
 err_out:
 	return (struct sync_pt*)psPVRPtTwo;
@@ -286,14 +319,15 @@ static int PVRSyncHasSignaled(struct sync_pt *sync_pt)
 {
     struct PVR_SYNC_PT *psPVRPt = (struct PVR_SYNC_PT *)sync_pt;
 
-	if (ServerSyncFenceIsMeet(psPVRPt->psSyncData->psSyncKernel->psSync,
-							  psPVRPt->psSyncData->psSyncKernel->ui32SyncValue))
-		psPVRPt->bSignaled = IMG_TRUE;
+    if (  !atomic_read(&psPVRPt->psSyncData->sSignaled)
+        && ServerSyncFenceIsMeet(psPVRPt->psSyncData->psSyncKernel->psSync,
+                                 psPVRPt->psSyncData->psSyncKernel->ui32SyncValue))
+        atomic_set(&psPVRPt->psSyncData->sSignaled, 1);
 
 	DPF("%s: r: %d # %s", __func__,
-		psPVRPt->bSignaled, _debugInfoPt(sync_pt));
+        atomic_read(&psPVRPt->psSyncData->sSignaled), _debugInfoPt(sync_pt));
 
-	return psPVRPt->bSignaled == IMG_TRUE ? 1 : 0;
+    return atomic_read(&psPVRPt->psSyncData->sSignaled);
 }
 
 static int PVRSyncCompare(struct sync_pt *a, struct sync_pt *b)
@@ -304,12 +338,13 @@ static int PVRSyncCompare(struct sync_pt *a, struct sync_pt *b)
 		_debugInfoPt(b));
 
 	return
-		((struct PVR_SYNC_PT*)a)->psSyncData->ui32FenceValue == ((struct PVR_SYNC_PT*)b)->psSyncData->ui32FenceValue ? 0 :
-		((struct PVR_SYNC_PT*)a)->psSyncData->ui32FenceValue >  ((struct PVR_SYNC_PT*)b)->psSyncData->ui32FenceValue ? 1 : -1;
+       ((struct PVR_SYNC_PT*)a)->psSyncData->ui64Stamp == ((struct PVR_SYNC_PT*)b)->psSyncData->ui64Stamp ? 0 :
+       ((struct PVR_SYNC_PT*)a)->psSyncData->ui64Stamp >  ((struct PVR_SYNC_PT*)b)->psSyncData->ui64Stamp ? 1 : -1;
 }
 
 static void PVRSyncReleaseTimeline(struct sync_timeline *psObj)
 {
+    PVRSRV_ERROR eError;
 	struct PVR_SYNC_TIMELINE *psPVRTl = (struct PVR_SYNC_TIMELINE *)psObj;
 
 	DPF("%s: # %s", __func__,
@@ -318,6 +353,15 @@ static void PVRSyncReleaseTimeline(struct sync_timeline *psObj)
     mutex_lock(&gTlListLock);
     list_del(&psPVRTl->sTlList);
     mutex_unlock(&gTlListLock);
+
+    eError = PVRSRVServerSyncFreeKM(psPVRTl->psTlSync);
+    if (eError != PVRSRV_OK)
+    {
+        PVR_DPF((PVR_DBG_ERROR, "%s: Failed to free prim server sync (%s)",
+                 __func__, PVRSRVGetErrorStringKM(eError)));
+        /* Fall-thru */
+    }
+
 }
 
 static void PVRSyncValueStrTimeline(struct sync_timeline *psObj,
@@ -325,7 +369,11 @@ static void PVRSyncValueStrTimeline(struct sync_timeline *psObj,
 {
         struct PVR_SYNC_TIMELINE *psPVRTl = (struct PVR_SYNC_TIMELINE *)psObj;
 
-        snprintf(str, size, "%d", atomic_read(&psPVRTl->sValue));
+        snprintf(str, size, "%u (%u) (%u/0x%08x)",
+                 ServerSyncGetValue(psPVRTl->psTlSync),
+                 ServerSyncGetNextValue(psPVRTl->psTlSync),
+                 psPVRTl->ui32TlSyncId,
+                 psPVRTl->ui32TlSyncVAddr);
 }
 
 static void PVRSyncValueStr(struct sync_pt *psPt,
@@ -342,35 +390,131 @@ static void PVRSyncValueStr(struct sync_pt *psPt,
          * available. Prints:
          * s=actual sync, cls=cleanup sync
          * timeline value (s_id/s_address:latest cls_value-cls_id/cls_addr) */
-        if (!psPVRPt->psSyncData->psSyncKernel->psCleanUpSync)
+        if (psPVRPt->psSyncData->psSyncKernel)
         {
+            if (!psPVRPt->psSyncData->psSyncKernel->psCleanUpSync)
+            {
                 snprintf(str, size, "%u (%u/0x%08x)",
-                                 psPVRPt->psSyncData->ui32FenceValue,
-                                 psPVRPt->psSyncData->ui32Id,
-                                 psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr);
+                         psPVRPt->psSyncData->ui32TlUpdateValue,
+                         psPVRPt->psSyncData->psSyncKernel->ui32SyncId,
+                         psPVRPt->psSyncData->psSyncKernel->ui32SyncVAddr);
+            }
+            else
+            {
+                snprintf(str, size, "%u (%u/0x%08x:%u-%u/0x%08x)",
+                         psPVRPt->psSyncData->ui32TlUpdateValue,
+                         psPVRPt->psSyncData->psSyncKernel->ui32SyncId,
+                         psPVRPt->psSyncData->psSyncKernel->ui32SyncVAddr,
+                         psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue,
+                         psPVRPt->psSyncData->psSyncKernel->ui32CleanUpId,
+                         psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr);
+            }
         }else
         {
-                snprintf(str, size, "%u (%u/0x%08x:%u-%u/0x%08x)",
-                                 psPVRPt->psSyncData->ui32FenceValue,
-                                 psPVRPt->psSyncData->ui32Id,
-                                 psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr,
-                                 psPVRPt->psSyncData->psSyncKernel->ui32CleanUpValue,
-                                 psPVRPt->psSyncData->psSyncKernel->ui32CleanUpId,
-                                 psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr);
+            snprintf(str, size, "%u (idle sync)",
+                    psPVRPt->psSyncData->ui32TlUpdateValue);
         }
 }
 
 
 static struct PVR_SYNC_PT *
-PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
+PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl, int *pbIdleFence)
 {
 	struct PVR_SYNC_PT *psPVRPt = IMG_NULL;
 	struct PVR_SYNC_DATA *psSyncData = IMG_NULL;
-	IMG_UINT32 ui32Dummy;
-	IMG_UINT32 ui32FWAddr;
-	IMG_UINT32 ui32CurrOp;
-	IMG_UINT32 ui32NextOp;
+    char name[32] = {};
+    IMG_UINT32 ui32Dummy, ui32CurrOp, ui32NextOp;
 	PVRSRV_ERROR eError;
+
+	psSyncData = OSAllocMem(sizeof(struct PVR_SYNC_DATA));
+	if (!psSyncData)
+	{
+		goto err_out;
+	}
+
+   psSyncData->ui64Stamp = psPVRTl->ui64LastStamp++;
+   atomic_set(&psSyncData->sRefCount, 1);
+
+   ui32CurrOp = ServerSyncGetValue(psPVRTl->psTlSync);
+   ui32NextOp = ServerSyncGetNextValue(psPVRTl->psTlSync);
+
+   /* Do we need to create a real fence or can we make it just an idle fence?
+    * If somebody did call "enable fencing", we create a real fence (cause
+    * probably some work was queued in between). If enable fencing is disabled
+    * we check if there currently somebody is doing work on this timeline.
+    * Only if this is not the case we can create an idle fence. Otherwise we
+    * need to block on this previous work. */
+   if (   psPVRTl->bFencingEnabled
+       || ui32CurrOp < ui32NextOp)
+   {
+	   atomic_set(&psSyncData->sSignaled, 0);
+	   atomic_set(&psSyncData->sUpdated, 0);
+
+       psSyncData->psSyncKernel = OSAllocMem(sizeof(struct PVR_SYNC_KERNEL_SYNC_PRIM));
+       if (!psSyncData->psSyncKernel)
+       {
+           goto err_free_data;
+       }
+
+       snprintf(name, sizeof(name), "sy:%.28s", psPVRTl->obj.name);
+       eError = PVRSRVServerSyncAllocKM(gsPVRSync.hDevCookie,
+                                        &psSyncData->psSyncKernel->psSync,
+                                        &psSyncData->psSyncKernel->ui32SyncVAddr);
+
+       if (eError != PVRSRV_OK)
+       {
+           PVR_DPF((PVR_DBG_ERROR, "%s: Failed to allocate prim server sync (%s)",
+                    __func__, PVRSRVGetErrorStringKM(eError)));
+           goto err_free_data1;
+       }
+
+       psSyncData->psSyncKernel->ui32SyncId =
+           ServerSyncGetId(psSyncData->psSyncKernel->psSync);
+
+       eError = PVRSRVServerSyncQueueHWOpKM(psSyncData->psSyncKernel->psSync,
+                                            IMG_TRUE,
+                                            &ui32Dummy,
+                                            &psSyncData->psSyncKernel->ui32SyncValue);
+       if (eError != PVRSRV_OK)
+       {
+           PVR_DPF((PVR_DBG_ERROR, "%s: Failed to queue prim server sync hw operation (%s)",
+                    __func__, PVRSRVGetErrorStringKM(eError)));
+           goto err_free_sync;
+       }
+
+       /* Queue the timeline sync */
+       eError = PVRSRVServerSyncQueueHWOpKM(psPVRTl->psTlSync,
+                                            IMG_TRUE,
+                                            &psSyncData->ui32TlFenceValue,
+                                            &psSyncData->ui32TlUpdateValue);
+       if (eError != PVRSRV_OK)
+       {
+           PVR_DPF((PVR_DBG_ERROR, "%s: Failed to queue prim server sync hw operation (%s)",
+                    __func__, PVRSRVGetErrorStringKM(eError)));
+           goto err_complete_sync;
+       }
+
+       psSyncData->psSyncKernel->psCleanUpSync    = IMG_NULL;
+       psSyncData->psSyncKernel->ui32CleanUpId    = 0;
+       psSyncData->psSyncKernel->ui32CleanUpVAddr = 0;
+       psSyncData->psSyncKernel->ui32CleanUpValue = 0;
+
+       *pbIdleFence = 0;
+   } else
+    {
+       /* There is no sync data which backs this up */
+       psSyncData->psSyncKernel      = NULL;
+       /* We set the pt's fence/update values to the previous one. */
+       psSyncData->ui32TlFenceValue  = ui32CurrOp;
+       psSyncData->ui32TlUpdateValue = ui32CurrOp;
+       atomic_set(&psSyncData->sUpdated, 1);
+       /* This is an idle fence. Immediately mark it signaled. */
+       atomic_set(&psSyncData->sSignaled, 1);
+
+       /* Return 1 here, so that the caller doesn't try to insert this into an
+        * OpenGL ES stream. */
+       *pbIdleFence = 1;
+    }
 
 	psPVRPt = (struct PVR_SYNC_PT *)
 		sync_pt_create(&psPVRTl->obj, sizeof(struct PVR_SYNC_PT));
@@ -378,79 +522,44 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to create sync pt",
 				 __func__));
-		goto err_out;
+		goto err_complete_sync1;
 	}
 
-	psPVRPt->bSignaled = IMG_FALSE;
-	psPVRPt->bUpdated = IMG_FALSE;
-
-	psSyncData = OSAllocMem(sizeof(struct PVR_SYNC_DATA));
-	if (!psSyncData)
-	{
-		goto err_free_pt;
-	}
-
-	psSyncData->psSyncKernel = OSAllocMem(sizeof(struct PVR_SYNC_KERNEL_SYNC_PRIM));
-	if (!psSyncData->psSyncKernel)
-	{
-		goto err_free_data;
-	}
-
-	atomic_set(&psSyncData->sRefCount, 1);
-	psSyncData->ui32FenceValue = atomic_inc_return(&psPVRTl->sValue);
-
-	eError = PVRSRVServerSyncAllocKM(gsPVRSync.hDevCookie,
-									 &psSyncData->psSyncKernel->psSync,
-									 &psSyncData->psSyncKernel->ui32SyncPrimVAddr);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to allocate prim server sync (%s)",
-				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_kernel_sync_prim;
-	}
-
-	eError = PVRSRVServerSyncGetStatusKM(1, &psSyncData->psSyncKernel->psSync,
-										 &psSyncData->ui32Id,
-										 &ui32FWAddr,
-										 &ui32CurrOp, &ui32NextOp);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to get status of prim server sync (%s)",
-				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_server_sync;
-	}
-
-	eError = PVRSRVServerSyncQueueHWOpKM(psSyncData->psSyncKernel->psSync,
-										 IMG_TRUE,
-										 &ui32Dummy,
-										 &psSyncData->psSyncKernel->ui32SyncValue);
-	if (eError != PVRSRV_OK)
-	{
-		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to queue prim server sync hw operation (%s)",
-				 __func__, PVRSRVGetErrorStringKM(eError)));
-		goto err_free_server_sync;
-	}
-
-	psSyncData->psSyncKernel->psCleanUpSync = IMG_NULL;
-	psSyncData->psSyncKernel->ui32CleanUpVAddr = 0;
-	psSyncData->psSyncKernel->ui32CleanUpValue = 0;
+	/* Attach our sync data to the new sync point. */
 	psPVRPt->psSyncData = psSyncData;
+
+	/* Reset the fencing enabled flag. If nobody sets this to 1 until the next
+	 * create call, we will do timeline idle detection. */
+	psPVRTl->bFencingEnabled = 0;
+
+	/* If this is a idle fence we need to signal the timeline immediately. */
+	if (atomic_read(&psPVRPt->psSyncData->sSignaled))
+		sync_timeline_signal((struct sync_timeline *)psPVRTl);
 
 err_out:
 	return psPVRPt;
 
-err_free_server_sync:
-	PVRSRVServerSyncFreeKM(psSyncData->psSyncKernel->psSync);
+err_complete_sync1:
+	if (psSyncData->psSyncKernel)
+		ServerSyncCompleteOp(psPVRTl->psTlSync, IMG_TRUE,
+                             psSyncData->ui32TlUpdateValue);
 
-err_free_kernel_sync_prim:
-	OSFreeMem(psSyncData->psSyncKernel);
+err_complete_sync:
+	if (psSyncData->psSyncKernel)
+		ServerSyncCompleteOp(psSyncData->psSyncKernel->psSync, IMG_TRUE,
+                             psSyncData->psSyncKernel->ui32SyncValue);
+
+err_free_sync:
+	if (psSyncData->psSyncKernel)
+		PVRSRVServerSyncFreeKM(psSyncData->psSyncKernel->psSync);
+
+err_free_data1:
+	if (psSyncData->psSyncKernel)
+		OSFreeMem(psSyncData->psSyncKernel);
 
 err_free_data:
 	OSFreeMem(psSyncData);
 
-err_free_pt:
-	sync_pt_free((struct sync_pt *)psPVRPt);
-	psPVRPt = IMG_NULL;
 	goto err_out;
 }
 
@@ -534,7 +643,8 @@ static void PVRSyncFreeSync(struct sync_pt *psPt)
 		if (atomic_dec_return(&psPVRPt->psSyncData->sRefCount) != 0)
 			return;
 
-		if(PVRSyncReleaseSyncPrim(psPVRPt->psSyncData->psSyncKernel))
+       if (   psPVRPt->psSyncData->psSyncKernel
+               && PVRSyncReleaseSyncPrim(psPVRPt->psSyncData->psSyncKernel))
 			queue_work(gsPVRSync.psWorkQueue, &gsPVRSync.sWork);
 		OSFreeMem(psPVRPt->psSyncData);
 		psPVRPt->psSyncData = IMG_NULL;
@@ -603,13 +713,15 @@ PVRSyncCreateWaiterForForeignSync(int iFenceFd)
 
 	eError = PVRSRVServerSyncAllocKM(gsPVRSync.hDevCookie,
 									 &psSyncKernel->psSync,
-									 &psSyncKernel->ui32SyncPrimVAddr);
+									 &psSyncKernel->ui32SyncVAddr);
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to allocate prim server sync (%s)",
 				 __func__, PVRSRVGetErrorStringKM(eError)));
 		goto err_free_kernel;
 	}
+
+    psSyncKernel->ui32SyncId = ServerSyncGetId(psSyncKernel->psSync);
 
 	eError = PVRSRVServerSyncQueueSWOpKM(psSyncKernel->psSync,
 										 &ui32Dummy,
@@ -633,6 +745,8 @@ PVRSyncCreateWaiterForForeignSync(int iFenceFd)
 				 __func__, PVRSRVGetErrorStringKM(eError)));
 		goto err_complete_sync;
 	}
+
+    psSyncKernel->ui32CleanUpId = ServerSyncGetId(psSyncKernel->psCleanUpSync);
 
 	eError = PVRSRVServerSyncQueueHWOpKM(psSyncKernel->psCleanUpSync,
 										 IMG_TRUE,
@@ -754,30 +868,19 @@ PVRSyncDebugFenceKM(IMG_INT32 i32FDFence,
 
 		/* Only fill this for our sync points. Foreign syncs will get empty
 		 * fields. */
-		if(psPt->parent->ops == &gsPVR_SYNC_TIMELINE_ops)
+        if (psPt->parent->ops == &gsPVR_SYNC_TIMELINE_ops)
 		{
 			struct PVR_SYNC_PT *psPVRPt = (struct PVR_SYNC_PT *)psPt;
-			IMG_UINT32 ui32UID;
-			IMG_UINT32 ui32FWAddr;
-			IMG_UINT32 ui32CurrOp;
-			IMG_UINT32 ui32NextOp;
 
-			eError = PVRSRVServerSyncGetStatusKM(1, &psPVRPt->psSyncData->psSyncKernel->psSync,
-												 &ui32UID, &ui32FWAddr,
-												 &ui32CurrOp, &ui32NextOp);
-			if (eError != PVRSRV_OK)
-			{
-				PVR_DPF((PVR_DBG_ERROR, "%s: Failed to get status of prim server "
-						 "sync (%s)", __func__, PVRSRVGetErrorStringKM(eError)));
-				goto err_put;
-			}
-
-			aPts[*pui32NumSyncs].ui32Id                = ui32UID;
-			aPts[*pui32NumSyncs].ui32CurrOp            = ui32CurrOp;
-			aPts[*pui32NumSyncs].ui32NextOp            = ui32NextOp;
-			aPts[*pui32NumSyncs].sData.ui32FWAddr      = psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr;
-			aPts[*pui32NumSyncs].sData.ui32FenceValue  = psPVRPt->psSyncData->ui32FenceValue;
-			aPts[*pui32NumSyncs].sData.ui32UpdateValue = psPVRPt->psSyncData->ui32FenceValue;
+            if (psPVRPt->psSyncData->psSyncKernel)
+            {
+               aPts[*pui32NumSyncs].ui32Id                = psPVRPt->psSyncData->psSyncKernel->ui32SyncId;
+               aPts[*pui32NumSyncs].ui32CurrOp            = ServerSyncGetValue(psPVRPt->psSyncData->psSyncKernel->psSync);
+               aPts[*pui32NumSyncs].ui32NextOp            = ServerSyncGetNextValue(psPVRPt->psSyncData->psSyncKernel->psSync);
+               aPts[*pui32NumSyncs].sData.ui32FWAddr      = psPVRPt->psSyncData->psSyncKernel->ui32SyncVAddr;
+               aPts[*pui32NumSyncs].sData.ui32FenceValue  = psPVRPt->psSyncData->ui32TlFenceValue;
+               aPts[*pui32NumSyncs].sData.ui32UpdateValue = psPVRPt->psSyncData->ui32TlUpdateValue;
+            }
 		}
 
 		++*pui32NumSyncs;
@@ -792,23 +895,52 @@ err_put:
 
 static int PVRSyncOpen(struct inode *inode, struct file *file)
 {
-	IMG_CHAR task_comm[TASK_COMM_LEN + 1];
+    char name[32] = {};
+    char name1[32] = {};
 	struct PVR_SYNC_TIMELINE *psPVRTl;
+    PVRSRV_ERROR eError;
 	int err = -ENOMEM;
 
-	get_task_comm(task_comm, current);
+    task_lock(current);
+    if (strncmp(current->group_leader->comm, current->comm, TASK_COMM_LEN) == 0)
+    {
+        snprintf(name, sizeof(name),
+                 "%.24s-%d",
+                 current->group_leader->comm, current->pid);
+    }else
+    {
+        snprintf(name, sizeof(name),
+                 "%.15s-%.10s-%d",
+                 current->group_leader->comm, current->comm,
+                 current->pid);
+    }
+    task_unlock(current);
 
     psPVRTl = (struct PVR_SYNC_TIMELINE *)
 		sync_timeline_create(&gsPVR_SYNC_TIMELINE_ops,
-							 sizeof(struct PVR_SYNC_TIMELINE), task_comm);
+							 sizeof(struct PVR_SYNC_TIMELINE), name);
     if (!psPVRTl)
     {
         PVR_DPF((PVR_DBG_ERROR, "%s: sync_timeline_create failed", __func__));
         goto err_out;
     }
 
-	psPVRTl->ui32Id = atomic_inc_return(&gsPVRSync.sTimelineId);
-	atomic_set(&psPVRTl->sValue, 0);
+    snprintf(name1, sizeof(name1), "tl:%.28s", name);
+    eError = PVRSRVServerSyncAllocKM(gsPVRSync.hDevCookie,
+                                     &psPVRTl->psTlSync,
+                                     &psPVRTl->ui32TlSyncVAddr);
+    if (eError != PVRSRV_OK)
+    {
+        PVR_DPF((PVR_DBG_ERROR, "%s: Failed to allocate prim server sync (%s)",
+                 __func__, PVRSRVGetErrorStringKM(eError)));
+        goto err_free_tl;
+    }
+ 
+    psPVRTl->ui32Id          = atomic_inc_return(&gsPVRSync.sTimelineId);
+    psPVRTl->ui32TlSyncId    = ServerSyncGetId(psPVRTl->psTlSync);
+    psPVRTl->ui64LastStamp   = 0;
+    psPVRTl->bFencingEnabled = 1;
+
 
 	DPF("%s: # %s", __func__,
 		_debugInfoTl((struct sync_timeline*)psPVRTl));
@@ -823,6 +955,10 @@ static int PVRSyncOpen(struct inode *inode, struct file *file)
 
 err_out:
     return err;
+
+err_free_tl:
+   sync_timeline_destroy(&psPVRTl->obj);
+   goto err_out;
 }
 
 static int PVRSyncRelease(struct inode *inode, struct file *file)
@@ -863,7 +999,7 @@ PVRSyncIOCTLCreateFence(struct PVR_SYNC_TIMELINE *psPVRTl, void __user *pvData)
 	}
 
 	psPt = (struct sync_pt *)
-		PVRSyncCreateSync(psPVRTl);
+		PVRSyncCreateSync(psPVRTl, &sData.bIdleFence);
 	if (!psPt)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "%s: Failed to create a sync point (%d)",
@@ -912,6 +1048,31 @@ err_put_fence:
 err_put_fd:
 	put_unused_fd(iFd);
 	goto err_out;
+}
+
+static long
+PVRSyncIOCTLEnableFencing(struct PVR_SYNC_TIMELINE *psPVRTl, void __user *pvData)
+{
+   struct PVR_SYNC_ENABLE_FENCING_IOCTL_DATA sData;
+   int err = -EFAULT;
+
+   if (!access_ok(VERIFY_READ, pvData, sizeof(sData)))
+   {
+       goto err_out;
+   }
+
+   if (copy_from_user(&sData, pvData, sizeof(sData)))
+   {
+       goto err_out;
+   }
+
+   psPVRTl->bFencingEnabled = sData.bFencingEnabled;
+/* PVR_DPF((PVR_DBG_ERROR, "%s: enable fencing %d", __func__, psPVRTl->bFencingEnabled));*/
+
+   err = 0;
+
+err_out:
+   return err;
 }
 
 static long
@@ -974,6 +1135,9 @@ PVRSyncIOCTL(struct file *file, unsigned int cmd, unsigned long __user arg)
 		case PVR_SYNC_IOC_CREATE_FENCE:
             err = PVRSyncIOCTLCreateFence(psPVRTl, pvData);
 			break;
+        case PVR_SYNC_IOC_ENABLE_FENCING:
+            err = PVRSyncIOCTLEnableFencing(psPVRTl, pvData);
+            break;
 		case PVR_SYNC_IOC_DEBUG_FENCE:
             err = PVRSyncIOCTLDebugFence(psPVRTl, pvData);
       			break;      
@@ -1153,7 +1317,7 @@ IMG_VOID PVRSyncUpdateAllTimelines(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle)
 
 			/* Check for any points which weren't signaled before, but are now.
 			 * If so, mark it for signaling and stop processing this timeline. */
-			if (   ((struct PVR_SYNC_PT *)psPt)->bSignaled == IMG_FALSE
+            if (   !atomic_read(&((struct PVR_SYNC_PT *)psPt)->psSyncData->sSignaled)
 				&& PVRSyncHasSignaled(psPt))
 			{
 				DPF("%s: signal # %s", __func__,
@@ -1306,6 +1470,7 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
     struct sync_fence *psFence = sync_fence_fdget(i32FDFence);
 	struct PVR_SYNC_TIMELINE *psPVRTl;
 	struct PVR_SYNC_PT *psPVRPt = IMG_NULL;
+    char name[32] = {};
 	IMG_UINT32 ui32Dummy;
 	PVRSRV_ERROR eError = PVRSRV_OK;
 	IMG_BOOL bHaveForeignSync = IMG_FALSE;
@@ -1358,7 +1523,7 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 			 * to be here again. I keep this for now, so we can turn on this
 			 * check for debugging other scenarios. */
 			if (   bUpdate
-				&& psPVRPt->bUpdated)
+                && atomic_read(&psPVRPt->psSyncData->sUpdated))&& atomic_read(&psPVRPt->psSyncData->sUpdated))
 			{
 				PVR_DPF((PVR_DBG_ERROR, "%s: sync point used for update more than once!",
 						 __func__));
@@ -1369,11 +1534,14 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 			 * signalled, don't return it to the caller. The operation is
 			 * already fulfilled in this case and needs no waiting on. */
 			if (   !bUpdate
-				&&  psPVRPt->bSignaled)
+                    &&  atomic_read(&psPVRPt->psSyncData->sSignaled))
 				continue;
 
+            /* Must not be NULL, cause idle syncs are always signaled. */
+            PVR_ASSERT(psPVRPt->psSyncData->psSyncKernel);
+
 			/* Save this within the sync point. */
-			aPts[*pui32NumSyncs].ui32FWAddr      = psPVRPt->psSyncData->psSyncKernel->ui32SyncPrimVAddr;
+			aPts[*pui32NumSyncs].ui32FWAddr      = psPVRPt->psSyncData->psSyncKernel->ui32SyncVAddr;
 			aPts[*pui32NumSyncs].ui32Flags       = (bUpdate ? PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE :
 															  PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK);
 			aPts[*pui32NumSyncs].ui32FenceValue  = psPVRPt->psSyncData->psSyncKernel->ui32SyncValue;
@@ -1396,7 +1564,7 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 				 * demand and queue an update operation. */
 				if (!psPVRPt->psSyncData->psSyncKernel->psCleanUpSync)
 				{
-					IMG_UINT32 ui32FWAddr, ui32CurrOp, ui32NextOp;
+                    snprintf(name, sizeof(name), "sycu:%.26s", psPVRPt->pt.parent->name);
 					eError = PVRSRVServerSyncAllocKM(gsPVRSync.hDevCookie,
 													 &psPVRPt->psSyncData->psSyncKernel->psCleanUpSync,
 													 &psPVRPt->psSyncData->psSyncKernel->ui32CleanUpVAddr);
@@ -1406,17 +1574,8 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 								 __func__, PVRSRVGetErrorStringKM(eError)));
 						goto err_put;
 					}
-
-					eError = PVRSRVServerSyncGetStatusKM(1, &psPVRPt->psSyncData->psSyncKernel->psCleanUpSync,
-														 &psPVRPt->psSyncData->psSyncKernel->ui32CleanUpId,
-														 &ui32FWAddr,
-														 &ui32CurrOp, &ui32NextOp);
-					if (eError != PVRSRV_OK)
-					{
-						PVR_DPF((PVR_DBG_ERROR, "%s: Failed to get status of cleanup prim server "
-								 "sync (%s)", __func__, PVRSRVGetErrorStringKM(eError)));
-						goto err_put;
-					}
+                    psPVRPt->psSyncData->psSyncKernel->ui32CleanUpId =
+                    ServerSyncGetId(psPVRPt->psSyncData->psSyncKernel->psCleanUpSync);
 				}
 				
 				eError = PVRSRVServerSyncQueueHWOpKM(psPVRPt->psSyncData->psSyncKernel->psCleanUpSync,
@@ -1437,9 +1596,24 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 				++*pui32NumSyncs;
 
 			}
+            else
+            {
+               if (*pui32NumSyncs == ui32MaxNumSyncs)
+               {
+                   PVR_DPF((PVR_DBG_WARNING, "%s: To less space on fence query for all "
+                            "the sync points in this fence", __func__));
+                   goto err_put;
+               }
 
-			if (bUpdate)
-				psPVRPt->bUpdated = IMG_TRUE;
+               /* Timeline sync point */
+               aPts[*pui32NumSyncs].ui32FWAddr      = psPVRTl->ui32TlSyncVAddr;
+               aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK | PVRSRV_CLIENT_SYNC_PRIM_OP_UPDATE;
+               aPts[*pui32NumSyncs].ui32FenceValue  = psPVRPt->psSyncData->ui32TlFenceValue;
+               aPts[*pui32NumSyncs].ui32UpdateValue = psPVRPt->psSyncData->ui32TlUpdateValue;
+               ++*pui32NumSyncs;
+ 
+               atomic_set(&psPVRPt->psSyncData->sUpdated, 1);
+            }
 		}
 	}
 
@@ -1462,7 +1636,7 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 				goto err_put;
 			}
 
-			aPts[*pui32NumSyncs].ui32FWAddr      = psSyncKernel->ui32SyncPrimVAddr;
+			aPts[*pui32NumSyncs].ui32FWAddr      = psSyncKernel->ui32SyncVAddr;
 			aPts[*pui32NumSyncs].ui32Flags       = PVRSRV_CLIENT_SYNC_PRIM_OP_CHECK;
 			aPts[*pui32NumSyncs].ui32FenceValue  = psSyncKernel->ui32SyncValue;
 			aPts[*pui32NumSyncs].ui32UpdateValue = psSyncKernel->ui32SyncValue;
