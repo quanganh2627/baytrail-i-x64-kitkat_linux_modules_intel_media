@@ -34,6 +34,7 @@
 #include "android_hdmi.h"
 #include "gfx_rtpm.h"
 #include "dc_maxfifo.h"
+#include "dc_server.h"
 
 static struct drm_device *g_dev;
 
@@ -93,6 +94,7 @@ static void gfx_early_suspend(struct early_suspend *h)
 	mutex_unlock(&dev->mode_config.mutex);
 	psb_dpst_notify_change_um(DPST_EVENT_HIST_INTERRUPT,
 						  dev_priv->psb_dpst_state);
+	DCDisplayContextFlush();
 }
 
 static void gfx_late_resume(struct early_suspend *h)
