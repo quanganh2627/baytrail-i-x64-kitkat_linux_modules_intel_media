@@ -62,10 +62,8 @@ void exit_s0i1_display_video_playback(struct drm_device *dev);
 bool can_enter_maxfifo_s0i1_display(struct drm_device *dev, int mode);
 void enable_repeat_frame_intr(struct drm_device *dev);
 void disable_repeat_frame_intr(struct drm_device *dev);
-#ifndef ENABLE_HW_REPEAT_FRAME
 void maxfifo_timer_stop(struct drm_device *dev);
 void maxfifo_timer_start(struct drm_device *dev);
-#endif
 
 int dc_maxfifo_uninit(struct drm_device *dev);
 
