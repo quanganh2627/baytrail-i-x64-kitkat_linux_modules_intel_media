@@ -275,8 +275,6 @@ static int32_t get_mtx_control_from_dash(struct drm_psb_private *dev_priv);
 
 static void release_mtx_control_from_dash(struct drm_psb_private *dev_priv);
 
-static void tng_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv);
-
 static int mtx_dma_write(
 	struct drm_device *dev,
 	struct ttm_buffer_object *src_bo,
@@ -600,16 +598,20 @@ static void tng_topaz_mmu_configure(struct drm_device *dev)
 #endif
 
 void tng_topaz_mmu_enable_tiling(
-	struct drm_psb_private *dev_priv)
+	struct drm_psb_private *dev_priv,
+	struct psb_video_ctx *video_ctx)
 {
 	uint32_t reg_val;
+	uint32_t frame_w;
+	uint32_t frame_h;
+
 	uint32_t min_addr = dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].gpu_offset;
 	uint32_t max_addr = dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].gpu_offset +
 			(dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].size<<PAGE_SHIFT);
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 
-	if ((topaz_priv->frame_w>PSB_TOPAZ_TILING_THRESHOLD) ||
-		(topaz_priv->frame_h>PSB_TOPAZ_TILING_THRESHOLD))
+	if ((video_ctx->frame_w > PSB_TOPAZ_TILING_THRESHOLD) ||
+		(video_ctx->frame_h > PSB_TOPAZ_TILING_THRESHOLD))
 		min_addr = dev_priv->bdev.man[TTM_PL_TT].gpu_offset;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Enable tiled memory from %08x ~ %08x\n",
@@ -882,7 +884,9 @@ int tng_topaz_reset(struct drm_psb_private *dev_priv)
 		TOPAZCORE_READ32(i, TOPAZHP_CR_TOPAZHP_SRST, &reg_val);
 	}
 
+	/*
 	tng_topaz_mmu_hwsetup(dev_priv);
+	*/
 
 	return 0;
 }
@@ -1098,7 +1102,7 @@ int tng_topaz_init_board(
 		TOPAZCORE_WRITE32(i, TOPAZHP_CR_TOPAZHP_SRST, 0);
 	}
 
-	tng_topaz_mmu_hwsetup(dev_priv);
+	tng_topaz_mmu_hwsetup(dev_priv, video_ctx);
 
 	tng_set_producer(dev, 0);
 	tng_set_consumer(dev, 0);
@@ -1283,7 +1287,7 @@ int tng_topaz_fw_run(
 		MULTICORE_WRITE32(MTX_SCRATCHREG_IDLE, 0);
 
 	/* set up mmu */
-	tng_topaz_mmu_hwsetup(dev_priv);
+	tng_topaz_mmu_hwsetup(dev_priv, video_ctx);
 
 	/* write 50 */
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MULTICORE_CORE_SEL_0, 0);
@@ -1671,7 +1675,9 @@ static void release_mtx_control_from_dash(struct drm_psb_private *dev_priv)
 	MULTICORE_WRITE32(TOPAZHP_TOP_CR_MTX_DEBUG_MSTR, reg_val);
 }
 
-void tng_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv)
+void tng_topaz_mmu_hwsetup(
+	struct drm_psb_private *dev_priv,
+	struct psb_video_ctx *video_ctx)
 {
 	uint32_t reg_val = 0;
 	uint32_t pd_addr = 0;
@@ -1696,7 +1702,7 @@ void tng_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv)
 
 	/* Enable tiling */
 	if (drm_psb_msvdx_tiling && dev_priv->have_mem_mmu_tiling)
-		tng_topaz_mmu_enable_tiling(dev_priv);
+		tng_topaz_mmu_enable_tiling(dev_priv, video_ctx);
 
 	/* now enable MMU access for all requestors */
 	reg_val = F_ENCODE(0, TOPAZHP_TOP_CR_MMU_BYPASS_TOPAZ);

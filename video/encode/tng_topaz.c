@@ -2443,15 +2443,15 @@ static int32_t tng_fill_input_control (
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 	struct psb_video_ctx *video_ctx;
 
-	mb_w = topaz_priv->frame_w / 16;
-	mb_h = topaz_priv->frame_h / 16;
-
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 	if (video_ctx == NULL) {
 		DRM_ERROR("Failed to get video contex from filp");
 		return -1;
 	}
 	video_ctx->pseudo_rand_seed = pseudo_rand_seed;
+
+	mb_w = video_ctx->frame_w / 16;
+	mb_h = video_ctx->frame_h / 16;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Fill input control, cir=%d, initqp=%d, minqp=%d, \
 		slot=%d, bufsize=%d, pseudo=%d, mb_w=%d, mb_h=%d\n", \
@@ -2587,7 +2587,7 @@ static int32_t tng_update_air_send (
 	pui16MBParam = (uint16_t*) video_ctx->cir_input_ctrl_addr;
 
 	//fill data 
-	ui32MBMaxSize = (uint32_t)(topaz_priv->frame_w / 16) * (IMG_UINT32)(topaz_priv->frame_h / 16);
+	ui32MBMaxSize = (uint32_t)(video_ctx->frame_w / 16) * (IMG_UINT32)(video_ctx->frame_h / 16);
 
 	ui32CurrentCnt = 0;
     
@@ -2645,7 +2645,7 @@ static int32_t tng_air_buf_clear(
 	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Clear AIR buffer\n");
-	memset(video_ctx->air_info.air_table, 0, (topaz_priv->frame_h * topaz_priv->frame_w) >> 8);
+	memset(video_ctx->air_info.air_table, 0, (video_ctx->frame_h * video_ctx->frame_w) >> 8);
 
 	return 0;
 }
@@ -2732,8 +2732,8 @@ static int32_t tng_update_air_calc(
 	pBestMBDecisionCtrlBuf = (uint8_t *)video_ctx->bufs_first_pass_out_best_multipass_param_addr;
 
 	//fill data 
-	ui32MBFrameWidth  = (topaz_priv->frame_w / 16);
-	ui32MBPictureHeight = (topaz_priv->frame_h / 16);
+	ui32MBFrameWidth  = (video_ctx->frame_w / 16);
+	ui32MBPictureHeight = (video_ctx->frame_h / 16);
 	
 	// get the SAD results buffer (either IPE0 and IPE1 results or, preferably, the more accurate Best Multipass SAD results)
 	if (pBestMBDecisionCtrlBuf) {
@@ -3012,10 +3012,6 @@ static int tng_setup_new_context_secure(
 	int32_t ret = 0;
 	bool is_iomem;
 
-	topaz_priv->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
-	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
-				& 0xffff0000)  >> 16) ;
-
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 	if (video_ctx == NULL) {
 		DRM_ERROR("Failed to get video contex from filp");
@@ -3039,10 +3035,16 @@ static int tng_setup_new_context_secure(
 	video_ctx->low_cmd_count = 0xa5a5a5a5 % MAX_TOPAZ_CMD_COUNT;
 	video_ctx->last_cir_index = -1;
 	video_ctx->air_info.air_scan_pos = 0;
-	video_ctx->air_info.air_table = kzalloc((topaz_priv->frame_h * topaz_priv->frame_w) >> 8, GFP_KERNEL);
-	if (!video_ctx->air_info.air_table) {
-		DRM_ERROR("TOPAZ: Failed to alloc memory for AIR table\n");
-		return -1;
+	video_ctx->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
+	video_ctx->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
+					& 0xffff0000)  >> 16) ;
+
+	if (codec != IMG_CODEC_JPEG) {
+		video_ctx->air_info.air_table = kzalloc((video_ctx->frame_h * video_ctx->frame_w) >> 8, GFP_KERNEL);
+		if (!video_ctx->air_info.air_table) {
+			DRM_ERROR("TOPAZ: Failed to alloc memory for AIR table\n");
+			return -1;
+		}
 	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: new context %08x(%s)(cur context = %08x)\n",
@@ -3113,10 +3115,6 @@ static int tng_setup_new_context(
 	int32_t ret = 0;
 	bool is_iomem;
 
-	topaz_priv->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
-	topaz_priv->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
-				& 0xffff0000)  >> 16) ;
-
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 	if (video_ctx == NULL) {
 		DRM_ERROR("Failed to get video contex from filp");
@@ -3133,10 +3131,16 @@ static int tng_setup_new_context(
 	video_ctx->low_cmd_count = 0xa5a5a5a5 % MAX_TOPAZ_CMD_COUNT;
 	video_ctx->last_cir_index = -1;
 	video_ctx->air_info.air_scan_pos = 0;
-	video_ctx->air_info.air_table = (int8_t *)kzalloc((topaz_priv->frame_h * topaz_priv->frame_w) >> 8, GFP_KERNEL);
-	if (!video_ctx->air_info.air_table) {
-		DRM_ERROR("TOPAZ: Failed to alloc memory for AIR table\n");
-		return -1;
+	video_ctx->frame_h = (uint16_t)((*((uint32_t *) cmd + 1)) & 0xffff);
+	video_ctx->frame_w = (uint16_t)(((*((uint32_t *) cmd + 1))
+					& 0xffff0000)  >> 16) ;
+
+	if (codec != IMG_CODEC_JPEG) {
+		video_ctx->air_info.air_table = (int8_t *)kzalloc((video_ctx->frame_h * video_ctx->frame_w) >> 8, GFP_KERNEL);
+		if (!video_ctx->air_info.air_table) {
+			DRM_ERROR("TOPAZ: Failed to alloc memory for AIR table\n");
+			return -1;
+		}
 	}
 
 	PSB_DEBUG_TOPAZ("TOPAZ: new context %08x(%s)(cur context = %08x)\n",
@@ -3358,7 +3362,6 @@ tng_topaz_send(
 	int32_t ret = 0;
 	struct psb_video_ctx *video_ctx;
 
-
 	if (Is_Secure_Fw() == 0) {
 		ret = tng_topaz_power_up(dev, 1);
 		if (ret) {
@@ -3366,6 +3369,7 @@ tng_topaz_send(
 			return ret;
 		}
 	}
+
 	video_ctx = get_ctx_from_fp(dev, file_priv->filp);
 	if (!video_ctx) {
 		DRM_ERROR("Failed to get context from filp %08x\n", file_priv->filp);
@@ -3518,6 +3522,7 @@ tng_topaz_send(
 					tng_topaz_fw_run(dev, video_ctx, IMG_CODEC_JPEG);
 				} else {
 					tng_topaz_reset(dev_priv);
+					tng_topaz_mmu_hwsetup(dev_priv, video_ctx);
 					tng_topaz_setup_fw(dev, video_ctx, topaz_priv->cur_codec);
 				}
 

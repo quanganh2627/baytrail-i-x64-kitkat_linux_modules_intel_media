@@ -171,13 +171,6 @@ struct tng_topaz_private {
 
 	uint32_t topaz_num_pipes;
 
-	/*Before load firmware, need to set up
-	jitter according to resolution*/
-	/*The data of MTX_CMDID_SW_NEW_CODEC command
-	contains width and length.*/
-	uint16_t frame_w;
-	uint16_t frame_h;
-
 	/* For IRQ and Sync */
 	uint32_t producer;
 	uint32_t consumer;
@@ -285,6 +278,9 @@ int mtx_write_FIFO(struct drm_device *dev,
 
 int tng_topaz_remove_ctx(struct drm_psb_private *dev,
 	struct psb_video_ctx *video_ctx);
+
+void tng_topaz_mmu_hwsetup(struct drm_psb_private *dev_priv,
+			struct psb_video_ctx *video_ctx);
 
 extern int tng_topaz_save_mtx_state(struct drm_device *dev);
 
