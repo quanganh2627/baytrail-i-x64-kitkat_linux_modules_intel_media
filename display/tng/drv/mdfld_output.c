@@ -98,21 +98,8 @@ bool is_dual_panel(struct drm_device *dev)
  */
 mdfld_dsi_encoder_t is_panel_vid_or_cmd(struct drm_device *dev)
 {
-	struct drm_psb_private *dev_priv =
-		(struct drm_psb_private *) dev->dev_private;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(panel_list); i++) {
-		if (panel_list[i].p_type == dev_priv->panel_id)
-			return panel_list[i].encoder_type;
-	}
-	DRM_INFO("%s : Could not find panel: dev_priv->pabel_id = %d, ARRAY_SIZE(panel_list) = %d",
-			__func__, dev_priv->panel_id, ARRAY_SIZE(panel_list));
-	DRM_INFO("%s : Crashing...", __func__);
-	BUG();
-
-	/* This should be unreachable */
-	return 0;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	return dev_priv->panel_type;
 }
 
 
@@ -179,6 +166,7 @@ void init_panel(struct drm_device *dev, int mipi_pipe, enum panel_type p_type)
 
 	for (i = 0; i < ARRAY_SIZE(panel_list); i++) {
 		if (panel_list[i].p_type == dev_priv->panel_id) {
+			dev_priv->panel_type = panel_list[i].encoder_type;
 			panel_list[i].panel_init(
 					dev,
 					p_funcs);
