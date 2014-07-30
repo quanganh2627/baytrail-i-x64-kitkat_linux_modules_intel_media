@@ -277,6 +277,9 @@ int psb_diet_enable(struct drm_device *dev, void *data)
 	if (!dev_priv)
 		return 0;
 
+	if(dev_priv->early_suspended)
+		return 0;
+
 	dsi_config = dev_priv->dsi_configs[0];
 	if (!dsi_config)
 		return 0;
@@ -629,6 +632,9 @@ int dpst_disable(struct drm_device *dev)
 	struct backlight_device bd;
 
 	if(!dev_priv)
+		return 0;
+
+	if(dev_priv->early_suspended)
 		return 0;
 
 	dpst_print("adjust percentage: %d.%d\n", *arg / 100, *arg % 100);
