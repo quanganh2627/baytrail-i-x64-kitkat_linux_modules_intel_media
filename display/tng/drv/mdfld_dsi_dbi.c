@@ -1078,8 +1078,6 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 		DCUnAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	} else {
-		mdfld_generic_dsi_dbi_set_power(encoder, false);
-
 		drm_handle_vblank(dev, dsi_config->pipe);
 
 		/* Turn off TE interrupt. */
@@ -1088,6 +1086,7 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 		/* Make the pending flip request as completed. */
 		DCUnAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOff(dsi_config->pipe);
+		mdfld_generic_dsi_dbi_set_power(encoder, false);
 	}
 
 	DCUnLockMutex();
@@ -1114,7 +1113,7 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 
 	DCLockMutex();
 	DC_MRFLD_onPowerOff(pipe);
-	mdfld_generic_dsi_dbi_set_power(encoder, false);
+
 
 	drm_handle_vblank(dev, pipe);
 
@@ -1123,6 +1122,8 @@ void mdfld_generic_dsi_dbi_save(struct drm_encoder *encoder)
 
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
+	mdfld_generic_dsi_dbi_set_power(encoder, false);
+
 	DCUnLockMutex();
 }
 

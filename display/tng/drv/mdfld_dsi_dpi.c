@@ -929,8 +929,6 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 		DCUnAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	} else {
-		mdfld_dsi_dpi_set_power(encoder, false);
-
 		drm_handle_vblank(dev, dsi_config->pipe);
 
 		/* Turn off TE interrupt. */
@@ -939,6 +937,7 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 		/* Make the pending flip request as completed. */
 		DCUnAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOff(dsi_config->pipe);
+		mdfld_dsi_dpi_set_power(encoder, false);
 	}
 
 	DCUnLockMutex();
@@ -1101,8 +1100,6 @@ void mdfld_dsi_dpi_save(struct drm_encoder *encoder)
 	 */
 	msleep(50);
 
-	__mdfld_dsi_dpi_set_power(encoder, false);
-
 	drm_handle_vblank(dev, pipe);
 
 	/* Turn off vsync interrupt. */
@@ -1111,6 +1108,7 @@ void mdfld_dsi_dpi_save(struct drm_encoder *encoder)
 	/* Make the pending flip request as completed. */
 	DCUnAttachPipe(pipe);
 	DC_MRFLD_onPowerOff(pipe);
+	__mdfld_dsi_dpi_set_power(encoder, false);
 	DCUnLockMutex();
 }
 
