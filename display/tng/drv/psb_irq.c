@@ -166,6 +166,7 @@ void mid_enable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 {
 	struct drm_device *dev = dev_priv->dev;
 	u32 pipe_event = mid_pipe_event(pipe);
+
 	/* S0i1-Display registers can only be programmed after the pipe events
 	 * are disabled. Otherwise MSI from the display controller can reach
 	 * the Punit without SCU knowing about it. We have to prevent this
@@ -174,6 +175,7 @@ void mid_enable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 	 * and set the state back to ready.
 	 */
 	exit_s0i1_display_mode(dev);
+
 	dev_priv->vdc_irq_mask |= pipe_event;
 	PSB_WVDC32(~dev_priv->vdc_irq_mask, PSB_INT_MASK_R);
 	PSB_WVDC32(dev_priv->vdc_irq_mask, PSB_INT_ENABLE_R);
@@ -187,14 +189,15 @@ void mid_disable_pipe_event(struct drm_psb_private *dev_priv, int pipe)
 		dev_priv->vdc_irq_mask &= ~pipe_event;
 		PSB_WVDC32(~dev_priv->vdc_irq_mask, PSB_INT_MASK_R);
 		PSB_WVDC32(dev_priv->vdc_irq_mask, PSB_INT_ENABLE_R);
-		/* S0i1-Display registers can only be programmed after the pipe events
-		 * are disabled. Otherwise MSI from the display controller can reach
-		 * the Punit without SCU knowing about it. We have to prevent this
-		 * scenario. So, if we are disabling the pipe_event, check if are
-		 * ready to enter S0i1-Display mode. If so clear it
-		 * and set the state back to entered.
+
+		/* S0i1-Display registers can only be programmed after the
+		 * pipe events are disabled. Otherwise MSI from the display
+		 * controller can reach the Punit without SCU knowing about it.
+		 * We have to prevent this scenario. So, if we are disabling
+		 * the pipe_event, check if are ready to enter S0i1-Display
+		 * mode. If so clear it and set the state back to entered.
 		 */
-		enter_s0i1_display_mode(dev);
+		enter_s0i1_display_mode(dev, false);
 	}
 }
 
@@ -467,11 +470,10 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		dev_priv->vsync_pipe |= (1 << pipe);
 		drm_handle_vblank(dev, pipe);
 		queue_work(dev_priv->vsync_wq, &dev_priv->vsync_event_work);
-		if (dev_priv->s0i1_4_video_playback) {
+
+		if (enter_s0i1_display_mode(dev, true)) {
 			hrtimer_start(&dev_priv->vsync_timer,
-			dev_priv->vsync_hrt_period,
-			HRTIMER_MODE_REL);
-			enter_s0i1_display_video_playback(dev);
+				dev_priv->vsync_hrt_period, HRTIMER_MODE_REL);
 		}
 	}
 
@@ -572,8 +574,6 @@ irqreturn_t psb_irq_handler(DRM_IRQ_ARGS)
 	uint32_t topaz_int = 0, vsp_int = 0;
 	int handled = 0;
 	unsigned long irq_flags;
-
-	/*      PSB_DEBUG_ENTRY("\n"); */
 
 	spin_lock_irqsave(&dev_priv->irqmask_lock, irq_flags);
 

@@ -1068,7 +1068,6 @@ struct drm_psb_private {
 	 */
 	ktime_t vsync_hrt_period;
 	struct hrtimer vsync_timer;
-	bool s0i1_4_video_playback;
 
 	bool dsi_device_ready;
 	bool hdmi_done_reading_edid;
@@ -1277,6 +1276,7 @@ struct backlight_device *psb_get_backlight_device(void);
 #define PSB_D_MIPI    (1 << 14)
 #define PSB_D_BL    (1 << 15)
 #define PSB_D_DPST    (1 << 16)
+#define PSB_D_MAXFIFO (1 << 17)
 
 #ifndef DRM_DEBUG_CODE
 /* To enable debug printout, set drm_psb_debug in psb_drv.c
@@ -1325,6 +1325,8 @@ extern int drm_topaz_sbuswa;
         PSB_DEBUG(PSB_D_BL, _fmt, ##_arg)
 #define PSB_DEBUG_DPST(_fmt, _arg...) \
         PSB_DEBUG(PSB_D_DPST, _fmt, ##_arg)
+#define PSB_DEBUG_MAXFIFO(_fmt, _arg...) \
+        PSB_DEBUG(PSB_D_MAXFIFO, _fmt, ##_arg)
 
 #if DRM_DEBUG_CODE
 #define PSB_DEBUG(_flag, _fmt, _arg...)					\

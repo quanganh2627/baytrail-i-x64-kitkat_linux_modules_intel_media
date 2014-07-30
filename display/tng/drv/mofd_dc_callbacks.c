@@ -628,7 +628,6 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 	u32 ovadd_reg = OV_OVADD;
 	u32 ovstat_reg = OV_DOVASTA;
 	u32 power_islands = OSPM_DISPLAY_A;
-	int retry;
 	int pipe;
 	uint32_t pipeconf = PIPEACONF;
 
@@ -838,52 +837,70 @@ void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe)
 
 void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
 {
-	struct drm_psb_private *dev_priv =
-		(struct drm_psb_private *)dev->dev_private;
+	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct dc_maxfifo *maxfifo_info = dev_priv->dc_maxfifo_info;
-	u32 curr_state;
-	u32 curr_mode;
+	unsigned long flags;
 
 	/* only video mode support for now */
-	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
+	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI)
+		return;
+
+	if (!maxfifo_info)
+		return;
+
+	spin_lock_irqsave(&maxfifo_info->lock, flags);
+
+	/* already in the required maxfifo mode */
+	if (maxfifo_info->maxfifo_current_state == req_mode)
+		goto out;
+
+	/*
+	 * requested maxfifo mode is different with current maxfifo mode,
+	 * exit first, will enter into new mode if get 20 consecutive same
+	 * requests
+	 */
+	if (maxfifo_info->maxfifo_current_state != -1 &&
+	    maxfifo_info->maxfifo_current_state != req_mode) {
+		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
+		DCCBExitMaxfifoMode(dev);
 		return;
 	}
 
-	if (can_enter_maxfifo_s0i1_display(dev, req_mode)) {
-		PSB_DEBUG_PM("Enter Maxfifo mode: %d current state: %d\n", req_mode,
-					maxfifo_info->maxfifo_current_state);
-		if (maxfifo_info->maxfifo_current_state == -1) {/*Not enabled, so enable*/
-			/*check to see if pipe b is on. if yes, don't enable*/
-			if ((REG_READ(0x71008) & 0x80000000) == 0) {
-				enter_maxfifo_mode(dev, req_mode);
-				dev_priv->s0i1_4_video_playback = (req_mode == 0) ? false : true;
-			}
+	if (!can_enter_maxfifo_s0i1_display(dev, req_mode))
+		goto out;
 
-		} else if (maxfifo_info->maxfifo_current_state != req_mode) {
-			DCCBExitMaxfifoMode(dev);
-		}
+	/* check to see if pipe b is on. if yes, don't enable */
+	if ((REG_READ(0x71008) & 0x80000000) == 0) {
+		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
+		enter_maxfifo_mode(dev, req_mode);
+		return;
 	}
+
+out:
+	spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 }
 
 void DCCBExitMaxfifoMode(struct drm_device *dev)
 {
-	struct drm_psb_private *dev_priv =
-		(struct drm_psb_private *)dev->dev_private;
-	struct dc_maxfifo * maxfifo_info = dev_priv->dc_maxfifo_info;
-	u32 curr_state;
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct dc_maxfifo *maxfifo_info = dev_priv->dc_maxfifo_info;
+	unsigned long flags;
 
 	/* only video mode support for now */
-	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
+	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI)
+		return;
+
+	if (!maxfifo_info)
+		return;
+
+	spin_lock_irqsave(&maxfifo_info->lock, flags);
+	if (maxfifo_info->maxfifo_current_state == -1) {
+		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 		return;
 	}
+	spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 
-	if (maxfifo_info->maxfifo_current_state != -1) {
-		PSB_DEBUG_PM("DCCB current mode: %d, Exit maxfifo mode\n",
-				maxfifo_info->maxfifo_current_state);
-		dev_priv->s0i1_4_video_playback = false;
-		exit_s0i1_display_video_playback(dev);
-		exit_maxfifo_mode(dev);
-	}
+	exit_maxfifo_mode(dev);
 }
 
 void DCCBUnblankDisplay(struct drm_device *dev)

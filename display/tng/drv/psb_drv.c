@@ -1465,9 +1465,7 @@ static enum hrtimer_restart vsync_hrt_event_processor(struct hrtimer *hrt)
 						vsync_timer);
 	struct drm_device *dev = dev_priv->dev;
 
-	if (dev_priv->s0i1_4_video_playback) {
-		exit_s0i1_display_video_playback(dev);
-	}
+	exit_s0i1_display_mode(dev);
 
 	return HRTIMER_NORESTART;
 }
@@ -1734,10 +1732,11 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 #endif
 	spin_lock_init(&dev_priv->sequence_lock);
 
-	/*Setup high resolution timer for s0i1 display when vsync active*/
-	/*Start timer here well in advance of vsync starting*/
-	/*so timer will be ready to go when vsyncs start*/
-	dev_priv->s0i1_4_video_playback = false;
+	/*
+	 * Setup high resolution timer for s0i1 display when vsync active
+	 * Start timer here well in advance of vsync starting
+	 * so timer will be ready to go when vsyncs start
+	 */
 	dev_priv->vsync_hrt_period = ktime_set(0, 15000 * NSEC_PER_USEC);
 	hrtimer_init(&dev_priv->vsync_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	dev_priv->vsync_timer.function = &vsync_hrt_event_processor;
@@ -2170,34 +2169,8 @@ static int psb_panel_query_ioctl(struct drm_device *dev, void *data,
 }
 
 static int psb_idle_ioctl(struct drm_device *dev, void *data,
-				struct drm_file *file_priv) {
-
-	struct drm_psb_idle_ctrl *ctrl = (struct drm_psb_idle_ctrl*) data;
-
-	switch (ctrl->cmd) {
-	case IDLE_CTRL_ENABLE:
-		PSB_DEBUG_PM("IDLE_CTRL_ENABLE\n");
-		enable_repeat_frame_intr(dev);
-		break;
-	case IDLE_CTRL_DISABLE:
-		PSB_DEBUG_PM("IDLE_CTRL_DISABLE\n");
-		exit_maxfifo_mode(dev);
-		disable_repeat_frame_intr(dev);
-		break;
-	case IDLE_CTRL_ENTER:
-		PSB_DEBUG_PM("IDLE_CTRL_ENTER\n");
-		enter_maxfifo_mode(dev, 0);
-		break;
-	case IDLE_CTRL_EXIT:
-		PSB_DEBUG_PM("IDLE_CTRL_EXIT\n");
-		exit_maxfifo_mode(dev);
-		enable_repeat_frame_intr(dev);
-		break;
-	default:
-		DRM_ERROR("%s: invalid command.\n", __func__);
-		break;
-	}
-
+				struct drm_file *file_priv)
+{
 	return 0;
 }
 

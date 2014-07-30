@@ -394,78 +394,28 @@ static void disable_plane(struct plane_state *pstate)
 	pstate->active = false;
 }
 
-static int get_maxfifo_s0i1_plane_config_state()
+static int get_maxfifo_s0i1_mode(DC_MRFLD_FLIP *psFlip)
 {
-	bool overlay_only_flag = false;
-	bool sprite_only_flag = false;
-	bool sprite_overlay_flag = false;
-	int i, j;
-	struct plane_state *pstate;
+	bool overlay_a_only;
+	bool primary_a_only;
+	int mode = -1;
 
-	for (i = 1; i < DC_PLANE_MAX; i++) {
-		for (j = 0; j < MAX_PLANE_INDEX; j++) {
-			pstate = &gpsDevice->plane_states[i][j];
-
-			/* Check if any active planes are on pipe b or c.
-				if so, can't enter maxfifo/s0i1 display */
-			if ((pstate->attached_pipe != 0) && (pstate->active == true))
-				return -1;
-		}
-	}
-
-	for (i = 1; i < DC_PLANE_MAX; i++) {
-		for (j = 0; j < MAX_PLANE_INDEX; j++) {
-			pstate = &gpsDevice->plane_states[i][j];
-
-			/* Check if any sprites are on.  if so, can't enter
-					maxfifo/s0i1 display */
-			if ((pstate->type == DC_SPRITE_PLANE) && (pstate->active == true)) {
-				return -1;
-			}
-		}
-	}
-
-	/* Check to see if one and only one Overlay (Overlay A) is on. */
-	for (i = 1; i < DC_PLANE_MAX; i++) {
-		for (j = 0; j < MAX_PLANE_INDEX; j++) {
-			pstate = &gpsDevice->plane_states[i][j];
-
-			if ((overlay_only_flag == true) && (pstate->active == true) && (pstate->type == DC_OVERLAY_PLANE)) {
-				return -1;
-			}
-			if ((pstate->type == DC_OVERLAY_PLANE) && (pstate->active == true) && (j == 0) && (pstate->attached_pipe == 0)) {
-				overlay_only_flag = true;
-			}
-		}
-	}
-
-	/* Check to see if one and only one Primary (Sprite A) is on. */
-	for (i = 1; i < DC_PLANE_MAX; i++) {
-		for (j = 0; j < MAX_PLANE_INDEX; j++) {
-			pstate = &gpsDevice->plane_states[i][j];
-
-			if ((sprite_only_flag == true) && (pstate->active == true) && (pstate->type == DC_PRIMARY_PLANE)) {
-				return -1;
-			}
-			if ((pstate->type == DC_PRIMARY_PLANE) && (pstate->active == true) && (j == 0) && (pstate->attached_pipe == 0)){
-				sprite_only_flag = true;
-			}
-		}
-	}
-
-	if (overlay_only_flag == true && sprite_only_flag == false)
-		return 0x02;
-
-	/*if (overlay_only_flag == false && sprite_only_flag == true)
-		return 0x00;*/
-
-	/*if (overlay_only_flag == true && sprite_only_flag == true)
-		return 0x01;*/
-
-	if (overlay_only_flag == false && sprite_only_flag == false)
+	if (psFlip->uiSpriteFlip)
 		return -1;
 
-	return -1;
+	/* get maxfifo entry mode for different flip combinations */
+	primary_a_only = (psFlip->uiPrimaryFlip == 1);
+	overlay_a_only = (psFlip->uiOverlayFlip == 1);
+
+	if (primary_a_only && !overlay_a_only)
+		mode = 0x0;
+	else if (primary_a_only && overlay_a_only)
+		mode = 0x1;
+	else if (!primary_a_only && overlay_a_only)
+		mode = 0x02;
+
+	PSB_DEBUG_MAXFIFO("can enter maxfifo mode: %d\n", mode);
+	return mode;
 }
 
 static IMG_BOOL enable_plane(struct flip_plane *plane)
@@ -641,6 +591,23 @@ static void _Flip_Timer_Fn(unsigned long arg)
         schedule_work(&psDevice->flip_retire_work);
 }
 
+static IMG_BOOL need_exit_maxfifo_mode(DC_MRFLD_FLIP *psFlip)
+{
+	/* any of sprite D E F flip */
+	if (psFlip->uiSpriteFlip)
+		return true;
+
+	/* primary B flip */
+	if (psFlip->uiPrimaryFlip & (1 << 1))
+		return true;
+
+	/* overlay C flip */
+	if (psFlip->uiOverlayFlip & (1 << 1))
+		return true;
+
+	return false;
+}
+
 static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 {
 	DC_MRFLD_SURF_CUSTOM *psSurfCustom = NULL;
@@ -708,6 +675,9 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 		enable_plane(plane);
 	}
 
+	if (need_exit_maxfifo_mode(psFlip))
+		DCCBExitMaxfifoMode(gpsDevice->psDrmDevice);
+
 	/* Delay the Flip if we are close the Vblank interval since we
 	 * do not want to update plane registers during the vblank period
 	 */
@@ -763,10 +733,12 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 
 	bUpdated = IMG_TRUE;
 
-	/* Check if we can enter maxfifo mode.  if yes, send the maxfifo
-	state to enter maxfifo mode.  Exit maxfifo is handled by
-	_Dispatch_Flip */
-	maxfifo_state = get_maxfifo_s0i1_plane_config_state();
+	/*
+	 * Check if we can enter maxfifo mode.
+	 * if yes, send the maxfifo state to enter maxfifo mode.
+	 * Exit maxfifo is handled before we do flip.
+	 */
+	maxfifo_state = get_maxfifo_s0i1_mode(psFlip);
 	if (maxfifo_state != -1)
 		DCCBEnterMaxfifoMode(gpsDevice->psDrmDevice, maxfifo_state);
 
@@ -889,19 +861,17 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 				/*Flip sprite context*/
 				index = psSurfCustom->ctx.sp_ctx.index;
 				pipe = psSurfCustom->ctx.sp_ctx.pipe;
-				DCCBExitMaxfifoMode(gpsDevice->psDrmDevice);
+				psFlip->uiSpriteFlip |= 1 << index;
 				break;
 			case DC_PRIMARY_PLANE:
 				index = psSurfCustom->ctx.prim_ctx.index;
 				pipe = psSurfCustom->ctx.prim_ctx.pipe;
-				if (index != 0)
-					DCCBExitMaxfifoMode(gpsDevice->psDrmDevice);
+				psFlip->uiPrimaryFlip |= 1 << index;
 				break;
 			case DC_OVERLAY_PLANE:
 				index = psSurfCustom->ctx.ov_ctx.index;
 				pipe = psSurfCustom->ctx.ov_ctx.pipe;
-				if (index != 0)
-					DCCBExitMaxfifoMode(gpsDevice->psDrmDevice);
+				psFlip->uiOverlayFlip |= 1 << index;
 				break;
 			default:
 				DRM_ERROR("Unknown plane type %d\n",

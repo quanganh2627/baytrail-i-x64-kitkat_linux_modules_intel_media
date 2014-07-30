@@ -321,11 +321,8 @@ exit:
 		pr_debug("%s: HDMI hot plug state  = %d\n", __func__, hdmi_status);
 
 		/* Turn off maxfifo/S0i1 display*/
-		if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DPI) {
-			dev_priv->s0i1_4_video_playback = false;
-			exit_s0i1_display_video_playback(dev);
+		if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DPI)
 			exit_maxfifo_mode(dev);
-		}
 
 		if (hdmi_status) {
 			/* hdmi_state indicates that hotplug event happens */

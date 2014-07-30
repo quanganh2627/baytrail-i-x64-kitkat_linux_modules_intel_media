@@ -37,34 +37,28 @@ typedef enum {
 } S0i1_DISP_STATE;
 
 struct dc_maxfifo {
-	struct mutex maxfifo_mtx;
+	spinlock_t lock;
 
-	struct drm_device       *dev_drm;
+	struct drm_device *dev_drm;
 	bool repeat_frame_interrupt_on;
-	int  regs_to_set;
-	u32 sa_count; /* holds the number of consecutive sprite a requests */
-	u32 so_count; /* holds the number of consecutive sprite a + OVA requests */
-	u32 ova_count; /* holds the number of consecutive OVA requests */
-	bool maxfifo_active; /* is maxfifo enabled */
+	int regs_to_set;
+	int maxfifo_try_count;
+	u32 req_mode;
 	int maxfifo_current_state; /* 0=sprite A; 1=sprite a + ova; 2=ova */
 	S0i1_DISP_STATE s0i1_disp_state;
 	struct work_struct repeat_frame_interrupt_work;
 };
 
-int dc_maxfifo_init(struct drm_device *dev);
-void maxfifo_report_repeat_frame_interrupt(struct drm_device * dev);
 bool enter_maxfifo_mode(struct drm_device *dev, int mode);
 bool exit_maxfifo_mode(struct drm_device *dev);
-bool enter_s0i1_display_mode(struct drm_device *dev);
+bool enter_s0i1_display_mode(struct drm_device *dev, bool from_playback);
 bool exit_s0i1_display_mode(struct drm_device *dev);
-void enter_s0i1_display_video_playback(struct drm_device *dev);
-void exit_s0i1_display_video_playback(struct drm_device *dev);
 bool can_enter_maxfifo_s0i1_display(struct drm_device *dev, int mode);
-void enable_repeat_frame_intr(struct drm_device *dev);
-void disable_repeat_frame_intr(struct drm_device *dev);
+
 void maxfifo_timer_stop(struct drm_device *dev);
 void maxfifo_timer_start(struct drm_device *dev);
 
+int dc_maxfifo_init(struct drm_device *dev);
 int dc_maxfifo_uninit(struct drm_device *dev);
 
 #endif

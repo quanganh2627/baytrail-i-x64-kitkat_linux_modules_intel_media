@@ -33,6 +33,7 @@
 #include "early_suspend.h"
 #include "android_hdmi.h"
 #include "gfx_rtpm.h"
+#include "dc_maxfifo.h"
 
 static struct drm_device *g_dev;
 
@@ -46,6 +47,14 @@ static void gfx_early_suspend(struct early_suspend *h)
 	PSB_DEBUG_PM("%s\n", __func__);
 
 	flush_workqueue(dev_priv->power_wq);
+
+	/*
+	 * exit s0i1-disp mode to avoid keeing system in s0i1-disp mode,
+	 * otherwise, we may block system entering into other s0i1 mode
+	 * after screen off
+	 */
+	maxfifo_timer_stop(dev);
+	exit_maxfifo_mode(dev);
 
 	/* protect early_suspend with dpms and mode config */
 	mutex_lock(&dev->mode_config.mutex);
