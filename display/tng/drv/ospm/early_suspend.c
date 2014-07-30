@@ -119,9 +119,11 @@ static void gfx_late_resume(struct early_suspend *h)
 	 * when system suspend,re-detect once here.
 	 */
 	if (android_hdmi_is_connected(dev)) {
+		DCLockMutex();
 		DCAttachPipe(1);
 		DC_MRFLD_onPowerOn(1);
 		mid_hdmi_audio_resume(dev);
+		DCUnLockMutex();
 	}
 
 	mutex_unlock(&dev->mode_config.mutex);
