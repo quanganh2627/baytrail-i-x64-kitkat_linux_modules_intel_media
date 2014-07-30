@@ -243,18 +243,21 @@ void enter_s0i1_display_video_playback(struct drm_device *dev)
 	struct dc_maxfifo *maxfifo_info =
 		(struct dc_maxfifo *) dev_priv->dc_maxfifo_info;
 	bool ret;
+	unsigned long irqflags;
 
+	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_READY;
 	ret = enter_s0i1_display_mode(dev);
+	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 	PSB_DEBUG_PM("Enabled S0i1 display for video playback\n");
 }
 
+/* Need lock protect of irqmask_lock */
 bool enter_s0i1_display_mode(struct drm_device *dev)
 {
 	struct drm_psb_private * dev_priv = dev->dev_private;
 	struct dc_maxfifo * maxfifo_info =
 		(struct dc_maxfifo *) dev_priv->dc_maxfifo_info;
-
 
 	if (maxfifo_info &&
 		(maxfifo_info->s0i1_disp_state == S0i1_DISP_STATE_READY)){
@@ -283,17 +286,22 @@ void exit_s0i1_display_video_playback(struct drm_device *dev)
 	struct dc_maxfifo *maxfifo_info =
 		(struct dc_maxfifo *) dev_priv->dc_maxfifo_info;
 	bool ret;
+	unsigned long irqflags;
 
+	spin_lock_irqsave(&dev_priv->irqmask_lock, irqflags);
 	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_ENTERED;
 	ret = exit_s0i1_display_mode(dev);
+	spin_unlock_irqrestore(&dev_priv->irqmask_lock, irqflags);
 	PSB_DEBUG_PM("Disabled S0i1 Display for video mode\n");
 }
 
+/* Need lock protect of irqmask_lock */
 bool exit_s0i1_display_mode(struct drm_device *dev)
 {
 	struct drm_psb_private * dev_priv = dev->dev_private;
 	struct dc_maxfifo * maxfifo_info =
 		(struct dc_maxfifo *) dev_priv->dc_maxfifo_info;
+
 	if (maxfifo_info &&
 		(maxfifo_info->s0i1_disp_state == S0i1_DISP_STATE_ENTERED)){
 
