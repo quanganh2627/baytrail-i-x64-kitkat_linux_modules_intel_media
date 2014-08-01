@@ -228,11 +228,14 @@ static irqreturn_t __hdmi_irq_handler_bottomhalf(void *data)
 {
 	struct android_hdmi_priv *hdmi_priv = data;
 	static int processed_hdmi_status = -1;
-	struct drm_device *dev = hdmi_priv->dev;
-	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
 
 	if (hdmi_priv == NULL || !hdmi_priv->dev)
 		return IRQ_HANDLED;
+
+	dev = hdmi_priv->dev;
+	dev_priv = dev->dev_private;
 
 	if (!ospm_power_using_hw_begin(OSPM_DISPLAY_ISLAND,
 			OSPM_UHB_FORCE_POWER_ON)) {
