@@ -728,11 +728,53 @@ int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 	return 0;
 }
 
+void DCCBEnablePrimaryWA(struct drm_device *dev, int index)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct psb_gtt *pg = dev_priv->pg;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_context *dsi_ctx = NULL;
+	u32 reg_offset;
+
+	if (index < 0 || index > 2) {
+		DRM_ERROR("Invalid primary index %d\n", index);
+		return;
+	}
+
+	if (index == 0) {
+		dsi_config = dev_priv->dsi_configs[0];
+		reg_offset = 0;
+	} else if (index == 1) {
+		reg_offset = 0x1000;
+	} else if (index == 2) {
+		dsi_config = dev_priv->dsi_configs[1];
+		reg_offset = 0x2000;
+	}
+
+	if (dsi_config) {
+		dsi_ctx = &dsi_config->dsi_hw_context;
+		dsi_ctx->dsppos = 0;
+		dsi_ctx->dspsize = (63 << 16) | 63;
+		dsi_ctx->dspstride = (64 << 2);
+		dsi_ctx->dspcntr = 0x9c800000;
+		dsi_ctx->dsplinoff = 0;
+		dsi_ctx->dspsurf = pg->reserved_gtt_start;
+	}
+
+	PSB_WVDC32(0, DSPAPOS + reg_offset);
+	PSB_WVDC32((63 << 16) | 63, DSPASIZE + reg_offset);
+	PSB_WVDC32((64 << 2), DSPASTRIDE + reg_offset);
+	PSB_WVDC32(0x9c800000, DSPACNTR + reg_offset);
+	PSB_WVDC32(0, DSPALINOFF + reg_offset);
+	PSB_WVDC32(0, DSPATILEOFF + reg_offset);
+	PSB_WVDC32(pg->reserved_gtt_start, DSPASURF + reg_offset);
+	DRM_INFO("enable primary plane WA on pipe %d\n", index);
+}
+
 int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct psb_gtt *pg = dev_priv->pg;
 	struct mdfld_dsi_config *dsi_config = NULL;
 	struct mdfld_dsi_hw_context *dsi_ctx = NULL;
 	u32 reg_offset;
@@ -753,26 +795,7 @@ int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 	}
 
 	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
-		if (dsi_config) {
-			dsi_ctx = &dsi_config->dsi_hw_context;
-			dsi_ctx->dsppos = 0;
-			dsi_ctx->dspsize = (63 << 16) | 63;
-			dsi_ctx->dspstride = (64 << 2);
-			dsi_ctx->dspcntr = DISPPLANE_32BPP;
-			dsi_ctx->dspcntr |= DISPPLANE_PREMULT_DISABLE;
-			dsi_ctx->dspcntr |= (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset));
-			dsi_ctx->dsplinoff = 0;
-			dsi_ctx->dspsurf = pg->reserved_gtt_start;
-		}
-
-		PSB_WVDC32(0, DSPAPOS + reg_offset);
-		PSB_WVDC32((63 << 16) | 63, DSPASIZE + reg_offset);
-		PSB_WVDC32((64 << 2), DSPASTRIDE + reg_offset);
-		PSB_WVDC32(0x1c800000 | (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset)),
-		DSPACNTR + reg_offset);
-		PSB_WVDC32(0, DSPALINOFF + reg_offset);
-		PSB_WVDC32(0, DSPATILEOFF + reg_offset);
-		PSB_WVDC32(pg->reserved_gtt_start, DSPASURF + reg_offset);
+		DCCBEnablePrimaryWA(dev, index);
 	} else {
 
 		if (dsi_config) {

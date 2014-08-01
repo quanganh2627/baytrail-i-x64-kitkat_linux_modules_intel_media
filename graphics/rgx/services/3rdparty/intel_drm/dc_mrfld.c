@@ -35,6 +35,7 @@
 #include "pwr_mgmt.h"
 #include "psb_drv.h"
 #include "dc_maxfifo.h"
+#include "mdfld_dsi_output.h"
 
 #if !defined(SUPPORT_DRM)
 #error "SUPPORT_DRM must be set"
@@ -81,6 +82,8 @@ static uint32_t DC_ExtraPowerIslands[DC_PLANE_MAX][MAX_PLANE_INDEX] = {
 	{ 0,              OSPM_DISPLAY_C, 0},
 	{ 0,              0,              0},
 };
+
+static uint32_t DC_PrimaryWAOnPipes[MAX_PIPE_NUM] = {0, 0, 0};
 
 static inline IMG_UINT32 _Align_To(IMG_UINT32 ulValue,
 				IMG_UINT32 ulAlignment)
@@ -349,10 +352,39 @@ static void disable_plane(struct plane_state *pstate)
 	int index = pstate->index;
 	int pipe = pstate->attached_pipe;
 	u32 ctx = 0;
+	int i, j, planes = 0;
 	struct drm_psb_private *dev_priv = gpsDevice->psDrmDevice->dev_private;
+	struct plane_state *tmp;
 
 	DRM_DEBUG("disable plane (%d %d)\n", type, index);
 
+	/* NOTE: pipe without active planes will hang */
+
+	/* we don't need this check in command mode because hwc do it */
+	if (is_panel_vid_or_cmd(gpsDevice->psDrmDevice) == MDFLD_DSI_ENCODER_DBI)
+		goto plane_disable;
+
+	for (i = 1; i < DC_PLANE_MAX; i++) {
+		for (j = 0; j < MAX_PLANE_INDEX; j++) {
+			tmp = &gpsDevice->plane_states[i][j];
+			if (tmp->attached_pipe != pipe)
+				continue;
+			if (tmp->active)
+				planes++;
+			if (planes > 1)
+				goto plane_disable;
+		}
+	}
+
+	if (planes == 1) {
+		DCCBEnablePrimaryWA(gpsDevice->psDrmDevice, pipe);
+		DC_PrimaryWAOnPipes[pipe] = 1;
+		/* last one is primary plane, skip disable*/
+		if (type == DC_PRIMARY_PLANE)
+			goto power_off;
+	}
+
+plane_disable:
 	switch (type) {
 	case DC_SPRITE_PLANE:
 		DCCBSpriteEnable(gpsDevice->psDrmDevice, ctx, index, 0);
@@ -370,6 +402,7 @@ static void disable_plane(struct plane_state *pstate)
 		return;
 	}
 
+power_off:
 	{
 		struct power_off_req *req = kzalloc(sizeof(*req), GFP_KERNEL);
 
@@ -396,7 +429,15 @@ static IMG_BOOL enable_plane(struct flip_plane *plane)
 {
 	int type = plane->type;
 	int index = plane->index;
+	int pipe = plane->attached_pipe;
 	struct plane_state *pstate = &gpsDevice->plane_states[type][index];
+
+	/* Disable primary plane WA on this pipe */
+	if (DC_PrimaryWAOnPipes[pipe]) {
+		if (type != DC_PRIMARY_PLANE)
+			DCCBPrimaryEnable(gpsDevice->psDrmDevice, 0, index, 0);
+		DC_PrimaryWAOnPipes[pipe] = 0;
+	}
 
 	if (pstate->powered_off && pstate->extra_power_island) {
 		DRM_DEBUG("power on island %#x for plane (%d %d)\n",

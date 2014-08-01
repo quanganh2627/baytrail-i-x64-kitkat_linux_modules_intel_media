@@ -910,16 +910,12 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 		DRM_MODE_DPMS_STANDBY == mode ? "standby" : "off"));
 
 	mutex_lock(&dev_priv->dpms_mutex);
-	DCLockMutex();
 
 	if (mode == DRM_MODE_DPMS_ON) {
-		mdfld_dsi_dpi_set_power(encoder, true);
-
-		drm_vblank_on(dev, dsi_config->pipe);
-
-		DCAttachPipe(dsi_config->pipe);
-		DC_MRFLD_onPowerOn(dsi_config->pipe);
-
+		/*
+		 * We remove power operation here to prevent power is on
+		 * after ospm power off the panel, it will lead pipe hang.
+		 */
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
 		ctx = &dsi_config->dsi_hw_context;
 		bd.props.brightness = ctx->lastbrightnesslevel;
@@ -932,22 +928,10 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 		bd.props.brightness = 0;
 		psb_set_brightness(&bd);
 #endif
-		/* Make the pending flip request as completed. */
-		DCUnAttachPipe(dsi_config->pipe);
-		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	} else {
-		drm_handle_vblank(dev, dsi_config->pipe);
-
-		/* Turn off TE interrupt. */
-		drm_vblank_off(dev, dsi_config->pipe);
-
-		/* Make the pending flip request as completed. */
-		DCUnAttachPipe(dsi_config->pipe);
-		DC_MRFLD_onPowerOff(dsi_config->pipe);
-		mdfld_dsi_dpi_set_power(encoder, false);
+		// nothing to do
 	}
 
-	DCUnLockMutex();
 	mutex_unlock(&dev_priv->dpms_mutex);
 }
 
