@@ -36,12 +36,6 @@ typedef enum {
 	S0i1_DISP_STATE_ENTERED
 } S0i1_DISP_STATE;
 
-enum {
-    MAXFIFO_MODE_SPRITE_ONLY = 0,
-    MAXFIFO_MODE_SPRITE_OVERLAY,
-    MAXFIFO_MODE_OVERLAY_ONLY
-};
-
 struct dc_maxfifo {
 	struct mutex maxfifo_mtx;
 

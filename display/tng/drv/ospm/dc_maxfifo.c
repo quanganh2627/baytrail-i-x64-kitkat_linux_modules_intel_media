@@ -199,7 +199,7 @@ bool can_enter_maxfifo_s0i1_display(struct drm_device * dev, int mode)
 		maxfifo_info->so_count = 0;
 		maxfifo_info->ova_count = 0;
 		/* wait for 200 consecutive requests */
-		if (maxfifo_info->sa_count > 20) {
+		if (maxfifo_info->sa_count > 0) {
 			maxfifo_info->sa_count = 0;
 			maxfifo_info->so_count = 0;
 			maxfifo_info->ova_count = 0;
