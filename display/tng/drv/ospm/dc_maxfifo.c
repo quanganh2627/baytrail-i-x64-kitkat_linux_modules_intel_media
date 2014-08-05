@@ -262,9 +262,6 @@ bool enter_s0i1_display_mode(struct drm_device *dev)
 	if (maxfifo_info &&
 		(maxfifo_info->s0i1_disp_state == S0i1_DISP_STATE_READY)){
 
-		if (dev_priv->psb_dpst_state)
-			psb_irq_turn_off_dpst_no_lock(dev);
-
 		pmu_set_s0i1_disp_vote(true);
 /*
 		u32 dsp_ss_pm_val;
@@ -306,9 +303,6 @@ bool exit_s0i1_display_mode(struct drm_device *dev)
 		(maxfifo_info->s0i1_disp_state == S0i1_DISP_STATE_ENTERED)){
 
 		pmu_set_s0i1_disp_vote(false);
-
-	if (dev_priv->psb_dpst_state)
-		psb_irq_turn_on_dpst_no_lock(dev);
 /*
 		u32 dsp_ss_pm_val;
 
@@ -339,6 +333,9 @@ bool enter_maxfifo_mode(struct drm_device *dev, int mode)
 #endif
 	mutex_lock(&maxfifo_info->maxfifo_mtx);
 	regs_to_set = maxfifo_info->regs_to_set;
+
+	if (dev_priv->psb_dpst_state)
+		psb_irq_disable_dpst(dev);
 
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		if (regs_to_set & DC_MAXFIFO_REGSTOSET_DSPSRCTRL_ENABLE) {
@@ -375,6 +372,9 @@ bool exit_maxfifo_mode(struct drm_device *dev)
 
 	if (!maxfifo_info)
 		return false;
+
+	if (dev_priv->psb_dpst_state)
+		psb_irq_enable_dpst(dev);
 
 	mutex_lock(&maxfifo_info->maxfifo_mtx);
 	if (power_island_get(OSPM_DISPLAY_A)) {
