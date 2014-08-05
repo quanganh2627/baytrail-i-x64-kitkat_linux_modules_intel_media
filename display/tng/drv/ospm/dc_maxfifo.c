@@ -189,14 +189,14 @@ bool enter_s0i1_display_mode(struct drm_device *dev, bool from_playback)
 	if (!maxfifo_info)
 		return false;
 
-	spin_lock_irqsave(&maxfifo_info->lock, flags);
-
 	/*
 	 * enter s0i1-disp mode after vblank is disabled,
 	 * need to cancel hrt timer to avoid exiting from s0i1-disp mode
 	 */
 	if (!from_playback)
 		hrtimer_cancel(&dev_priv->vsync_timer);
+
+	spin_lock_irqsave(&maxfifo_info->lock, flags);
 
 	if (maxfifo_info->s0i1_disp_state != S0i1_DISP_STATE_READY) {
 		ret = false;
