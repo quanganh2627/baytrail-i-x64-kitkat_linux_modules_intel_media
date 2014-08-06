@@ -1114,7 +1114,7 @@ bool mrst_get_vbt_data(struct drm_psb_private *dev_priv)
 	struct drm_device *dev = dev_priv->dev;
 
 	dev_priv->panel_id = PanelID;
-	dev_priv->mipi_encoder_type = is_panel_vid_or_cmd(dev_priv->dev);
+	dev_priv->mipi_encoder_type = get_mipi_panel_type(dev);
 
 	if (is_dual_dsi(dev) && IS_ANN(dev)) {
 		dev_priv->bUseHFPLL = false;

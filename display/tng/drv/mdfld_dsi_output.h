@@ -581,6 +581,7 @@ extern int mdfld_dsi_get_power_mode(struct mdfld_dsi_config *dsi_config,
 		u8 transmission);
 
 extern mdfld_dsi_encoder_t is_panel_vid_or_cmd(struct drm_device *dev);
+extern mdfld_dsi_encoder_t get_mipi_panel_type(struct drm_device *dev);
 extern const char *panel_mode_string(struct drm_device *dev);
 
 extern void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,

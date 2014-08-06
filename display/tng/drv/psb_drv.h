@@ -614,7 +614,6 @@ struct drm_psb_private {
 	/* info that is stored from the gct */
 	struct gct_ioctl_arg gct_data;
 	enum panel_type panel_id;
-	mdfld_dsi_encoder_t panel_type;
 
 	/* pci revision id for B0:D2:F0 */
 	uint8_t platform_rev_id;
