@@ -141,8 +141,8 @@ static void maxfifo_send_hwc_event_work(struct work_struct *work)
 		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 		enter_maxfifo_mode(dev, maxfifo_info->req_mode);
 		/* trigger the vblank disable to enter into s0i1-disp */
-		drm_vblank_get(dev, 0);
-		drm_vblank_put(dev, 0);
+		if (!drm_vblank_get(dev, 0))
+			drm_vblank_put(dev, 0);
 		return;
 	}
 	spin_unlock_irqrestore(&maxfifo_info->lock, flags);

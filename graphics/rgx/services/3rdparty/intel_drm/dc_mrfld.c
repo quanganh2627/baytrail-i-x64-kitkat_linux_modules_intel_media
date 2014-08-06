@@ -394,30 +394,6 @@ static void disable_plane(struct plane_state *pstate)
 	pstate->active = false;
 }
 
-static int get_maxfifo_s0i1_mode(DC_MRFLD_FLIP *psFlip)
-{
-	bool overlay_a_only;
-	bool primary_a_only;
-	int mode = -1;
-
-	if (psFlip->uiSpriteFlip)
-		return -1;
-
-	/* get maxfifo entry mode for different flip combinations */
-	primary_a_only = (psFlip->uiPrimaryFlip == 1);
-	overlay_a_only = (psFlip->uiOverlayFlip == 1);
-
-	if (primary_a_only && !overlay_a_only)
-		mode = 0x0;
-	else if (primary_a_only && overlay_a_only)
-		mode = 0x1;
-	else if (!primary_a_only && overlay_a_only)
-		mode = 0x02;
-
-	PSB_DEBUG_MAXFIFO("can enter maxfifo mode: %d\n", mode);
-	return mode;
-}
-
 static IMG_BOOL enable_plane(struct flip_plane *plane)
 {
 	int type = plane->type;
@@ -598,14 +574,38 @@ static IMG_BOOL need_exit_maxfifo_mode(DC_MRFLD_FLIP *psFlip)
 		return true;
 
 	/* primary B flip */
-	if (psFlip->uiPrimaryFlip & (1 << 1))
+	if (psFlip->uiPrimaryFlip & ~1)
 		return true;
 
 	/* overlay C flip */
-	if (psFlip->uiOverlayFlip & (1 << 1))
+	if (psFlip->uiOverlayFlip & ~1)
 		return true;
 
 	return false;
+}
+
+static int get_maxfifo_s0i1_mode(DC_MRFLD_FLIP *psFlip)
+{
+	bool overlay_a_only;
+	bool primary_a_only;
+	int mode = -1;
+
+	if (need_exit_maxfifo_mode(psFlip))
+		return -1;
+
+	/* get maxfifo entry mode for different flip combinations */
+	primary_a_only = (psFlip->uiPrimaryFlip == 1);
+	overlay_a_only = (psFlip->uiOverlayFlip == 1);
+
+	if (primary_a_only && !overlay_a_only)
+		mode = 0x0;
+	else if (primary_a_only && overlay_a_only)
+		mode = 0x1;
+	else if (!primary_a_only && overlay_a_only)
+		mode = 0x02;
+
+	PSB_DEBUG_MAXFIFO("can enter maxfifo mode: %d\n", mode);
+	return mode;
 }
 
 static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
