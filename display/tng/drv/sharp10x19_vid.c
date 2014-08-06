@@ -65,12 +65,6 @@ static int mdfld_dsi_sharp10x19_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 		DRM_ERROR("%s: %d: Remove NVM reload\n", __func__, __LINE__);
 		goto ic_init_err;
 	}
-	err = mdfld_dsi_send_mcs_short_hs(sender,
-			write_display_brightness, 0x10, 1, MDFLD_DSI_SEND_PACKAGE);
-	if (err) {
-		DRM_ERROR("%s: %d: Set Brightness\n", __func__, __LINE__);
-		goto ic_init_err;
-	}
 
 	err = mdfld_dsi_send_mcs_short_hs(sender,
 		write_ctrl_display,
@@ -209,6 +203,14 @@ static int mdfld_dsi_sharp10x19_power_on(
 	}
 
 	msleep(20);
+
+	err = mdfld_dsi_send_mcs_short_hs(sender,
+			write_display_brightness, 0x10, 1, MDFLD_DSI_SEND_PACKAGE);
+	if (err) {
+		DRM_ERROR("%s: %d: Set Brightness\n", __func__, __LINE__);
+		goto power_on_err;
+	}
+
 	return 0;
 power_on_err:
 	err = -EIO;
