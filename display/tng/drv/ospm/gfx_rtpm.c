@@ -48,31 +48,12 @@ int rtpm_suspend(struct device *dev)
 	return 0;
 }
 
-int rtpm_suspend_if_runtime_active(struct device *dev)
-{
-	if (dev->power.runtime_status == RPM_ACTIVE) {
-		/* do actual runtime suspend */
-		pm_runtime_put_sync_suspend(dev);
-
-		/* The final condition should become before system suspends:
-		 * a) usage_count == 1 as
-		 *    device_prepare() calls pm_runtime_get_noresume()
-		 * b) runtime_status == RPM_SUSPENDED
-		 */
-		pm_runtime_get_noresume(dev);
-	}
-
-	return 0;
-}
-
 int rtpm_resume(struct device *dev)
 {
 	struct drm_psb_private *dev_priv = gpDrmDevice->dev_private;
 	PSB_DEBUG_PM("%s\n", __func__);
-	if (!pm_qos_request_active(&dev_priv->s0ix_qos)) {
-		pm_qos_add_request(& dev_priv->s0ix_qos,
+	pm_qos_add_request(&dev_priv->s0ix_qos,
 			PM_QOS_CPU_DMA_LATENCY, CSTATE_EXIT_LATENCY_S0i1 - 1);
-	}
 	/* No OPs of GFX/VED/VEC/VSP/DISP */
 	rtpm_resume_pci();
 
