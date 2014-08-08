@@ -139,15 +139,18 @@ static void maxfifo_send_hwc_event_work(struct work_struct *work)
 	spin_lock_irqsave(&maxfifo_info->lock, flags);
 	if (maxfifo_info->req_mode == 0) {
 		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
-		enter_maxfifo_mode(dev, maxfifo_info->req_mode);
+
+		if (maxfifo_info->maxfifo_current_state == -1)
+			enter_maxfifo_mode(dev, maxfifo_info->req_mode);
+
 		/* trigger the vblank disable to enter into s0i1-disp */
 		if (!drm_vblank_get(dev, 0))
 			drm_vblank_put(dev, 0);
 		return;
 	}
-	spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 
-	 maxfifo_send_hwc_uevent(maxfifo_info->dev_drm);
+	spin_unlock_irqrestore(&maxfifo_info->lock, flags);
+	maxfifo_send_hwc_uevent(maxfifo_info->dev_drm);
 }
 
 bool can_enter_maxfifo_s0i1_display(struct drm_device *dev, int mode)
