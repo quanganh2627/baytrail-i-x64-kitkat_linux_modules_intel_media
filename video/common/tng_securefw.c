@@ -62,7 +62,7 @@ extern struct soft_platform_id spid;
 #define mofd_v0_msvdx		"msvdx.bin.0008.0000.0001"
 #define mofd_v1_pr2_msvdx	"msvdx.bin.0008.0002.0001"
 #define mofd_ffrd_pr0_msvdx	mofd_v0_msvdx
-//#define mofd_product_msvdx	"mofd_product_msvdx.bin"
+#define mofd_product_msvdx	"mofd_product_msvdx.bin"
 #define mofd_prh_b0_msvdx	"msvdx.bin.000c.0001.0001"
 
 #define mrfl_ffrd_pr2_b0_topaz	"topaz.bin.0004.0000.000d"
@@ -75,7 +75,7 @@ extern struct soft_platform_id spid;
 #define mofd_v0_topaz		"topaz.bin.0008.0000.0001"
 #define mofd_v1_pr2_topaz	"topaz.bin.0008.0002.0001"
 #define mofd_ffrd_pr0_topaz	mofd_vv_fab_a_topaz
-//#define mofd_product_topaz	"mofd_product_topaz.bin"
+#define mofd_product_topaz	"mofd_product_topaz.bin"
 #define mofd_prh_b0_topaz	"topaz.bin.000c.0001.0001"
 
 #define mrfl_ffrd_pr2_b0_vsp	"vsp.bin.0004.0000.000d"
@@ -88,7 +88,7 @@ extern struct soft_platform_id spid;
 #define mofd_v0_vsp		"vsp.bin.0008.0000.0001"
 #define mofd_v1_pr2_vsp		"vsp.bin.0008.0002.0001"
 #define mofd_ffrd_pr0_vsp	mofd_vv_fab_a_vsp
-//#define mofd_product_vsp	"mofd_product_vsp.bin"
+#define mofd_product_vsp	"mofd_product_vsp.bin"
 #define mofd_prh_b0_vsp		"vsp.bin.000c.0001.0001"
 
 #define mrfl_defalut_msvdx	mrfl_product_msvdx
@@ -131,7 +131,7 @@ static struct spid2fw_mapping spid2fw[] = {
 	{8, 0, 1, mofd_v0_msvdx, mofd_v0_topaz, mofd_v0_vsp, 15}, /* moorefield V0 */
 	{8, 2, 0, mofd_vv_fab_a_msvdx, mofd_vv_fab_a_topaz, mofd_vv_fab_a_vsp, 15}, /* moorefield V1 VV with A0 soc */
 	{8, 2, 1, mofd_v1_pr2_msvdx, mofd_v1_pr2_topaz, mofd_v1_pr2_vsp, 15}, /* moorefield V1 PR2 */
-	//{8, 0, 2, mofd_product_msvdx, mofd_product_topaz, mofd_product_vsp, 15}, /* Anniedale Production Keys (QS/PRQ) */
+	{8, 0, 2, mofd_product_msvdx, mofd_product_topaz, mofd_product_vsp, 15}, /* Anniedale Production Keys (QS/PRQ) */
 	{0xc, 0, 4, mofd_ffrd_pr0_msvdx, mofd_ffrd_pr0_topaz, mofd_ffrd_pr0_vsp, 15}, /* moorefield FFRD PR0 */
 	{0xc, 1, 1, mofd_prh_b0_msvdx, mofd_prh_b0_topaz, mofd_prh_b0_vsp, 15}, /* MCG Moorefield PRH B0 */
 
