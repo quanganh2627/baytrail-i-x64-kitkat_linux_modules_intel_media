@@ -488,13 +488,14 @@ static int mdfld_dsi_connector_get_modes(struct drm_connector *connector)
 		MDFLD_DSI_CONNECTOR(psb_output);
 	struct mdfld_dsi_config *dsi_config =
 		mdfld_dsi_get_config(dsi_connector);
+	struct drm_display_mode *fixed_mode;
+	struct drm_display_mode *dup_mode = NULL;
+	struct drm_device *dev = connector->dev;
+
 	if (!dsi_config) {
 		DRM_ERROR("dsi_config is NULL\n");
 		return MODE_ERROR;
 	}
-	struct drm_display_mode *fixed_mode = dsi_config->fixed_mode;
-	struct drm_display_mode *dup_mode = NULL;
-	struct drm_device *dev = connector->dev;
 
 	PSB_DEBUG_ENTRY("\n");
 
@@ -503,6 +504,7 @@ static int mdfld_dsi_connector_get_modes(struct drm_connector *connector)
 	connector->display_info.min_hfreq = 0;
 	connector->display_info.max_hfreq = 200;
 
+	fixed_mode = dsi_config->fixed_mode;
 	if (fixed_mode) {
 		PSB_DEBUG_ENTRY("fixed_mode %dx%d\n",
 				fixed_mode->hdisplay, fixed_mode->vdisplay);
@@ -525,11 +527,12 @@ static int mdfld_dsi_connector_mode_valid(struct drm_connector *connector,
 		MDFLD_DSI_CONNECTOR(psb_output);
 	struct mdfld_dsi_config *dsi_config =
 		mdfld_dsi_get_config(dsi_connector);
+	struct drm_display_mode *fixed_mode = NULL;
+
 	if (!dsi_config) {
 		DRM_ERROR("dsi_config is NULL\n");
 		return MODE_ERROR;
 	}
-	struct drm_display_mode *fixed_mode = dsi_config->fixed_mode;
 
 	PSB_DEBUG_ENTRY("mode %p, fixed mode %p\n", mode, fixed_mode);
 
@@ -543,6 +546,7 @@ static int mdfld_dsi_connector_mode_valid(struct drm_connector *connector,
 	 * FIXME: current DC has no fitting unit, reject any mode setting request
 	 * will figure out a way to do up-scaling(pannel fitting) later.  
 	 **/
+	fixed_mode = dsi_config->fixed_mode;
 	if (fixed_mode) {
 		if (mode->hdisplay != fixed_mode->hdisplay)
 			return MODE_PANEL;
@@ -571,11 +575,12 @@ mdfld_dsi_connector_best_encoder(struct drm_connector *connector)
 		MDFLD_DSI_CONNECTOR(psb_output);
 	struct mdfld_dsi_config *dsi_config =
 		mdfld_dsi_get_config(dsi_connector);
+	struct mdfld_dsi_encoder *encoder = NULL;
+
 	if (!dsi_config) {
 		DRM_ERROR("dsi_config is NULL\n");
 		return NULL;
 	}
-	struct mdfld_dsi_encoder *encoder = NULL;
 
 	PSB_DEBUG_ENTRY("config type %d\n", dsi_config->type);
 
@@ -985,14 +990,6 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 		goto dsi_init_err0;
 	}
 
-#if 0
-	/*init panel error detector*/
-	if (mdfld_dsi_error_detector_init(dev, dsi_connector)) {
-		DRM_ERROR("Failed to init dsi_error detector");
-		goto dsi_init_err1;
-	}
-#endif
-
 	/*create DBI & DPI encoders*/
 	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {
 		encoder = mdfld_dsi_dbi_init(dev, dsi_connector, p_funcs);
@@ -1041,7 +1038,6 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 dsi_init_err2:
 	mdfld_dsi_error_detector_exit(dsi_connector);
 
-dsi_init_err1:
 	/*destroy sender*/
 	mdfld_dsi_pkg_sender_destroy(dsi_connector->pkg_sender);
 
@@ -1068,8 +1064,6 @@ dsi_init_err0:
 void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 		struct drm_display_mode *mode)
 {
-	int drain_rate = 0;
-	u8 value;
 	struct mdfld_dsi_encoder *dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	struct mdfld_dsi_config *dsi_config =
 		mdfld_dsi_encoder_get_config(dsi_encoder);
@@ -1084,27 +1078,7 @@ void mdfld_dsi_set_drain_latency(struct drm_encoder *encoder,
 	ctx = &dsi_config->dsi_hw_context;
 	if (dsi_config->pipe == 0) {
 		mutex_lock(&dsi_config->context_lock);
-#if 0
-		if ((mode->hdisplay == 720) && (mode->vdisplay == 1280))
-			drain_rate = ACTUAL_DRAIN_RATE_7x12;
-		else if ((mode->hdisplay == 1080) && (mode->vdisplay == 1920))
-			drain_rate = ACTUAL_DRAIN_RATE_10x19;
-		else if ((mode->hdisplay == 2560) && (mode->vdisplay == 1600))
-			drain_rate = ACTUAL_DRAIN_RATE_25x16;
-		if (drain_rate != 0) {
-			value = ((64 * 32 / drain_rate) & 0xFF) | 0x80;
-			ctx->ddl1 = value | (HDMI_SPRITE_DEADLINE << 8) |
-					(value << 24);
-			ctx->ddl2 = value | (HDMI_OVERLAY_DEADLINE << 8);
-			ctx->ddl3 = 0;
-			ctx->ddl4 = value | (value << 8);
-			ctx->ddl1 = 0x83838383;
-			ctx->ddl2 = 0x83838383;
-			ctx->ddl3 = 0x83;
-			ctx->ddl4 = 0x8383;
 
-		}
-#endif
 		ctx->ddl1 = 0x86868686;
 		ctx->ddl2 = 0x86868686;
 		ctx->ddl3 = 0x86;
@@ -1136,7 +1110,6 @@ int mdfld_dsi_set_cabc_mode(struct drm_device *dev, struct mdfld_dsi_config *dsi
 	struct panel_funcs *p_funcs;
 	u32 power_island = 0;
 	int err;
-	u8 mode;
 
 	if (!dev || !dsi_config) {
 		DRM_ERROR("Invalid parameter\n");

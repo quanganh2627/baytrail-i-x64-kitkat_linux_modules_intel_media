@@ -596,6 +596,7 @@ void ospm_sidekick_init(struct drm_device *dev,
 	p_island->p_dependency = get_island_ptr(NC_PM_SSS_GFX_SLC);
 }
 
+#if 0
 static void ospm_check_registers(struct drm_device *dev)
 {
 	uint32_t reg, data;
@@ -613,6 +614,7 @@ static void ospm_check_registers(struct drm_device *dev)
 
 	return ;
 }
+#endif
 
 
 static void ospm_pnp_settings(struct drm_device *dev)

@@ -257,7 +257,6 @@ void jdi25x16_cmd_controller_init(
 
 	hw_ctx->mipi = SEL_FLOPPED_HSTX	| PASS_FROM_SPHY_TO_AFE |
 					DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE;
-		DUAL_LINK_MODE_PIXEL_ALTER;
 	hw_ctx->video_mode_format = 0xf;
 }
 static

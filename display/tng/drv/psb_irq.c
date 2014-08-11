@@ -126,12 +126,11 @@ static inline u32 mid_pipeconf(int pipe)
 void psb_enable_pipestat(struct drm_psb_private *dev_priv, int pipe, u32 mask)
 {
 	struct drm_device *dev = dev_priv->dev;
-
 	u32 reg = psb_pipestat(pipe);
-	dev_priv->pipestat[pipe] |= mask;
-	/* Enable the interrupt, clear any pending status */
 	u32 writeVal = PSB_RVDC32(reg);
 
+	dev_priv->pipestat[pipe] |= mask;
+	/* Enable the interrupt, clear any pending status */
 	writeVal |= (mask | (mask >> 16));
 	PSB_WVDC32(writeVal, reg);
 	(void)PSB_RVDC32(reg);
@@ -431,7 +430,6 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	    (dev_priv->psb_dpst_state != NULL)) {
 		uint32_t pwm_reg = 0;
 		uint32_t hist_reg = 0;
-		u32 irqCtrl = 0;
 		struct dpst_guardband guardband_reg;
 		struct dpst_ie_histogram_control ie_hist_cont_reg;
 
@@ -809,10 +807,6 @@ void psb_irq_turn_on_dpst_no_lock(struct drm_device *dev)
 	    (struct drm_psb_private *)dev->dev_private;
 	struct mdfld_dsi_config *dsi_config = NULL;
 	struct mdfld_dsi_hw_context *ctx = NULL;
-	unsigned long irqflags;
-
-	u32 hist_reg;
-	u32 pwm_reg;
 
 	if(!dev_priv)
 		return;
@@ -852,7 +846,6 @@ void psb_irq_turn_off_dpst_no_lock(struct drm_device *dev)
 	struct drm_psb_private *dev_priv =
 	    (struct drm_psb_private *)dev->dev_private;
 	struct mdfld_dsi_config *dsi_config = NULL;
-	unsigned long irqflags;
 
 	if (!dev_priv)
 		return;
@@ -1142,7 +1135,6 @@ int mdfld_enable_te(struct drm_device *dev, int pipe)
 	struct drm_psb_private *dev_priv =
 	    (struct drm_psb_private *)dev->dev_private;
 	unsigned long irqflags;
-	uint32_t reg_val = 0;
 	uint32_t pipeconf_reg = mid_pipeconf(pipe);
 	uint32_t retry = 0;
 

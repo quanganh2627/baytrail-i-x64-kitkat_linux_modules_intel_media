@@ -1295,8 +1295,8 @@ static otm_hdmi_ret_t __pd_attr_declare(otm_hdmi_attribute_t *table,
 
 	switch (type) {
 	case OTM_HDMI_ATTR_TYPE_UINT:
-		table[id].content._uint.value         = (unsigned int) value;
-		table[id].content._uint.value_default = (unsigned int) value;
+		table[id].content._uint.value         = (unsigned int) ((uint64_t)value);
+		table[id].content._uint.value_default = (unsigned int) ((uint64_t)value);
 		table[id].content._uint.value_min     = min;
 		table[id].content._uint.value_max     = max;
 		break;

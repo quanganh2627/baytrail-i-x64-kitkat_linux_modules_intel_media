@@ -262,9 +262,10 @@ bool ps_hdmi_power_rails_off(void)
 /* enable/disable IRQ and CPD_HPD */
 bool ps_hdmi_enable_hpd(bool enable)
 {
+	u8 pin = 0;
+
 	pr_debug("Entered %s: %s\n", __func__, enable ? "enable" : "disable");
 
-	u8 pin = 0;
 	/* see ShadyCove PMIC spec and board schema */
 	if (INTEL_MID_BOARD(2, PHONE, MOFD, MP, PRO) ||
 		INTEL_MID_BOARD(2, PHONE, MOFD, MP, ENG)){
@@ -393,7 +394,7 @@ int ps_hdmi_get_hpd_pin(void)
 void ps_hdmi_override_cable_status(bool state, bool auto_state)
 {
 	if (g_context == NULL)
-		return 0;
+		return;
 
 	g_context->override_cable_state = auto_state;
 
