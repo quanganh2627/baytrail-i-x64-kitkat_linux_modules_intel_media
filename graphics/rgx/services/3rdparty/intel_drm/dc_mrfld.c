@@ -569,6 +569,9 @@ static void _Flip_Timer_Fn(unsigned long arg)
 
 static IMG_BOOL need_exit_maxfifo_mode(DC_MRFLD_FLIP *psFlip)
 {
+	if (hdmi_state)
+		return true;
+
 	/* any of sprite D E F flip */
 	if (psFlip->uiSpriteFlip)
 		return true;
@@ -743,7 +746,7 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 		DCCBEnterMaxfifoMode(gpsDevice->psDrmDevice, maxfifo_state);
 
 	/* maxfifo is only enabled in mipi only mode */
-	if (iPipe == DC_PIPE_A)
+	if (iPipe == DC_PIPE_A && !hdmi_state)
 		maxfifo_timer_start(gpsDevice->psDrmDevice);
 
 err_out:
