@@ -785,7 +785,11 @@ IMG_VOID RGXProcessRequestFreelistsReconstruction(PVRSRV_RGXDEV_INFO *psDevInfo,
 	
 	PVR_ASSERT(psDevInfo);
 
-	//PVR_DPF((PVR_DBG_ERROR,"FreeList RECONSTRUCTION: Reconstructing %u freelist(s)", ui32FreelistsCount));
+	if(ui32FreelistsCount > MAX_HW_TA3DCONTEXTS * RGXFW_MAX_FREELISTS)
+	{
+		PVR_DPF((PVR_DBG_FATAL,"FreeList RECONSTRUCTION: Reconstructing %u freelist(s) exceed the Max", ui32FreelistsCount));
+		return;
+	}
 	
 	for (ui32Loop = 0; ui32Loop < ui32FreelistsCount; ui32Loop++)
 	{
