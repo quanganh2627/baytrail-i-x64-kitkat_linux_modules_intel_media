@@ -980,11 +980,15 @@ struct IMG_WRITEBACK_MSG {
 #define BIAS_MM_WRITE32(base, offset, value)  \
 	TNG_WRITE32(base, offset, value)
 
+#ifndef MM_WRITE32
 #define MM_WRITE32(base, offset, value)  \
 	TNG_WRITE32(base, offset, value)
+#endif
 
+#ifndef MM_READ32
 #define MM_READ32(base, offset, pointer) \
 	TNG_READ32(base, offset, pointer)
+#endif
 
 #else
 #define BIAS_MM_WRITE32(base, offset, value)  \
@@ -2378,7 +2382,7 @@ int tng_topaz_power_up(
 
 int tng_topaz_power_off(struct drm_device *dev);
 
-int Is_Secure_Fw();
+int Is_Secure_Fw(void);
 
 #define SHIFT_WB_PRODUCER       (0)
 #define MASK_WB_PRODUCER	\
