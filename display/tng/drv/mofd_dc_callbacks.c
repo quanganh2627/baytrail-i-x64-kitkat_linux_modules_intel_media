@@ -841,10 +841,6 @@ void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
 	struct dc_maxfifo *maxfifo_info = dev_priv->dc_maxfifo_info;
 	unsigned long flags;
 
-	/* only video mode support for now */
-	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI)
-		return;
-
 	if (!maxfifo_info)
 		return;
 
@@ -885,10 +881,6 @@ void DCCBExitMaxfifoMode(struct drm_device *dev)
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct dc_maxfifo *maxfifo_info = dev_priv->dc_maxfifo_info;
 	unsigned long flags;
-
-	/* only video mode support for now */
-	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI)
-		return;
 
 	if (!maxfifo_info)
 		return;

@@ -29,6 +29,7 @@
 #include "dc_maxfifo.h"
 #include "psb_drv.h"
 #include "psb_intel_reg.h"
+#include "mdfld_dsi_output.h"
 
 #include <linux/spinlock.h>
 #include <linux/device.h>
@@ -111,6 +112,10 @@ void maxfifo_timer_start(struct drm_device *dev)
 void maxfifo_timer_stop(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct dc_maxfifo *maxfifo_info = dev_priv->dc_maxfifo_info;
+
+	if (!maxfifo_info)
+		return;
 
 	del_timer(&dev_priv->maxfifo_timer);
 }
@@ -433,8 +438,9 @@ int dc_maxfifo_init(struct drm_device *dev)
 	struct dc_maxfifo *maxfifo_info;
 	struct drm_psb_private *dev_priv = dev->dev_private;
 
-	if (dev_priv->dc_maxfifo_info)
-		return true;
+	/* don't support s0i1-disp with command mode panel */
+	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI)
+		return 0;
 
 	dev_priv->dc_maxfifo_info =
 		kzalloc(sizeof(struct dc_maxfifo), GFP_KERNEL);
@@ -448,6 +454,7 @@ int dc_maxfifo_init(struct drm_device *dev)
 	spin_lock_init(&maxfifo_info->lock);
 
 	maxfifo_info->maxfifo_current_state = -1;
+	maxfifo_info->req_mode = -1;
 	maxfifo_info->dev_drm = dev;
 	maxfifo_info->regs_to_set = TNG_MAXFIFO_REGS_TO_SET_DEFAULT;
 	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_NOT_READY;
