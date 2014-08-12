@@ -79,7 +79,7 @@
 
 /* MaxFifo/ S0i1-Display */
 #include "dc_maxfifo.h"
-#define VBLANK_OFF_DELAY_DEFAULT	300
+#define VBLANK_OFF_DELAY_DEFAULT	50
 
 #define KEEP_UNUSED_CODE 0
 #define KEEP_UNUSED_CODE_S3D 0

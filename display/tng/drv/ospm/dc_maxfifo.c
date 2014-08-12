@@ -64,7 +64,7 @@
 		DC_MAXFIO_REGSTOSET_DSPSSM_S0i1_DISP )
 
 
-static int maxfifo_entry_delay = 150;
+static int maxfifo_entry_delay = 80;
 EXPORT_SYMBOL(maxfifo_entry_delay);
 module_param_named(maxfifo_delay, maxfifo_entry_delay, int, 0600);
 
