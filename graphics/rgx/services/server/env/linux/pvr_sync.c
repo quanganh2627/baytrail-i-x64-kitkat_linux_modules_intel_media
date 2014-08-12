@@ -169,9 +169,6 @@ struct PVR_SYNC_DATA
     /* The timeline update value for this sync point. */
     IMG_UINT32            ui32TlUpdateValue;
  
-    /* Has this sync point signaled? */
-    atomic_t              sSignaled;
- 
     /* Was this sync used for "update" already */
     atomic_t              sUpdated;
 	/* This refcount is incremented at create and dup time, and decremented
@@ -187,6 +184,9 @@ struct PVR_SYNC_PT
     /* Original sync struct */
 	struct sync_pt pt;
 
+    /* Has this sync point signaled? */
+    atomic_t              sSignaled;
+ 
     /* Private shared data */
 	struct PVR_SYNC_DATA *psSyncData;
 };
@@ -272,7 +272,7 @@ static char* _debugInfoPt(struct sync_pt *pt)
         snprintf(szInfo, sizeof(szInfo), "sync(%llu): id=%u%s tv=%u # fw=%08x v=%u r=%d%s p: %s",
                  psPVRPt->psSyncData->ui64Stamp,
                  psPVRPt->psSyncData->psSyncKernel->ui32SyncId,
-                 atomic_read(&psPVRPt->psSyncData->sSignaled) ? "* " : " ",
+                 atomic_read(&psPVRPt->sSignaled) ? "* " : " ",
                  psPVRPt->psSyncData->ui32TlUpdateValue,
                  psPVRPt->psSyncData->psSyncKernel->ui32SyncVAddr,
                  psPVRPt->psSyncData->psSyncKernel->ui32SyncValue,
@@ -310,6 +310,7 @@ static struct sync_pt *PVRSyncDup(struct sync_pt *sync_pt)
 
     atomic_inc(&psPVRPtOne->psSyncData->sRefCount);
 	psPVRPtTwo->psSyncData = psPVRPtOne->psSyncData;
+	atomic_set(&psPVRPtTwo->sSignaled, atomic_read(&psPVRPtOne->sSignaled));
 
 err_out:
 	return (struct sync_pt*)psPVRPtTwo;
@@ -319,15 +320,15 @@ static int PVRSyncHasSignaled(struct sync_pt *sync_pt)
 {
     struct PVR_SYNC_PT *psPVRPt = (struct PVR_SYNC_PT *)sync_pt;
 
-    if (  !atomic_read(&psPVRPt->psSyncData->sSignaled)
+    if (  !atomic_read(&psPVRPt->sSignaled)
         && ServerSyncFenceIsMeet(psPVRPt->psSyncData->psSyncKernel->psSync,
                                  psPVRPt->psSyncData->psSyncKernel->ui32SyncValue))
-        atomic_set(&psPVRPt->psSyncData->sSignaled, 1);
+        atomic_set(&psPVRPt->sSignaled, 1);
 
 	DPF("%s: r: %d # %s", __func__,
-        atomic_read(&psPVRPt->psSyncData->sSignaled), _debugInfoPt(sync_pt));
+        atomic_read(&psPVRPt->sSignaled), _debugInfoPt(sync_pt));
 
-    return atomic_read(&psPVRPt->psSyncData->sSignaled);
+    return atomic_read(&psPVRPt->sSignaled);
 }
 
 static int PVRSyncCompare(struct sync_pt *a, struct sync_pt *b)
@@ -447,7 +448,6 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl, int *pbIdleFence)
    if (   psPVRTl->bFencingEnabled
        || ui32CurrOp < ui32NextOp)
    {
-	   atomic_set(&psSyncData->sSignaled, 0);
 	   atomic_set(&psSyncData->sUpdated, 0);
 
        psSyncData->psSyncKernel = OSAllocMem(sizeof(struct PVR_SYNC_KERNEL_SYNC_PRIM));
@@ -508,8 +508,6 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl, int *pbIdleFence)
        psSyncData->ui32TlFenceValue  = ui32CurrOp;
        psSyncData->ui32TlUpdateValue = ui32CurrOp;
        atomic_set(&psSyncData->sUpdated, 1);
-       /* This is an idle fence. Immediately mark it signaled. */
-       atomic_set(&psSyncData->sSignaled, 1);
 
        /* Return 1 here, so that the caller doesn't try to insert this into an
         * OpenGL ES stream. */
@@ -528,12 +526,19 @@ PVRSyncCreateSync(struct PVR_SYNC_TIMELINE *psPVRTl, int *pbIdleFence)
 	/* Attach our sync data to the new sync point. */
 	psPVRPt->psSyncData = psSyncData;
 
+	if (psSyncData->psSyncKernel)
+	   atomic_set(&psPVRPt->sSignaled, 0);
+	else
+       /* This is an idle fence. Immediately mark it signaled. */
+       atomic_set(&psPVRPt->sSignaled, 1);
+
+
 	/* Reset the fencing enabled flag. If nobody sets this to 1 until the next
 	 * create call, we will do timeline idle detection. */
 	psPVRTl->bFencingEnabled = 0;
 
 	/* If this is a idle fence we need to signal the timeline immediately. */
-	if (atomic_read(&psPVRPt->psSyncData->sSignaled))
+	if (atomic_read(&psPVRPt->sSignaled))
 		sync_timeline_signal((struct sync_timeline *)psPVRTl);
 
 err_out:
@@ -1317,7 +1322,7 @@ IMG_VOID PVRSyncUpdateAllTimelines(PVRSRV_CMDCOMP_HANDLE hCmdCompHandle)
 
 			/* Check for any points which weren't signaled before, but are now.
 			 * If so, mark it for signaling and stop processing this timeline. */
-            if (   !atomic_read(&((struct PVR_SYNC_PT *)psPt)->psSyncData->sSignaled)
+            if (   !atomic_read(&((struct PVR_SYNC_PT *)psPt)->sSignaled)
 				&& PVRSyncHasSignaled(psPt))
 			{
 				DPF("%s: signal # %s", __func__,
@@ -1534,7 +1539,7 @@ PVRSRV_ERROR PVRFDSyncQueryFenceKM(IMG_INT32 i32FDFence,
 			 * signalled, don't return it to the caller. The operation is
 			 * already fulfilled in this case and needs no waiting on. */
 			if (   !bUpdate
-                    &&  atomic_read(&psPVRPt->psSyncData->sSignaled))
+                    &&  atomic_read(&psPVRPt->sSignaled))
 				continue;
 
             /* Must not be NULL, cause idle syncs are always signaled. */
