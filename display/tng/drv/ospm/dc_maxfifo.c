@@ -211,6 +211,8 @@ bool enter_s0i1_display_mode(struct drm_device *dev, bool from_playback)
 	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_ENTERED;
 	PSB_DEBUG_MAXFIFO("maxfifo: enter s0i1-display playback:%d\n",
 			  from_playback);
+	if (dev_priv->psb_dpst_state)
+		psb_irq_turn_off_dpst_no_lock(dev);
 
 out:
 	spin_unlock_irqrestore(&maxfifo_info->lock, flags);
@@ -229,6 +231,9 @@ static void __exit_s0i1_display_mode(struct drm_device *dev)
 
 	pmu_set_s0i1_disp_vote(false);
 	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_READY;
+
+	if (dev_priv->psb_dpst_state)
+		psb_irq_turn_on_dpst_no_lock(dev);
 
 	PSB_DEBUG_MAXFIFO("maxfifo: exit s0i1-display\n");
 }
@@ -259,9 +264,6 @@ bool enter_maxfifo_mode(struct drm_device *dev, int mode)
 
 	if (!maxfifo_info)
 		return false;
-
-	if (dev_priv->psb_dpst_state)
-		psb_irq_disable_dpst(dev);
 
 	maxfifo_timer_stop(dev);
 
@@ -302,9 +304,6 @@ bool exit_maxfifo_mode(struct drm_device *dev)
 
 	if (!maxfifo_info)
 		return false;
-
-	if (dev_priv->psb_dpst_state)
-		psb_irq_enable_dpst(dev);
 
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		spin_lock_irqsave(&maxfifo_info->lock, flags);
