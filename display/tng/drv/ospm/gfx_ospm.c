@@ -366,6 +366,14 @@ int gpu_freq_mhz_to_code(int freq_mhz_in, int *p_freq_out)
 }
 EXPORT_SYMBOL(gpu_freq_mhz_to_code);
 
+int gpu_freq_get_max_fuse_setting(void)
+{
+
+	/* Feature not supported for TNG */
+	return 0;
+}
+EXPORT_SYMBOL(gpu_freq_get_max_fuse_setting);
+
 /***********************************************************
  * All Graphics Island
  ***********************************************************/

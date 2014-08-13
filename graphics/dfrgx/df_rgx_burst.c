@@ -41,7 +41,7 @@
 #define MAX_NUM_SAMPLES		10
 
 /*Profiling Information - */
-struct gpu_profiling_record a_profiling_info[NUMBER_OF_LEVELS_B0];
+struct gpu_profiling_record a_profiling_info[NUMBER_OF_LEVELS_MAX_FUSE];
 
 /**
  * gpu_profiling_records_init() - Initializes profiling array.
@@ -94,11 +94,15 @@ int gpu_profiling_records_show(char *buf)
 {
 	int i;
 	int ret = 0;
+	int n_levels = NUMBER_OF_LEVELS;
+
+	if(df_rgx_is_max_fuse_set())
+		n_levels = NUMBER_OF_LEVELS_MAX_FUSE;
 
 	DFRGX_DPF(DFRGX_DEBUG_HIGH, "%s\n",
 		__func__);
 
-	for (i = 0; i < NUMBER_OF_LEVELS_B0; i++) {
+	for (i = 0; i < n_levels; i++) {
 		ret += sprintf((buf+ret), "Time for %lu KHZ : %llu ms\n",
 			a_available_state_freq[i].freq,
 			a_profiling_info[i].time_ms);
@@ -226,7 +230,7 @@ static long set_desired_frequency_khz(struct busfreq_data *bfdata,
 		prev_util_record_index =
 			df_rgx_get_util_record_index_by_freq(prev_freq);
 		if ((prev_util_record_index >= 0)
-			&& (prev_util_record_index < NUMBER_OF_LEVELS_B0))
+			&& (prev_util_record_index < NUMBER_OF_LEVELS_MAX_FUSE))
 			gpu_profiling_records_update_entry(prev_util_record_index, 0);
 
 		if (bfdata->g_dfrgx_data.gpu_utilization_record_index >= 0)
