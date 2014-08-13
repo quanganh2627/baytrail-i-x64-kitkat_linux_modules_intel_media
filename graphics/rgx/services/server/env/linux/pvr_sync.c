@@ -546,13 +546,11 @@ err_out:
 
 err_complete_sync1:
 	if (psSyncData->psSyncKernel)
-		ServerSyncCompleteOp(psPVRTl->psTlSync, IMG_TRUE,
-                             psSyncData->ui32TlUpdateValue);
+		PVRSRVServerSyncPrimSetKM(psPVRTl->psTlSync, psSyncData->ui32TlUpdateValue);
 
 err_complete_sync:
 	if (psSyncData->psSyncKernel)
-		ServerSyncCompleteOp(psSyncData->psSyncKernel->psSync, IMG_TRUE,
-                             psSyncData->psSyncKernel->ui32SyncValue);
+		PVRSRVServerSyncPrimSetKM(psSyncData->psSyncKernel->psSync, psSyncData->psSyncKernel->ui32SyncValue);
 
 err_free_sync:
 	if (psSyncData->psSyncKernel)
