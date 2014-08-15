@@ -631,6 +631,8 @@ static int mdfld_dsi_get_default_config(struct drm_device *dev,
 	config->channel_num = 0;
 	config->video_mode = MDFLD_DSI_VIDEO_BURST_MODE;
 
+	config->cabc_mode = CABC_MODE_STILL_IMAGE;
+
 	return 0;
 }
 

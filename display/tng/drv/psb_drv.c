@@ -1884,8 +1884,6 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 
 	mdfld_dsi_dsr_enable(dev_priv->dsi_configs[0]);
 
-	dev_priv->dsi_configs[0]->cabc_mode = CABC_MODE_STILL_IMAGE;
-
 	return PVRSRVDrmLoad(dev, chipset);
  out_err:
 	psb_driver_unload(dev);
