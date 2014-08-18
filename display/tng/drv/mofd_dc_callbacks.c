@@ -887,6 +887,7 @@ void DCCBExitMaxfifoMode(struct drm_device *dev)
 
 	spin_lock_irqsave(&maxfifo_info->lock, flags);
 	if (maxfifo_info->maxfifo_current_state == -1) {
+		maxfifo_info->req_mode = -1;
 		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 		return;
 	}
