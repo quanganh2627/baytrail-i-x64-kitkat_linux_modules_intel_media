@@ -285,11 +285,11 @@ void DCCBFlipSprite(struct drm_device *dev,
 	}
 
 	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL)){
-                if(drm_psb_set_gamma_success)
+		if(dev_priv->legacy_gamma_enable)
 			PSB_WVDC32(ctx->cntr | DISPPLANE_GAMMA_ENABLE, DSPACNTR + reg_offset);
-                else
-                        PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
-        }
+		else
+			PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
+    }
 
 	if ((ctx->update_mask & SPRITE_UPDATE_SURFACE)) {
 		PSB_WVDC32(ctx->linoff, DSPALINOFF + reg_offset);
@@ -351,11 +351,11 @@ void DCCBFlipPrimary(struct drm_device *dev,
 	}
 
 	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL)){
-                if(drm_psb_set_gamma_success)
-                        PSB_WVDC32(ctx->cntr | DISPPLANE_GAMMA_ENABLE, DSPACNTR + reg_offset);
-                else
-                        PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
-        }
+		if(dev_priv->legacy_gamma_enable)
+			PSB_WVDC32(ctx->cntr | DISPPLANE_GAMMA_ENABLE, DSPACNTR + reg_offset);
+		else
+			PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
+    }
 
 	if ((ctx->update_mask & SPRITE_UPDATE_SURFACE)) {
 		PSB_WVDC32(ctx->linoff, DSPALINOFF + reg_offset);

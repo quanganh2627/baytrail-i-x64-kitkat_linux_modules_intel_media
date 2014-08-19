@@ -926,7 +926,7 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 	dsi_config->dev = dev;
 
 	/*init fixed mode basing on DSI config type*/
-	dsi_panel_info.panel_180_rotation = false;
+	memset(&dsi_panel_info, 0, sizeof(struct panel_info));
 	if (dsi_config->type == MDFLD_DSI_ENCODER_DBI) {
 		dsi_config->fixed_mode = p_funcs->get_config_mode();
 		p_funcs->get_panel_info(pipe, &dsi_panel_info);
@@ -938,6 +938,8 @@ int mdfld_dsi_output_init(struct drm_device *dev,
 	width_mm = dsi_panel_info.width_mm;
 	height_mm = dsi_panel_info.height_mm;
 	dev_priv->panel_180_rotation = dsi_panel_info.panel_180_rotation;
+	dev_priv->legacy_csc_enable = dsi_panel_info.legacy_csc_enable;
+	dev_priv->legacy_gamma_enable = dsi_panel_info.legacy_gamma_enable;
 
 	dsi_config->mode = dsi_config->fixed_mode;
 	dsi_config->connector = dsi_connector;

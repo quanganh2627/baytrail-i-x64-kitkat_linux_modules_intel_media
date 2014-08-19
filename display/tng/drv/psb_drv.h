@@ -1150,6 +1150,8 @@ struct drm_psb_private {
 	bool bUseHFPLL;
 	bool bRereadZero;
 	bool panel_180_rotation;
+	bool legacy_csc_enable;
+	bool legacy_gamma_enable;
 };
 
 struct psb_mmu_driver;

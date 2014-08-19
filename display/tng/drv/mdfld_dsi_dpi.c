@@ -422,13 +422,11 @@ reset_recovery:
 	REG_WRITE(regs->dsplinoff_reg, ctx->dsplinoff);
 	REG_WRITE(regs->vgacntr_reg, ctx->vgacntr);
 
-	/*restore color_coef (chrome) */
-	for (i = 0; i < 6; i++)
-		REG_WRITE(regs->color_coef_reg + (i<<2), csc_setting_save[i]);
+	if (p_funcs && p_funcs->set_legacy_coefficient)
+		p_funcs->set_legacy_coefficient(dsi_config);
 
-	/* restore palette (gamma) */
-	for (i = 0; i < 256; i++)
-		REG_WRITE(regs->palette_reg + (i<<2), gamma_setting_save[i]);
+	if (p_funcs && p_funcs->set_legacy_gamma_table)
+		p_funcs->set_legacy_gamma_table(dsi_config);
 
 	/* restore dpst setting */
 	if (dev_priv->psb_dpst_state) {
@@ -505,6 +503,9 @@ reset_recovery:
 	 * after the start of VBLANK
 	 */
 	val = (val & (~BIT27)) | BIT28 | BIT31;
+	if (dev_priv->legacy_csc_enable)
+		val |= BIT20;
+
 	REG_WRITE(regs->pipeconf_reg, val);
 	/*Wait for pipe enabling,when timing generator
 	  is wroking */

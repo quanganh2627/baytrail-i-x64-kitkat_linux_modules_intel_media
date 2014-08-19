@@ -485,6 +485,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		queue_work(dev_priv->vsync_wq, &dev_priv->te_work);
 	}
 
+#if 0
 	if (pipe == drm_psb_set_gamma_pipe && drm_psb_set_gamma_pending) {
 		if (pipe == 0)
 			dsi_config = dev_priv->dsi_configs[0];
@@ -508,6 +509,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 		drm_psb_set_gamma_pending = 0 ;
 		drm_psb_set_gamma_pipe = MDFLD_PIPE_MAX;
 	}
+#endif
 
 	if (pipe == 0) { /* only for PIPE A */
 		if (pipe_stat_val & PIPE_FRAME_DONE_STATUS)
