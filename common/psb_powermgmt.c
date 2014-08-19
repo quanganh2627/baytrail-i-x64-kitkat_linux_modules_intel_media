@@ -52,6 +52,7 @@
 #include <linux/earlysuspend.h>
 #endif /* if SUPPORT_EARLY_SUSPEND */
 
+#include <asm/intel-mid.h>
 #include <linux/mutex.h>
 #include <linux/gpio.h>
 #include <linux/early_suspend_sysfs.h>
@@ -521,6 +522,17 @@ static void mdfld_adjust_display_fifo(struct drm_device *dev)
 		}
 
 		REG_WRITE(MI_ARB, 0x0);
+
+		/*
+		* enable bit 29 for BUNIT.DEBUG0 register
+		* This gives slightly more priority to urgent ISOCH traffic
+		* (which applies to Display and Camera) over BE (best effort)
+		* in memory controller arbiter, to lower the chance that
+		* display memory request being blocked for long time which
+		* may cause display controller crash.
+		*/
+		temp = intel_mid_msgbus_read32(3, 0x30);
+		intel_mid_msgbus_write32(3, 0x30, temp | (1 << 29));
 	}
 
 	temp = REG_READ(DSPARB);
@@ -601,8 +613,14 @@ disable these MSIC power rails permanently.  */
 		intel_scu_ipc_iowrite8(MSIC_VCC330CNT, VCC330_OFF);
 	}
 	if (IS_CTP(dev)) {
+//ASUS_BSP Louis +++
+#ifdef CONFIG_SUPPORT_OTM8018B_MIPI_480X854_DISPLAY
+		//do nothing
+#else
 		/* turn off HDMI power rails */
 		intel_scu_ipc_iowrite8(MSIC_VCC330CNT, VCC330_OFF);
+#endif
+//ASUS_BSP Louis ---
 	}
 #endif
 	mdfld_adjust_display_fifo(dev);

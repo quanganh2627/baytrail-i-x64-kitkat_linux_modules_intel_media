@@ -70,7 +70,24 @@ extern int drm_psb_enable_color_conversion;
 extern u32 DISP_PLANEB_STATUS;
 extern int drm_psb_use_cases_control;
 extern int dpst_level;
+extern int asus_panel_id;
 
+//ASUS_BSP: Louis +++
+#ifdef CONFIG_SUPPORT_DDS_MIPI_SWITCH
+extern int panel_id;
+extern int hpd;
+extern int panel_turn_on;
+
+enum {
+	DDS_PHONE = 0,
+	DDS_PAD = 1,
+	DDS_NONE = 2,
+};
+#endif
+//ASUS_BSP: Louis ---
+#ifdef CONFIG_SUPPORT_OTM8018B_MIPI_480X854_DISPLAY
+extern bool esd_thread_enable;
+#endif
 
 extern struct ttm_bo_driver psb_ttm_bo_driver;
 
@@ -396,6 +413,8 @@ struct drm_psb_private {
 	int vsync_pipe;
 	wait_queue_head_t vsync_queue;
 	atomic_t *vblank_count;
+	int vblank_disable_cnt;
+	bool vsync_enabled;
 
 	/*
 	 *TTM Glue.
@@ -1020,6 +1039,13 @@ struct drm_psb_private {
 	bool  vsync_te_working[PSB_NUM_PIPE];
 	atomic_t mipi_flip_abnormal;
 	struct gpu_pvr_ops * pvr_ops;
+
+#define OVERLAY_BACKBUF_NUM 2
+	struct ttm_buffer_object *overlay_backbuf[OVERLAY_BACKBUF_NUM];
+	struct ttm_bo_kmap_obj overlay_kmap[OVERLAY_BACKBUF_NUM];
+	int overlay_buf_index;
+	struct overlay_ctrl_blk *ov_ctrl_blk;
+	struct mutex ov_ctrl_lock;
 
 	struct platform_panel_info panel_info;
 };
