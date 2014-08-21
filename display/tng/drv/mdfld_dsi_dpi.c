@@ -911,11 +911,17 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 
 	mutex_lock(&dev_priv->dpms_mutex);
 
+	DCLockMutex();
 	if (mode == DRM_MODE_DPMS_ON) {
 		/*
 		 * We remove power operation here to prevent power is on
 		 * after ospm power off the panel, it will lead pipe hang.
 		 */
+		if (dev_priv->early_suspended)
+			goto unlock_dc;
+		DCAttachPipe(dsi_config->pipe);
+		DC_MRFLD_onPowerOn(dsi_config->pipe);
+
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
 		ctx = &dsi_config->dsi_hw_context;
 		bd.props.brightness = ctx->lastbrightnesslevel;
@@ -928,9 +934,14 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 		bd.props.brightness = 0;
 		psb_set_brightness(&bd);
 #endif
+
+		DCUnAttachPipe(dsi_config->pipe);
+		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	} else {
 		// nothing to do
 	}
+unlock_dc:
+	DCUnLockMutex();
 
 	mutex_unlock(&dev_priv->dpms_mutex);
 }
