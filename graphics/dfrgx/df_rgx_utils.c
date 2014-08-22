@@ -133,6 +133,10 @@ unsigned int df_rgx_request_burst(struct df_rgx_data_s *pdfrgx_data,
 		/* Provide recommended unburst*/
 		pdfrgx_data->gpu_utilization_record_index = new_index-1;
 		burst = DFRGX_UNBURST_REQ;
+	} else if (new_index < pdfrgx_data->g_min_freq_index) {
+		/* If frequency is throttled, request return to min */
+		pdfrgx_data->gpu_utilization_record_index = pdfrgx_data->g_min_freq_index;
+		burst = DFRGX_UNBURST_REQ;
 	}
 
 out:
