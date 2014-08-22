@@ -79,7 +79,7 @@
 
 /* MaxFifo/ S0i1-Display */
 #include "dc_maxfifo.h"
-#define VBLANK_OFF_DELAY_DEFAULT	50
+#define VBLANK_OFF_DELAY_DEFAULT_DPI	50
 
 #define KEEP_UNUSED_CODE 0
 #define KEEP_UNUSED_CODE_S3D 0
@@ -1783,7 +1783,8 @@ static int psb_driver_load(struct drm_device *dev, unsigned long chipset)
 	 * off faster than the default of 5 seconds. This is done to have
 	 * better S0i1-Display residency for idle use cases
 	 */
-	drm_vblank_offdelay = VBLANK_OFF_DELAY_DEFAULT;
+	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DPI)
+		drm_vblank_offdelay = VBLANK_OFF_DELAY_DEFAULT_DPI;
 
 	dev->driver->get_vblank_counter = psb_get_vblank_counter;
 
