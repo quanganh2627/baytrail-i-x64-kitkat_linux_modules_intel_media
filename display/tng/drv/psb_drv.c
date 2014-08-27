@@ -1290,11 +1290,11 @@ static int psb_do_init(struct drm_device *dev)
 	}
 	if (!ttm_bo_init_mm(bdev,
 			    DRM_PSB_MEM_MMU,
-			    PSB_MEM_TT_START >> PAGE_SHIFT)) {
+			    (PSB_MEM_TT_START + pg->gtt_video_start) >> PAGE_SHIFT)) {
 		dev_priv->have_mem_mmu = 1;
 		dev_priv->sizes.mmu_size =
 			PSB_MEM_TT_START / (1024 * 1024);
-		printk("[TTM] MMU heap size is %d\n", PSB_MEM_TT_START);
+		printk("[TTM] MMU heap size is %d\n", PSB_MEM_TT_START + pg->gtt_video_start);
 	}
 
 	if (IS_MSVDX_MEM_TILE(dev)) {
