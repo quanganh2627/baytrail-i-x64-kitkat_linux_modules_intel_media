@@ -697,7 +697,7 @@ static bool hdcp_stage1_authentication(bool *is_repeater)
 	/* Wait (up to 2s) for HDMI sink to be in HDMI mode */
 	retry = 40;
 	if (hdcp_context->hdmi) {
-		while (retry--) {
+		while (--retry) {
 			if (hdcp_read_bstatus(&bstatus.value) == false) {
 				pr_err("hdcp: failed to read bstatus\n");
 				return false;

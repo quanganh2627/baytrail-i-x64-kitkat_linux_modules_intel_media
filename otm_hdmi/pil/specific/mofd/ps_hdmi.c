@@ -75,6 +75,8 @@
 #include <asm/intel_scu_pmic.h>
 #include <asm/intel-mid.h>
 #include "pwr_mgmt.h"
+#include "sepapp.h"
+#include "hdcp_api.h"
 
 /* Implementation of the Moorefield specific PCI driver for receiving
  * Hotplug and other device status signals.
@@ -343,8 +345,15 @@ bool ps_hdmi_get_cable_status(void *context)
  */
 void ps_hdmi_update_security_hdmi_hdcp_status(bool hdcp, bool cable)
 {
-	/* Note: do nothing since not clear if mrfld needs this or not */
-	return;
+	uint8_t status = 0;
+	if (cable)
+		status |= 1 << 0;
+	if (hdcp)
+		status |= 1 << 1;
+
+	uint8_t bksv[5];
+	otm_hdmi_hdcp_get_bksv(bksv, 5);
+	sepapp_hdmi_status(status, bksv);
 }
 
 /**
