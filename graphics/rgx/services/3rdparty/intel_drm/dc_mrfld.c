@@ -771,8 +771,10 @@ static IMG_BOOL _Do_Flip(DC_MRFLD_FLIP *psFlip, int iPipe)
 	 * Exit maxfifo is handled before we do flip.
 	 */
 	maxfifo_state = get_maxfifo_s0i1_mode(psFlip);
+
 	if (maxfifo_state != -1)
-		DCCBEnterMaxfifoMode(gpsDevice->psDrmDevice, maxfifo_state);
+		if (0 == DCCBEnterMaxfifoMode(gpsDevice->psDrmDevice, maxfifo_state))
+			goto err_out;
 
 	/* maxfifo is only enabled in mipi only mode */
 	if (iPipe == DC_PIPE_A && !hdmi_state)

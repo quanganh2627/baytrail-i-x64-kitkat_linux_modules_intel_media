@@ -857,20 +857,23 @@ void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe)
 		DRM_ERROR("DBI FIFO not empty\n");
 }
 
-void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
+/* Return 0 on maxFIFO entry success */
+int DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct dc_maxfifo *maxfifo_info = dev_priv->dc_maxfifo_info;
 	unsigned long flags;
+	int ret = 0;
 
 	if (!maxfifo_info)
-		return;
+		return 0;
 
 	spin_lock_irqsave(&maxfifo_info->lock, flags);
 
 	/* already in the required maxfifo mode */
-	if (maxfifo_info->maxfifo_current_state == req_mode)
+	if (maxfifo_info->maxfifo_current_state == req_mode) {
 		goto out;
+	}
 
 	/*
 	 * requested maxfifo mode is different with current maxfifo mode,
@@ -881,21 +884,30 @@ void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
 	    maxfifo_info->maxfifo_current_state != req_mode) {
 		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 		DCCBExitMaxfifoMode(dev);
-		return;
+		return -1;
 	}
 
-	if (!can_enter_maxfifo_s0i1_display(dev, req_mode))
-		goto out;
+	/* Allow maxFIFO for video playback case */
+	if ((can_enter_maxfifo_s0i1_display(dev, req_mode)
+		/* Allow maxFIFO for idle case */
+		|| (0 == req_mode && !timer_pending(&dev_priv->maxfifo_timer)))
+		/* Disable maxFIFO if pipe b is on */
+		&& ((REG_READ(0x71008) & 0x80000000) == 0)) {
 
-	/* check to see if pipe b is on. if yes, don't enable */
-	if ((REG_READ(0x71008) & 0x80000000) == 0) {
 		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 		enter_maxfifo_mode(dev, req_mode);
-		return;
+		/* Assume this is idle case with all layers composited as one.
+		 * Then try to check whether we can disable vblank now. */
+		if(0 == req_mode) {
+			if (!drm_vblank_get(dev, 0))
+				drm_vblank_put(dev, 0);
+		}
+		return 0;
 	}
 
 out:
 	spin_unlock_irqrestore(&maxfifo_info->lock, flags);
+	return ret;
 }
 
 void DCCBExitMaxfifoMode(struct drm_device *dev)

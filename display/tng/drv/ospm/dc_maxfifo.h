@@ -47,6 +47,8 @@ struct dc_maxfifo {
 	int maxfifo_current_state; /* 0=sprite A; 1=sprite a + ova; 2=ova */
 	S0i1_DISP_STATE s0i1_disp_state;
 	struct work_struct repeat_frame_interrupt_work;
+	unsigned int jiffies_record;
+	unsigned long last_jiffies;
 };
 
 bool enter_maxfifo_mode(struct drm_device *dev, int mode);
