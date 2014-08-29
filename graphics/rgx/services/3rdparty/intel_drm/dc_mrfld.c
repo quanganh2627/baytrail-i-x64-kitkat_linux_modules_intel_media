@@ -376,7 +376,15 @@ static void disable_plane(struct plane_state *pstate)
 		}
 	}
 
-	if (planes == 1) {
+	if (planes < 2) {
+		/* attached pipe is invalied on first power on, use index instead */
+		if (pipe == -1) {
+			if (type != DC_PRIMARY_PLANE) {
+				DRM_ERROR("attached pipe is invalid, but plane type[%d] isn't primary!", type);
+				return;
+			}
+			pipe = index;
+		}
 		DCCBEnablePrimaryWA(gpsDevice->psDrmDevice, pipe);
 		DC_PrimaryWAOnPipes[pipe] = 1;
 		/* last one is primary plane, skip disable*/
