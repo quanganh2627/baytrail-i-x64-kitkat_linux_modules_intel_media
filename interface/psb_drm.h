@@ -862,7 +862,7 @@ struct drm_psb_register_rw_arg {
 		uint32_t b_wms;
 		uint32_t buffer_handle;
 		uint32_t backbuf_index;
-		unsigned long backbuf_addr;
+		uint32_t backbuf_addr;
 	} overlay;
 
 	uint32_t vsync_operation_mask;
