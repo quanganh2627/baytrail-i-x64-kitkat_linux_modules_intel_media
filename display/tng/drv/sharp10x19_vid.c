@@ -340,6 +340,10 @@ int mdfld_dsi_sharp10x19_set_brightness(struct mdfld_dsi_config *dsi_config,
 	mdfld_dsi_send_mcs_short_hs(sender,
 		write_display_brightness, level, 1,
 		MDFLD_DSI_SEND_PACKAGE);
+
+	/* give some time for new backlight value to take effect */
+	msleep(20);
+
 	return 0;
 }
 
