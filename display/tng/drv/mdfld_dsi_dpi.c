@@ -495,6 +495,10 @@ reset_recovery:
 		REG_WRITE(DSPARB, ctx->dsparb);
 	}
 
+	/*enable plane*/
+	val = ctx->dspcntr | BIT31;
+	REG_WRITE(regs->dspcntr_reg, val);
+
 	/*Enable pipe*/
 	val = ctx->pipeconf;
 	val &= ~0x000c0000;
@@ -520,9 +524,6 @@ reset_recovery:
 			goto power_on_err;
 		}
 	}
-	/*enable plane*/
-	val = ctx->dspcntr | BIT31;
-	REG_WRITE(regs->dspcntr_reg, val);
 
 	if (p_funcs && p_funcs->set_brightness) {
 		if (p_funcs->set_brightness(dsi_config,
