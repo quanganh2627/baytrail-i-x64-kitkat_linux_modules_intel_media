@@ -2959,7 +2959,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
-				if (ret && (ret != -EINTR)) {
+				if (ret && (ret != -EINTR && ret != -EPERM)) {
 					DRM_ERROR("fail to get vsync on pipe %d, ret %d\n", pipe, ret);
 					vsync_state_dump(dev, pipe);
 
@@ -2973,6 +2973,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					}
 				} else if (ret == -EINTR)
 					ret = 0;
+				else if (ret == -EPERM) {
+					/*
+					 * pipe is disabled when we try to enable vblank on it,
+					 * expect hwc switch to another vsync source next time
+					 */
+				}
 			} else {
 				DRM_INFO("request VSYNC on pipe(%d) when vsync_enabled=%d.\n",
 						 pipe, dev_priv->vsync_enabled[pipe]);
