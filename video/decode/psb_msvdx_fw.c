@@ -418,7 +418,11 @@ static int msvdx_get_fw_bo(struct drm_device *dev,
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 	void *gpu_addr;
 
+#ifdef CONFIG_DRM_VXD_BYT
+	rc = request_firmware(raw, name, &dev->platformdev->dev);
+#else
 	rc = request_firmware(raw, name, &dev->pdev->dev);
+#endif
 	if (*raw == NULL || rc < 0) {
 		DRM_ERROR("MSVDX: %s request_firmware failed: Reason %d\n",
 			  name, rc);
@@ -497,7 +501,11 @@ static uint32_t *msvdx_get_fw(struct drm_device *dev,
 	void *ptr = NULL;
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
 
+#ifdef CONFIG_DRM_VXD_BYT
+	rc = request_firmware(raw, name, &dev->platformdev->dev);
+#else
 	rc = request_firmware(raw, name, &dev->pdev->dev);
+#endif
 	if (*raw == NULL || rc < 0) {
 		DRM_ERROR("MSVDX: %s request_firmware failed: Reason %d\n",
 			  name, rc);

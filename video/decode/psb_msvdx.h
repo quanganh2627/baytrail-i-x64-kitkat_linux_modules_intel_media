@@ -31,7 +31,7 @@
 #include "psb_drv.h"
 #include "img_types.h"
 #endif
-
+#include <linux/interrupt.h>
 #include "psb_msvdx_reg.h"
 
 extern int drm_msvdx_pmpolicy;

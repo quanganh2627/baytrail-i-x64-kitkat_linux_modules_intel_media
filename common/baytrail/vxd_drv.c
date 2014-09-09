@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright (c) 2007-2008, Intel Corporation.
+ * Copyright (c) 2013-2014 Intel Corporation.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -26,8 +26,8 @@
 #include <uapi/drm/drm.h>
 #endif
 
-#include "i915_drm.h"
-#include "i915_drv.h"
+#include <linux/pm_runtime.h>
+
 #include "vxd_drv.h"
 #include "vxd_drm.h"
 
@@ -36,24 +36,20 @@
 #include <asm/uaccess.h>
 #include <linux/intel_mid_pm.h>
 #include <asm/intel_mid_pcihelpers.h>
+#include <asm/bug.h>
 
 extern int drm_psb_trap_pagefaults;
 
 int drm_psb_cpurelax;
 int drm_psb_udelaydivider = 1;
 int drm_psb_priv_pmu_func = 0;
-
-static struct pci_dev *pci_root;
+static bool need_set_ved_freq = true;
 
 int drm_psb_trap_pagefaults;
 
-extern struct drm_device *i915_drm_dev;
 int drm_psb_msvdx_tiling;
 
-atomic_t g_videodec_access_count;
-
-static void vxd_power_init(struct drm_device *dev);
-static void vxd_power_post_init(struct drm_device *dev);
+static struct pci_dev *pci_root;
 
 extern int pmc_nc_set_power_state(int islands, int state_type, int reg);
 extern int pmc_nc_get_power_state(int islands, int reg);
@@ -75,8 +71,9 @@ MODULE_PARM_DESC(priv_pmu_func,
 		"(default: 0"
 		"0 - disable"
 		"1 - enable)");
+atomic_t g_videodec_access_count;
 
-int drm_psb_debug = 0x0;
+int drm_psb_debug = 0x80;
 module_param_named(psb_debug, drm_psb_debug, int, 0600);
 MODULE_PARM_DESC(psb_debug,
 		"control debug info output"
@@ -162,51 +159,36 @@ struct drm_ioctl_desc vxd_ioctls[] = {
 			DRM_AUTH | DRM_UNLOCKED),
 };
 
-int vxd_max_ioctl = DRM_ARRAY_SIZE(vxd_ioctls);
-
 struct psb_fpriv *psb_fpriv(struct drm_file *file_priv)
 {
-	struct drm_i915_file_private *i915_file_priv =
-		(struct drm_i915_file_private *)file_priv->driver_priv;
-#ifdef CONFIG_DRM_VXD_BYT
-	return i915_file_priv->pPriv;
-#else
-	return NULL;
-#endif
+	return file_priv->driver_priv;
 }
 
 struct drm_psb_private *psb_priv(struct drm_device *dev)
 {
-	struct drm_i915_private *i915_dev_priv = dev->dev_private;
-	return i915_dev_priv->vxd_priv;
+	return dev->dev_private;
 }
 
-int vxd_release(struct inode *inode, struct file *filp)
+static int vxd_open(struct inode *inode, struct file *filp)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+	return drm_open(inode, filp);
+}
+
+static int vxd_release(struct inode *inode, struct file *filp)
 {
 	struct drm_file *file_priv;
-	struct drm_i915_file_private *i915_file_priv;
 	struct psb_fpriv *psb_fp;
 	struct drm_psb_private *dev_priv;
 	struct msvdx_private *msvdx_priv;
 	int i;
+	PSB_DEBUG_ENTRY("enter\n");
 
 	file_priv = (struct drm_file *)filp->private_data;
-	i915_file_priv = file_priv->driver_priv;
-	psb_fp = i915_file_priv->pPriv;
-
+	psb_fp = psb_fpriv(file_priv);
 	dev_priv = psb_priv(file_priv->minor->dev);
 	msvdx_priv = (struct msvdx_private *)dev_priv->msvdx_private;
 
-#if 0
-	/*cleanup for msvdx */
-	if (msvdx_priv->tfile == BCVideoGetPriv(file_priv)->tfile) {
-		msvdx_priv->fw_status = 0;
-		msvdx_priv->host_be_opp_enabled = 0;
-		memset(&msvdx_priv->frame_info, 0,
-		       sizeof(struct drm_psb_msvdx_frame_info) *
-		       MAX_DECODE_BUFFERS);
-	}
-#endif
 #ifdef CONFIG_VIDEO_MRFLD_EC
 	for (i = 0; i < PSB_MAX_EC_INSTANCE; i++) {
 		if (msvdx_priv->msvdx_ec_ctx[i]->tfile == psb_fp->tfile) {
@@ -221,12 +203,12 @@ int vxd_release(struct inode *inode, struct file *filp)
 
 	/* remove video context */
 	/* psb_remove_videoctx(dev_priv, filp); */
-	return 0;
+	return drm_release(inode, filp);
 }
 
 static struct vm_operations_struct psb_ttm_vm_ops;
 
-int psb_mmap(struct file *filp, struct vm_area_struct *vma)
+static int vxd_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	struct drm_file *file_priv;
 	struct drm_psb_private *dev_priv;
@@ -250,10 +232,14 @@ int psb_mmap(struct file *filp, struct vm_area_struct *vma)
 	return 0;
 }
 
+static unsigned int vxd_poll(struct file *filp, struct poll_table_struct *wait)
+{
+	return POLLIN | POLLRDNORM;
+}
+
 static void psb_do_takedown(struct drm_device *dev)
 {
-	struct drm_psb_private *dev_priv =
-	    ((struct drm_i915_private *)dev->dev_private)->vxd_priv;
+	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct ttm_bo_device *bdev = &dev_priv->bdev;
 
 	if (dev_priv->have_mem_mmu) {
@@ -264,13 +250,14 @@ static void psb_do_takedown(struct drm_device *dev)
 	psb_msvdx_uninit(dev);
 }
 
-static int  __vxd_driver_unload()
+static int32_t  __vxd_drm_unload(struct drm_device *dev)
 {
-	struct drm_i915_private *i915_dev_priv = i915_drm_dev->dev_private;
-	struct drm_psb_private *dev_priv = i915_dev_priv->vxd_priv;
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	int32_t rpm_status;
 
 	if (dev_priv) {
-		psb_do_takedown(i915_dev_priv->dev);
+		WARN_ON(pm_runtime_get_sync(&dev->platformdev->dev) < 0);
+		psb_do_takedown(dev);
 
 		if (dev_priv->pf_pd) {
 			psb_mmu_free_pagedir(dev_priv->pf_pd);
@@ -289,46 +276,47 @@ static int  __vxd_driver_unload()
 			ttm_fence_device_release(&dev_priv->fdev);
 			dev_priv->has_fence_device = 0;
 		}
-#if 0
+
 		if (dev_priv->msvdx_reg) {
-			iounmap(dev_priv->msvdx_reg);
+			iounmap(dev_priv->msvdx_reg - dev_priv->msvdx_reg_offset);
 			dev_priv->msvdx_reg = NULL;
 		}
-#endif
+
 		if (dev_priv->tdev)
 			ttm_object_device_release(&dev_priv->tdev);
 
 		if (dev_priv->has_global)
 			psb_ttm_global_release(dev_priv);
 
+		WARN_ON(pm_runtime_put_sync_suspend(&dev->platformdev->dev) < 0);
+
 		kfree(dev_priv);
-		i915_dev_priv->vxd_priv = NULL;
 	}
 #if 0
 	ospm_power_uninit();
 #endif
+	rpm_status = pm_runtime_enabled(&dev->platformdev->dev);
+	if (rpm_status) {
+		PSB_DEBUG_PM("YAO RPM enabled, forbid it\n");
+		pm_runtime_disable(&dev->platformdev->dev);
+	}
+	else {
+		PSB_DEBUG_PM("YAO no need to forbid RPM since it's disabled\n");
+	}
+
+	pci_root = NULL;
 	return 0;
 }
 
-static int __exit vxd_driver_unload()
+static bool is_vxd_on(struct drm_device *dev);
+
+static int32_t vxd_drm_unload(struct drm_device *dev)
 {
-	return __vxd_driver_unload();
+	return __vxd_drm_unload(dev);
 }
 
-#define PCI_ROOT_MSGBUS_CTRL_REG	0xD0
-#define PCI_ROOT_MSGBUS_DATA_REG	0xD4
-#define PCI_ROOT_MSGBUS_CTRL_EXT_REG	0xD8
-#define PCI_ROOT_MSGBUS_READ		0x10
-#define PCI_ROOT_MSGBUS_WRITE		0x11
-#define PCI_ROOT_MSGBUS_DWORD_ENABLE	0xf0
-#define PUNIT_PORT			0x04
-#define VEDSSPM0 			0x32
-#define VEDSSPM1 			0x33
-#define VEDSSC				0x1
-
-u32 intel_mid_msgbus_read32_vxd(u8 port, u32 addr)
+static u32 __intel_mid_msgbus_read32_vxd(u8 port, u32 addr)
 {
-	unsigned long irq_flags;
 	u32 data;
 	u32 cmd;
 	u32 cmdext;
@@ -342,9 +330,8 @@ u32 intel_mid_msgbus_read32_vxd(u8 port, u32 addr)
 	return data;
 }
 
-void intel_mid_msgbus_write32_vxd(u8 port, u32 addr, u32 data)
+static void __intel_mid_msgbus_write32_vxd(u8 port, u32 addr, u32 data)
 {
-	unsigned long irq_flags;
 	u32 cmd;
 	u32 cmdext;
 
@@ -355,27 +342,60 @@ void intel_mid_msgbus_write32_vxd(u8 port, u32 addr, u32 data)
 	intel_mid_msgbus_write32_raw_ext(cmd, cmdext, data);
 }
 
-static int __init vxd_driver_load()
+static int32_t vxd_drm_load(struct drm_device *dev, unsigned long flags)
 {
-	struct drm_i915_private *i915_dev_priv;
 	struct drm_psb_private *dev_priv;
 	struct ttm_bo_device *bdev;
 	int ret = -ENOMEM;
-	uint32_t pwr_sts;
-
-	/* Check if DRM device is loaded first */
-	if (!i915_drm_dev)
-		return -ENODEV;
-
-	i915_dev_priv = i915_drm_dev->dev_private;
+	struct platform_device *platdev = dev->platformdev;
+	struct resource *res_mmio, *res_reg;
+	void __iomem* mmio_addr;
+	int32_t rpm_status;
+	struct msvdx_private *msvdx_priv;
+	PSB_DEBUG_ENTRY("enter\n");
 
 	dev_priv = kzalloc(sizeof(*dev_priv), GFP_KERNEL);
 	if (dev_priv == NULL)
 		return -ENOMEM;
 	INIT_LIST_HEAD(&dev_priv->video_ctx);
 	spin_lock_init(&dev_priv->video_ctx_lock);
-	dev_priv->dev = i915_dev_priv->dev;
+	dev_priv->dev = dev;
 	bdev = &dev_priv->bdev;
+	pci_root = pci_get_bus_and_slot(0, PCI_DEVFN(0, 0));
+	if (!pci_root) {
+		PSB_DEBUG_WARN("%s: Error: msgbus PCI handle NULL\n", __func__);
+		kfree(dev_priv);
+		return -ENODEV;
+	}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0))
+	dev->irq = platform_get_irq(platdev, 0);
+	PSB_DEBUG_INIT("got IRQ number %d\n", dev->irq);
+	BUG_ON(dev->irq < 0);
+#endif
+
+	platform_set_drvdata(dev->platformdev, dev);
+	rpm_status = pm_runtime_enabled(&dev->platformdev->dev);
+
+	if (!rpm_status) {
+		PSB_DEBUG_PM("YAO RPM not enabled, allow it\n");
+		pm_runtime_enable(&dev->platformdev->dev);
+	}
+	else {
+		PSB_DEBUG_PM("YAO no need to allow RPM since it's enabled\n");
+	}
+
+	res_mmio = platform_get_resource(platdev, IORESOURCE_MEM, 0);
+	BUG_ON(!res_mmio);
+	res_reg = platform_get_resource(platdev, IORESOURCE_REG, 0);
+	BUG_ON(!res_reg);
+	mmio_addr = ioremap_wc(res_mmio->start,
+					res_mmio->end - res_mmio->start);
+	dev_priv->msvdx_reg = mmio_addr + res_reg->start;
+	dev_priv->msvdx_reg_offset = res_reg->start;
+	PSB_DEBUG_MSVDX("ved_reg_base is 0x%lx, offset is 0x%lx.\n",
+		(unsigned long)dev_priv->msvdx_reg,
+		dev_priv->msvdx_reg_offset);
 
 	ret = psb_ttm_global_init(dev_priv);
 	if (unlikely(ret != 0))
@@ -390,24 +410,17 @@ static int __init vxd_driver_load()
 	INIT_LIST_HEAD(&dev_priv->decode_context.validate_list);
 	spin_lock_init(&dev_priv->reloc_lock);
 
-	i915_dev_priv->vxd_priv = dev_priv;
+	dev->dev_private = dev_priv;
 
-	dev_priv->msvdx_reg = i915_dev_priv->regs + 0x170000;
-	DRM_INFO("%s 3, i915_dev_priv->regs is 0x%x.\n",
-				__func__, i915_dev_priv->regs);
 	DRM_INFO("0 MSVDX_CORE_REV_OFFSET value is 0x%x.\n",
-				readl(i915_dev_priv->regs + 0x170640));
+				readl(dev_priv->msvdx_reg + 0x640));
 	DRM_INFO("1 MSVDX_CORE_REV_OFFSET value is 0x%x.\n",
 				PSB_RMSVDX32(MSVDX_CORE_REV_OFFSET));
 
-	vxd_power_init(i915_dev_priv->dev);
-	i915_dev_priv->vxd_driver_open = vxd_driver_open;
-	i915_dev_priv->vxd_lastclose = vxd_lastclose;
-	i915_dev_priv->vxd_ioctl = vxd_ioctl;
-	i915_dev_priv->vxd_release = vxd_release;
-	i915_dev_priv->psb_mmap = psb_mmap;
-	i915_dev_priv->psb_msvdx_interrupt = psb_msvdx_interrupt;
+	mutex_init(&dev_priv->vxd_pm_mutex);
 
+	WARN_ON(pm_runtime_get_sync(&dev->platformdev->dev) < 0);
+	BUG_ON(!is_vxd_on(dev));
 #if 0
 	get_imr_info(dev_priv);
 
@@ -472,62 +485,24 @@ static int __init vxd_driver_load()
                 dev_priv->have_mem_mmu_tiling = 1;
 
 	PSB_DEBUG_INIT("Init MSVDX\n");
-	psb_msvdx_init(i915_dev_priv->dev);
+	psb_msvdx_init(dev);
 
-	vxd_power_post_init(i915_dev_priv->dev);
+	WARN_ON(pm_runtime_put_sync_suspend(&dev->platformdev->dev) < 0);
+	BUG_ON(is_vxd_on(dev));
+	msvdx_priv = dev_priv->msvdx_private;
+	msvdx_priv->msvdx_needs_reset = 1;
 
 #if 0
 	ospm_post_init(dev);
 #endif
 	/* enable msvdx tiling on BYT */
 	drm_psb_msvdx_tiling = 1;
+
 	return 0;
 out_err:
-	__vxd_driver_unload();
+	__vxd_drm_unload(dev);
 	return ret;
 
-}
-
-void vxd_lastclose(struct drm_device *dev)
-{
-	struct msvdx_private *msvdx_priv;
-	struct drm_psb_private *dev_priv = psb_priv(dev);
-	if (!dev_priv)
-		return;
-
-	msvdx_priv = dev_priv->msvdx_private;
-	if (msvdx_priv) {
-		mutex_lock(&msvdx_priv->msvdx_mutex);
-		if (dev_priv->decode_context.buffers) {
-			vfree(dev_priv->decode_context.buffers);
-			dev_priv->decode_context.buffers = NULL;
-		}
-		mutex_unlock(&msvdx_priv->msvdx_mutex);
-	}
-}
-
-int vxd_driver_open(struct drm_device *dev, struct drm_file *file)
-{
-	struct psb_fpriv *psb_fp;
-	struct drm_psb_private *dev_priv;
-	struct drm_i915_file_private *file_priv;
-	dev_priv = psb_priv(dev);
-	file_priv = file->driver_priv;
-	psb_fp = kzalloc(sizeof(*psb_fp), GFP_KERNEL);
-	if (unlikely(psb_fp == NULL))
-		return -ENOMEM;
-	psb_fp->tfile = ttm_object_file_init(dev_priv->tdev,
-					     PSB_FILE_OBJECT_HASH_ORDER);
-	if (unlikely(psb_fp->tfile == NULL)) {
-		kfree(psb_fp);
-		return -EINVAL;
-	}
-	if (unlikely(dev_priv->bdev.dev_mapping == NULL))
-		dev_priv->bdev.dev_mapping = dev_priv->dev->dev_mapping;
-#ifdef CONFIG_DRM_VXD_BYT
-	file_priv->pPriv = psb_fp;
-#endif
-	return 0;
 }
 
 int psb_extension_ioctl(struct drm_device *dev, void *data,
@@ -535,6 +510,7 @@ int psb_extension_ioctl(struct drm_device *dev, void *data,
 {
 	union drm_psb_extension_arg *arg = data;
 	struct drm_psb_extension_rep *rep = &arg->rep;
+	PSB_DEBUG_ENTRY("enter\n");
 
 	if (strcmp(arg->extension, "psb_ttm_placement_alphadrop") == 0) {
 		rep->exists = 1;
@@ -579,6 +555,68 @@ int psb_extension_ioctl(struct drm_device *dev, void *data,
 	return 0;
 }
 
+static int32_t vxd_drm_firstopen(struct drm_device *dev)
+{
+	int ret = 0;
+	PSB_DEBUG_ENTRY("enter\n");
+	return ret;
+}
+
+static void vxd_drm_lastclose(struct drm_device *dev)
+{
+	struct msvdx_private *msvdx_priv;
+	struct drm_psb_private *dev_priv = psb_priv(dev);
+	PSB_DEBUG_ENTRY("enter\n");
+	if (!dev_priv)
+		return;
+
+	msvdx_priv = dev_priv->msvdx_private;
+	if (msvdx_priv) {
+		mutex_lock(&msvdx_priv->msvdx_mutex);
+		if (dev_priv->decode_context.buffers) {
+			vfree(dev_priv->decode_context.buffers);
+			dev_priv->decode_context.buffers = NULL;
+		}
+		mutex_unlock(&msvdx_priv->msvdx_mutex);
+	}
+}
+
+static int32_t
+vxd_drm_open(struct drm_device *dev, struct drm_file *file_priv)
+{
+	struct psb_fpriv *psb_fp;
+	struct drm_psb_private *dev_priv;
+	dev_priv = psb_priv(dev);
+
+	psb_fp = kzalloc(sizeof(*psb_fp), GFP_KERNEL);
+	if (unlikely(psb_fp == NULL))
+		return -ENOMEM;
+	psb_fp->tfile = ttm_object_file_init(dev_priv->tdev,
+										 PSB_FILE_OBJECT_HASH_ORDER);
+	if (unlikely(psb_fp->tfile == NULL)) {
+		kfree(psb_fp);
+		return -EINVAL;
+	}
+	if (unlikely(dev_priv->bdev.dev_mapping == NULL))
+		dev_priv->bdev.dev_mapping = dev_priv->dev->dev_mapping;
+
+	file_priv->driver_priv = psb_fp;
+
+	return 0;
+}
+
+static void
+vxd_drm_preclose(struct drm_device *dev, struct drm_file *file_priv)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+}
+
+static void
+vxd_drm_postclose(struct drm_device *dev, struct drm_file *file_priv)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+}
+
 /**
  * Called whenever a 32-bit process running under a 64-bit kernel
  * performs an ioctl on /dev/dri/card<n>.
@@ -588,7 +626,7 @@ int psb_extension_ioctl(struct drm_device *dev, void *data,
  * \param arg user argument.
  * \return zero on success or negative number on failure.
  */
-long vxd_ioctl(struct file *filp,
+static long vxd_ioctl(struct file *filp,
 	      unsigned int cmd, unsigned long arg)
 {
 	struct drm_file *file_priv = filp->private_data;
@@ -687,94 +725,146 @@ err_i1:
 	return retcode;
 }
 
+#define GET_VED_FREQUENCY(freq_code)	((1600 * 2)/((freq_code) + 1))
+static int __vxd_pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd)
+{
+	int tcount;
+	u32 freq_val;
+
+	for (tcount = 0; ; tcount++) {
+		freq_val = __intel_mid_msgbus_read32_vxd(PUNIT_PORT, reg_freq);
+		if ((freq_val & IP_FREQ_VALID) == 0)
+			break;
+		if (tcount > 500) {
+			PSB_DEBUG_WARN("P-Unit freq request wait timeout %x",
+				freq_val);
+			return -EBUSY;
+		}
+		udelay(1);
+	}
+
+	if (freq_code_rlzd) {
+		*freq_code_rlzd = ((freq_val >> IP_FREQ_STAT_POS) &
+			IP_FREQ_MASK);
+	}
+
+	return 0;
+}
+
+static int __vxd_pm_cmd_freq_get(u32 reg_freq)
+{
+	u32 freq_val;
+	int freq_code=0;
+
+	__vxd_pm_cmd_freq_wait(reg_freq, NULL);
+
+	freq_val = __intel_mid_msgbus_read32_vxd(PUNIT_PORT, reg_freq);
+	freq_code =(int)((freq_val>>IP_FREQ_STAT_POS) & ~IP_FREQ_VALID);
+	return freq_code;
+}
+
+static int __vxd_pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd)
+{
+	u32 freq_val;
+	u32 freq_code_realized;
+	int rva;
+
+	rva = __vxd_pm_cmd_freq_wait(reg_freq, NULL);
+	if (rva < 0) {
+		PSB_DEBUG_WARN("%s: pm_cmd_freq_wait 1 failed\n", __func__);
+		return rva;
+	}
+
+	freq_val = IP_FREQ_VALID | freq_code;
+	__intel_mid_msgbus_write32_vxd(PUNIT_PORT, reg_freq, freq_val);
+
+	rva = __vxd_pm_cmd_freq_wait(reg_freq, &freq_code_realized);
+	if (rva < 0) {
+		PSB_DEBUG_WARN("%s: pm_cmd_freq_wait 2 failed\n", __func__);
+		return rva;
+	}
+
+	if (p_freq_code_rlzd)
+		*p_freq_code_rlzd = freq_code_realized;
+
+	return rva;
+}
+
+static int vxd_set_freq(u32 reg_freq, u32 freq_code)
+{
+	u32 freq_code_rlzd = 0;
+	int ret;
+
+	ret = __vxd_pm_cmd_freq_set(reg_freq, freq_code, &freq_code_rlzd);
+	if (ret < 0) {
+		PSB_DEBUG_WARN("failed to set freqency, current is %x\n",
+			freq_code_rlzd);
+	}
+
+	return ret;
+}
+
+static int vxd_get_freq(u32 reg_freq)
+{
+	return __vxd_pm_cmd_freq_get(reg_freq);
+}
+
 static bool vxd_power_down(struct drm_device *dev)
 {
-	uint32_t pwr_sts;
 	PSB_DEBUG_PM("MSVDX: power off msvdx.\n");
+
 	if (drm_psb_priv_pmu_func) {
-		intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
-		udelay(10);
-		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-		while (pwr_sts != 0x03000003) {
-			intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
+		/* TODO: Yao -> add timeout check */
+		do {
+			__intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
 			udelay(10);
-			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-		}
-		return true;
+		} while (__intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0) != 0x03000003);
 	}
 	else {
 		if (pmc_nc_set_power_state(VEDSSC, OSPM_ISLAND_DOWN, VEDSSPM0)) {
 			PSB_DEBUG_PM("VED: pmu_nc_set_power_state DOWN failed!\n");
 			return false;
 		}
-		return true;
 	}
+	return true;
 }
 
-static bool vxd_power_on(struct drm_device *dev)
+static bool vxd_power_up(struct drm_device *dev)
 {
-	uint32_t pwr_sts;
 	PSB_DEBUG_PM("MSVDX: power on msvdx.\n");
 	if (drm_psb_priv_pmu_func) {
-		intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
-		udelay(10);
-		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-		while (pwr_sts != 0x0) {
-			intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
+		/* TODO: Yao -> add timeout check */
+		do {
+			__intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
 			udelay(10);
-			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-		}
+		} while (__intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0) != 0x0);
 
-		intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
-		udelay(10);
-		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-		while (pwr_sts != 0x03000003) {
-			intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
+		do {
+			__intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D3);
 			udelay(10);
-			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-		}
+		} while (__intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0) != 0x03000003);
 
-		intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
-		udelay(10);
-		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-		while (pwr_sts != 0x0) {
-			intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
+		do {
+			__intel_mid_msgbus_write32_vxd(PUNIT_PORT, VEDSSPM0, VXD_APM_STS_D0);
 			udelay(10);
-			pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
-		}
-		return true;
+		} while (__intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0) != 0x0);
 	}
 	else {
 		if (pmc_nc_set_power_state(VEDSSC, OSPM_ISLAND_UP, VEDSSPM0)) {
 			PSB_DEBUG_PM("VED: pmu_nc_set_power_state ON failed!\n");
 			return false;
 		}
-		return true;
 	}
-}
 
-static void vxd_power_init(struct drm_device *dev)
-{
-	struct drm_psb_private *dev_priv = psb_priv(dev);
-	PSB_DEBUG_PM("MSVDX: vxd power init.\n");
-	pci_root = pci_get_bus_and_slot(0, PCI_DEVFN(0, 0));
-	if (!pci_root) {
-		printk(KERN_ALERT "%s: Error: msgbus PCI handle NULL",
-			__func__);
+	if (need_set_ved_freq) {
+		WARN_ON(vxd_set_freq(VEDSSPM1, IP_FREQ_320_00));
 	}
-	mutex_init(&dev_priv->vxd_pm_mutex);
-	vxd_power_on(dev);
-}
 
-static void vxd_power_post_init(struct drm_device *dev)
-{
-	struct drm_psb_private *dev_priv = psb_priv(dev);
-	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
-	/* need power down msvdx after init */
-	vxd_power_down(dev);
-	msvdx_priv->msvdx_needs_reset = 1;
-}
+	PSB_DEBUG_PM("MSVDX: VED frequency is %dMHZ after power up\n",
+		GET_VED_FREQUENCY(vxd_get_freq(VEDSSPM1)));
 
+	return true;
+}
 
 /**
  * is_island_on
@@ -783,26 +873,281 @@ static void vxd_power_post_init(struct drm_device *dev)
  * returns true if hw_island is ON
  * returns false if hw_island is OFF
  */
-bool is_vxd_on()
+static bool is_vxd_on(struct drm_device *dev)
 {
 	uint32_t pwr_sts;
 	if (drm_psb_priv_pmu_func)
-		pwr_sts = intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
+		pwr_sts = __intel_mid_msgbus_read32_vxd(PUNIT_PORT, VEDSSPM0);
 	else
 		pwr_sts = pmc_nc_get_power_state(VEDSSC, VEDSSPM0);
-
 	if (pwr_sts == VXD_APM_STS_D0)
 		return true;
 	else
 		return false;
 }
 
+#ifdef CONFIG_COMPAT
+static long
+vxd_ioctl_compat(struct file *filp, uint32_t cmd, unsigned long arg)
+{
+	return vxd_ioctl(filp, cmd, arg);
+}
+#endif
+
+static irqreturn_t vxd_irq_handler(int32_t irq, void *arg)
+{
+	int ret;
+	struct drm_device *dev = (struct drm_device *) arg;
+	ret = psb_msvdx_interrupt(dev);
+	if (ret) {
+		PSB_DEBUG_WARN("Error in msvdx irq handler: %d\n", ret);
+	}
+	return IRQ_HANDLED;
+}
+
+static void vxd_irq_preinstall (struct drm_device *dev)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+}
+static int vxd_irq_postinstall (struct drm_device *dev)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+	return 0;
+}
+static void vxd_irq_uninstall (struct drm_device *dev)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+}
+
+static const struct file_operations vxd_fops = {
+	.owner = THIS_MODULE,
+	.open = vxd_open,
+	.release = vxd_release,
+	.unlocked_ioctl = vxd_ioctl,
+	.mmap = vxd_mmap,
+	.poll = vxd_poll,
+	.fasync = drm_fasync,
+	.read = drm_read,
+	.llseek = noop_llseek,
+#ifdef CONFIG_COMPAT
+    .compat_ioctl = vxd_ioctl_compat,
+#endif
+};
+
+static struct drm_driver vxd_drm_driver = {
+	.driver_features = DRIVER_HAVE_IRQ,
+	.load = vxd_drm_load,
+	.unload = vxd_drm_unload,
+	.ioctls = vxd_ioctls,
+	.num_ioctls = ARRAY_SIZE(vxd_ioctls),
+	.irq_preinstall = vxd_irq_preinstall,
+	.irq_postinstall = vxd_irq_postinstall,
+	.irq_uninstall = vxd_irq_uninstall,
+	.irq_handler = vxd_irq_handler,
+	.device_is_agp = NULL,
+	.enable_vblank = NULL,
+	.disable_vblank = NULL,
+	.get_vblank_counter = NULL,
+	.get_vblank_timestamp = NULL,
+	.get_scanout_position = NULL,
+	.firstopen = vxd_drm_firstopen,
+	.lastclose = vxd_drm_lastclose,
+	.open = vxd_drm_open,
+	.preclose = vxd_drm_preclose,
+	.postclose = vxd_drm_postclose,
+#if defined(CONFIG_DEBUG_FS)
+	.debugfs_init = NULL,
+	.debugfs_cleanup = NULL,
+#endif
+	.fops = &vxd_fops,
+	.name = VXD_DRIVER_NAME,
+	.desc = VXD_DRIVER_DESC,
+	.date = VXD_DRIVER_DATE,
+	.major = VXD_DRIVER_MAJOR,
+	.minor = VXD_DRIVER_MINOR,
+	.patchlevel = VXD_DRIVER_PATCHLEVEL,
+};
+
+static int32_t vxd_plat_probe(struct platform_device *device)
+{
+	PSB_DEBUG_ENTRY("%s enter\n", __func__);
+	return drm_platform_init(&vxd_drm_driver, device);
+}
+
+static int32_t vxd_plat_remove(struct platform_device *device)
+{
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
+	drm_platform_exit(&vxd_drm_driver, device);
+#else
+	PSB_DEBUG_ENTRY("%s enter\n", __func__);
+	drm_put_dev(platform_get_drvdata(device));
+#endif
+	return 0;
+}
+
+static int vxd_freeze(struct drm_device *dev)
+{
+	bool parent_active;
+	int parent_child;
+	int ret = 0;
+	parent_active = pm_runtime_active(dev->platformdev->dev.parent);
+	parent_child = atomic_read(&dev->platformdev->dev.parent->power.child_count);
+	PSB_DEBUG_PM("parent active %d child %d\n", parent_active, parent_child);
+	if (is_vxd_on(dev)) {
+		if (dev->irq_enabled) {
+			if (unlikely(drm_irq_uninstall(dev))) {
+				PSB_DEBUG_WARN("Failed to uninstall IRQ handler\n");
+				ret = -EFAULT;
+			}
+		}
+		if (unlikely(!vxd_power_down(dev))) {
+			PSB_DEBUG_WARN("Failed to power off VED\n");
+			ret = -EFAULT;
+		}
+		PSB_DEBUG_PM("Successfully powered off\n");
+	} else {
+		PSB_DEBUG_PM("Skiped since already powered off\n");
+	}
+	return ret;
+}
+
+static int32_t vxd_thaw(struct drm_device *dev, bool restore_mmu)
+{
+	bool parent_active;
+	int parent_child;
+	int ret = 0;
+	parent_active = pm_runtime_active(dev->platformdev->dev.parent);
+	parent_child = atomic_read(&dev->platformdev->dev.parent->power.child_count);
+	PSB_DEBUG_PM("parent active %d child %d\n", parent_active, parent_child);
+	if (!is_vxd_on(dev)) {
+		if (unlikely(!vxd_power_up(dev))) {
+			PSB_DEBUG_WARN("Failed to power on VED\n");
+			ret = -EFAULT;
+		}
+		if (!dev->irq_enabled) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0))
+			if (unlikely(drm_irq_install(dev))) {
+#else
+			if (unlikely(drm_irq_install(dev, dev->irq))) {
+#endif
+				PSB_DEBUG_WARN("Failed installing IRQ handler\n");
+				ret = -EFAULT;
+			}
+		}
+		PSB_DEBUG_PM("Successfully powered on\n");
+	} else {
+		PSB_DEBUG_PM("Skiped since already powered on\n");
+	}
+	return ret;
+}
+
+static int32_t vxd_pm_suspend(struct device *dev)
+{
+	struct platform_device *platformdev = to_platform_device(dev);
+	struct drm_device *drm_dev = platform_get_drvdata(platformdev);
+	BUG_ON(!drm_dev);
+	PSB_DEBUG_PM("PM suspend called\n");
+	return vxd_freeze(drm_dev);
+}
+static int32_t vxd_pm_resume(struct device *dev)
+{
+	struct platform_device *platformdev = to_platform_device(dev);
+	struct drm_device *drm_dev = platform_get_drvdata(platformdev);
+	BUG_ON(!drm_dev);
+	PSB_DEBUG_PM("PM resume called\n");
+	return vxd_thaw(drm_dev, true);
+}
+static int32_t vxd_pm_freeze(struct device *dev)
+{
+	struct platform_device *platformdev = to_platform_device(dev);
+	struct drm_device *drm_dev = platform_get_drvdata(platformdev);
+	BUG_ON(!drm_dev);
+	PSB_DEBUG_PM("PM freeze called\n");
+	return vxd_freeze(drm_dev);
+}
+static int32_t vxd_pm_thaw(struct device *dev)
+{
+	struct platform_device *platformdev = to_platform_device(dev);
+	struct drm_device *drm_dev = platform_get_drvdata(platformdev);
+	BUG_ON(!drm_dev);
+	PSB_DEBUG_PM("PM thaw called\n");
+	return vxd_thaw(drm_dev, true);
+}
+static int32_t vxd_pm_poweroff(struct device *dev)
+{
+	struct platform_device *platformdev = to_platform_device(dev);
+	struct drm_device *drm_dev = platform_get_drvdata(platformdev);
+	BUG_ON(!drm_dev);
+	PSB_DEBUG_PM("PM poweroff called\n");
+	return vxd_freeze(drm_dev);
+}
+static int32_t vxd_rpm_suspend(struct device *dev)
+{
+	struct platform_device *platformdev = to_platform_device(dev);
+	struct drm_device *drm_dev = platform_get_drvdata(platformdev);
+	BUG_ON(!drm_dev);
+	PSB_DEBUG_PM("Runtime-PM suspend called\n");
+	return vxd_freeze(drm_dev);
+}
+static int32_t vxd_rpm_resume(struct device *dev)
+{
+	struct platform_device *platformdev = to_platform_device(dev);
+	struct drm_device *drm_dev = platform_get_drvdata(platformdev);
+	BUG_ON(!drm_dev);
+	PSB_DEBUG_PM("Runtime-PM resume called\n");
+	return vxd_thaw(drm_dev, true);
+}
+
+static void vxd_plat_shutdown(struct platform_device *dev)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+}
+
+static int32_t
+vxd_plat_suspend(struct platform_device *dev, pm_message_t state)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+	return 0;
+}
+static int32_t vxd_plat_resume(struct platform_device *dev)
+{
+	PSB_DEBUG_ENTRY("enter\n");
+	return 0;
+}
+
+static struct dev_pm_ops vxd_pm_ops = {
+	.suspend = vxd_pm_suspend,
+	.resume = vxd_pm_resume,
+	.freeze = vxd_pm_freeze,
+	.thaw = vxd_pm_thaw,
+	.poweroff = vxd_pm_poweroff,
+	.restore = vxd_pm_resume,
+#ifdef CONFIG_PM_RUNTIME
+	.runtime_suspend = vxd_rpm_suspend,
+	.runtime_resume = vxd_rpm_resume,
+#endif
+};
+
+static struct platform_driver vxd_plat_driver = {
+	.driver = {
+		.name = "vlv-ved",
+		.owner = THIS_MODULE,
+#ifdef CONFIG_PM
+		.pm = &vxd_pm_ops,
+#endif
+	},
+	.probe = vxd_plat_probe,
+	.remove = vxd_plat_remove,
+	.suspend = vxd_plat_suspend,
+	.resume = vxd_plat_resume,
+	.shutdown = vxd_plat_shutdown,
+};
+
 int ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
-	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
-	PSB_DEBUG_PM("MSVDX: work queue is scheduled to power off msvdx.\n");
 	int ret = 0;
+	PSB_DEBUG_PM("MSVDX: work queue is scheduled to power off msvdx.\n");
 	mutex_lock(&dev_priv->vxd_pm_mutex);
 	if (force_off)
 		goto power_off;
@@ -813,7 +1158,7 @@ int ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 		goto out;
 	}
 
-	if (is_vxd_on() == false) {
+	if (is_vxd_on(dev) == false) {
 		PSB_DEBUG_PM("vxd already is in power off.\n");
 		goto out;
 	}
@@ -826,10 +1171,8 @@ int ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 	psb_msvdx_save_context(dev);
 
 power_off:
-	vxd_power_down(dev);
-#ifdef CONFIG_PM_RUNTIME
-	i915_rpm_put_vxd(dev);
-#endif
+	if (unlikely(pm_runtime_put_sync_suspend(&dev->platformdev->dev) < 0))
+		PSB_DEBUG_WARN("Failed pm runtime put\n");
 	/* MSVDX_NEW_PMSTATE(dev, msvdx_priv, PSB_PMSTATE_POWERDOWN); */
 
 out:
@@ -837,39 +1180,36 @@ out:
 	return ret;
 }
 
-bool ospm_power_using_video_begin(int hw_island)
+bool ospm_power_using_video_begin(struct drm_device *dev, int hw_island)
 {
-	struct pci_dev *pdev = i915_drm_dev->pdev;
-	struct drm_psb_private *dev_priv = psb_priv(i915_drm_dev);
+	struct drm_psb_private *dev_priv = psb_priv(dev);
 
 	PSB_DEBUG_PM("MSVDX: %s is called.\n", __func__);
 	if (hw_island != OSPM_VIDEO_DEC_ISLAND) {
 		DRM_ERROR("failed.\n");
-		return true;
+		return false;
 	}
 
 	mutex_lock(&dev_priv->vxd_pm_mutex);
 	/* ospm_resume_pci(pdev); */
-	if (!is_vxd_on()) {
-#ifdef CONFIG_PM_RUNTIME
-		i915_rpm_get_vxd(dev_priv->dev);
-#endif
-		vxd_power_on(i915_drm_dev);
+	if (!is_vxd_on(dev)) {
+		if (unlikely(pm_runtime_get_sync(&dev->platformdev->dev) < 0)) {
+			PSB_DEBUG_WARN("Failed get runtime pm\n");
+			return false;
+		}
 	}
 	atomic_inc(&g_videodec_access_count);
 	mutex_unlock(&dev_priv->vxd_pm_mutex);
 	return true;
 }
 
-void ospm_power_using_video_end(int hw_island)
+void ospm_power_using_video_end(struct drm_device *dev, int hw_island)
 {
-	struct pci_dev *pdev = i915_drm_dev->pdev;
-	struct drm_psb_private *dev_priv = psb_priv(i915_drm_dev);
+	struct drm_psb_private *dev_priv = psb_priv(dev);
 
 	PSB_DEBUG_PM("MSVDX: %s is called.\n", __func__);
 	if (hw_island != OSPM_VIDEO_DEC_ISLAND) {
 		DRM_ERROR("failed.\n");
-		return true;
 	}
 	mutex_lock(&dev_priv->vxd_pm_mutex);
 	if (atomic_read(&g_videodec_access_count) <= 0)
@@ -879,6 +1219,5 @@ void ospm_power_using_video_end(int hw_island)
 	mutex_unlock(&dev_priv->vxd_pm_mutex);
 }
 
-module_init(vxd_driver_load);
-module_exit(vxd_driver_unload);
+module_platform_driver(vxd_plat_driver);
 MODULE_LICENSE("GPL");
