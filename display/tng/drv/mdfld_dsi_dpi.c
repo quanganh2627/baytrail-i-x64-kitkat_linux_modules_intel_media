@@ -656,13 +656,13 @@ static int __dpi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 	if (is_dual_dsi(dev)) {
 		offset = 0x1000;
 		/*Disable MIPI port*/
-		REG_WRITE(regs->mipi_reg, (REG_READ(regs->mipi_reg) & ~BIT31));
+		REG_WRITE(regs->mipi_reg + offset, (REG_READ(regs->mipi_reg + offset) & ~BIT31));
 
 		/*clear Low power output hold*/
-		REG_WRITE(regs->mipi_reg, (REG_READ(regs->mipi_reg) & ~BIT16));
+		REG_WRITE(regs->mipi_reg + offset, (REG_READ(regs->mipi_reg + offset) & ~BIT16));
 		offset = 0x800;
 		/*Disable DSI controller*/
-		REG_WRITE(regs->device_ready_reg, (ctx->device_ready & ~BIT0));
+		REG_WRITE(regs->device_ready_reg + offset, (REG_READ(regs->device_ready_reg + offset) & ~BIT0));
 
 		/*enter ULPS*/
 		__dpi_enter_ulps_locked(dsi_config, offset);
