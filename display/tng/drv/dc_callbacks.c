@@ -963,7 +963,7 @@ void DCCBExitMaxfifoMode(struct drm_device *dev)
 	return;
 }
 
-void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
+int DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
 {
-	return;
+	return 0;
 }
