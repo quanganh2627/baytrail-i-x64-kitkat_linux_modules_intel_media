@@ -4435,6 +4435,8 @@ struct drm_psb_register_rw_arg_32 {
 		uint32_t b_wait_vblank;
 		uint32_t b_wms;
 		uint32_t buffer_handle;
+		uint32_t backbuf_index;
+		uint32_t backbuf_addr;
 	} overlay;
 	uint32_t vsync_operation_mask;
 	struct {
@@ -4524,6 +4526,8 @@ int compat_PVRSRV_BridgeDispatchKM3(struct file *filp, unsigned int cmd,
 		|| __put_user(req32.overlay.b_wait_vblank, &request->overlay.b_wait_vblank)
 		|| __put_user(req32.overlay.b_wms, &request->overlay.b_wms)
 		|| __put_user(req32.overlay.buffer_handle, &request->overlay.buffer_handle)
+		|| __put_user(req32.overlay.backbuf_index, &request->overlay.backbuf_index)
+		|| __put_user(req32.overlay.backbuf_addr, &request->overlay.backbuf_addr)
 		|| __put_user(req32.vsync_operation_mask, &request->vsync_operation_mask)
 		|| __put_user(req32.vsync.pipe, &request->vsync.pipe)
 		|| __put_user(req32.vsync.vsync_pipe, &request->vsync.vsync_pipe)
@@ -4600,6 +4604,8 @@ int compat_PVRSRV_BridgeDispatchKM3(struct file *filp, unsigned int cmd,
 		|| __put_user(returnBuffer.overlay.b_wait_vblank, &p_buf->overlay.b_wait_vblank)
 		|| __put_user(returnBuffer.overlay.b_wms, &p_buf-> overlay.b_wms)
 		|| __put_user(returnBuffer.overlay.buffer_handle, &p_buf->overlay.buffer_handle)
+		|| __put_user(returnBuffer.overlay.backbuf_index, &p_buf->overlay.backbuf_index)
+		|| __put_user(returnBuffer.overlay.backbuf_addr, &p_buf->overlay.backbuf_addr)
 		|| __put_user(returnBuffer.vsync_operation_mask, &p_buf->vsync_operation_mask)
 		|| __put_user(returnBuffer.vsync.pipe, &p_buf->vsync.pipe)
 		|| __put_user(returnBuffer.vsync.vsync_pipe, &p_buf->vsync.vsync_pipe)
