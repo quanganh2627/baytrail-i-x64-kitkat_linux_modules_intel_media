@@ -984,6 +984,9 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 	}
 
 	if (send_wms && psFlip) {
+		/*turn on required power islands*/
+		if (!power_island_get(OSPM_DISPLAY_A))
+			return IMG_FALSE;
 
 		/* Ensure that *psFlip is not freed while lock is not held. */
 		if (psFlip)
@@ -1005,6 +1008,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 		if (psFlip)
 			psFlip->uiVblankCounters[DC_PIPE_A] =
 				drm_vblank_count(gpsDevice->psDrmDevice, DC_PIPE_A);
+		power_island_put(OSPM_DISPLAY_A);
 	}
 
 	mutex_unlock(&gpsDevice->sFlipQueueLock);
