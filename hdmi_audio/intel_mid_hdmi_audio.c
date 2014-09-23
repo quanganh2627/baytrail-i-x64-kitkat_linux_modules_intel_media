@@ -1898,10 +1898,12 @@ static int hdmi_audio_probe(struct platform_device *devptr)
 		intelhaddata->ops = &had_ops_v1;
 		version = "v1";
 	} else{
-		intelhaddata->hw_silence = 0;
-		intelhaddata->audio_reg_base = 0x69000;
-		intelhaddata->ops = &had_ops_v1;
-		version = "v1";
+		/* default set to BYT.
+		   PIPE B is used for HDMI*/
+		intelhaddata->hw_silence = 1;
+		intelhaddata->audio_reg_base = 0x65800;
+		intelhaddata->ops = &had_ops_v2;
+		version = "v2";
 	}
 	had_debugfs_init(intelhaddata, version);
 	return retval;
