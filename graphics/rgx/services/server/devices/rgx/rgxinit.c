@@ -77,6 +77,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "rgxta3d.h"
 #include "debug_request_ids.h"
+#include "pwr_mgmt.h"
 
 static PVRSRV_ERROR RGXDevInitCompatCheck(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_UINT32 ui32ClientBuildOptions);
 static PVRSRV_ERROR RGXDevVersionString(PVRSRV_DEVICE_NODE *psDeviceNode, IMG_CHAR **ppszVersionString);
@@ -125,13 +126,16 @@ static IMG_BOOL RGX_LISRHandler (IMG_VOID *pvData)
 	IMG_UINT32 ui32IRQStatus;
 	IMG_BOOL bInterruptProcessed = IMG_FALSE;
 
+	if (!ospm_power_is_hw_on(OSPM_GRAPHICS_ISLAND))
+		return bInterruptProcessed;
+
 	psDeviceNode = pvData;
 	psDevConfig = psDeviceNode->psDevConfig;
 	psDevInfo = psDeviceNode->pvDevice;
 
 	if (psDevInfo->bIgnoreFurtherIRQs)
 	{
-		return IMG_FALSE;
+		return IMG_TRUE;
 	}
 
 	ui32IRQStatus = OSReadHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_META_SP_MSLVIRQSTATUS);

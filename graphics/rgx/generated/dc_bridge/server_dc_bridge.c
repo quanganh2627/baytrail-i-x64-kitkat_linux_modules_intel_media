@@ -2113,7 +2113,6 @@ DCBufferRelease_exit:
 }
 
 
-
 /* *************************************************************************** 
  * Server bridge dispatch related glue 
  */
@@ -2152,7 +2151,6 @@ PVRSRV_ERROR RegisterDCFunctions(IMG_VOID)
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCBUFFERUNPIN, PVRSRVBridgeDCBufferUnpin);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCBUFFERACQUIRE, PVRSRVBridgeDCBufferAcquire);
 	SetDispatchTableEntry(PVRSRV_BRIDGE_DC_DCBUFFERRELEASE, PVRSRVBridgeDCBufferRelease);
-
 	return PVRSRV_OK;
 }
 
