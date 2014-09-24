@@ -671,7 +671,7 @@ long vxd_ioctl(struct file *filp,
 			mutex_unlock(&drm_global_mutex);
 		}
 
-		if (cmd & IOC_OUT) {
+		if ((cmd & IOC_OUT) && kdata) {
 			if (copy_to_user((void __user *)arg, kdata,
 					 usize) != 0)
 				retcode = -EFAULT;
