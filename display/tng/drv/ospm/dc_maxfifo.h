@@ -49,6 +49,10 @@ struct dc_maxfifo {
 	struct work_struct repeat_frame_interrupt_work;
 	unsigned int jiffies_record;
 	unsigned long last_jiffies;
+	u32 ddl1;
+	u32 ddl2;
+	u32 ddl3;
+	u32 ddl4;
 };
 
 bool enter_maxfifo_mode(struct drm_device *dev, int mode);

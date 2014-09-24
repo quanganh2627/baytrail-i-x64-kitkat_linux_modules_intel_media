@@ -282,7 +282,16 @@ bool enter_maxfifo_mode(struct drm_device *dev, int mode)
 			dspsrctrl_val |= mode << 24;
 			if (regs_to_set & DC_MAXFIFO_REGSTOSET_DSPSRCTRL_MAXFIFO)
 				dspsrctrl_val |= DSPSRCTRL_MAXFIFO_MODE_ALWAYS_MAXFIFO;
+			maxfifo_info->ddl1 = PSB_RVDC32(DDL1);
+			maxfifo_info->ddl2 = PSB_RVDC32(DDL2);
+			maxfifo_info->ddl3 = PSB_RVDC32(DDL3);
+			maxfifo_info->ddl4 = PSB_RVDC32(DDL4);
 			PSB_WVDC32(dspsrctrl_val, DSPSRCTRL_REG);
+			/* As SV suggestion, we need to set DDL as 0 in maxfifo mode */
+			PSB_WVDC32(0, DDL1);
+			PSB_WVDC32(0, DDL2);
+			PSB_WVDC32(0, DDL3);
+			PSB_WVDC32(0, DDL4);
 			maxfifo_info->maxfifo_current_state = mode;
 		}
 
@@ -322,6 +331,11 @@ bool exit_maxfifo_mode(struct drm_device *dev)
 				  PSB_RVDC32(DSPSRCTRL_REG),
 				intel_mid_msgbus_read32(PUNIT_PORT, DSP_SS_PM));
 
+		/* Set DDL back to original values when leaving maxfifo */
+		PSB_WVDC32(maxfifo_info->ddl1, DDL1);
+		PSB_WVDC32(maxfifo_info->ddl2, DDL2);
+		PSB_WVDC32(maxfifo_info->ddl3, DDL3);
+		PSB_WVDC32(maxfifo_info->ddl4, DDL4);
 		PSB_WVDC32(dspsrctrl_val, DSPSRCTRL_REG);
 		maxfifo_info->maxfifo_current_state = -1;
 		maxfifo_info->req_mode = -1;
