@@ -99,7 +99,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "linkage.h"
 #include "power.h"
 #include "env_connection.h"
-#include "sysinfo.h"
+#include "rgxsysinfo.h"
 #include "pvrsrv.h"
 #include "process_stats.h"
 
@@ -173,6 +173,7 @@ MODULE_PARM_DESC(gPVRDebugLevel, "Sets the level of debug output (default 0x7)")
 EXPORT_SYMBOL(DCRegisterDevice);
 EXPORT_SYMBOL(DCUnregisterDevice);
 EXPORT_SYMBOL(DCDisplayConfigurationRetired);
+EXPORT_SYMBOL(DCDisplayHasPendingCommand);
 EXPORT_SYMBOL(DCImportBufferAcquire);
 EXPORT_SYMBOL(DCImportBufferRelease);
 #endif
@@ -283,8 +284,10 @@ struct pci_device_id powervr_id_table[] __devinitdata = {
 #endif
 	{0}
 };
+#if !defined(SUPPORT_DRM_INTEL)
 MODULE_DEVICE_TABLE(pci, powervr_id_table);
-#endif	/*defined(LDM_PCI) */ 
+#endif
+#endif /*defined(LDM_PCI) */
 
 #if defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
 static struct platform_device_id powervr_id_table[] __devinitdata = {
@@ -322,7 +325,11 @@ static LDM_DRV powervr_driver = {
 	.shutdown	= PVRSRVDriverShutdown,
 };
 
+#if defined(SUPPORT_DRM_INTEL)
+extern LDM_DEV *gpsPVRLDMDev;
+#else
 LDM_DEV *gpsPVRLDMDev;
+#endif
 
 #if defined(LDM_PLATFORM)
 #if defined(MODULE) && !defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
@@ -455,10 +462,10 @@ static int __devinit PVRSRVDriverProbe(LDM_DEV *pDevice, const struct pci_device
 	PVR_TRACE(("PVRSRVDriverProbe (pDevice=%p)", pDevice));
 
 #if defined(SUPPORT_DRM)
-#if defined(LDM_PLATFORM)
+#if defined(LDM_PLATFORM) && !defined(SUPPORT_DRM_INTEL)
 	result = drm_platform_init(&sPVRDRMDriver, pDevice);
 #endif
-#if defined(LDM_PCI)
+#if defined(LDM_PCI) && !defined(SUPPORT_DRM_INTEL)
 	result = drm_get_pci_dev(pDevice, pID, &sPVRDRMDriver);
 #endif
 #else	/* defined(SUPPORT_DRM) */
@@ -493,7 +500,7 @@ static void __devexit PVRSRVDriverRemove(LDM_DEV *pDevice)
 {
 	PVR_TRACE(("PVRSRVDriverRemove (pDevice=%p)", pDevice));
 
-#if defined(SUPPORT_DRM)
+#if defined(SUPPORT_DRM) && !defined(SUPPORT_DRM_INTEL)
 #if defined(LDM_PLATFORM)
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0))
 	drm_platform_exit(&sPVRDRMDriver, pDevice);
@@ -886,7 +893,11 @@ check_auth_exit:
 PVRSRV_ERROR LinuxBridgeInit(void);
 void LinuxBridgeDeInit(void);
 
+#if defined(SUPPORT_DRM_INTEL)
+int PVRCore_Init(void)
+#else
 static int __init PVRCore_Init(void)
+#endif
 {
 	int error;
 #if defined(PVRSRV_ENABLE_PROCESS_STATS) || defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
@@ -971,7 +982,7 @@ static int __init PVRCore_Init(void)
 #endif	/* defined(MODULE) && !defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV) */
 #endif	/* defined(LDM_PLATFORM) */ 
 
-#if defined(LDM_PCI)
+#if defined(LDM_PCI) && !defined(SUPPORT_DRM_INTEL)
 #if defined(SUPPORT_DRM)
 	error = drm_pci_init(&sPVRDRMDriver, &powervr_driver);
 #else
@@ -986,6 +997,20 @@ static int __init PVRCore_Init(void)
 #endif /* LDM_PCI */
 
 	/* Check that the driver probe function was called */
+#if defined(LDM_PCI) && defined(SUPPORT_DRM_INTEL)
+	if (!bDriverProbeSucceeded)
+	{
+		error = PVRSRVInit();
+		if (error != 0)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "PVRSRVSystemInit: unable to init PVR service (%d)", error));
+
+			goto init_failed;
+		}
+		bDriverProbeSucceeded = IMG_TRUE;
+	}
+#endif	/* defined(SUPPORT_DRM) */
+
 	if (!bDriverProbeSucceeded)
 	{
 		PVR_TRACE(("PVRCore_Init: PVRSRVDriverProbe has not been called or did not succeed - check that hardware is detected"));
@@ -1034,7 +1059,11 @@ static int __init PVRCore_Init(void)
 	{
 		PVR_DPF((PVR_DBG_ERROR, "PVRCore_Init: unable to create sync (%d)", eError));
 		error = -EBUSY;
+#if !defined(SUPPORT_DRM)
 		goto destroy_class;
+#else
+		goto init_failed;
+#endif
 
 	}
 #endif
@@ -1062,7 +1091,7 @@ unregister_device:
 	unregister_chrdev((IMG_UINT)AssignedMajorNumber, DEVNAME);
 sys_deinit:
 #if defined(LDM_PCI)
-#if defined(SUPPORT_DRM)
+#if defined(SUPPORT_DRM) && !defined(SUPPORT_DRM_INTEL)
 	drm_pci_exit(&sPVRDRMDriver, &powervr_driver);
 #else
 	pci_unregister_driver(&powervr_driver);
@@ -1079,10 +1108,13 @@ sys_deinit:
 #endif	/* (LINUX_VERSION_CODE < KERNEL_VERSION(3,2,0)) */
 #endif	/* defined(MODULE) && !defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV) */
 	platform_driver_unregister(&powervr_driver);
-#endif	/* defined (LDM_PLATFORM) */
+#endif	/* defined(LDM_MODULE) */
 #endif	/* !defined(SUPPORT_DRM) */
 
 init_failed:
+#if defined(LDM_PCI) && defined(SUPPORT_DRM_INTEL)
+	PVRSRVDeInit();
+#endif
 	PVRMMapCleanup();
 	LinuxBridgeDeInit();
 	PVROSFuncDeInit();
@@ -1122,7 +1154,11 @@ dbgdrv_cleanup:
  @Return none
 
 *****************************************************************************/
+#if defined(SUPPORT_DRM_INTEL)
+void PVRCore_Cleanup(void)
+#else
 static void __exit PVRCore_Cleanup(void)
+#endif
 {
 	PVR_TRACE(("PVRCore_Cleanup"));
 
@@ -1148,7 +1184,7 @@ static void __exit PVRCore_Cleanup(void)
 #endif
 
 #if defined(LDM_PCI)
-#if defined(SUPPORT_DRM)
+#if defined(SUPPORT_DRM) && !defined(SUPPORT_DRM_INTEL)
 	drm_pci_exit(&sPVRDRMDriver, &powervr_driver);
 #else
 	pci_unregister_driver(&powervr_driver);
@@ -1192,5 +1228,7 @@ static void __exit PVRCore_Cleanup(void)
  * statically as well; in both cases they define the function the kernel will
  * run to start/stop the driver.
 */
+#if !defined(SUPPORT_DRM_INTEL)
 module_init(PVRCore_Init);
 module_exit(PVRCore_Cleanup);
+#endif
