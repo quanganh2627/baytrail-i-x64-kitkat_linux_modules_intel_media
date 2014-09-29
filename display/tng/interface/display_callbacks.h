@@ -30,6 +30,7 @@
 #include <displayclass_interface.h>
 #include "img_types.h"
 #include "psb_drm.h"
+#include "psb_gtt.h"
 
 struct psb_framebuffer;
 
@@ -59,7 +60,7 @@ void DCCBSetupZorder(struct drm_device *dev,
 			int pipe);
 void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe);
 void DCCBAvoidFlipInVblankInterval(struct drm_device *dev, int pipe);
-void DCCBEnterMaxfifoMode(struct drm_device *dev, int mode);
+int DCCBEnterMaxfifoMode(struct drm_device *dev, int mode);
 void DCCBExitMaxfifoMode(struct drm_device *dev);
 int DCCBUpdateDbiPanel(struct drm_device *dev, int pipe);
 int DCCBOverlayDisableAndWait(struct drm_device *dev, u32 ctx,
@@ -72,6 +73,7 @@ int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
 int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
+void DCCBEnablePrimaryWA(struct drm_device *dev, int index);
 void DCCBFlipDSRCb(struct drm_device *dev);
 void DCCBUnblankDisplay(struct drm_device *dev);
 int DCCBgttMapMemory(struct drm_device *dev,

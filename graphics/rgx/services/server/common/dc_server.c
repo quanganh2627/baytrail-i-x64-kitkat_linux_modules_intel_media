@@ -172,6 +172,7 @@ typedef struct _DC_BUFFER_PMR_DATA_
 } DC_BUFFER_PMR_DATA;
 
 POS_LOCK g_hDCListLock;
+POS_LOCK g_hDCFlushLock;
 
 DC_DEVICE *g_psDCDeviceList;
 IMG_UINT32 g_ui32DCDeviceCount;
@@ -1368,7 +1369,7 @@ static IMG_BOOL _DCDisplayContextFlush( PDLLIST_NODE psNode, IMG_PVOID pvCallbac
 	
 	PVR_UNREFERENCED_PARAMETER(pvCallbackData);
 
-	PVR_DPF((PVR_DBG_ERROR, "_DCDisplayContextFlush: Display Context: %p", psDisplayContext));
+	PVR_DPF((PVR_DBG_MESSAGE, "_DCDisplayContextFlush: Display Context: %p", psDisplayContext));
 
 	/* Make the NULL flip command data */
 	sReadyData.psDisplayContext = psDisplayContext;
@@ -1416,14 +1417,14 @@ static IMG_BOOL _DCDisplayContextFlush( PDLLIST_NODE psNode, IMG_PVOID pvCallbac
 	 */
 	while ( ui32GoodRuns < ui32NumConfigsInSCP && ui32LoopCount < 500 )
 	{
-		PVR_DPF((PVR_DBG_ERROR, "ui32GoodRuns: %u, ui32NumConfigsInSCP: %u, ui32ConfigsInFlight: %u ui32LoopCount: %u",
+		PVR_DPF((PVR_DBG_MESSAGE, "ui32GoodRuns: %u, ui32NumConfigsInSCP: %u, ui32ConfigsInFlight: %u ui32LoopCount: %u",
 										ui32GoodRuns,
 										ui32NumConfigsInSCP,
 										psDisplayContext->ui32ConfigsInFlight,
 										ui32LoopCount));
 		eError = SCPRun( psDisplayContext->psSCPContext );
 
-		PVR_DPF((PVR_DBG_ERROR, "SCPRun returned %u", eError));
+		PVR_DPF((PVR_DBG_MESSAGE, "SCPRun returned %u", eError));
 		
 		if ( 0 == ui32LoopCount && PVRSRV_ERROR_FAILED_DEPENDENCIES != eError && 1 != psDisplayContext->ui32ConfigsInFlight )
 		{
@@ -1436,7 +1437,7 @@ static IMG_BOOL _DCDisplayContextFlush( PDLLIST_NODE psNode, IMG_PVOID pvCallbac
 		}
 		else if ( PVRSRV_ERROR_FAILED_DEPENDENCIES == eError && 1 == psDisplayContext->ui32ConfigsInFlight )
 		{
-			PVR_DPF((PVR_DBG_ERROR, "DCDisplayContextFlush: inserting NULL flip"));
+			PVR_DPF((PVR_DBG_MESSAGE, "DCDisplayContextFlush: inserting NULL flip"));
 
 			/* Check if we need to do any CPU cache operations before sending the NULL flip */
 			psData = PVRSRVGetPVRSRVData();
@@ -1459,7 +1460,7 @@ static IMG_BOOL _DCDisplayContextFlush( PDLLIST_NODE psNode, IMG_PVOID pvCallbac
 		PVR_DPF((PVR_DBG_ERROR, "DCDisplayContextFlush: Failed to flush after > 500 milliseconds"));
 	}
 	
-	PVR_DPF((PVR_DBG_ERROR, "DCDisplayContextFlush: inserting NULL flip"));
+	PVR_DPF((PVR_DBG_MESSAGE, "DCDisplayContextFlush: inserting NULL flip"));
 
 	/* Check if we need to do any CPU cache operations before sending the NULL flip */
 	psData = PVRSRVGetPVRSRVData();
@@ -1479,7 +1480,8 @@ static IMG_BOOL _DCDisplayContextFlush( PDLLIST_NODE psNode, IMG_PVOID pvCallbac
 
 
 PVRSRV_ERROR DCDisplayContextFlush( IMG_VOID )
-{	
+{
+	OSLockAcquire(g_hDCFlushLock);
 	PVRSRV_ERROR eError = PVRSRV_OK;
 	
 	if ( !dllist_is_empty(&g_sDisplayContextsList) )
@@ -1491,7 +1493,8 @@ PVRSRV_ERROR DCDisplayContextFlush( IMG_VOID )
 		PVR_DPF((PVR_DBG_ERROR, "DCDisplayContextFlush: No display contexts found"));
 		eError = PVRSRV_ERROR_INVALID_PARAMS;
 	}
-		
+
+	OSLockRelease(g_hDCFlushLock);
 	return eError;
 }
 
@@ -2270,6 +2273,7 @@ PVRSRV_ERROR DCInit()
 	g_psDCDeviceList = IMG_NULL;
 	g_ui32DCNextIndex = 0;
 	dllist_init(&g_sDisplayContextsList);
+	OSLockCreate(&g_hDCFlushLock, LOCK_TYPE_NONE);
 	return OSLockCreate(&g_hDCListLock, LOCK_TYPE_NONE);
 }
 
@@ -2282,6 +2286,7 @@ PVRSRV_ERROR DCDeInit()
 		PVR_ASSERT(g_psDCDeviceList == IMG_NULL);
 	}
 
+	OSLockDestroy(g_hDCFlushLock);
 	OSLockDestroy(g_hDCListLock);
 
 	return PVRSRV_OK;

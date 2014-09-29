@@ -41,7 +41,6 @@ static int mdfld_dsi_sharp10x19_drv_ic_init(struct mdfld_dsi_config *dsi_config)
 
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
-	u32 cmd = 0;
 	int err = 0;
 
 	if (!sender) {
@@ -332,8 +331,6 @@ int mdfld_dsi_sharp10x19_set_brightness(struct mdfld_dsi_config *dsi_config,
 	struct mdfld_dsi_pkg_sender *sender =
 		mdfld_dsi_get_pkg_sender(dsi_config);
 
-	struct drm_device *dev = dsi_config->dev;
-
 	PSB_DEBUG_ENTRY("level = %d\n", level);
 
 	if (!sender) {
@@ -343,10 +340,14 @@ int mdfld_dsi_sharp10x19_set_brightness(struct mdfld_dsi_config *dsi_config,
 	mdfld_dsi_send_mcs_short_hs(sender,
 		write_display_brightness, level, 1,
 		MDFLD_DSI_SEND_PACKAGE);
+
+	/* give some time for new backlight value to take effect */
+	msleep(20);
+
 	return 0;
 }
 
-static void _get_panel_reset_gpio()
+static void _get_panel_reset_gpio(void)
 {
 	int ret = 0;
 	if (mipi_reset_gpio == 0) {
@@ -388,7 +389,6 @@ static void __vpro2_power_ctrl(bool on)
 static int mdfld_dsi_sharp10x19_panel_reset(struct mdfld_dsi_config *dsi_config)
 {
 	int ret = 0;
-	struct drm_device *dev = dsi_config->dev;
 
 	PSB_DEBUG_ENTRY("\n");
 

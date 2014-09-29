@@ -400,9 +400,9 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config, bool from_dsr)
 	struct mdfld_dsi_hw_context *ctx;
 	struct drm_psb_private *dev_priv;
 	struct drm_device *dev;
+	struct panel_funcs *p_funcs;
 	int retry;
 	int err = 0;
-	u32 guit_val = 0;
 	u32 power_island = 0;
 	u32 sprite_reg_offset = 0;
 	int i = 0;
@@ -417,6 +417,7 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config, bool from_dsr)
 	ctx = &dsi_config->dsi_hw_context;
 	dev = dsi_config->dev;
 	dev_priv = dev->dev_private;
+	p_funcs = dev_priv->dbi_output->p_funcs;
 
 	power_island = pipe_to_island(dsi_config->pipe);
 
@@ -507,23 +508,16 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config, bool from_dsr)
 	REG_WRITE(regs->dsppos_reg, ctx->dsppos);
 	REG_WRITE(regs->dspstride_reg, ctx->dspstride);
 
-	//if (!IS_ANN(dev)) 
-        //ANN gamma setting use old path
-        {
-		/*restore color_coef (chrome) */
-		for (i = 0; i < 6; i++)
-                       REG_WRITE(regs->color_coef_reg + (i<<2), csc_setting_save[i]);
+	if (p_funcs && p_funcs->set_legacy_coefficient)
+		p_funcs->set_legacy_coefficient(dsi_config);
 
+	if (p_funcs && p_funcs->set_legacy_gamma_table)
+		p_funcs->set_legacy_gamma_table(dsi_config);
 
-		/* restore palette (gamma) */
-		for (i = 0; i < 256; i++)
-                       REG_WRITE(regs->palette_reg + (i<<2), gamma_setting_save[i]);
-
-		/* restore dpst setting */
-		if (dev_priv->psb_dpst_state) {
-			dpstmgr_reg_restore_locked(dev, dsi_config);
-			psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
-		}
+	/* restore dpst setting */
+	if (dev_priv->psb_dpst_state) {
+		dpstmgr_reg_restore_locked(dev, dsi_config);
+		psb_enable_pipestat(dev_priv, 0, PIPE_DPST_EVENT_ENABLE);
 	}
 
 	/*Setup plane*/
@@ -587,6 +581,8 @@ int __dbi_power_on(struct mdfld_dsi_config *dsi_config, bool from_dsr)
 	val = ctx->pipeconf;
 	val &= ~0x000c0000;
 	val |= BIT31 | PIPEACONF_DSR;
+	if (dev_priv->legacy_csc_enable)
+		val |= BIT20;
 	REG_WRITE(regs->pipeconf_reg, val);
 
 	/*Wait for pipe enabling,when timing generator is working */
@@ -728,10 +724,7 @@ int __dbi_power_off(struct mdfld_dsi_config *dsi_config, bool from_dsr)
 	struct mdfld_dsi_hw_context *ctx;
 	struct drm_device *dev;
 	struct drm_psb_private *dev_priv;
-	int pipe0_enabled;
-	int pipe2_enabled;
 	int err = 0;
-	u32 guit_val = 0;
 	u32 power_island = 0;
 	int retry,i;
 	int offset = 0;
@@ -1051,6 +1044,10 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 	struct mdfld_dsi_config *dsi_config;
 	struct drm_psb_private *dev_priv;
 	struct panel_funcs *p_funcs;
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
+	struct mdfld_dsi_hw_context *ctx;
+	struct backlight_device bd;
+#endif
 
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
@@ -1078,15 +1075,13 @@ void mdfld_generic_dsi_dbi_dpms(struct drm_encoder *encoder, int mode)
 		DC_MRFLD_onPowerOn(dsi_config->pipe);
 
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
-		struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
-		struct backlight_device bd;
+		ctx = &dsi_config->dsi_hw_context;
 		bd.props.brightness = ctx->lastbrightnesslevel;
 		psb_set_brightness(&bd);
 #endif
 	} else if (mode == DRM_MODE_DPMS_STANDBY) {
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
-		struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
-		struct backlight_device bd;
+		ctx = &dsi_config->dsi_hw_context;
 		ctx->lastbrightnesslevel = psb_get_brightness(&bd);
 		bd.props.brightness = 0;
 		psb_set_brightness(&bd);

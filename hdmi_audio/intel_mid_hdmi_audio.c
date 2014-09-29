@@ -1473,10 +1473,10 @@ static int snd_intelhad_pcm_prepare(struct snd_pcm_substream *substream)
 		goto prep_end;
 	}
 
-	pr_debug("period_size=%d\n",
+	pr_debug("period_size=%zd\n",
 				frames_to_bytes(runtime, runtime->period_size));
 	pr_debug("periods=%d\n", runtime->periods);
-	pr_debug("buffer_size=%d\n", snd_pcm_lib_buffer_bytes(substream));
+	pr_debug("buffer_size=%zu\n", snd_pcm_lib_buffer_bytes(substream));
 	pr_debug("rate=%d\n", runtime->rate);
 	pr_debug("channels=%d\n", runtime->channels);
 

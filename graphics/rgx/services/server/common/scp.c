@@ -788,7 +788,7 @@ IMG_VOID SCPCommandComplete(SCP_CONTEXT *psContext)
 
 	if (psContext->ui32ReadOffset == psContext->ui32DepOffset)
 	{
-		PVR_DPF((PVR_DBG_ERROR, "SCPCommandComplete: Called with no work to do!"));
+		PVR_DPF((PVR_DBG_MESSAGE, "SCPCommandComplete: Called with no work to do!"));
 		return;
 	}	
 

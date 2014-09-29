@@ -75,8 +75,6 @@ static int vsp_fence_compose_surfaces(struct drm_file *priv,
 				struct psb_ttm_fence_rep *fence_arg,
 				struct ttm_buffer_object *pic_param_bo);
 
-static int  vp8_error_response(struct drm_psb_private *dev_priv, int context);
-
 static inline void psb_clflush(void *addr)
 {
 	__asm__ __volatile__("wbinvd ");
@@ -93,7 +91,6 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 	struct vss_response_t *msg;
 	uint32_t sequence;
 	uint32_t status;
-	struct vss_command_t *cur_cell_cmd, *cur_cmd;
 	unsigned int cmd_rd, cmd_wr;
 
 	idx = 0;
@@ -301,7 +298,6 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	unsigned long cmd_page_offset = arg->cmdbuf_offset & ~PAGE_MASK;
 	struct ttm_bo_kmap_obj cmd_kmap;
 	bool is_iomem;
-	uint32_t invalid_mmu = 0;
 	struct file *filp = priv->filp;
 	bool need_power_put = 0;
 
@@ -313,7 +309,7 @@ int vsp_cmdbuf_vpp(struct drm_file *priv,
 	    (arg->cmdbuf_size > cmd_buffer->acc_size) ||
 	    (arg->cmdbuf_size + arg->cmdbuf_offset) > cmd_buffer->acc_size) {
 		DRM_ERROR("VSP: the size of cmdbuf is invalid!");
-		DRM_ERROR("VSP: offset=%x, size=%x,cmd_buffer size=%x\n",
+		DRM_ERROR("VSP: offset=%x, size=%x,cmd_buffer size=%zx\n",
 			  arg->cmdbuf_offset, arg->cmdbuf_size,
 			  cmd_buffer->acc_size);
 		vsp_priv->vsp_cmd_num = 0;
@@ -466,7 +462,7 @@ int vsp_send_command(struct drm_device *dev,
 
 		VSP_DEBUG("VSP: rd %d, wr %d, remaining_space %d, ",
 			  rd, wr, remaining_space);
-		VSP_DEBUG("cmd_size %ld sizeof(*cur_cmd) %d\n",
+		VSP_DEBUG("cmd_size %ld sizeof(*cur_cmd) %ld\n",
 			  cmd_size, sizeof(*cur_cmd));
 
 		if (remaining_space < vsp_priv->vsp_cmd_num) {
@@ -585,7 +581,7 @@ static int vsp_prehandle_command(struct drm_file *priv,
 	struct drm_device *dev = priv->minor->dev;
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	struct ttm_buffer_object *pic_bo_vp8;
+	struct ttm_buffer_object *pic_bo_vp8 = NULL;
 	int vp8_pic_num = 0;
 	struct ttm_buffer_object *compose_param_bo = NULL;
 	int compose_param_num = 0;
@@ -935,7 +931,6 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	struct ttm_bo_kmap_obj vp8_encode_frame__kmap;
-	int vp8_id = 0;
 
 	INIT_LIST_HEAD(&surf_list);
 
@@ -953,16 +948,16 @@ static int vsp_fence_vp8enc_surfaces(struct drm_file *priv,
 				&vp8_encode_frame__kmap,
 				&is_iomem);
 
-	VSP_DEBUG("save vp8 pic param address %x\n", pic_param);
+	VSP_DEBUG("save vp8 pic param address %p\n", pic_param);
 
-	VSP_DEBUG("bo addr %x kernel addr %x surfaceid %x base %x base_uv %x\n",
+	VSP_DEBUG("bo addr %p kernel addr %p surfaceid %x base %x base_uv %x\n",
 			pic_param_bo,
 			pic_param,
 			pic_param->input_frame.surface_id,
 			pic_param->input_frame.base,
 			pic_param->input_frame.base_uv);
 
-	VSP_DEBUG("pic_param->encoded_frame_base = %p\n",
+	VSP_DEBUG("pic_param->encoded_frame_base = %d\n",
 			pic_param->encoded_frame_base);
 
 	vsp_priv->vp8_encode_frame_cmd = (void *)pic_param;
@@ -1016,7 +1011,6 @@ static int vsp_fence_compose_surfaces(struct drm_file *priv,
 		VSP_DEBUG("NO fence?????\n");
 		ret = -1;
 	}
-out:
 	ttm_bo_unref(&compose_param_bo);
 	return ret;
 }
@@ -1144,12 +1138,13 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 				vsp_priv->vp8_filp[i] = NULL;
 		}
 
-		if (VAEntrypointEncSlice == ctx_type)
+		if (VAEntrypointEncSlice == ctx_type) {
 			if (vsp_priv->context_vp8_num > 0)
 				vsp_priv->context_vp8_num--;
-		else if (ctx_type == VAEntrypointVideoProc)
+		} else if (ctx_type == VAEntrypointVideoProc) {
 			if (vsp_priv->context_vpp_num > 0)
 				vsp_priv->context_vpp_num--;
+		}
 		return;
 	}
 
@@ -1240,7 +1235,7 @@ void vsp_rm_context(struct drm_device *dev, struct file *filp, int ctx_type)
 		PSB_DEBUG_PM("VSP: OK. Power down the HW!\n");
 
 	/* FIXME: frequency should change */
-	VSP_PERF("the total time spend on VSP is %ld ms\n",
+	VSP_PERF("the total time spend on VSP is %lld ms\n",
 		 div_u64(vsp_priv->vss_cc_acc, 200 * 1000));
 
 	return;
@@ -1438,7 +1433,7 @@ out:
 int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 {
 	struct vsp_private *vsp_priv = dev_priv->vsp_private;
-	unsigned int reg, i, j, *cmd_p;
+	unsigned int reg, i;
 
 	/* config info */
 	for (i = 0; i < VSP_CONFIG_SIZE; i++) {
@@ -1447,11 +1442,11 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	}
 
 	/* ma_header_reg */
-	MM_READ32(vsp_priv->boot_header.ma_header_reg, 0, &reg);
+	MM_VSP_READ32(vsp_priv->boot_header.ma_header_reg, 0, &reg);
 	VSP_DEBUG("ma_header_reg:%x\n", reg);
 
 	/* The setting-struct */
-	VSP_DEBUG("setting addr:%x\n", vsp_priv->setting_bo->offset);
+	VSP_DEBUG("setting addr:%lx\n", vsp_priv->setting_bo->offset);
 	VSP_DEBUG("setting->command_queue_size:0x%x\n",
 			vsp_priv->setting->command_queue_size);
 	VSP_DEBUG("setting->command_queue_addr:%x\n",
@@ -1464,7 +1459,7 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	/* dump dma register */
 	VSP_DEBUG("partition1_dma_external_ch[0..23]_pending_req_cnt\n");
 	for (i=0; i <= 23; i++) {
-		MM_READ32(0x150010, i * 0x20, &reg);
+		MM_VSP_READ32(0x150010, i * 0x20, &reg);
 		if (reg != 0)
 			VSP_DEBUG("partition1_dma_external_ch%d_pending_req_cnt = 0x%x\n",
 					i, reg);
@@ -1472,7 +1467,7 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 
 	VSP_DEBUG("partition1_dma_external_dim[0..31]_pending_req_cnt\n");
 	for (i=0; i <= 31; i++) {
-		MM_READ32(0x151008, i * 0x20, &reg);
+		MM_VSP_READ32(0x151008, i * 0x20, &reg);
 		if (reg != 0)
 			VSP_DEBUG("partition1_dma_external_dim%d_pending_req_cnt = 0x%x\n",
 					i, reg);
@@ -1480,14 +1475,14 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 
 	VSP_DEBUG("partition1_dma_internal_ch[0..7]_pending_req_cnt\n");
 	for (i=0; i <= 7; i++) {
-		MM_READ32(0x160010, i * 0x20, &reg);
+		MM_VSP_READ32(0x160010, i * 0x20, &reg);
 		if (reg != 0)
 			VSP_DEBUG("partition1_dma_internal_ch%d_pending_req_cnt = 0x%x\n",
 					i, reg);
 	}
 	VSP_DEBUG("partition1_dma_internal_dim[0..7]_pending_req_cnt\n");
 	for (i=0; i <= 7; i++) {
-		MM_READ32(0x160408, i * 0x20, &reg);
+		MM_VSP_READ32(0x160408, i * 0x20, &reg);
 		if (reg != 0)
 			VSP_DEBUG("partition1_dma_internal_dim%d_pending_req_cnt = 0x%x\n",
 					i, reg);
@@ -1495,7 +1490,7 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 
 	/* IRQ registers */
 	for (i = 0; i < 6; i++) {
-		MM_READ32(0x180000, i * 4, &reg);
+		MM_VSP_READ32(0x180000, i * 4, &reg);
 		VSP_DEBUG("partition1_gp_ireg_IRQ%d:%x", i, reg);
 	}
 	IRQ_REG_READ32(VSP_IRQ_CTRL_IRQ_EDGE, &reg);
@@ -1512,7 +1507,7 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 	VSP_DEBUG("partition1_irq_control_irq_pulse:%x\n", reg);
 
 	/* MMU table address */
-	MM_READ32(MMU_TABLE_ADDR, 0x0, &reg);
+	MM_VSP_READ32(MMU_TABLE_ADDR, 0x0, &reg);
 	VSP_DEBUG("mmu_page_table_address:%x\n", reg);
 
 	/* SP0 info */
@@ -1588,19 +1583,19 @@ int psb_vsp_dump_info(struct drm_psb_private *dev_priv)
 
 	/* ECA info */
 	VSP_DEBUG("ECA info\n");
-	MM_READ32(0x30000, 0x0, &reg);
+	MM_VSP_READ32(0x30000, 0x0, &reg);
 	VSP_DEBUG("partition1_sp0_tile_eca_stat_and_ctrl:%x\n", reg);
-	MM_READ32(0x30000, 0x4, &reg);
+	MM_VSP_READ32(0x30000, 0x4, &reg);
 	VSP_DEBUG("partition1_sp0_tile_eca_base_address:%x\n", reg);
-	MM_READ32(0x30000, 0x2C, &reg);
+	MM_VSP_READ32(0x30000, 0x2C, &reg);
 	VSP_DEBUG("partition1_sp0_tile_eca_debug_pc:%x\n", reg);
-	MM_READ32(0x30000, 0x30, &reg);
+	MM_VSP_READ32(0x30000, 0x30, &reg);
 	VSP_DEBUG("partition1_sp0_tile_eca_stall_stat_cfg_pmem_loc_op0:%x\n",
 			reg);
 
 	/* WDT info */
 	for (i = 0; i < 14; i++) {
-		MM_READ32(0x170000, i * 4, &reg);
+		MM_VSP_READ32(0x170000, i * 4, &reg);
 		VSP_DEBUG("partition1_wdt_reg%d:%x\n", i, reg);
 	}
 

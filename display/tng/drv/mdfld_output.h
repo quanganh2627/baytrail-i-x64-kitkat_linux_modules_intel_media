@@ -68,6 +68,8 @@ struct panel_info {
 	u32 height_mm;
 
 	bool panel_180_rotation;
+	bool legacy_csc_enable;
+	bool legacy_gamma_enable;
 	/*other infos*/
 };
 
@@ -103,6 +105,9 @@ struct panel_funcs {
 	int (*drv_set_cabc_mode)(struct mdfld_dsi_config *dsi_config,
 		u8 cabc_mode);
 	int (*drv_get_cabc_mode)(struct mdfld_dsi_config *dsi_config);
+	void (*set_legacy_coefficient)(struct mdfld_dsi_config *dsi_config);
+	void (*set_legacy_gamma_table)(struct mdfld_dsi_config *dsi_config);
+
 };
 
 struct intel_mid_panel_list {

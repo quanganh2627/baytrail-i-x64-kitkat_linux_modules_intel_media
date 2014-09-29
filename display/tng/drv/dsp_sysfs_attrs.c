@@ -282,7 +282,7 @@ static DEVICE_ATTR(panel_mode, S_IRUGO, _sysfs_panel_mode_show, NULL);
 
 static DEVICE_ATTR(support_fbc, S_IRUGO, _sysfs_support_fbc_show, NULL);
 
-static DEVICE_ATTR(cabc_mode, S_IRUGO | S_IWUGO,
+static DEVICE_ATTR(cabc_mode, S_IRUGO,
 	_sysfs_cabc_mode_show, _sysfs_cabc_mode_store);
 
 #if INCLUDE_CABC_TEST

@@ -133,28 +133,26 @@ static void maxfifo_send_hwc_event_work(struct work_struct *work)
 {
 	struct dc_maxfifo *maxfifo_info = container_of(work,
 				struct dc_maxfifo, repeat_frame_interrupt_work);
-	struct drm_device *dev = maxfifo_info->dev_drm;
-	unsigned long flags;
 
-	/*
-	 * when timer expires, if it is already a single sprite flip
-	 * enter into maxfifo directly, otherwise send a uevent to
-	 * let SF do a composition for us.
-	 */
-	spin_lock_irqsave(&maxfifo_info->lock, flags);
-	if (maxfifo_info->req_mode == 0) {
-		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
+	/* Network streaming video playback FPS may be as low as 10fps. We do not want
+	 * to trigger layers composition for every frame. So we set maxFIFO latecy
+	 * longer in such scenario, but still use shorter latecy for other scenario. */
+	if ((jiffies - maxfifo_info->last_jiffies) < msecs_to_jiffies(200))
+		maxfifo_entry_delay = 300;
+	else
+		maxfifo_entry_delay = 60;
 
-		if (maxfifo_info->maxfifo_current_state == -1)
-			enter_maxfifo_mode(dev, maxfifo_info->req_mode);
+	PSB_DEBUG_MAXFIFO("last jiffies %ld, now: %ld, set timer delay: %dms\n",
+		maxfifo_info->last_jiffies, jiffies, maxfifo_entry_delay);
 
-		/* trigger the vblank disable to enter into s0i1-disp */
-		if (!drm_vblank_get(dev, 0))
-			drm_vblank_put(dev, 0);
-		return;
-	}
+	/* Do not adjust maxfifo latency if we just adjust it to avoid it swing between
+	 * long and short */
+	if (!maxfifo_info->jiffies_record) {
+		maxfifo_info->last_jiffies = jiffies;
+		maxfifo_info->jiffies_record = 1;
+	} else
+		maxfifo_info->jiffies_record = 0;
 
-	spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 	maxfifo_send_hwc_uevent(maxfifo_info->dev_drm);
 }
 
@@ -170,6 +168,9 @@ bool can_enter_maxfifo_s0i1_display(struct drm_device *dev, int mode)
 		/* new mode, restart entry count */
 		maxfifo_info->maxfifo_try_count = 0;
 		maxfifo_info->req_mode = mode;
+		/* Stop idle timer for overlay only case */
+		if (2 == mode)
+			maxfifo_timer_stop(dev);
 		return false;
 	}
 
@@ -458,6 +459,7 @@ int dc_maxfifo_init(struct drm_device *dev)
 	maxfifo_info->dev_drm = dev;
 	maxfifo_info->regs_to_set = TNG_MAXFIFO_REGS_TO_SET_DEFAULT;
 	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_NOT_READY;
+	maxfifo_info->jiffies_record = 0;
 
 	INIT_WORK(&maxfifo_info->repeat_frame_interrupt_work,
 			maxfifo_send_hwc_event_work);

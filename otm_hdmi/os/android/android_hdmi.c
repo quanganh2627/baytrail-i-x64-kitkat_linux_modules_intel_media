@@ -1020,8 +1020,12 @@ int android_hdmi_get_modes(struct drm_connector *connector)
 	struct edid *edid = NULL;
 	/* Edid address in HDMI context */
 	struct edid *ctx_edid = NULL;
-	struct drm_display_mode *mode, *t, *dup_mode, *user_mode;
-	int i = 0, j = 0, ret = 0, mode_present = 0;
+	struct drm_display_mode *mode, *t;
+	int i = 0, j = 0, ret = 0;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0))
+	struct drm_display_mode *dup_mode, *user_mode;
+	int mode_present = 0;
+#endif
 	int refresh_rate = 0;
 	bool pref_mode_found = false;
 	struct i2c_adapter *adapter = NULL;
@@ -2423,7 +2427,9 @@ void android_hdmi_connector_destroy(struct drm_connector *connector)
 void android_hdmi_connector_dpms(struct drm_connector *connector, int mode)
 {
 	struct drm_device *dev = connector->dev;
+#if (defined CONFIG_PM_RUNTIME) && (!defined MERRIFIELD)
 	struct drm_psb_private *dev_priv = dev->dev_private;
+#endif
 	bool hdmi_audio_busy = false;
 	u32 dspcntr_val;
 

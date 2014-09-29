@@ -37,7 +37,10 @@
 static int pm_cmd_freq_get(u32 reg_freq);
 static int pm_cmd_freq_set(u32 reg_freq, u32 freq_code, u32 *p_freq_code_rlzd);
 static int pm_cmd_freq_wait(u32 reg_freq, u32 *freq_code_rlzd);
-static pm_cmd_power_set(int pm_reg, int pm_mask);
+#if 0
+static void pm_cmd_power_set(int pm_reg, int pm_mask);
+#endif
+static bool need_set_ved_freq = true;
 
 static void vsp_set_max_frequency(struct drm_device *dev);
 static void vsp_set_default_frequency(struct drm_device *dev);
@@ -54,8 +57,6 @@ extern struct drm_device *gpDrmDevice;
 static bool vsp_power_up(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
-	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	bool ret = true;
 	int pm_ret = 0;
 
@@ -99,8 +100,6 @@ static bool vsp_power_up(struct drm_device *dev,
 static bool vsp_power_down(struct drm_device *dev,
 			struct ospm_power_island *p_island)
 {
-	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct vsp_private *vsp_priv = dev_priv->vsp_private;
 	bool ret = true;
 	int pm_ret = 0;
 
@@ -335,10 +334,6 @@ static bool vec_power_down(struct drm_device *dev,
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct tng_topaz_private *topaz_priv = dev_priv->topaz_private;
 
-	int d0i3_power_down = (drm_topaz_pmpolicy == PSB_PMPOLICY_NOPM ? 0 : 1);
-	/* Avoid handle the previous context's power down request */
-	int release_power_down = (topaz_priv->power_down_by_release \
-		== topaz_priv->cur_context ? 1 : 0);
 	topaz_priv->power_down_by_release = 0;
 
 	PSB_DEBUG_PM("TOPAZ: powering down vec\n");
@@ -551,7 +546,8 @@ void psb_set_freq_control_switch(bool config_value)
 	need_set_ved_freq = config_value;
 }
 
-static pm_cmd_power_set(int pm_reg, int pm_mask)
+#if 0
+static void pm_cmd_power_set(int pm_reg, int pm_mask)
 {
 	intel_mid_msgbus_write32(0x04, pm_reg, pm_mask);
 	udelay(500);
@@ -564,3 +560,4 @@ static pm_cmd_power_set(int pm_reg, int pm_mask)
 	pm_mask = intel_mid_msgbus_read32(0x04, pm_reg);
 	PSB_DEBUG_PM("pwr_mask read: reg=0x%x pwr_mask=0x%x \n", pm_reg, pm_mask);
 }
+#endif

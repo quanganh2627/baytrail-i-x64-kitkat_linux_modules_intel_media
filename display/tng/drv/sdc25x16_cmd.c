@@ -36,6 +36,7 @@ static u8 sdc_column_addr[] = {
 			0x2a, 0x00, 0x00, 0x04, 0xff};
 static u8 sdc_page_addr[] = {
 			0x2b, 0x00, 0x00, 0x06, 0x3f};
+#if 0
 static	u8 sdc_set_300nit[34] = { 0x83,
 								0x80, 0x80,
 								0x80, 0x80,
@@ -56,6 +57,10 @@ static	u8 sdc_set_300nit[34] = { 0x83,
 								0x80, 0x80,
 								0x00};
 static	u8 sdc_set_AID[] = { 0x85, 0x06, 0x00 };
+static	u8 sdc_300_ELVSS[] = { 0xbb, 0x19};
+static	u8 sdc_set_ACL_off[] = { 0xbb, 0x10};
+#endif
+
 
 static	u8 sdc_gamma_setting[] = { 0x82, 0x1f};
 static	u8 sdc_AOR_setting[] = { 0x85, 0x6, 0};
@@ -64,11 +69,8 @@ static	u8 sdc_ELVSS_para[] = { 0xbb, 0xF};
 static	u8 sdc_global_para_47[] = { 0xb0, 0x2e};
 static	u8 sdc_gamma_update[] = { 0xbb, 0x1};
 
-static	u8 sdc_300_ELVSS[] = { 0xbb, 0x19};
-
 
 static	u8 sdc_global_para_70[] = { 0xb0, 0x45};
-static	u8 sdc_set_ACL_off[] = { 0xbb, 0x10};
 static	u8 sdc_set_ACL_on[] = { 0xbb, 0x12};
 
 static u8 sdc_brightness_list[21][5] = {

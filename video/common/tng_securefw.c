@@ -200,7 +200,7 @@ static void tng_spid2fw(struct drm_device *dev, char *fw_name, char *fw_basename
 	/* find a matched entry */
 	if (matched_spid2fw != NULL) {
 		tng_copyfw(fw_name,  island_name, sep_key, matched_spid2fw);
-		PSB_DEBUG_INIT("Got matched firmware %s\n", fw_name, fw_name);
+		PSB_DEBUG_INIT("Got matched firmware %s\n", fw_name);
 		return;
 	}
 

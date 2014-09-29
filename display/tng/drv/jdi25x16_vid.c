@@ -196,6 +196,7 @@ set_mode_err:
 	err = -EIO;
 	return err;
 }
+
 static
 void mdfld_dsi_jdi25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_config)
 {
@@ -240,7 +241,6 @@ void mdfld_dsi_jdi25x16_dsi_controller_init(struct mdfld_dsi_config *dsi_config)
 	hw_ctx->mipi = MIPI_PORT_EN | PASS_FROM_SPHY_TO_AFE |
 		dsi_config->lane_config |
 		DUAL_LINK_ENABLE | DUAL_LINK_CAPABLE;
-
 }
 
 static int mdfld_dsi_jdi25x16_detect(struct mdfld_dsi_config *dsi_config)
@@ -487,9 +487,52 @@ static void jdi25x16_vid_get_panel_info(int pipe, struct panel_info *pi)
 	if (pipe == 0) {
 		pi->width_mm = 192;
 		pi->height_mm = 120;
+		pi->legacy_csc_enable = false;
+		pi->legacy_gamma_enable = false;
 	}
 
 	return;
+}
+static void mdfld_dsi_jdi25x16_set_legacy_coefficient(
+		struct mdfld_dsi_config *dsi_config)
+{
+	struct drm_device *dev = dsi_config->dev;
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *) dev->dev_private;
+	struct mdfld_dsi_hw_registers *regs = &dsi_config->regs;
+	if (dev_priv->legacy_csc_enable)
+	{
+		/* customer loading their required color matrix coefficient */
+		int i;
+		int	gamma_table[] = {
+			0x4000000, 0,
+			0, 0x400,
+			0x400, 0};
+		for (i = 0; i < 6; i++)
+			REG_WRITE(regs->color_coef_reg + (i<<2), gamma_table[i]);
+	}
+}
+
+static void mdfld_dsi_jdi25x16_set_legacy_gamma_table(
+		struct mdfld_dsi_config *dsi_config)
+{
+	struct drm_device *dev = dsi_config->dev;
+	struct drm_psb_private *dev_priv =
+		(struct drm_psb_private *) dev->dev_private;
+	struct mdfld_dsi_hw_registers *regs = &dsi_config->regs;
+	if (dev_priv->legacy_gamma_enable)
+	{
+		int i;
+		int value;
+		/* customer loading their required Gamma table */
+		for (i = 0; i < 128; i++) {
+			value = 2 * i;
+			REG_WRITE(regs->palette_reg + (i<<2), (value << 16) | (value << 8) | value);
+		}
+		REG_WRITE(regs->gamma_red_max_reg, 0x8000);
+		REG_WRITE(regs->gamma_green_max_reg, 0x8000);
+		REG_WRITE(regs->gamma_blue_max_reg, 0x8000);
+	}
 }
 
 void jdi25x16_vid_init(struct drm_device *dev, struct panel_funcs *p_funcs)
@@ -506,4 +549,6 @@ void jdi25x16_vid_init(struct drm_device *dev, struct panel_funcs *p_funcs)
 	p_funcs->power_off = mdfld_dsi_jdi25x16_power_off;
 	p_funcs->set_brightness = mdfld_dsi_jdi25x16_set_brightness;
 	p_funcs->drv_set_panel_mode = mdfld_dsi_jdi25x16_set_mode;
+	p_funcs->set_legacy_coefficient = mdfld_dsi_jdi25x16_set_legacy_coefficient;
+	p_funcs->set_legacy_gamma_table = mdfld_dsi_jdi25x16_set_legacy_gamma_table;
 }

@@ -378,7 +378,7 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	/* map GTT */
 	ret = psb_gtt_map_vaddr(dev, user_virtual_addr, size, 0, &page_offset);
 	if (ret) {
-		DRM_ERROR("Can not map cpu address (%p) to GTT handle \n", user_virtual_addr);
+		DRM_ERROR("Can not map cpu address (0x%x) to GTT handle \n", user_virtual_addr);
 		psbfb->offset = 0;
 	} else
 		psbfb->offset =  page_offset << PAGE_SHIFT;

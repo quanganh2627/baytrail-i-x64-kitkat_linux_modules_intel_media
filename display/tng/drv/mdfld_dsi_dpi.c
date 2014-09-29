@@ -344,7 +344,6 @@ static int __dpi_panel_power_on(struct mdfld_dsi_config *dsi_config,
 	int retry, reset_count = 10;
 	int i;
 	int err = 0;
-	u32 guit_val = 0;
 	u32 power_island = 0;
 	int offset = 0;
 
@@ -423,13 +422,11 @@ reset_recovery:
 	REG_WRITE(regs->dsplinoff_reg, ctx->dsplinoff);
 	REG_WRITE(regs->vgacntr_reg, ctx->vgacntr);
 
-	/*restore color_coef (chrome) */
-	for (i = 0; i < 6; i++)
-		REG_WRITE(regs->color_coef_reg + (i<<2), csc_setting_save[i]);
+	if (p_funcs && p_funcs->set_legacy_coefficient)
+		p_funcs->set_legacy_coefficient(dsi_config);
 
-	/* restore palette (gamma) */
-	for (i = 0; i < 256; i++)
-		REG_WRITE(regs->palette_reg + (i<<2), gamma_setting_save[i]);
+	if (p_funcs && p_funcs->set_legacy_gamma_table)
+		p_funcs->set_legacy_gamma_table(dsi_config);
 
 	/* restore dpst setting */
 	if (dev_priv->psb_dpst_state) {
@@ -498,6 +495,10 @@ reset_recovery:
 		REG_WRITE(DSPARB, ctx->dsparb);
 	}
 
+	/*enable plane*/
+	val = ctx->dspcntr | BIT31;
+	REG_WRITE(regs->dspcntr_reg, val);
+
 	/*Enable pipe*/
 	val = ctx->pipeconf;
 	val &= ~0x000c0000;
@@ -506,6 +507,9 @@ reset_recovery:
 	 * after the start of VBLANK
 	 */
 	val = (val & (~BIT27)) | BIT28 | BIT31;
+	if (dev_priv->legacy_csc_enable)
+		val |= BIT20;
+
 	REG_WRITE(regs->pipeconf_reg, val);
 	/*Wait for pipe enabling,when timing generator
 	  is wroking */
@@ -520,9 +524,6 @@ reset_recovery:
 			goto power_on_err;
 		}
 	}
-	/*enable plane*/
-	val = ctx->dspcntr | BIT31;
-	REG_WRITE(regs->dspcntr_reg, val);
 
 	if (p_funcs && p_funcs->set_brightness) {
 		if (p_funcs->set_brightness(dsi_config,
@@ -558,7 +559,6 @@ static int __dpi_panel_power_off(struct mdfld_dsi_config *dsi_config,
 	int retry;
 	int i;
 	int err = 0;
-	u32 guit_val = 0;
 	u32 power_island = 0;
 	int offset = 0;
 
@@ -847,17 +847,19 @@ void mdfld_dsi_dpi_set_power(struct drm_encoder *encoder, bool on)
 	struct mdfld_dsi_encoder *dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	struct mdfld_dsi_config *dsi_config =
 		mdfld_dsi_encoder_get_config(dsi_encoder);
+	int pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
+	struct drm_device *dev;
+	struct drm_psb_private *dev_priv;
+	struct mdfld_dsi_dpi_output *dpi_output = NULL;
+	u32 mipi_reg = MIPI;
+	u32 pipeconf_reg = PIPEACONF;
+
 	if (!dsi_config) {
 		DRM_ERROR("dsi_config is NULL\n");
 		return;
 	}
-
-	int pipe = mdfld_dsi_encoder_get_pipe(dsi_encoder);
-	struct drm_device *dev = dsi_config->dev;
-	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct mdfld_dsi_dpi_output *dpi_output = NULL;
-	u32 mipi_reg = MIPI;
-	u32 pipeconf_reg = PIPEACONF;
+	dev = dsi_config->dev;
+	dev_priv = dev->dev_private;
 
 	PSB_DEBUG_ENTRY("set power %s on pipe %d\n", on ? "On" : "Off", pipe);
 
@@ -889,6 +891,10 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 	struct drm_psb_private *dev_priv;
 	struct mdfld_dsi_dpi_output *dpi_output;
 	struct panel_funcs *p_funcs;
+#ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
+	struct mdfld_dsi_hw_context *ctx;
+	struct backlight_device bd;
+#endif
 
 	dsi_encoder = MDFLD_DSI_ENCODER(encoder);
 	dsi_config = mdfld_dsi_encoder_get_config(dsi_encoder);
@@ -906,46 +912,39 @@ void mdfld_dsi_dpi_dpms(struct drm_encoder *encoder, int mode)
 		DRM_MODE_DPMS_STANDBY == mode ? "standby" : "off"));
 
 	mutex_lock(&dev_priv->dpms_mutex);
+
 	DCLockMutex();
-
 	if (mode == DRM_MODE_DPMS_ON) {
-		mdfld_dsi_dpi_set_power(encoder, true);
-
-		drm_vblank_on(dev, dsi_config->pipe);
-
+		/*
+		 * We remove power operation here to prevent power is on
+		 * after ospm power off the panel, it will lead pipe hang.
+		 */
+		if (dev_priv->early_suspended)
+			goto unlock_dc;
 		DCAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOn(dsi_config->pipe);
 
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
-		struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
-		struct backlight_device bd;
+		ctx = &dsi_config->dsi_hw_context;
 		bd.props.brightness = ctx->lastbrightnesslevel;
 		psb_set_brightness(&bd);
 #endif
 	} else if (mode == DRM_MODE_DPMS_STANDBY) {
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
-		struct mdfld_dsi_hw_context *ctx = &dsi_config->dsi_hw_context;
-		struct backlight_device bd;
+		ctx = &dsi_config->dsi_hw_context;
 		ctx->lastbrightnesslevel = psb_get_brightness(&bd);
 		bd.props.brightness = 0;
 		psb_set_brightness(&bd);
 #endif
-		/* Make the pending flip request as completed. */
+
 		DCUnAttachPipe(dsi_config->pipe);
 		DC_MRFLD_onPowerOff(dsi_config->pipe);
 	} else {
-		drm_handle_vblank(dev, dsi_config->pipe);
-
-		/* Turn off TE interrupt. */
-		drm_vblank_off(dev, dsi_config->pipe);
-
-		/* Make the pending flip request as completed. */
-		DCUnAttachPipe(dsi_config->pipe);
-		DC_MRFLD_onPowerOff(dsi_config->pipe);
-		mdfld_dsi_dpi_set_power(encoder, false);
+		// nothing to do
 	}
-
+unlock_dc:
 	DCUnLockMutex();
+
 	mutex_unlock(&dev_priv->dpms_mutex);
 }
 
@@ -961,7 +960,7 @@ bool mdfld_dsi_dpi_mode_fixup(struct drm_encoder *encoder,
 
 	if (!dsi_config) {
 		DRM_ERROR("dsi_config is NULL\n");
-		return;
+		return false;
 	}
 
 	fixed_mode = dsi_config->fixed_mode;
@@ -1016,14 +1015,14 @@ static void __mdfld_dsi_dpi_set_timing(struct mdfld_dsi_config *config,
 {
 	struct mdfld_dsi_dpi_timing dpi_timing;
 	struct mdfld_dsi_hw_context *ctx;
-	
+	struct drm_device *dev;
+
 	if (!config) {
-                DRM_ERROR("Invalid parameters\n");
-                return;
-        }
+		DRM_ERROR("Invalid parameters\n");
+		return;
+	}
 
-	struct drm_device *dev = config->dev;
-
+	dev = config->dev;
 	mode = adjusted_mode;
 	ctx = &config->dsi_hw_context;
 
@@ -1070,10 +1069,10 @@ void mdfld_dsi_dpi_mode_set(struct drm_encoder *encoder,
 	 * if TMD panel call new power on/off sequences instead.
 	 * NOTE: refine TOSHIBA panel code later
 	 */
-      if (!dsi_config) {
-                DRM_ERROR("Invalid dsi config\n");
-                return NULL;
-        }
+	if (!dsi_config) {
+		DRM_ERROR("Invalid dsi config\n");
+		return;
+	}
 
 	__mdfld_dsi_dpi_set_timing(dsi_config, mode, adjusted_mode);
 	mdfld_dsi_set_drain_latency(encoder, adjusted_mode);

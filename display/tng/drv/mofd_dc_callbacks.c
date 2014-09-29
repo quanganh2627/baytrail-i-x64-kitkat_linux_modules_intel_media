@@ -146,7 +146,6 @@ void DCCBFlipToSurface(struct drm_device *dev, unsigned long uiAddr,
 	u32 dspstride;
 	u32 reg_offset;
 	u32 val = 0;
-	u32 power_island = 0;
 	struct mdfld_dsi_config *dsi_config = NULL;
 	struct mdfld_dsi_hw_context *dsi_ctx;
 
@@ -286,11 +285,11 @@ void DCCBFlipSprite(struct drm_device *dev,
 	}
 
 	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL)){
-                if(drm_psb_set_gamma_success)
+		if(dev_priv->legacy_gamma_enable)
 			PSB_WVDC32(ctx->cntr | DISPPLANE_GAMMA_ENABLE, DSPACNTR + reg_offset);
-                else
-                        PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
-        }
+		else
+			PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
+    }
 
 	if ((ctx->update_mask & SPRITE_UPDATE_SURFACE)) {
 		PSB_WVDC32(ctx->linoff, DSPALINOFF + reg_offset);
@@ -352,11 +351,11 @@ void DCCBFlipPrimary(struct drm_device *dev,
 	}
 
 	if ((ctx->update_mask & SPRITE_UPDATE_CONTROL)){
-                if(drm_psb_set_gamma_success)
-                        PSB_WVDC32(ctx->cntr | DISPPLANE_GAMMA_ENABLE, DSPACNTR + reg_offset);
-                else
-                        PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
-        }
+		if(dev_priv->legacy_gamma_enable)
+			PSB_WVDC32(ctx->cntr | DISPPLANE_GAMMA_ENABLE, DSPACNTR + reg_offset);
+		else
+			PSB_WVDC32(ctx->cntr, DSPACNTR + reg_offset);
+    }
 
 	if ((ctx->update_mask & SPRITE_UPDATE_SURFACE)) {
 		PSB_WVDC32(ctx->linoff, DSPALINOFF + reg_offset);
@@ -729,11 +728,53 @@ int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 	return 0;
 }
 
+void DCCBEnablePrimaryWA(struct drm_device *dev, int index)
+{
+	struct drm_psb_private *dev_priv = dev->dev_private;
+	struct psb_gtt *pg = dev_priv->pg;
+	struct mdfld_dsi_config *dsi_config = NULL;
+	struct mdfld_dsi_hw_context *dsi_ctx = NULL;
+	u32 reg_offset;
+
+	if (index < 0 || index > 2) {
+		DRM_ERROR("Invalid primary index %d\n", index);
+		return;
+	}
+
+	if (index == 0) {
+		dsi_config = dev_priv->dsi_configs[0];
+		reg_offset = 0;
+	} else if (index == 1) {
+		reg_offset = 0x1000;
+	} else if (index == 2) {
+		dsi_config = dev_priv->dsi_configs[1];
+		reg_offset = 0x2000;
+	}
+
+	if (dsi_config) {
+		dsi_ctx = &dsi_config->dsi_hw_context;
+		dsi_ctx->dsppos = 0;
+		dsi_ctx->dspsize = (63 << 16) | 63;
+		dsi_ctx->dspstride = (64 << 2);
+		dsi_ctx->dspcntr = 0x9c800000;
+		dsi_ctx->dsplinoff = 0;
+		dsi_ctx->dspsurf = pg->reserved_gtt_start;
+	}
+
+	PSB_WVDC32(0, DSPAPOS + reg_offset);
+	PSB_WVDC32((63 << 16) | 63, DSPASIZE + reg_offset);
+	PSB_WVDC32((64 << 2), DSPASTRIDE + reg_offset);
+	PSB_WVDC32(0x9c800000, DSPACNTR + reg_offset);
+	PSB_WVDC32(0, DSPALINOFF + reg_offset);
+	PSB_WVDC32(0, DSPATILEOFF + reg_offset);
+	PSB_WVDC32(pg->reserved_gtt_start, DSPASURF + reg_offset);
+	DRM_INFO("enable primary plane WA on pipe %d\n", index);
+}
+
 int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
-	struct psb_gtt *pg = dev_priv->pg;
 	struct mdfld_dsi_config *dsi_config = NULL;
 	struct mdfld_dsi_hw_context *dsi_ctx = NULL;
 	u32 reg_offset;
@@ -754,26 +795,7 @@ int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 	}
 
 	if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI) {
-		if (dsi_config) {
-			dsi_ctx = &dsi_config->dsi_hw_context;
-			dsi_ctx->dsppos = 0;
-			dsi_ctx->dspsize = (63 << 16) | 63;
-			dsi_ctx->dspstride = (64 << 2);
-			dsi_ctx->dspcntr = DISPPLANE_32BPP;
-			dsi_ctx->dspcntr |= DISPPLANE_PREMULT_DISABLE;
-			dsi_ctx->dspcntr |= (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset));
-			dsi_ctx->dsplinoff = 0;
-			dsi_ctx->dspsurf = pg->reserved_gtt_start;
-		}
-
-		PSB_WVDC32(0, DSPAPOS + reg_offset);
-		PSB_WVDC32((63 << 16) | 63, DSPASIZE + reg_offset);
-		PSB_WVDC32((64 << 2), DSPASTRIDE + reg_offset);
-		PSB_WVDC32(0x1c800000 | (BIT31 & PSB_RVDC32(DSPACNTR + reg_offset)),
-		DSPACNTR + reg_offset);
-		PSB_WVDC32(0, DSPALINOFF + reg_offset);
-		PSB_WVDC32(0, DSPATILEOFF + reg_offset);
-		PSB_WVDC32(pg->reserved_gtt_start, DSPASURF + reg_offset);
+		DCCBEnablePrimaryWA(dev, index);
 	} else {
 
 		if (dsi_config) {
@@ -835,20 +857,23 @@ void DCCBWaitForDbiFifoEmpty(struct drm_device *dev, int pipe)
 		DRM_ERROR("DBI FIFO not empty\n");
 }
 
-void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
+/* Return 0 on maxFIFO entry success */
+int DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct dc_maxfifo *maxfifo_info = dev_priv->dc_maxfifo_info;
 	unsigned long flags;
+	int ret = 0;
 
 	if (!maxfifo_info)
-		return;
+		return 0;
 
 	spin_lock_irqsave(&maxfifo_info->lock, flags);
 
 	/* already in the required maxfifo mode */
-	if (maxfifo_info->maxfifo_current_state == req_mode)
+	if (maxfifo_info->maxfifo_current_state == req_mode) {
 		goto out;
+	}
 
 	/*
 	 * requested maxfifo mode is different with current maxfifo mode,
@@ -859,21 +884,30 @@ void DCCBEnterMaxfifoMode(struct drm_device *dev, int req_mode)
 	    maxfifo_info->maxfifo_current_state != req_mode) {
 		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 		DCCBExitMaxfifoMode(dev);
-		return;
+		return -1;
 	}
 
-	if (!can_enter_maxfifo_s0i1_display(dev, req_mode))
-		goto out;
+	/* Allow maxFIFO for video playback case */
+	if ((can_enter_maxfifo_s0i1_display(dev, req_mode)
+		/* Allow maxFIFO for idle case */
+		|| (0 == req_mode && !timer_pending(&dev_priv->maxfifo_timer)))
+		/* Disable maxFIFO if pipe b is on */
+		&& ((REG_READ(0x71008) & 0x80000000) == 0)) {
 
-	/* check to see if pipe b is on. if yes, don't enable */
-	if ((REG_READ(0x71008) & 0x80000000) == 0) {
 		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 		enter_maxfifo_mode(dev, req_mode);
-		return;
+		/* Assume this is idle case with all layers composited as one.
+		 * Then try to check whether we can disable vblank now. */
+		if(0 == req_mode) {
+			if (!drm_vblank_get(dev, 0))
+				drm_vblank_put(dev, 0);
+		}
+		return 0;
 	}
 
 out:
 	spin_unlock_irqrestore(&maxfifo_info->lock, flags);
+	return ret;
 }
 
 void DCCBExitMaxfifoMode(struct drm_device *dev)
@@ -887,6 +921,7 @@ void DCCBExitMaxfifoMode(struct drm_device *dev)
 
 	spin_lock_irqsave(&maxfifo_info->lock, flags);
 	if (maxfifo_info->maxfifo_current_state == -1) {
+		maxfifo_info->req_mode = -1;
 		spin_unlock_irqrestore(&maxfifo_info->lock, flags);
 		return;
 	}
@@ -973,6 +1008,8 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe)
 	if (dev_priv->early_suspended)
 		return 0;
 
+	if((pipe == 1) && (!hdmi_state))
+		return 0;
 	/* get display a for register reading */
 	if (power_island_get(OSPM_DISPLAY_A)) {
 		if ((pipe != 1) && dev_priv->dsi_configs) {
