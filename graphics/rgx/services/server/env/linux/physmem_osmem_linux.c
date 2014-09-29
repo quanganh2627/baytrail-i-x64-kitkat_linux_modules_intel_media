@@ -815,6 +815,11 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 			}
 			kunmap(psPage);
 		}
+		else
+		{
+			PVR_DPF((PVR_DBG_ERROR, "physmem_osmem_linux.c: OS refused the memory allocation for the pages.  Did you ask for too much?"));
+			eError = PVRSRV_ERROR_PMR_FAILED_TO_ALLOC_PAGES;
+		}
 #endif
 	}
 #if 0
@@ -970,7 +975,7 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 
     gfp_flags = GFP_KERNEL | __GFP_NOWARN | __GFP_NOMEMALLOC;
 
-#if defined(CONFIG_X86)
+#if defined(CONFIG_X86_64)
     gfp_flags |= __GFP_DMA32;
 #else
     gfp_flags |= __GFP_HIGHMEM;
