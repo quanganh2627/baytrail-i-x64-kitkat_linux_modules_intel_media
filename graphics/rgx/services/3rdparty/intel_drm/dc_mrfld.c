@@ -1025,7 +1025,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 	if (send_wms && psFlip) {
 		/*turn on required power islands*/
 		if (!power_island_get(OSPM_DISPLAY_A))
-			return IMG_FALSE;
+			return;
 
 		/* Ensure that *psFlip is not freed while lock is not held. */
 		if (psFlip)
