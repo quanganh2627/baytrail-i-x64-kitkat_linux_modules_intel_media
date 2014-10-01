@@ -673,26 +673,16 @@ static int msvdx_startup_init(struct drm_device *dev)
 	 * if not pci_set_drvdata, can't get drm_device from device
 	 */
 	/* pci_set_drvdata(dev->pdev, dev); */
-#ifdef CONFIG_DRM_VXD_BYT
-	if (device_create_file(&dev->platformdev->dev, &dev_attr_msvdx_pmstate))
-#else
-	if (device_create_file(&dev->pdev->dev, &dev_attr_msvdx_pmstate))
-#endif
+	if (device_create_file(&dev->pdev->dev,
+			       &dev_attr_msvdx_pmstate))
 		DRM_ERROR("MSVDX: could not create sysfs file\n");
 #ifdef CONFIG_VIDEO_MRFLD
 	if (device_create_file(&dev->pdev->dev,
                                &dev_attr_ved_freq_scaling))
 		DRM_ERROR("Freq: could not create sysfs file\n");
 #endif
-
-#ifdef CONFIG_DRM_VXD_BYT
 	msvdx_priv->sysfs_pmstate = sysfs_get_dirent(
-					    dev->platformdev->dev.kobj.sd,
-#else
-	msvdx_priv->sysfs_pmstate = sysfs_get_dirent(
-						dev->pdev->dev.kobj.sd,
-#endif
-
+					    dev->pdev->dev.kobj.sd,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35))
 					    NULL,
 #endif
@@ -1054,11 +1044,7 @@ int psb_msvdx_uninit(struct drm_device *dev)
 
 	if (msvdx_priv) {
 		/* pci_set_drvdata(dev->pdev, NULL); */
-#ifdef CONFIG_DRM_VXD_BYT
-		device_remove_file(&dev->platformdev->dev, &dev_attr_msvdx_pmstate);
-#else
 		device_remove_file(&dev->pdev->dev, &dev_attr_msvdx_pmstate);
-#endif
 		sysfs_put(msvdx_priv->sysfs_pmstate);
 		msvdx_priv->sysfs_pmstate = NULL;
 #ifdef CONFIG_VIDEO_MRFLD

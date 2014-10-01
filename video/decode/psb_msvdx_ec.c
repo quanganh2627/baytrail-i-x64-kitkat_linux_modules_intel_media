@@ -100,8 +100,6 @@ void psb_msvdx_do_concealment(struct work_struct *work)
 
 #ifdef CONFIG_VIDEO_MRFLD
 	if (!power_island_get(OSPM_VIDEO_DEC_ISLAND)) {
-#elif defined(CONFIG_DRM_VXD_BYT)
-	if (!ospm_power_using_video_begin(msvdx_priv->dev, OSPM_VIDEO_DEC_ISLAND)) {
 #else
 	if (!ospm_power_using_video_begin(OSPM_VIDEO_DEC_ISLAND)) {
 #endif
@@ -354,8 +352,6 @@ ec_done:
 
 #ifdef CONFIG_VIDEO_MRFLD
 	power_island_put(OSPM_VIDEO_DEC_ISLAND);
-#elif defined(CONFIG_DRM_VXD_BYT)
-	ospm_power_using_video_end(msvdx_priv->dev, OSPM_VIDEO_DEC_ISLAND);
 #else
 	ospm_power_using_video_end(OSPM_VIDEO_DEC_ISLAND);
 #endif

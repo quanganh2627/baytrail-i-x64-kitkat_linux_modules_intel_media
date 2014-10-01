@@ -897,11 +897,7 @@ int psb_cmdbuf_ioctl(struct drm_device *dev, void *data,
 		if (msvdx_priv->fw_loaded_by_punit)
 			psb_msvdx_check_reset_fw(dev);
 #ifndef MERRIFIELD
-#ifdef CONFIG_DRM_VXD_BYT
-		if (!ospm_power_using_video_begin(dev, OSPM_VIDEO_DEC_ISLAND)) {
-#else
 		if (!ospm_power_using_video_begin(OSPM_VIDEO_DEC_ISLAND)) {
-#endif
 			ret = -EBUSY;
 			goto out_err0;
 		}
@@ -1102,11 +1098,7 @@ out_err0:
 	ttm_read_unlock(&dev_priv->ttm_lock);
 #ifndef MERRIFIELD
 	if (arg->engine == PSB_ENGINE_DECODE)
-#ifdef CONFIG_DRM_VXD_BYT
-		ospm_power_using_video_end(dev, OSPM_VIDEO_DEC_ISLAND);
-#else
 		ospm_power_using_video_end(OSPM_VIDEO_DEC_ISLAND);
-#endif
 #endif
 #ifndef CONFIG_DRM_VXD_BYT
 #ifndef MERRIFIELD

@@ -1,5 +1,5 @@
 /**************************************************************************
- * Copyright (c) 2013-2014, Intel Corporation.
+ * Copyright (c) 2007-2008, Intel Corporation.
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or modify it
@@ -20,11 +20,9 @@
 #ifndef _VXD_DRV_H_
 #define _VXD_DRV_H_
 
+#include "i915_drv.h"
 #include <linux/io-mapping.h>
 #include <linux/kref.h>
-#include <linux/version.h>
-
-#include <drm/drmP.h>
 
 #include <ttm/ttm_object.h>
 #include "psb_ttm_fence_driver.h"
@@ -119,8 +117,7 @@ struct drm_psb_private {
 	/*
 	 *MSVDX
 	 */
-	uint8_t __iomem* msvdx_reg;
-	unsigned long msvdx_reg_offset; /* used for uninit */
+	uint8_t *msvdx_reg;
 	atomic_t msvdx_mmu_invaldc;
 	void *msvdx_private;
 
@@ -256,42 +253,6 @@ extern int drm_psb_debug;
 
 #define IS_MSVDX_MEM_TILE(dev) 1
 
-/*
- * Frequency bits for *_PM1 registers above.
- */
-#define IP_FREQ_VALID     0x80     /* Freq is valid bit */
-
-#define IP_FREQ_SIZE         5     /* number of bits in freq fields */
-#define IP_FREQ_MASK      0x1f     /* Bit mask for freq field */
-
-/*  Positions of various frequency fields */
-#define IP_FREQ_POS          0     /* Freq control [4:0] */
-#define IP_FREQ_GUAR_POS     8     /* Freq guar   [12:8] */
-#define IP_FREQ_STAT_POS    24     /* Freq status [28:24] */
-
-#define IP_FREQ_320_00 0x09        /* 0b01001 320.00 */
-#define IP_FREQ_RESUME_SET 0x64
-
-#define PCI_ROOT_MSGBUS_CTRL_REG	0xD0
-#define PCI_ROOT_MSGBUS_DATA_REG	0xD4
-#define PCI_ROOT_MSGBUS_CTRL_EXT_REG	0xD8
-#define PCI_ROOT_MSGBUS_READ		0x10
-#define PCI_ROOT_MSGBUS_WRITE		0x11
-#define PCI_ROOT_MSGBUS_DWORD_ENABLE	0xf0
-#define PUNIT_PORT			0x04
-#define VEDSSPM0 			0x32
-#define VEDSSPM1 			0x33
-#define VEDSSC				0x1
-
-#define VXD_DRIVER_AUTHOR		"Intel, Inc."
-#define VXD_DRIVER_NAME			"vxd392"
-#define VXD_DRIVER_DESC			"Vxd392 for Intel Graphics"
-#define VXD_DRIVER_DATE			"20140909"
-#define VXD_DRIVER_MAJOR		0
-#define VXD_DRIVER_MINOR		99
-#define VXD_DRIVER_PATCHLEVEL	9
-
-
 #if DRM_DEBUG_CODE
 #define PSB_DEBUG(_flag, _fmt, _arg...)					\
 	do {								\
@@ -328,11 +289,19 @@ do {                                            \
 		cpu_relax();                    \
 } while (0)
 
+struct psb_fpriv *psb_fpriv(struct drm_file *file_priv);
+struct drm_psb_private *psb_priv(struct drm_device *dev);
+int vxd_release(struct inode *inode, struct file *filp);
+int psb_mmap(struct file *filp, struct vm_area_struct *vma);
+int ivxd_mmap(struct file *filp, struct vm_area_struct *vma);
+void vxd_lastclose(struct drm_device *dev);
+int vxd_driver_open(struct drm_device *dev, struct drm_file *file);
+long vxd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 
-	/* pm related start */
+/* pm related start */
 #define OSPM_VIDEO_DEC_ISLAND	1
-bool ospm_power_using_video_begin(struct drm_device *dev, int hw_island);
-void ospm_power_using_video_end(struct drm_device *dev, int hw_island);
+bool ospm_power_using_video_begin(int hw_island);
+void ospm_power_using_video_end(int hw_island);
 int ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off);
 /* end */
 
