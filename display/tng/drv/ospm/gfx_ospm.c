@@ -451,7 +451,7 @@ static void ospm_check_registers(struct drm_device *dev)
 {
 	uint32_t reg, data;
 
-	PSB_DEBUG_PM("start\n", data);
+	PSB_DEBUG_PM("start\n");
 
 	reg = 0x103800 - RGX_OFFSET;
 	data = RGX_REG_READ(reg);
