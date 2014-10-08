@@ -575,6 +575,7 @@ static IMG_BOOL
 PVRSyncReleaseSyncPrim(struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel)
 {
 	PVRSRV_ERROR eError;
+        IMG_BOOL bNeedLock;
 
 	/* Freeing the sync needs us to be in non atomic context,
 	 * but this function may be called from the sync driver in
@@ -587,14 +588,17 @@ PVRSyncReleaseSyncPrim(struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel)
 		return IMG_TRUE;
 	}
 
-	OSAcquireBridgeLock();
+        bNeedLock = !OSIsBridgeLockedByMe();
+        if (bNeedLock)
+            OSAcquireBridgeLock();
 
 	if (   !ServerSyncFenceIsMet(psSyncKernel->psSync, psSyncKernel->ui32SyncValue)
 		|| (psSyncKernel->psCleanUpSync && !ServerSyncFenceIsMet(psSyncKernel->psCleanUpSync, psSyncKernel->ui32CleanUpValue)))
 	{
-		OSReleaseBridgeLock();
-		PVRSyncAddToDeferFreeList(psSyncKernel);
-		return IMG_TRUE;
+            if (bNeedLock)
+                OSReleaseBridgeLock();
+            PVRSyncAddToDeferFreeList(psSyncKernel);
+            return IMG_TRUE;
 	}
 
 	eError = PVRSRVServerSyncFreeKM(psSyncKernel->psSync);
@@ -615,7 +619,8 @@ PVRSyncReleaseSyncPrim(struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel)
 		}
 	}
 	OSFreeMem(psSyncKernel);
-	OSReleaseBridgeLock();
+        if (bNeedLock)
+            OSReleaseBridgeLock();
 	return IMG_FALSE;
 }
 
