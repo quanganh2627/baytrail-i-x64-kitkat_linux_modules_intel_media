@@ -65,15 +65,15 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 /* WARNING!
  * The mmap code has its own mutex, to prevent a possible deadlock,
- * when using gPVRSRVLock.
+ * when using the bridge lock.
  * The Linux kernel takes the mm->mmap_sem before calling the mmap
  * entry points (PVRMMap, MMapVOpen, MMapVClose), but the ioctl
  * entry point may take mm->mmap_sem during fault handling, or 
- * before calling get_user_pages.  If gPVRSRVLock was used in the
+ * before calling get_user_pages.  If the bridge lock was used in the
  * mmap entry points, a deadlock could result, due to the ioctl
  * and mmap code taking the two locks in different orders.
  * As a corollary to this, the mmap entry points must not call
- * any driver code that relies on gPVRSRVLock is held.
+ * any driver code that relies on the bridge lock is held.
  */
 static struct mutex g_sMMapMutex;
 
@@ -197,7 +197,7 @@ int MMapPMR(struct file *pFile, struct vm_area_struct *ps_vma)
 	 * and ResManFindPrivateDataByPtr is going to be removed.
 	 *  This change was necessary to solve the lockdep issues related with the MMapPMR
 	 */
-	mutex_lock(&gPVRSRVLock);
+	OSAcquireBridgeLock();
 	mutex_lock(&g_sMMapMutex);
 
 #if defined(SUPPORT_DRM_DC_MODULE)
@@ -230,7 +230,7 @@ int MMapPMR(struct file *pFile, struct vm_area_struct *ps_vma)
 	 */
 	PMRRefPMR(psPMR);
 
-	mutex_unlock(&gPVRSRVLock);
+	OSReleaseBridgeLock();
 
 	eError = PMRLockSysPhysAddresses(psPMR, PAGE_SHIFT);
 	if (eError != PVRSRV_OK)
@@ -457,7 +457,7 @@ int MMapPMR(struct file *pFile, struct vm_area_struct *ps_vma)
 	goto em1;
  e0:
     PVR_DPF((PVR_DBG_ERROR, "Error in MMapPMR critical section"));
-	mutex_unlock(&gPVRSRVLock);
+	OSReleaseBridgeLock();
  em1:
     PVR_ASSERT(eError != PVRSRV_OK);
     PVR_DPF((PVR_DBG_ERROR, "unable to translate error %d", eError));
