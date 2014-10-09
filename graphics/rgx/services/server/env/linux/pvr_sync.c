@@ -567,6 +567,8 @@ PVRSyncAddToDeferFreeList(struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel)
 	spin_unlock_irqrestore(&gSyncPrimFreeListLock, flags);
 }
 
+extern IMG_BOOL OSIsBridgeLockedByMe(void);
+
 /* Releases a sync prim - freeing it if there are no outstanding
  * operations, else adding it to a deferred list to be freed later.
  * Returns IMG_TRUE if the free was deferred, IMG_FALSE otherwise.
@@ -575,7 +577,7 @@ static IMG_BOOL
 PVRSyncReleaseSyncPrim(struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel)
 {
 	PVRSRV_ERROR eError;
-        IMG_BOOL bNeedLock;
+	IMG_BOOL bNeedLock;
 
 	/* Freeing the sync needs us to be in non atomic context,
 	 * but this function may be called from the sync driver in
@@ -588,17 +590,17 @@ PVRSyncReleaseSyncPrim(struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel)
 		return IMG_TRUE;
 	}
 
-        bNeedLock = !OSIsBridgeLockedByMe();
-        if (bNeedLock)
-            OSAcquireBridgeLock();
+	bNeedLock = !OSIsBridgeLockedByMe();
+	if (bNeedLock)
+		OSAcquireBridgeLock();
 
 	if (   !ServerSyncFenceIsMet(psSyncKernel->psSync, psSyncKernel->ui32SyncValue)
 		|| (psSyncKernel->psCleanUpSync && !ServerSyncFenceIsMet(psSyncKernel->psCleanUpSync, psSyncKernel->ui32CleanUpValue)))
 	{
-            if (bNeedLock)
-                OSReleaseBridgeLock();
-            PVRSyncAddToDeferFreeList(psSyncKernel);
-            return IMG_TRUE;
+		if (bNeedLock)
+			OSReleaseBridgeLock();
+		PVRSyncAddToDeferFreeList(psSyncKernel);
+		return IMG_TRUE;
 	}
 
 	eError = PVRSRVServerSyncFreeKM(psSyncKernel->psSync);
@@ -619,8 +621,8 @@ PVRSyncReleaseSyncPrim(struct PVR_SYNC_KERNEL_SYNC_PRIM *psSyncKernel)
 		}
 	}
 	OSFreeMem(psSyncKernel);
-        if (bNeedLock)
-            OSReleaseBridgeLock();
+	if (bNeedLock)
+		OSReleaseBridgeLock();
 	return IMG_FALSE;
 }
 
