@@ -2517,7 +2517,19 @@ PVRSRV_ERROR RGXSendCommandWithPowLock(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 		goto _PVRSRVSetDevicePowerStateKM_Exit;
 	}
 
-	RGXSendCommandRaw(psDevInfo, eKCCBType,  psKCCBCmd, ui32CmdSize, bPDumpContinuous?PDUMP_FLAGS_CONTINUOUS:0);
+	eError = RGXSendCommandRaw(psDevInfo, eKCCBType,  psKCCBCmd, ui32CmdSize, bPDumpContinuous?PDUMP_FLAGS_CONTINUOUS:0);
+
+	if (eError != PVRSRV_OK)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "RGXSendCommandWithPowLock: failed to schedule command (%s)",
+					PVRSRVGetErrorStringKM(eError)));
+#if defined(DEBUG)
+		/* PVRSRVDebugRequest must be called without powerlock */
+		PVRSRVPowerUnlock();
+		PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX, IMG_NULL);
+		goto _PVRSRVPowerLock_Exit;
+#endif
+	}
 
 _PVRSRVSetDevicePowerStateKM_Exit:
 	PVRSRVPowerUnlock();
@@ -2587,9 +2599,6 @@ PVRSRV_ERROR RGXSendCommandRaw(PVRSRV_RGXDEV_INFO 	*psDevInfo,
 	{
 		PVR_DPF((PVR_DBG_ERROR, "RGXSendCommandRaw failed to acquire CCB slot. Type:%u Error:%u",
 				eKCCBType, eError));
-#if defined(DEBUG)
-		PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX, IMG_NULL);
-#endif
 		goto _RGXSendCommandRaw_Exit;
 	}
 	
