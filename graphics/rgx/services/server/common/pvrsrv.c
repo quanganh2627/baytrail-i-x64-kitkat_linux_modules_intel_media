@@ -1547,6 +1547,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVFinaliseSystem(IMG_BOOL bInitSuccessful, IMG_UIN
 		if (eError != PVRSRV_OK)
 		{
 			PVRSRVPowerUnlock();
+			PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX, IMG_NULL);
 			return eError;
 		}
 
@@ -1746,6 +1747,9 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 	eError = PVRSRVSetDevicePowerStateKM(psDeviceNode->sDevId.ui32DeviceIndex,
 										 PVRSRV_DEV_POWER_STATE_OFF,
 										 IMG_TRUE);
+
+	PVRSRVPowerUnlock();
+
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVUnregisterDevice: Failed PVRSRVSetDevicePowerStateKM call (%s). Dump debug.", PVRSRVGetErrorStringKM(eError)));
@@ -1755,7 +1759,6 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 		/* If the driver is okay then return the error, otherwise we can ignore this error. */
 		if (PVRSRVGetPVRSRVData()->eServicesState == PVRSRV_SERVICES_STATE_OK)
 		{
-			PVRSRVPowerUnlock();
 			return eError;
 		}
 		else
@@ -1763,8 +1766,6 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 			PVR_DPF((PVR_DBG_MESSAGE,"PVRSRVUnregisterDevice: Will continue to unregister as driver status is not OK"));
 		}
 	}
-
-	PVRSRVPowerUnlock();
 
 	/*
 		De-init the device.

@@ -3139,9 +3139,11 @@ PVRSRV_ERROR RGXWaitForFWOp(PVRSRV_RGXDEV_INFO	*psDevInfo,
 		if (eError == PVRSRV_ERROR_TIMEOUT)
 		{
 			PVR_DPF((PVR_DBG_ERROR,"RGXScheduleCommandAndWait: PVRSRVWaitForValueKM timed out. Dump debug information."));
+			PVRSRVPowerUnlock();
 
 			PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX,IMG_NULL);
 			PVR_ASSERT(eError != PVRSRV_ERROR_TIMEOUT);
+			goto _PVRSRVDebugRequest_Exit;
 		}
 	}
 
@@ -3150,6 +3152,7 @@ _PVRSRVSetDevicePowerStateKM_Exit:
 
 	PVRSRVPowerUnlock();
 
+_PVRSRVDebugRequest_Exit:
 _PVRSRVPowerLock_Exit:
 	return eError;
 }
