@@ -133,11 +133,6 @@ static IMG_BOOL RGX_LISRHandler (IMG_VOID *pvData)
 	psDevConfig = psDeviceNode->psDevConfig;
 	psDevInfo = psDeviceNode->pvDevice;
 
-	if (psDevInfo->bIgnoreFurtherIRQs)
-	{
-		return IMG_TRUE;
-	}
-
 	ui32IRQStatus = OSReadHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_META_SP_MSLVIRQSTATUS);
 
 	if (ui32IRQStatus & RGX_CR_META_SP_MSLVIRQSTATUS_TRIGVECT2_EN)
@@ -147,6 +142,11 @@ static IMG_BOOL RGX_LISRHandler (IMG_VOID *pvData)
 #if defined(RGX_FEATURE_OCPBUS)
 		OSWriteHWReg32(psDevInfo->pvRegsBaseKM, RGX_CR_OCP_IRQSTATUS_2, RGX_CR_OCP_IRQSTATUS_2_RGX_IRQ_STATUS_EN);
 #endif
+
+		if (psDevInfo->bIgnoreFurtherIRQs)
+		{
+			return IMG_TRUE;
+		}
 
 		if (psDevConfig->pfnInterruptHandled)
 		{
