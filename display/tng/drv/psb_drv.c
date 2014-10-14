@@ -547,6 +547,10 @@ MODULE_DEVICE_TABLE(pci, pciidlist);
 	DRM_IOR(DRM_PSB_PANEL_ORIENTATION + DRM_COMMAND_BASE,          \
 			int)
 
+#define DRM_IOCTL_PSB_UPDATE_CURSOR_POS \
+	DRM_IOW(DRM_PSB_UPDATE_CURSOR_POS + DRM_COMMAND_BASE,\
+			struct intel_dc_cursor_ctx)
+
 struct user_printk_arg {
 	char string[512];
 };
@@ -643,8 +647,8 @@ static int psb_panel_query_ioctl(struct drm_device *dev, void *data,
 					struct drm_file *file_priv);
 static int psb_idle_ioctl(struct drm_device *dev, void *data,
 				struct drm_file *file_priv);
-
-
+static int psb_update_cursor_pos_ioctl(struct drm_device *dev, void *data,
+				struct drm_file *file_priv);
 static int user_printk_ioctl(struct drm_device *dev, void *data,
 			     struct drm_file *file_priv)
 {
@@ -810,6 +814,8 @@ static struct drm_ioctl_desc psb_ioctls[] = {
 	PSB_IOCTL_DEF(DRM_IOCTL_PSB_PANEL_ORIENTATION,
 		psb_get_panel_orientation_ioctl, DRM_AUTH),
 
+	PSB_IOCTL_DEF(DRM_IOCTL_PSB_UPDATE_CURSOR_POS,
+		psb_update_cursor_pos_ioctl, DRM_AUTH),
 };
 
 static void psb_set_uopt(struct drm_psb_uopt *uopt)
@@ -3160,6 +3166,19 @@ static int psb_get_panel_orientation_ioctl(struct drm_device *dev, void *data,
         else
             *arg = 0;
 	return 0;
+}
+
+static int psb_update_cursor_pos_ioctl(struct drm_device *dev, void *data,
+						 struct drm_file *file_priv)
+{
+	struct intel_dc_cursor_ctx *ctx = (struct intel_dc_cursor_ctx*) data;
+
+	if (ctx == NULL) {
+		DRM_ERROR("%s: invalid cursor context\n", __func__);
+		return -1;
+	}
+
+	return DCUpdateCursorPos(ctx->pipe, ctx->pos);
 }
 
 /* always available as we are SIGIO'd */
