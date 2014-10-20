@@ -1290,11 +1290,11 @@ static int psb_do_init(struct drm_device *dev)
 	}
 	if (!ttm_bo_init_mm(bdev,
 			    DRM_PSB_MEM_MMU,
-			    PSB_MEM_TT_START >> PAGE_SHIFT)) {
+			    (PSB_MEM_TT_START + pg->gtt_video_start) >> PAGE_SHIFT)) {
 		dev_priv->have_mem_mmu = 1;
 		dev_priv->sizes.mmu_size =
 			PSB_MEM_TT_START / (1024 * 1024);
-		printk("[TTM] MMU heap size is %d\n", PSB_MEM_TT_START);
+		printk("[TTM] MMU heap size is %d\n", PSB_MEM_TT_START + pg->gtt_video_start);
 	}
 
 	if (IS_MSVDX_MEM_TILE(dev)) {
@@ -2959,7 +2959,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 
 				ret = drm_wait_vblank(dev, (void *)&vblwait,
 						file_priv);
-				if (ret && (ret != -EINTR)) {
+				if (ret && (ret != -EINTR && ret != -EPERM)) {
 					DRM_ERROR("fail to get vsync on pipe %d, ret %d\n", pipe, ret);
 					vsync_state_dump(dev, pipe);
 
@@ -2973,6 +2973,12 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 					}
 				} else if (ret == -EINTR)
 					ret = 0;
+				else if (ret == -EPERM) {
+					/*
+					 * pipe is disabled when we try to enable vblank on it,
+					 * expect hwc switch to another vsync source next time
+					 */
+				}
 			} else {
 				DRM_INFO("request VSYNC on pipe(%d) when vsync_enabled=%d.\n",
 						 pipe, dev_priv->vsync_enabled[pipe]);
@@ -4435,6 +4441,8 @@ struct drm_psb_register_rw_arg_32 {
 		uint32_t b_wait_vblank;
 		uint32_t b_wms;
 		uint32_t buffer_handle;
+		uint32_t backbuf_index;
+		uint32_t backbuf_addr;
 	} overlay;
 	uint32_t vsync_operation_mask;
 	struct {
@@ -4524,6 +4532,8 @@ int compat_PVRSRV_BridgeDispatchKM3(struct file *filp, unsigned int cmd,
 		|| __put_user(req32.overlay.b_wait_vblank, &request->overlay.b_wait_vblank)
 		|| __put_user(req32.overlay.b_wms, &request->overlay.b_wms)
 		|| __put_user(req32.overlay.buffer_handle, &request->overlay.buffer_handle)
+		|| __put_user(req32.overlay.backbuf_index, &request->overlay.backbuf_index)
+		|| __put_user(req32.overlay.backbuf_addr, &request->overlay.backbuf_addr)
 		|| __put_user(req32.vsync_operation_mask, &request->vsync_operation_mask)
 		|| __put_user(req32.vsync.pipe, &request->vsync.pipe)
 		|| __put_user(req32.vsync.vsync_pipe, &request->vsync.vsync_pipe)
@@ -4600,6 +4610,8 @@ int compat_PVRSRV_BridgeDispatchKM3(struct file *filp, unsigned int cmd,
 		|| __put_user(returnBuffer.overlay.b_wait_vblank, &p_buf->overlay.b_wait_vblank)
 		|| __put_user(returnBuffer.overlay.b_wms, &p_buf-> overlay.b_wms)
 		|| __put_user(returnBuffer.overlay.buffer_handle, &p_buf->overlay.buffer_handle)
+		|| __put_user(returnBuffer.overlay.backbuf_index, &p_buf->overlay.backbuf_index)
+		|| __put_user(returnBuffer.overlay.backbuf_addr, &p_buf->overlay.backbuf_addr)
 		|| __put_user(returnBuffer.vsync_operation_mask, &p_buf->vsync_operation_mask)
 		|| __put_user(returnBuffer.vsync.pipe, &p_buf->vsync.pipe)
 		|| __put_user(returnBuffer.vsync.vsync_pipe, &p_buf->vsync.vsync_pipe)

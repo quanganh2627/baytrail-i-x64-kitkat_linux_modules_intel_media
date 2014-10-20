@@ -3635,6 +3635,8 @@ int tng_topaz_remove_ctx(
 	spin_lock_irqsave(&(topaz_priv->ctx_spinlock), flags);
 	if (video_ctx == topaz_priv->irq_context)
 		topaz_priv->irq_context = NULL;
+	if (video_ctx == topaz_priv->cur_context)
+		topaz_priv->cur_context = NULL;
 	spin_unlock_irqrestore(&(topaz_priv->ctx_spinlock), flags);
 
 	mutex_lock(&topaz_priv->topaz_mutex);

@@ -1551,7 +1551,7 @@ static PVRSRV_ERROR DC_MRFLD_BufferAlloc(IMG_HANDLE hDisplayContext,
 	 * IMG uses pgprot_noncached(PAGE_KERNEL)
 	 */
 	psBuffer->sCPUVAddr = __vmalloc(psBuffer->ui32BufferSize,
-			GFP_KERNEL | __GFP_HIGHMEM | __GFP_ZERO,
+			GFP_KERNEL | __GFP_DMA32 | __GFP_ZERO,
 			 __pgprot((pgprot_val(PAGE_KERNEL) & ~_PAGE_CACHE_MASK)
 			| _PAGE_CACHE_WC));
 	/*FIXME: */

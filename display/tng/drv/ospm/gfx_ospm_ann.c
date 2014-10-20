@@ -383,6 +383,17 @@ void gpu_freq_set_resume_func(int (*resume_func)(void))
 }
 EXPORT_SYMBOL(gpu_freq_set_resume_func);
 
+int gpu_freq_get_max_fuse_setting(void)
+{
+	u32 reg_value;
+
+	/* Fuse value stored in offset 0x10F */
+	reg_value = intel_mid_msgbus_read32(PUNIT_PORT, 0x10F);
+
+	return (reg_value & 0xF);
+}
+EXPORT_SYMBOL(gpu_freq_get_max_fuse_setting);
+
 /***********************************************************
  * All Graphics Island
  ***********************************************************/

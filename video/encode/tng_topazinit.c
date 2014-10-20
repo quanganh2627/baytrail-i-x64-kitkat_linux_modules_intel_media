@@ -58,9 +58,9 @@
 
 extern int drm_psb_msvdx_tiling;
 
-/* When width or height is bigger than 1280. Encode will
+/* Height is bigger than (1920 - 1). Encode will
    treat TTM_PL_TT buffers as tilied memory */
-#define PSB_TOPAZ_TILING_THRESHOLD (1280)
+#define PSB_TOPAZ_TILING_THRESHOLD (1920 - 1)
 
 #ifdef MRFLD_B0_DEBUG
 /* #define TOPAZHP_ENCODE_FPGA */
@@ -608,8 +608,7 @@ void tng_topaz_mmu_enable_tiling(
 	uint32_t max_addr = dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].gpu_offset +
 			(dev_priv->bdev.man[DRM_PSB_MEM_MMU_TILING].size<<PAGE_SHIFT);
 
-	if ((video_ctx->frame_w > PSB_TOPAZ_TILING_THRESHOLD) ||
-		(video_ctx->frame_h > PSB_TOPAZ_TILING_THRESHOLD))
+	if ((video_ctx->frame_h > PSB_TOPAZ_TILING_THRESHOLD))
 		min_addr = dev_priv->bdev.man[TTM_PL_TT].gpu_offset;
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Enable tiled memory from %08x ~ %08x\n",
