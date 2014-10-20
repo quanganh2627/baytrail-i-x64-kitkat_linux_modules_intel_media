@@ -1444,6 +1444,12 @@ static IMG_VOID _RGXDumpRGXDebugSummary(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrint
 			break;
 		}
 		
+		case PVRSRV_DEVICE_HEALTH_STATUS_NOT_RESPONDING:
+		{
+			pszState = "NOT RESPONDING";
+			break;
+		}
+		
 		case PVRSRV_DEVICE_HEALTH_STATUS_DEAD:
 		{
 			pszState = "DEAD";
