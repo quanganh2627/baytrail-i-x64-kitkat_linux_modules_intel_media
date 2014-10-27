@@ -99,6 +99,8 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ENV_DATA *gpsEnvData = IMG_NULL;
 
+struct task_struct *OSGetBridgeLockOwner(void);
+
 /*
 	Create a 4MB pool which should be more then enough in most cases,
 	if it becomes full then the calling code will fall back to
@@ -1952,19 +1954,28 @@ void OSDumpStack(void)
 	dump_stack();
 }
 
+static struct task_struct *gsOwner;
+
 void OSAcquireBridgeLock(void)
 {
 	mutex_lock(&gPVRSRVLock);
+	gsOwner = current;
 }
 
 void OSReleaseBridgeLock(void)
 {
+	gsOwner = NULL;
 	mutex_unlock(&gPVRSRVLock);
 }
 
-IMG_BOOL OSIsBridgeLockedByMe()
+struct task_struct *OSGetBridgeLockOwner(void)
 {
-	return (mutex_is_locked(&gPVRSRVLock) && current == gPVRSRVLock.owner);
+	return gsOwner;
+}
+
+IMG_BOOL OSIsBridgeLockedByMe(void)
+{
+	return (mutex_is_locked(&gPVRSRVLock) && current == gsOwner);
 }
 
 /*************************************************************************/ /*!

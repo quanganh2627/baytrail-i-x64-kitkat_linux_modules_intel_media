@@ -130,6 +130,12 @@ int vsp_handle_response(struct drm_psb_private *dev_priv)
 			}
 
 			ret = false;
+
+			/* For VPP component, wouldn't receive any command
+			 * from user space.
+			 */
+			if (msg->context == 0)
+				vsp_priv->vsp_state = VSP_STATE_HANG;
 			break;
 
 		case VssEndOfSequenceResponse:

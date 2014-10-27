@@ -97,7 +97,7 @@ PVRSRV_ERROR OSSecureExport(CONNECTION_DATA *psConnection,
 #endif
 
 	
-	mutex_unlock(&gPVRSRVLock);
+	OSReleaseBridgeLock();
 
 	/* Open our device (using the file information from our current connection) */
 	secure_file = dentry_open(
@@ -110,7 +110,7 @@ PVRSRV_ERROR OSSecureExport(CONNECTION_DATA *psConnection,
 					  connection_file->f_flags,
 					  current_cred());
 
-	mutex_lock(&gPVRSRVLock);
+	OSAcquireBridgeLock();
 
 	/* Bail if the open failed */
 	if (IS_ERR(secure_file))

@@ -1721,7 +1721,7 @@ static struct psb_video_ctx* psb_msvdx_find_ctx(struct drm_psb_private *dev_priv
 
 	spin_lock(&dev_priv->video_ctx_lock);
 	list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
-		if (pos->cur_sequence == fence) {
+		if ((pos->ctx_type & VAEntrypointVLD) && (pos->cur_sequence == fence)) {
 			spin_unlock(&dev_priv->video_ctx_lock);
 			return pos;
 		}

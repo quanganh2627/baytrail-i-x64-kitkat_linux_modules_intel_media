@@ -384,8 +384,6 @@ static IMG_VOID CleanupThread(IMG_PVOID pvData)
 	while ((psPVRSRVData->eServicesState == PVRSRV_SERVICES_STATE_OK) && 
 			(!psPVRSRVData->bUnload))
 	{
-		IMG_BOOL bLockedByMe;
-
 		/* Wait until RESMAN signals for deferred clean up OR wait for a
 		 * short period if the previous deferred clean up was not able
 		 * to release all the resources before trying again.
@@ -412,11 +410,8 @@ static IMG_VOID CleanupThread(IMG_PVOID pvData)
 		 * In order to avoid to block the system during the cleanup the lock is
 		 * released periodically every time a specific time expires.
 		 */
-		bLockedByMe = OSIsBridgeLockedByMe();
-		if (!bLockedByMe)
-		{
-			OSAcquireBridgeLock();
-		}
+		OSAcquireBridgeLock();
+
 		/* Estimate the time limit as soon as we acquire the global lock */
 		ui64TimesliceLimit = OSClockns64() + RESMAN_DEFERRED_CLEANUP_TIMESLICE_NS;
 
@@ -428,10 +423,7 @@ static IMG_VOID CleanupThread(IMG_PVOID pvData)
 				ui64TimesliceLimit);
 
 		/* Release the bridge lock after the cleanup of the defer context */
-		if (!bLockedByMe)
-		{
-			OSReleaseBridgeLock();
-		}
+		OSReleaseBridgeLock();
 	}
 
 	eRc = OSEventObjectClose(hOSEvent);
@@ -1547,6 +1539,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVFinaliseSystem(IMG_BOOL bInitSuccessful, IMG_UIN
 		if (eError != PVRSRV_OK)
 		{
 			PVRSRVPowerUnlock();
+			PVRSRVDebugRequest(DEBUG_REQUEST_VERBOSITY_MAX, IMG_NULL);
 			return eError;
 		}
 
@@ -1746,6 +1739,9 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 	eError = PVRSRVSetDevicePowerStateKM(psDeviceNode->sDevId.ui32DeviceIndex,
 										 PVRSRV_DEV_POWER_STATE_OFF,
 										 IMG_TRUE);
+
+	PVRSRVPowerUnlock();
+
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"PVRSRVUnregisterDevice: Failed PVRSRVSetDevicePowerStateKM call (%s). Dump debug.", PVRSRVGetErrorStringKM(eError)));
@@ -1755,7 +1751,6 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 		/* If the driver is okay then return the error, otherwise we can ignore this error. */
 		if (PVRSRVGetPVRSRVData()->eServicesState == PVRSRV_SERVICES_STATE_OK)
 		{
-			PVRSRVPowerUnlock();
 			return eError;
 		}
 		else
@@ -1763,8 +1758,6 @@ static PVRSRV_ERROR IMG_CALLCONV PVRSRVUnregisterDevice(PVRSRV_DEVICE_NODE *psDe
 			PVR_DPF((PVR_DBG_MESSAGE,"PVRSRVUnregisterDevice: Will continue to unregister as driver status is not OK"));
 		}
 	}
-
-	PVRSRVPowerUnlock();
 
 	/*
 		De-init the device.

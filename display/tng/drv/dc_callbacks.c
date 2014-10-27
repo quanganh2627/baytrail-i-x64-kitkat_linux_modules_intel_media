@@ -433,23 +433,13 @@ static void _OverlayWaitFlip(
 	struct drm_device *dev, u32 ovstat_reg, int index, int pipe)
 {
 	int retry;
-	int ret = -EBUSY;
-        bool is_cmd_mode;
-
-        is_cmd_mode = is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DBI;
-	if (DCCBEnableVSyncInterrupt(dev, pipe) != 0) {
-		DRM_ERROR("%s: failed to enable vblank on pipe %d\n",
-			__func__, pipe);
-		return;
-	}
 
 	/* HDMI pipe can run as low as 24Hz */
 	retry = 600;
 	if (pipe != 1)
 	{
 		retry = 200;  /* 60HZ for MIPI */
-		if(is_cmd_mode)
-			DCCBDsrForbid(dev, pipe);
+		DCCBDsrForbid(dev, pipe);
 	}
 	/**
 	 * make sure overlay command buffer
@@ -457,19 +447,12 @@ static void _OverlayWaitFlip(
 	 * overlay command buffer.
 	 */
 	while (--retry) {
-		if (pipe != 1 && ret == -EBUSY && is_cmd_mode)
-		{
-			_OverlayWaitVblank(dev, pipe);
-			DCCBWaitForDbiFifoEmpty(dev, pipe);
-			ret = DCCBUpdateDbiPanel(dev, pipe);
-		}
 		if (BIT31 & PSB_RVDC32(ovstat_reg))
 			break;
 		udelay(100);
 	}
 
-	DCCBDisableVSyncInterrupt(dev, pipe);
-	if (pipe != 1 && is_cmd_mode)
+	if (pipe != 1)
 		DCCBDsrAllow(dev, pipe);
 
 	if (!retry)
@@ -678,7 +661,8 @@ int DCCBOverlayEnable(struct drm_device *dev, u32 ctx,
 
 	if (power_island_get(power_islands)) {
 		/*make sure previous flip was done*/
-		//_OverlayWaitFlip(dev, ovstat_reg, index, pipe);
+		if (is_panel_vid_or_cmd(dev) == MDFLD_DSI_ENCODER_DPI)
+			_OverlayWaitFlip(dev, ovstat_reg, index, pipe);
 		//_OverlayWaitVblank(dev, pipe);
 
 		PSB_WVDC32(ctx, ovadd_reg);

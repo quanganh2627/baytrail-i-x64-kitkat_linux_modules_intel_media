@@ -744,13 +744,14 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 			 unsigned int gfp_flags,
 			 IMG_BOOL bFlush,
 			 IMG_UINT32 uiOrder,
-			 struct page **ppsPage)
+			 struct page **ppsPage,
+			 IMG_BOOL *pbPageFromPool)
 {
 	PVRSRV_ERROR eError = PVRSRV_OK;
-	IMG_BOOL bFromPagePool = IMG_FALSE;
 	IMG_PVOID pvPageVAddr;
 	struct page *psPage = IMG_NULL;
 
+	*pbPageFromPool = IMG_FALSE;
 
 	/* Does the requested page contiguity match the CPU page size? */
 	if (uiOrder == 0)
@@ -758,13 +759,7 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 		psPage = _RemoveFirstEntryFromPool(ui32CPUCacheFlags, bFlush);
 		if (psPage != IMG_NULL)
 		{
-			bFromPagePool = IMG_TRUE;
-			/*
-				Unset memory type is set to true as although in the "normal" case
-				(where we free the page back to the pool) we don't want to unset
-				it, we _must_ unset it in the case where the page pool was full
-				and thus we have to give the page back to the OS.
-			*/
+			*pbPageFromPool = IMG_TRUE;
 		}
 	}
 
@@ -773,55 +768,12 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 		either the pool was empty or it was for a cached page so we
 		must ask the OS and do the cache management as required.
 	*/
-	if (!bFromPagePool)
+	if (!*pbPageFromPool)
 	{
         DisableOOMKiller();
         psPage = alloc_pages(gfp_flags, uiOrder);
         EnableOOMKiller();
 
-#if defined (CONFIG_X86)
-		if (psPage != IMG_NULL)
-		{
-			/*
-				On X86 if we already have a mapping we need to change the mode of
-				current mapping before we map it ourselves
-			*/
-			pvPageVAddr = page_address(psPage);
-			if (pvPageVAddr != NULL)
-			{
-				int ret;
-
-				switch (ui32CPUCacheFlags)
-				{
-					case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
-							ret = set_memory_uc((unsigned long)pvPageVAddr, 1);
-							if (ret)
-							{
-								eError = PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
-								 __free_pages(psPage, uiOrder);
-								 psPage = IMG_NULL;
-							}
-							break;
-
-					case PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE:
-							ret = set_memory_wc((unsigned long)pvPageVAddr, 1);
-							if (ret)
-							{
-								eError = PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
-								 __free_pages(psPage, uiOrder);
-								psPage = IMG_NULL;
-							}
-							break;
-
-					case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
-							break;
-
-					default:
-							break;
-				}
-			}
-		}
-#endif
 #if defined (CONFIG_ARM) || defined(CONFIG_ARM64) || defined (CONFIG_METAG)
 		/*
 		On ARM kernels we can be given pages which still remain in the cache.
@@ -862,6 +814,11 @@ _AllocOSPage(IMG_UINT32 ui32CPUCacheFlags,
 				}
 			}
 			kunmap(psPage);
+		}
+		else
+		{
+			PVR_DPF((PVR_DBG_ERROR, "physmem_osmem_linux.c: OS refused the memory allocation for the pages.  Did you ask for too much?"));
+			eError = PVRSRV_ERROR_PMR_FAILED_TO_ALLOC_PAGES;
 		}
 #endif
 	}
@@ -930,6 +887,8 @@ _FreeOSPage(IMG_UINT32 ui32CPUCacheFlags,
 	IMG_BOOL bAddedToPool = IMG_FALSE;
 #if defined (CONFIG_X86)
     IMG_PVOID pvPageVAddr;
+#else
+	PVR_UNREFERENCED_PARAMETER(bUnsetMemoryType);
 #endif
 
 	/* Only zero order pages can be managed in the pool */
@@ -952,7 +911,7 @@ _FreeOSPage(IMG_UINT32 ui32CPUCacheFlags,
 	{
 #if defined(CONFIG_X86)
 		pvPageVAddr = page_address(psPage);
-		if (bUnsetMemoryType == IMG_TRUE)
+		if (pvPageVAddr && bUnsetMemoryType == IMG_TRUE)
 		{
 			int ret;
 
@@ -976,11 +935,32 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
     IMG_UINT32 uiOrder;
     IMG_UINT32 uiPageIndex;
 	IMG_UINT32 ui32CPUCacheFlags;
+    IMG_BOOL bPageFromPool = IMG_FALSE;
 
     struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData = *ppsPageArrayDataPtr;
     struct page **ppsPageArray = psPageArrayData->pagearray;
 
     unsigned int gfp_flags;
+
+#if defined (CONFIG_X86)
+    /* On x86 we might have to change the page cache attributes.
+     * We do this by storing references to all the changed pages that are not
+     * from the page pool and then set the attribute of all the pages at once.
+     * This saves us calling set_memory_XX() and therefore a cache flush every time
+     */
+    struct page **apsUnsetPages = OSAllocMem(sizeof(struct page*) * psPageArrayData->uiNumPages);
+    IMG_UINT32 uiUnsetPagesIndex = 0;
+
+    if (apsUnsetPages == NULL)
+    {
+    	PVR_DPF((PVR_DBG_ERROR, "physmem_osmem_linux.c: Could not allocate temporary structure, system probably OOM"));
+    	eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+    	goto e_exit;
+    }
+
+#endif
+
+
 
     PVR_ASSERT(!psPageArrayData->bHasOSPages);
 
@@ -995,7 +975,7 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 
     gfp_flags = GFP_KERNEL | __GFP_NOWARN | __GFP_NOMEMALLOC;
 
-#if defined(CONFIG_X86)
+#if defined(CONFIG_X86_64)
     gfp_flags |= __GFP_DMA32;
 #else
     gfp_flags |= __GFP_HIGHMEM;
@@ -1011,6 +991,22 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 		||ui32CPUCacheFlags == PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE)
     {
          psPageArrayData->bUnsetMemoryType = IMG_TRUE;
+    }
+
+	/*
+		Unset memory type is set to true as although in the "normal" case
+		(where we free the page back to the pool) we don't want to unset
+		it, we _must_ unset it in the case where the page pool was full
+		and thus we have to give the page back to the OS.
+	*/
+    if (ui32CPUCacheFlags == PVRSRV_MEMALLOCFLAG_CPU_UNCACHED
+        ||ui32CPUCacheFlags == PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE)
+    {
+         psPageArrayData->bUnsetMemoryType = IMG_TRUE;
+    }
+    else
+    {
+         psPageArrayData->bUnsetMemoryType = IMG_FALSE;
     }
 
     /* Allocate pages one at a time.  Note that the _device_ memory
@@ -1033,7 +1029,16 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 							  gfp_flags,
 							  psPageArrayData->bZero,
 							  uiOrder,
-							  &ppsPageArray[uiPageIndex]);
+							  &ppsPageArray[uiPageIndex],
+							  &bPageFromPool);
+
+#if defined(CONFIG_X86)
+		if (!bPageFromPool)
+		{
+			apsUnsetPages[uiUnsetPagesIndex] = ppsPageArray[uiPageIndex];
+			uiUnsetPagesIndex++;
+		}
+#endif
 
         if (eError != PVRSRV_OK)
         {
@@ -1046,8 +1051,8 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
             {
 				_FreeOSPage(ui32CPUCacheFlags,
 							uiOrder,
-							psPageArrayData->bUnsetMemoryType,
-							IMG_FALSE,
+							IMG_TRUE,
+							IMG_TRUE,
 							ppsPageArray[uiPageIndex]);
             }
             eError = PVRSRV_ERROR_PMR_FAILED_TO_ALLOC_PAGES;
@@ -1083,6 +1088,61 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
 #endif
     }
 
+#if defined (CONFIG_X86)
+	/*
+		On X86 if we already have a mapping we need to change the mode of
+		current mapping before we map it ourselves
+	*/
+	{
+		int ret = IMG_FALSE;
+
+		switch (ui32CPUCacheFlags)
+		{
+			case PVRSRV_MEMALLOCFLAG_CPU_UNCACHED:
+				ret = set_pages_array_uc(apsUnsetPages, uiUnsetPagesIndex);
+				if (ret)
+				{
+					eError = PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
+					PVR_DPF((PVR_DBG_ERROR, "Setting Linux page caching mode to UC failed, returned %d", ret));
+				}
+				break;
+
+			case PVRSRV_MEMALLOCFLAG_CPU_WRITE_COMBINE:
+				ret = set_pages_array_wc(apsUnsetPages, uiUnsetPagesIndex);
+				if (ret)
+				{
+					eError = PVRSRV_ERROR_UNABLE_TO_SET_CACHE_MODE;
+					PVR_DPF((PVR_DBG_ERROR, "Setting Linux page caching mode to WC failed, returned %d", ret));
+				}
+				break;
+
+			case PVRSRV_MEMALLOCFLAG_CPU_CACHED:
+				break;
+
+			default:
+				break;
+		}
+
+		if (ret)
+		{
+			for(uiPageIndex = 0;uiPageIndex < psPageArrayData->uiNumPages; uiPageIndex++)
+			{
+				_FreeOSPage(ui32CPUCacheFlags,
+							uiOrder,
+							IMG_FALSE,
+							IMG_FALSE,
+							ppsPageArray[uiPageIndex]);
+			}
+
+			goto e_freed_pages;
+		}
+
+	}
+
+	OSFreeMem(apsUnsetPages);
+#endif
+
+
     /* OS Pages have been allocated */
     psPageArrayData->bHasOSPages = IMG_TRUE;
 
@@ -1096,6 +1156,10 @@ _AllocOSPages(struct _PMR_OSPAGEARRAY_DATA_ **ppsPageArrayDataPtr)
     */
 
 e_freed_pages:
+#if defined (CONFIG_X86)
+	OSFreeMem(apsUnsetPages);
+e_exit:
+#endif
     PVR_ASSERT(eError != PVRSRV_OK);
     return eError;
 }
@@ -1118,6 +1182,20 @@ _FreeOSPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData)
     IMG_UINT32 uiOrder;
     IMG_UINT32 uiPageIndex;
     struct page **ppsPageArray;
+	IMG_BOOL bAddedToPool = IMG_FALSE;
+
+#if defined (CONFIG_X86)
+	IMG_UINT32 uiUnsetPagesIndex = 0;
+	struct page **apsUnsetPages = OSAllocMem(sizeof(struct page *) * psPageArrayData->uiNumPages);
+
+	if (apsUnsetPages == NULL)
+	{
+		PVR_DPF((PVR_DBG_ERROR, "%s: Could not allocate temporary structure, "
+				"system probably OOM. Cannot free pages now.", __FUNCTION__));
+		eError = PVRSRV_ERROR_OUT_OF_MEMORY;
+		goto e_exit;
+	}
+#endif
 
 	PVR_ASSERT(psPageArrayData->bHasOSPages);
 	g_ui32LiveAllocs--;
@@ -1153,12 +1231,61 @@ _FreeOSPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData)
 #endif
 #endif
 
-		_FreeOSPage(psPageArrayData->ui32CPUCacheFlags,
-					uiOrder,
-					psPageArrayData->bUnsetMemoryType,
-					IMG_FALSE,
-					ppsPageArray[uiPageIndex]);
+
+		/* Only zero order pages can be managed in the pool */
+		if (uiOrder == 0)
+		{
+			_PagePoolLock();
+			bAddedToPool = g_ui32PagePoolEntryCount < g_ui32PagePoolMaxEntries;
+			_PagePoolUnlock();
+
+			if (bAddedToPool)
+			{
+				if (!_AddEntryToPool(ppsPageArray[uiPageIndex], psPageArrayData->ui32CPUCacheFlags))
+				{
+					bAddedToPool = IMG_FALSE;
+				}
+			}
+		}
+
+		if (!bAddedToPool)
+		{
+#if defined(CONFIG_X86)
+			if (psPageArrayData->bUnsetMemoryType == IMG_TRUE)
+			{
+				/* Keeping track of the pages for which the caching needs to change */
+				apsUnsetPages[uiUnsetPagesIndex] = ppsPageArray[uiPageIndex];
+				uiUnsetPagesIndex++;
+			}
+			else
+#endif
+			{
+				__free_pages(ppsPageArray[uiPageIndex], uiOrder);
+			}
+		}
 	}
+
+#if defined(CONFIG_X86)
+	if (uiUnsetPagesIndex != 0)
+	{
+		int ret;
+		ret = set_pages_array_wb(apsUnsetPages, uiUnsetPagesIndex);
+
+		if (ret)
+		{
+			PVR_DPF((PVR_DBG_ERROR, "%s: Failed to reset page attributes", __FUNCTION__));
+		}
+
+		for (uiPageIndex = 0;
+			 uiPageIndex < uiUnsetPagesIndex;
+			 uiPageIndex++)
+		{
+			__free_pages(apsUnsetPages[uiPageIndex], uiOrder);
+		}
+	}
+
+	OSFreeMem(apsUnsetPages);
+#endif
 
     eError = PVRSRV_OK;
 
@@ -1169,7 +1296,9 @@ _FreeOSPages(struct _PMR_OSPAGEARRAY_DATA_ *psPageArrayData)
 	{
 		_DeinitPagePool();
 	}
-
+#if defined(CONFIG_X86)
+e_exit:
+#endif
     return eError;
 }
 
