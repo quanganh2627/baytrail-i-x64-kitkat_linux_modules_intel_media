@@ -421,7 +421,7 @@ void otm_hdmi_save_display_registers(void *context, bool connected);
  *
  * Returns:	none
  */
-void otm_disable_hdmi(void *context);
+void otm_disable_hdmi(void *context, bool is_connected);
 
 /*
  * Description: restore hdmi display registers and enable the display

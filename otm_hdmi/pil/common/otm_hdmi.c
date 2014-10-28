@@ -1784,9 +1784,12 @@ void otm_hdmi_update_security_hdmi_hdcp_status(bool hdcp, bool cable)
  * Returns:	none
  * disable HDMI display
  */
-void otm_disable_hdmi(void *context)
+void otm_disable_hdmi(void *context, bool is_connected)
 {
 	pr_debug("Entered %s\n", __func__);
+	if (! is_connected)
+		return;
+
 	if (NULL != context) {
 #ifdef OTM_HDMI_HDCP_ENABLE
 		/* inform HDCP about suspend */
