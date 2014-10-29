@@ -1889,6 +1889,12 @@ IMG_VOID RGXDebugRequestProcess(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 				}
 		 	}
 
+		 	/* Dump the KCCB commands executed */
+			{
+				PVR_DUMPDEBUG_LOG(("RGX Kernel CCB commands executed = %d",
+				                  psDevInfo->psRGXFWIfTraceBuf->ui32KCCBCmdsExecuted));
+			}
+
 		 	/* Dump the IRQ info */
 			{
 				PVR_DUMPDEBUG_LOG(("RGX FW IRQ count = %d, last sampled in MISR = %d",

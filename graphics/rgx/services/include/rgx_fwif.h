@@ -226,6 +226,7 @@ typedef struct _RGXFWIF_TRACEBUF_
 	IMG_UINT32              ui32LastDropOrdinal; /* The ordinal of the last packet the FW dropped */
 
 	IMG_UINT32				ui32InterruptCount;
+	IMG_UINT32				ui32KCCBCmdsExecuted;
     IMG_UINT64 RGXFW_ALIGN	ui64StartIdleTime;
 } RGXFWIF_TRACEBUF;
 
