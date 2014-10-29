@@ -80,12 +80,12 @@ void DCCBEnablePrimaryWA(struct drm_device *dev, int index);
 void DCCBFlipDSRCb(struct drm_device *dev);
 void DCCBUnblankDisplay(struct drm_device *dev);
 int DCCBgttMapMemory(struct drm_device *dev,
-		     unsigned int hHandle,
+		     unsigned long hHandle,
 		     unsigned int ui32TaskId,
 		     IMG_SYS_PHYADDR *pPages,
 		     unsigned int ui32PagesNum, unsigned int *ui32Offset);
 int DCCBgttUnmapMemory(struct drm_device *dev,
-		       unsigned int hHandle, unsigned int ui32TaskId);
+		       unsigned long hHandle, unsigned int ui32TaskId);
 int DCCBgttCleanupMemoryOnTask(struct drm_device *dev,
 				unsigned int ui32TaskId);
 bool DCChangeSwapChainProperty(unsigned long *psSwapChainGTTOffset,
@@ -99,6 +99,6 @@ void DCCBDsrForbid(struct drm_device *dev, int pipe);
 void DCCBDsrAllow(struct drm_device *dev, int pipe);
 int DCCBUpdateCursorPos(struct drm_device *dev, int pipe, uint32_t pos);
 
-int DCCBgetGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key, struct psb_gtt_mem_mapping **map);
-int DCCBputGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key);
+int DCCBgetGttMapping(struct drm_device *dev, unsigned int tgid, unsigned long key, struct psb_gtt_mem_mapping **map);
+int DCCBputGttMapping(struct drm_device *dev, unsigned int tgid, unsigned long key);
 #endif				/* __DC_CALLBACKS_H__ */
