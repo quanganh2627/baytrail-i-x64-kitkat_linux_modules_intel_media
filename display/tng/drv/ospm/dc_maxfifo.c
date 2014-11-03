@@ -213,6 +213,7 @@ bool enter_s0i1_display_mode(struct drm_device *dev, bool from_playback)
 	}
 
 	ret = true;
+	psb_disable_pipestat(dev_priv, 0, PIPE_VBLANK_INTERRUPT_ENABLE);
 	pmu_set_s0i1_disp_vote(true);
 	maxfifo_info->s0i1_disp_state = S0i1_DISP_STATE_ENTERED;
 	PSB_DEBUG_MAXFIFO("maxfifo: enter s0i1-display playback:%d\n",
@@ -241,6 +242,7 @@ static void __exit_s0i1_display_mode(struct drm_device *dev)
 	if (dev_priv->psb_dpst_state)
 		psb_irq_turn_on_dpst_no_lock(dev);
 
+	psb_enable_pipestat(dev_priv, 0, PIPE_VBLANK_INTERRUPT_ENABLE);
 	PSB_DEBUG_MAXFIFO("maxfifo: exit s0i1-display\n");
 }
 
@@ -282,7 +284,16 @@ bool enter_maxfifo_mode(struct drm_device *dev, int mode)
 			dspsrctrl_val |= mode << 24;
 			if (regs_to_set & DC_MAXFIFO_REGSTOSET_DSPSRCTRL_MAXFIFO)
 				dspsrctrl_val |= DSPSRCTRL_MAXFIFO_MODE_ALWAYS_MAXFIFO;
+			maxfifo_info->ddl1 = PSB_RVDC32(DDL1);
+			maxfifo_info->ddl2 = PSB_RVDC32(DDL2);
+			maxfifo_info->ddl3 = PSB_RVDC32(DDL3);
+			maxfifo_info->ddl4 = PSB_RVDC32(DDL4);
 			PSB_WVDC32(dspsrctrl_val, DSPSRCTRL_REG);
+			/* As SV suggestion, we need to set DDL as 0 in maxfifo mode */
+			PSB_WVDC32(0, DDL1);
+			PSB_WVDC32(0, DDL2);
+			PSB_WVDC32(0, DDL3);
+			PSB_WVDC32(0, DDL4);
 			maxfifo_info->maxfifo_current_state = mode;
 		}
 
@@ -322,6 +333,11 @@ bool exit_maxfifo_mode(struct drm_device *dev)
 				  PSB_RVDC32(DSPSRCTRL_REG),
 				intel_mid_msgbus_read32(PUNIT_PORT, DSP_SS_PM));
 
+		/* Set DDL back to original values when leaving maxfifo */
+		PSB_WVDC32(maxfifo_info->ddl1, DDL1);
+		PSB_WVDC32(maxfifo_info->ddl2, DDL2);
+		PSB_WVDC32(maxfifo_info->ddl3, DDL3);
+		PSB_WVDC32(maxfifo_info->ddl4, DDL4);
 		PSB_WVDC32(dspsrctrl_val, DSPSRCTRL_REG);
 		maxfifo_info->maxfifo_current_state = -1;
 		maxfifo_info->req_mode = -1;

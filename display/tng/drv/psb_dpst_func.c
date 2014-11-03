@@ -628,8 +628,9 @@ int dpst_disable(struct drm_device *dev)
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	uint32_t * arg = data;
-	struct backlight_device bd;
+	struct backlight_device *bd;
 
+	bd = psb_get_backlight_device();
 	if(!dev_priv)
 		return 0;
 
@@ -640,10 +641,15 @@ int dpst_disable(struct drm_device *dev)
 	dev_priv->blc_adj2 = (*arg * 255 / 100) * 255 / 100;
 
 #ifdef CONFIG_BACKLIGHT_CLASS_DEVICE
-	bd.props.brightness = psb_get_brightness(&bd);
-	if ( 0 == bd.props.brightness)
+	mutex_lock(&bd->ops_lock);
+	bd->props.brightness = psb_get_brightness(bd);
+	if ( 0 == bd->props.brightness)
+	{
+	    mutex_unlock(&bd->ops_lock);
 	    return 0;
-	psb_set_brightness(&bd);
+	}
+	psb_set_brightness(bd);
+	mutex_unlock(&bd->ops_lock);
 #endif				/*  */
 	    return 0;
 }

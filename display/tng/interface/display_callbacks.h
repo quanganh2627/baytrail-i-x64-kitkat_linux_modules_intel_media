@@ -55,6 +55,8 @@ void DCCBFlipSprite(struct drm_device *dev,
 			struct intel_dc_sprite_ctx *ctx);
 void DCCBFlipPrimary(struct drm_device *dev,
 			struct intel_dc_primary_ctx *ctx);
+void DCCBFlipCursor(struct drm_device *dev,
+			struct intel_dc_cursor_ctx *ctx);
 void DCCBSetupZorder(struct drm_device *dev,
 			struct intel_dc_plane_zorder *zorder,
 			int pipe);
@@ -73,6 +75,7 @@ int DCCBSpriteEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
 int DCCBPrimaryEnable(struct drm_device *dev, u32 ctx,
 			int index, int enabled);
+int DCCBCursorDisable(struct drm_device *dev, int index);
 void DCCBEnablePrimaryWA(struct drm_device *dev, int index);
 void DCCBFlipDSRCb(struct drm_device *dev);
 void DCCBUnblankDisplay(struct drm_device *dev);
@@ -94,6 +97,7 @@ int DCCBIsPipeActive(struct drm_device *dev, int pipe);
 
 void DCCBDsrForbid(struct drm_device *dev, int pipe);
 void DCCBDsrAllow(struct drm_device *dev, int pipe);
+int DCCBUpdateCursorPos(struct drm_device *dev, int pipe, uint32_t pos);
 
 int DCCBgetGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key, struct psb_gtt_mem_mapping **map);
 int DCCBputGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key);
