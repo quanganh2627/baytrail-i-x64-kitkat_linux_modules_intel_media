@@ -163,6 +163,7 @@ int gamma_setting[129] = {0};
 int csc_setting[6] = {0};
 int gamma_number = 129;
 int csc_number = 6;
+struct timespec time_vsync_irq;
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -2994,8 +2995,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 						 pipe, dev_priv->vsync_enabled[pipe]);
 			}
 
-			getrawmonotonic(&now);
-			nsecs = timespec_to_ns(&now);
+			nsecs = timespec_to_ns(&time_vsync_irq);
 			arg->vsync.timestamp = (uint64_t)nsecs;
 			return ret;
 		}
