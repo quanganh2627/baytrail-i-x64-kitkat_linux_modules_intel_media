@@ -1444,6 +1444,12 @@ static IMG_VOID _RGXDumpRGXDebugSummary(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrint
 			break;
 		}
 		
+		case PVRSRV_DEVICE_HEALTH_STATUS_NOT_RESPONDING:
+		{
+			pszState = "NOT RESPONDING";
+			break;
+		}
+		
 		case PVRSRV_DEVICE_HEALTH_STATUS_DEAD:
 		{
 			pszState = "DEAD";
@@ -1882,6 +1888,12 @@ IMG_VOID RGXDebugRequestProcess(DUMPDEBUG_PRINTF_FUNC *pfnDumpDebugPrintf,
 					}
 				}
 		 	}
+
+		 	/* Dump the KCCB commands executed */
+			{
+				PVR_DUMPDEBUG_LOG(("RGX Kernel CCB commands executed = %d",
+				                  psDevInfo->psRGXFWIfTraceBuf->ui32KCCBCmdsExecuted));
+			}
 
 		 	/* Dump the IRQ info */
 			{

@@ -54,8 +54,16 @@ LEGACY_USE_JAVA6 ?= 0
 # Force API_LEVEL to 20 for rscompute
 RSC_API_LEVEL := 20
 
+# fenv was rewritten in AOSP master
+PVR_ANDROID_HAS_WORKING_FESETROUND := 1
+
+ifeq ($(is_aosp_master),0)
+
 # Future versions of non-AOSP builds require RSCompute's
 # BCC to emit both 32-bit and 64-bit LLVM bitcode.
-ifeq ($(is_aosp_master),0)
 PVR_ANDROID_BCC_MULTIARCH_SUPPORT := 1
+
+# Future versions of non-AOSP builds annotate the cursor allocation
+PVR_ANDROID_HAS_GRALLOC_USAGE_CURSOR := 1
+
 endif

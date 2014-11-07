@@ -432,7 +432,11 @@ _ScanObjectsInPagePool(struct shrinker *psShrinker, struct shrink_control *psShr
 	remain = g_ui32PagePoolEntryCount;
 	_PagePoolUnlock();
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0))
 	return remain;
+#else
+	return psShrinkControl->nr_to_scan - uNumToScan;
+#endif
 }
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,12,0))
