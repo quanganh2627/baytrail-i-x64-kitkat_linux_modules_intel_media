@@ -1166,6 +1166,35 @@ PVRSRV_ERROR RGXAPMLatencyChange(IMG_HANDLE				hDevHandle,
 	return PVRSRV_OK;
 }
 
+PVRSRV_ERROR RGXTrigHWR(IMG_HANDLE hDevHandle)
+{
+
+	PVRSRV_DEVICE_NODE	*psDeviceNode = hDevHandle;
+	PVRSRV_ERROR		eError;
+	RGXFWIF_KCCB_CMD 	sRGXHWRCommand;
+
+	if(psDeviceNode && psDeviceNode->pfnResetHWRLogs)
+	{
+		psDeviceNode->pfnResetHWRLogs(psDeviceNode);
+	}
+
+	sRGXHWRCommand.eCmdType = RGXFWIF_KCCB_CMD_RGXHWR;
+	eError = RGXScheduleCommand(psDeviceNode->pvDevice,
+				RGXFWIF_DM_GP,
+				&sRGXHWRCommand,
+				sizeof(sRGXHWRCommand),
+				IMG_TRUE);
+
+	if (eError != PVRSRV_OK)
+	{
+		PDUMPCOMMENT("Scheduling command to RGXTrigHWR. Error:%u", eError);
+		PVR_DPF((PVR_DBG_ERROR, "RGXTrigHWR: Scheduling KCCB to RGXTrigHWR. Error:%u", eError));
+		return eError;
+	}
+
+	return PVRSRV_OK;
+}
+
 /*
 	RGXActivePowerRequest
 */

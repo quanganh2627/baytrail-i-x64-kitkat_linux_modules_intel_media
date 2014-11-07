@@ -114,6 +114,8 @@ enum enum_ports {
 #define HDMI_PROC_ENTRY "hdmi_power"
 #define GPIO_PROC_ENTRY "hdmi_gpio_control"
 #define CSC_PROC_ENTRY "csc_control"
+#define RGX_PROC_ENTRY "rgx_hwr_control"
+
 
 
 #define PSB_DRM_DRIVER_DATE "2009-03-10"

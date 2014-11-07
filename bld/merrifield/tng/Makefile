@@ -34,6 +34,7 @@ ccflags-y += -DANDROID -DLINUX -D_linux_ -D__KERNEL__
 ccflags-y += -DMERRIFIELD -DCONFIG_PCI_MSI
 ccflags-y += -DCONFIG_SLICE_HEADER_PARSING
 ccflags-y += -DCONFIG_VIDEO_MRFLD_EC
+ccflags-y += -DCONFIG_SUPPORT_TRIGER_RGX_HWR
 
 #
 # HDMI

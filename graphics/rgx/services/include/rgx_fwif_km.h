@@ -539,6 +539,8 @@ typedef enum _RGXFWIF_KCCB_CMD_TYPE_
 	RGXFWIF_KCCB_CMD_HEALTH_CHECK               = 120, /*!< Health check request */
 	RGXFWIF_KCCB_CMD_REGCONFIG                  = 121,
 	RGXFWIF_KCCB_CMD_HWPERF_SELECT_CUSTOM_CNTRS = 122, /*!< Configure the custom counters for HWPerf */
+	RGXFWIF_KCCB_CMD_RGXHWR                       = 123,
+
 } RGXFWIF_KCCB_CMD_TYPE;
 
 /* Kernel CCB command packet */

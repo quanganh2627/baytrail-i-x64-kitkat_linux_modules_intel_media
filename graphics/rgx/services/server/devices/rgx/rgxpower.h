@@ -186,4 +186,7 @@ PVRSRV_ERROR RGXAPMLatencyChange(IMG_HANDLE				hDevHandle,
 ******************************************************************************/
 PVRSRV_ERROR RGXActivePowerRequest(IMG_HANDLE hDevHandle);
 
+PVRSRV_ERROR RGXTrigHWR(IMG_HANDLE hDevHandle);
+
+
 #endif /* __RGXPOWER_H__ */
