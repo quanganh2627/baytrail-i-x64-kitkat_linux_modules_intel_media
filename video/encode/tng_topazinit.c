@@ -529,8 +529,7 @@ int tng_topaz_wait_for_register(
 		if (func(value, tmp, mask))
 			return 0;
 
-		/* FIXME: use cpu_relax instead */
-		PSB_UDELAY(1000);/* derive from reference driver */
+		cpu_relax();
 		--count;
 	}
 
