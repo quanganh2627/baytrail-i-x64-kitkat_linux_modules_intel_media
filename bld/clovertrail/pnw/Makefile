@@ -51,6 +51,7 @@ ccflags-y += -DOTM_HDMI_UNIT_TEST
 #enable HDCP
 ccflags-y += -DOTM_HDMI_HDCP_ENABLE
 ccflags-y += -DCONFIG_VIDEO_MRFLD_EC
+ccflags-y += -DCONFIG_SLICE_HEADER_PARSING
 
 ccflags-y += $(include_dirs)
 

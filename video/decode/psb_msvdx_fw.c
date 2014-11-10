@@ -613,7 +613,7 @@ int psb_setup_fw(struct drm_device *dev)
 			MSVDX_COMMS_OFFSET_FLAGS);
 #else
 	/* decode flag should be set as 0 according to IMG's said */
-	PSB_WMSVDX32(drm_decode_flag, MSVDX_COMMS_OFFSET_FLAGS);
+	PSB_WMSVDX32(0, MSVDX_COMMS_OFFSET_FLAGS);
 #endif
 	PSB_WMSVDX32(0, MSVDX_COMMS_SIGNATURE);
 
