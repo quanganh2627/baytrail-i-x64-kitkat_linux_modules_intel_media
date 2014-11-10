@@ -722,6 +722,7 @@ PVRSRV_ERROR SCPRun(SCP_CONTEXT *psContext)
 	SCP_COMMAND *psCommand;
 	PVRSRV_ERROR eError = PVRSRV_OK;
 
+
 	if (psContext == IMG_NULL)
 	{
 		return PVRSRV_ERROR_INVALID_PARAMS;
