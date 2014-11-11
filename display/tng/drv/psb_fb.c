@@ -352,6 +352,10 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	unsigned long user_virtual_addr = (unsigned long) r->handles[0];
 	int ret;
 
+	/* Align with setting in HWC */
+	if (sizeof(unsigned long) == 8)
+		user_virtual_addr |= ((unsigned long)r->handles[1]) << 32;
+
 	size = r->height * r->pitches[0];
 	if (size < r->height * r->pitches[0])
 		return ERR_PTR(-ENOMEM);
