@@ -796,7 +796,7 @@ err_unlock:
 
 *****************************************************************************/
 #if defined(SUPPORT_DRI_DRM)
-void PVRSRVRelease(void *pvPrivData)
+void PVRSRVRelease(void **ppvPrivData)
 #else
 static int PVRSRVRelease(struct inode unref__ * pInode, struct file *pFile)
 #endif
@@ -807,7 +807,7 @@ static int PVRSRVRelease(struct inode unref__ * pInode, struct file *pFile)
 	LinuxLockMutexNested(&gPVRSRVLock, PVRSRV_LOCK_CLASS_BRIDGE);
 
 #if defined(SUPPORT_DRI_DRM)
-	psPrivateData = (PVRSRV_FILE_PRIVATE_DATA *)pvPrivData;
+	psPrivateData = (PVRSRV_FILE_PRIVATE_DATA *)(*ppvPrivData);
 #else
 	psPrivateData = PRIVATE_DATA(pFile);
 #endif
@@ -861,6 +861,8 @@ static int PVRSRVRelease(struct inode unref__ * pInode, struct file *pFile)
 
 #if !defined(SUPPORT_DRI_DRM)
 		PRIVATE_DATA(pFile) = IMG_NULL; /*nulling shared pointer*/
+#else
+		*ppvPrivData = IMG_NULL;
 #endif
 	}
 
