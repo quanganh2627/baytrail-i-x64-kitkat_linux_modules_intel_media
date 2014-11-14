@@ -59,6 +59,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "process_stats.h"
 #include "dfrgx_interface.h"
+#include <linux/kct.h>
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
@@ -567,8 +568,9 @@ static PVRSRV_ERROR RGXStop(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXStop: RGXRunScript failed (%d)", eError));
-		panic("RGXStop() fiailed");
-		return eError;
+		printk(KERN_ALERT "RGXStop() failed");
+		kct_log(CT_EV_CRASH, "GFX", "RGXSTOP", 0, "", "", "", "", "", "", "",
+			CT_ADDITIONAL_APLOG);
 	}
 
 
