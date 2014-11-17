@@ -133,7 +133,7 @@ static void
 pin_gtt_mapping(struct flip_plane *plane)
 {
 	DC_MRFLD_BUFFER *psBuffer = plane->flip_buf;
-	IMG_UINT32 key;
+	IMG_UINT64 key;
 
 	if (!psBuffer || psBuffer->eSource != DCMrfldEX_BUFFER_SOURCE_IMPORT) {
 		return;
@@ -141,14 +141,15 @@ pin_gtt_mapping(struct flip_plane *plane)
 
 	key = psBuffer->sContext[0].gtt_key;
 
-	DCCBgetGttMapping(gpsDevice->psDrmDevice, psBuffer->ui32OwnerTaskID, key, NULL);
+	DCCBgetGttMapping(gpsDevice->psDrmDevice, psBuffer->ui32OwnerTaskID,
+			  (unsigned long)key, NULL);
 }
 
 static void
 unpin_gtt_mapping(struct flip_plane *plane)
 {
 	DC_MRFLD_BUFFER *psBuffer = plane->flip_buf;
-	IMG_UINT32 key;
+	IMG_UINT64 key;
 
 	if (!psBuffer || psBuffer->eSource != DCMrfldEX_BUFFER_SOURCE_IMPORT) {
 		return;
@@ -156,7 +157,8 @@ unpin_gtt_mapping(struct flip_plane *plane)
 
 	key = psBuffer->sContext[0].gtt_key;
 
-	DCCBputGttMapping(gpsDevice->psDrmDevice, psBuffer->ui32OwnerTaskID, key);
+	DCCBputGttMapping(gpsDevice->psDrmDevice, psBuffer->ui32OwnerTaskID,
+			  (unsigned long)key);
 }
 
 
@@ -1448,7 +1450,7 @@ static PVRSRV_ERROR DC_MRFLD_ContextConfigureCheck(
 		}
 
 		/*post flip*/
-		if (!pasSurfAttrib[i].ui32Custom) {
+		if (!pasSurfAttrib[i].ui64Custom) {
 			psBuffer->eFlipOp = DC_MRFLD_FLIP_SURFACE;
 			continue;
 		}
@@ -1464,7 +1466,7 @@ static PVRSRV_ERROR DC_MRFLD_ContextConfigureCheck(
 
 		/*copy the context from userspace*/
 		err = copy_from_user(psSurfCustom,
-				(void *)((uint64_t)pasSurfAttrib[i].ui32Custom),
+				(void *)(pasSurfAttrib[i].ui64Custom),
 				sizeof(DC_MRFLD_SURF_CUSTOM));
 		if (err) {
 			DRM_ERROR("Failed to copy plane context\n");
@@ -1615,7 +1617,7 @@ static PVRSRV_ERROR DC_MRFLD_BufferAlloc(IMG_HANDLE hDisplayContext,
 
 	/*map this buffer to gtt*/
 	DCCBgttMapMemory(psDrmDev,
-			(unsigned int)((uint64_t)psBuffer),
+			 (unsigned long)psBuffer,
 			psBuffer->ui32OwnerTaskID,
 			psBuffer->psSysAddr,
 			ulPagesNumber,
@@ -1754,7 +1756,7 @@ static IMG_VOID DC_MRFLD_BufferFree(IMG_HANDLE hBuffer)
 	 */
 	if (psBuffer->eSource == DCMrfldEX_BUFFER_SOURCE_ALLOC) {
 		/*make sure unmap this buffer from gtt*/
-		DCCBgttUnmapMemory(psDrmDev, (unsigned int)((uint64_t)psBuffer),
+		DCCBgttUnmapMemory(psDrmDev, (unsigned long)psBuffer,
 				psBuffer->ui32OwnerTaskID);
 		kfree(psBuffer->psSysAddr);
 		vfree(psBuffer->sCPUVAddr);

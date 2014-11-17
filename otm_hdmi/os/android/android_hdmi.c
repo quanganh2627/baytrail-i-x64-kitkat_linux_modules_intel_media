@@ -1635,7 +1635,7 @@ void android_hdmi_suspend_display(struct drm_device *dev)
 	otm_hdmi_save_display_registers(hdmi_priv->context,
 					is_connected);
 
-	otm_disable_hdmi(hdmi_priv->context);
+	otm_disable_hdmi(hdmi_priv->context, is_connected);
 
 	/* power island is turnned off by IRQ handler if device is disconnected */
 	if (is_connected && !hdmi_priv->hdmi_suspended) {

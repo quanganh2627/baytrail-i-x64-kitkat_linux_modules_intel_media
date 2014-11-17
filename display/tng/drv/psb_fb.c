@@ -349,7 +349,7 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	struct psb_gtt *pg = dev_priv->pg;
 	uint64_t size;
 	uint32_t page_offset;
-	uint32_t user_virtual_addr = (uint32_t) r->handles[0];
+	unsigned long user_virtual_addr = (unsigned long) r->handles[0];
 	int ret;
 
 	size = r->height * r->pitches[0];
@@ -378,7 +378,7 @@ static struct drm_framebuffer *psb_user_framebuffer_create(
 	/* map GTT */
 	ret = psb_gtt_map_vaddr(dev, user_virtual_addr, size, 0, &page_offset);
 	if (ret) {
-		DRM_ERROR("Can not map cpu address (0x%x) to GTT handle \n", user_virtual_addr);
+		DRM_ERROR("Can not map cpu address (0x%lx) to GTT handle \n", user_virtual_addr);
 		psbfb->offset = 0;
 	} else
 		psbfb->offset =  page_offset << PAGE_SHIFT;

@@ -56,6 +56,8 @@ static void gfx_early_suspend(struct early_suspend *h)
 	maxfifo_timer_stop(dev);
 	exit_maxfifo_mode(dev);
 
+	if (dev_priv->psb_dpst_state)
+		psb_irq_disable_dpst(dev);
 	/* protect early_suspend with dpms and mode config */
 	mutex_lock(&dev->mode_config.mutex);
 

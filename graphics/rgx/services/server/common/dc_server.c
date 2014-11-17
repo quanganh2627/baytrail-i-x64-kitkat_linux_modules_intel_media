@@ -1687,6 +1687,12 @@ FailMapBuffer:
 		for (i=0;i<ui32BuffersMapped;i++)
 		{
 			_DCBufferUnmap(papsBuffers[i]);
+
+			/*
+			 * ahBuffers points to new buffers allocated in
+			 * pfnContextConfigureCheck, need to free them here.
+			 */
+			OSFreeMem(ahBuffers[i]);
 		}
 	}
 FailConfigCheck:

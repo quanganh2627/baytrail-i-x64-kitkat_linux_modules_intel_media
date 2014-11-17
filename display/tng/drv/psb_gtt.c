@@ -619,7 +619,7 @@ static int psb_gtt_mm_insert_ht_locked(struct psb_gtt_mm *mm,
 	}
 
 	item = &hentry->item;
-	item->key = tgid;
+	item->key = (unsigned long)tgid;
 
 	/**
 	 * NOTE: drm_ht_insert_item will perform such a check
@@ -726,7 +726,7 @@ static int psb_gtt_mm_remove_free_ht_locked(struct psb_gtt_mm *mm, u32 tgid)
 
 static int
 psb_gtt_mm_get_mem_mapping_locked(struct drm_open_hash *ht,
-				  u32 key, struct psb_gtt_mem_mapping **hentry)
+				  unsigned long key, struct psb_gtt_mem_mapping **hentry)
 {
 	struct drm_hash_item *entry;
 	struct psb_gtt_mem_mapping *mapping;
@@ -734,7 +734,7 @@ psb_gtt_mm_get_mem_mapping_locked(struct drm_open_hash *ht,
 
 	ret = drm_ht_find_item(ht, key, &entry);
 	if (ret) {
-		DRM_DEBUG("Cannot find key %d\n", key);
+		DRM_DEBUG("Cannot find key %lu\n", key);
 		return ret;
 	}
 
@@ -750,7 +750,7 @@ psb_gtt_mm_get_mem_mapping_locked(struct drm_open_hash *ht,
 
 static int
 psb_gtt_mm_insert_mem_mapping_locked(struct drm_open_hash *ht,
-				     u32 key,
+				     unsigned long key,
 				     struct psb_gtt_mem_mapping *hentry)
 {
 	struct drm_hash_item *item;
@@ -781,7 +781,7 @@ psb_gtt_mm_insert_mem_mapping_locked(struct drm_open_hash *ht,
 static int
 psb_gtt_mm_alloc_insert_mem_mapping(struct psb_gtt_mm *mm,
 				    struct drm_open_hash *ht,
-				    u32 key,
+				    unsigned long key,
 				    struct drm_mm_node *node,
 				    struct psb_gtt_mem_mapping **entry)
 {
@@ -797,7 +797,7 @@ psb_gtt_mm_alloc_insert_mem_mapping(struct psb_gtt_mm *mm,
 	spin_lock(&mm->lock);
 	ret = psb_gtt_mm_get_mem_mapping_locked(ht, key, &mapping);
 	if (!ret) {
-		DRM_INFO("mapping entry for key %d exists, entry %p\n",
+		DRM_INFO("mapping entry for key %lu exists, entry %p\n",
 			  key, mapping);
 		/*
 		 * FIXME: Normally we shouldn't fall into this,
@@ -811,7 +811,7 @@ psb_gtt_mm_alloc_insert_mem_mapping(struct psb_gtt_mm *mm,
 	}
 	spin_unlock(&mm->lock);
 
-	DRM_DEBUG("Mapping entry for key %d doesn't exist, will create it\n",
+	DRM_DEBUG("Mapping entry for key %lu doesn't exist, will create it\n",
 		  key);
 
 	mapping = kzalloc(sizeof(struct psb_gtt_mem_mapping), GFP_KERNEL);
@@ -836,7 +836,7 @@ psb_gtt_mm_alloc_insert_mem_mapping(struct psb_gtt_mm *mm,
 static struct psb_gtt_mem_mapping *psb_gtt_mm_remove_mem_mapping_locked(struct
 									drm_open_hash
 									*ht,
-									u32 key)
+									unsigned long key)
 {
 	struct psb_gtt_mem_mapping *tmp;
 	struct psb_gtt_hash_entry *entry;
@@ -849,7 +849,7 @@ static struct psb_gtt_mem_mapping *psb_gtt_mm_remove_mem_mapping_locked(struct
 
 	ret = psb_gtt_mm_get_mem_mapping_locked(ht, key, &tmp);
 	if (ret) {
-		DRM_DEBUG("Cannot find key %d\n", key);
+		DRM_DEBUG("Cannot find key %lu\n", key);
 		return NULL;
 	}
 
@@ -867,7 +867,7 @@ static struct psb_gtt_mem_mapping *psb_gtt_mm_remove_mem_mapping_locked(struct
 }
 
 static int psb_gtt_mm_remove_free_mem_mapping_locked(struct drm_open_hash *ht,
-						     u32 key,
+						     unsigned long key,
 						     struct drm_mm_node **node)
 {
 	struct psb_gtt_mem_mapping *entry;
@@ -890,7 +890,7 @@ static int psb_gtt_mm_remove_free_mem_mapping_locked(struct drm_open_hash *ht,
 
 static int psb_gtt_add_node(struct psb_gtt_mm *mm,
 			    u32 tgid,
-			    u32 key,
+			    unsigned long key,
 			    struct drm_mm_node *node,
 			    struct psb_gtt_mem_mapping **entry)
 {
@@ -918,7 +918,7 @@ static int psb_gtt_add_node(struct psb_gtt_mm *mm,
 }
 
 static int psb_gtt_remove_node(struct psb_gtt_mm *mm,
-			       u32 tgid, u32 key, struct drm_mm_node **node)
+			       u32 tgid, unsigned long key, struct drm_mm_node **node)
 {
 	struct psb_gtt_hash_entry *hentry;
 	struct drm_mm_node *tmp;
@@ -1187,7 +1187,7 @@ int psb_gtt_map_meminfo(struct drm_device *dev,
 
 	if ((ret = psb_gtt_add_node(mm,
 				    (u32) gtt_get_tgid(),
-				    (u32) ((u64)hKernelMemInfo),
+				    ((unsigned long)hKernelMemInfo),
 				    node, &mapping)) != 0) {
 		DRM_DEBUG("add_node failed");
 
@@ -1218,7 +1218,7 @@ int psb_gtt_map_meminfo(struct drm_device *dev,
 	} else {
 		psb_gtt_remove_node(mm,
 				    (u32) gtt_get_tgid(),
-				    (u32) ((u64)hKernelMemInfo), &node);
+				    (unsigned long) hKernelMemInfo, &node);
 		psb_gtt_mm_free_mem(mm, node);
 
 		return ret;
@@ -1240,7 +1240,7 @@ int psb_gtt_unmap_meminfo(struct drm_device *dev, void *hKernelMemInfo)
 
 	ret = psb_gtt_remove_node(mm,
 				  (u32) gtt_get_tgid(),
-				  (u32) ((u64)hKernelMemInfo), &node);
+				  (unsigned long) hKernelMemInfo, &node);
 	if (ret) {
 		DRM_DEBUG("remove node failed\n");
 		return ret;
@@ -1260,7 +1260,7 @@ int psb_gtt_unmap_meminfo(struct drm_device *dev, void *hKernelMemInfo)
 
 static int psb_gtt_unmap_common(struct drm_device *dev,
 			unsigned int ui32TaskId,
-			unsigned int hHandle)
+			unsigned long hHandle)
 {
 	struct drm_psb_private *dev_priv
 	= (struct drm_psb_private *)dev->dev_private;
@@ -1272,7 +1272,7 @@ static int psb_gtt_unmap_common(struct drm_device *dev,
 
 	ret = psb_gtt_remove_node(mm,
 				  (u32)ui32TaskId,
-				  (u32)hHandle,
+				  hHandle,
 				  &node);
 	if (ret) {
 		/* we are not the last user */
@@ -1296,7 +1296,7 @@ static int psb_gtt_unmap_common(struct drm_device *dev,
 
 }
 
-static int psb_get_vaddr_pages(u32 vaddr, u32 size,
+static int psb_get_vaddr_pages(unsigned long vaddr, u32 size,
 				unsigned long **pfn_list, int *page_count)
 {
 	u32 num_pages;
@@ -1349,7 +1349,7 @@ static int psb_get_vaddr_pages(u32 vaddr, u32 size,
 			}
 
 			ret = follow_pfn(vma,
-				(unsigned long)(vaddr + i * PAGE_SIZE),
+				vaddr + i * PAGE_SIZE,
 				&pfns[i]);
 			if (ret) {
 				DRM_ERROR("failed to follow pfn\n");
@@ -1381,7 +1381,7 @@ get_page_err:
 }
 
 int psb_gtt_map_vaddr(struct drm_device *dev,
-			uint32_t vaddr,
+			unsigned long vaddr,
 			uint32_t size,
 			uint32_t page_align,
 			uint32_t *offset)
@@ -1457,7 +1457,7 @@ failed_pages_alloc:
 }
 
 int psb_gtt_unmap_vaddr(struct drm_device *dev,
-			uint32_t vaddr,
+			unsigned long vaddr,
 			uint32_t size)
 {
 	return psb_gtt_unmap_common(dev, gtt_get_tgid(), vaddr);
@@ -1471,7 +1471,7 @@ int psb_gtt_map_meminfo_ioctl(struct drm_device *dev, void *data,
 	= (struct psb_gtt_mapping_arg *)data;
 	uint32_t *offset_pages = &arg->offset_pages;
 	uint32_t page_align = arg->page_align;
-	uint32_t vaddr = arg->vaddr;
+	unsigned long vaddr = arg->vaddr;
 	uint32_t size = arg->size;
 	uint32_t type = arg->type;
 
@@ -1501,7 +1501,7 @@ int psb_gtt_unmap_meminfo_ioctl(struct drm_device *dev, void *data,
 
 	struct psb_gtt_mapping_arg *arg
 		= (struct psb_gtt_mapping_arg *)data;
-	uint32_t vaddr = arg->vaddr;
+	unsigned long vaddr = arg->vaddr;
 	uint32_t size = arg->size;
 	uint32_t type = arg->type;
 
@@ -1519,7 +1519,7 @@ int psb_gtt_unmap_meminfo_ioctl(struct drm_device *dev, void *data,
 }
 
 int DCCBgttMapMemory(struct drm_device *dev,
-		     unsigned int hHandle,
+		     unsigned long hHandle,
 		     unsigned int ui32TaskId,
 		     IMG_SYS_PHYADDR *pPages,
 		     unsigned int ui32PagesNum, unsigned int *ui32Offset)
@@ -1546,7 +1546,7 @@ int DCCBgttMapMemory(struct drm_device *dev,
 
 	/*update psb_gtt_mm */
 	ret = psb_gtt_add_node(mm,
-			       (u32) ui32TaskId, (u32) hHandle, node, &mapping);
+			       (u32) ui32TaskId, hHandle, node, &mapping);
 	if (ret) {
 		DRM_DEBUG("add_node failed");
 		goto failed_add_node;
@@ -1571,7 +1571,7 @@ int DCCBgttMapMemory(struct drm_device *dev,
 	return ret;
 }
 
-int DCCBgttUnmapMemory(struct drm_device *dev, unsigned int hHandle,
+int DCCBgttUnmapMemory(struct drm_device *dev, unsigned long hHandle,
 		       unsigned int ui32TaskId)
 {
 	struct drm_psb_private *dev_priv =
@@ -1582,7 +1582,7 @@ int DCCBgttUnmapMemory(struct drm_device *dev, unsigned int hHandle,
 	struct drm_mm_node *node;
 	int ret;
 
-	ret = psb_gtt_remove_node(mm, (u32) ui32TaskId, (u32) hHandle, &node);
+	ret = psb_gtt_remove_node(mm, (u32) ui32TaskId, hHandle, &node);
 	if (ret) {
 		printk(KERN_ERR "remove node failed\n");
 		return ret;
@@ -1608,7 +1608,8 @@ int DCCBgttCleanupMemoryOnTask(struct drm_device *dev, unsigned int ui32TaskId)
 	return 0;
 }
 
-int DCCBgetGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key, struct psb_gtt_mem_mapping **map)
+int DCCBgetGttMapping(struct drm_device *dev, unsigned int tgid, unsigned long key,
+		      struct psb_gtt_mem_mapping **map)
 {
 	struct drm_psb_private *dev_priv = psb_priv(dev);
 	struct psb_gtt_mm *mm = dev_priv->gtt_mm;
@@ -1628,7 +1629,7 @@ int DCCBgetGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int ke
 	// find the gtt mapping
 	ret = psb_gtt_mm_get_mem_mapping_locked(&hentry->ht, key, &mapping);
 	if (ret) {
-		DRM_DEBUG("Cannot find key %d\n", key);
+		DRM_DEBUG("Cannot find key %lu\n", key);
 		goto unlock_exit;
 	}
 
@@ -1642,7 +1643,7 @@ unlock_exit:
 	return ret;
 }
 
-int DCCBputGttMapping(struct drm_device *dev, unsigned int tgid, unsigned int key)
+int DCCBputGttMapping(struct drm_device *dev, unsigned int tgid, unsigned long key)
 {
 	return psb_gtt_unmap_common(dev, tgid, key);
 }
