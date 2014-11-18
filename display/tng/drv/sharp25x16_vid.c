@@ -307,8 +307,8 @@ static int mdfld_dsi_sharp25x16_set_brightness(struct mdfld_dsi_config *dsi_conf
 	}
 
 	duty_val = (0xFF * level) / 255;
-	if (duty_val < 12)
-		duty_val = 0;
+	if (duty_val < 13 && duty_val > 0)
+		duty_val = 13;
 	sharp_set_brightness[2] = duty_val;
 	mdfld_dsi_send_gen_long_hs(sender, sharp_set_brightness,
 				3,
