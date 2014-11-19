@@ -3972,9 +3972,10 @@ ssize_t rgx_HWR_control_write(struct file *file, const char *buffer,
 	int  rgx_HWR_control;
 	struct drm_psb_private *dev_priv = NULL;
 
-	if (gpDrmDevice){
+	if (gpDrmDevice == NULL || gpDrmDevice->dev_private == NULL)
+		return -EINVAL;
+	else
 		dev_priv = (struct drm_psb_private *)gpDrmDevice->dev_private;
-	}
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
 	struct drm_minor *minor =
