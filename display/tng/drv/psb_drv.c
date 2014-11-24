@@ -132,6 +132,7 @@ int drm_topaz_pmpolicy = PSB_PMPOLICY_POWERDOWN;
 int drm_vsp_pmpolicy = PSB_PMPOLICY_SUSPEND_HWIDLE;
 int drm_topaz_cgpolicy = PSB_CGPOLICY_ON;
 int drm_topaz_cmdpolicy = PSB_CMDPOLICY_PARALLEL;
+int drm_topaz_pmlatency = 0;
 int drm_topaz_sbuswa;
 int drm_psb_ospm = 1;
 int drm_psb_dsr;
@@ -240,6 +241,7 @@ module_param_named(hdmi_state, hdmi_state, int, 0600);
 module_param_named(vblank_sync, drm_psb_3D_vblank, int, 0600);
 module_param_named(smart_vsync, drm_psb_smart_vsync, int, 0600);
 module_param_named(te_delay, drm_psb_te_timer_delay, int, 0600);
+module_param_named(topaz_pmlatency, drm_topaz_pmlatency, int, 0600);
 #ifdef CONFIG_SLICE_HEADER_PARSING
 module_param_named(decode_flag, drm_decode_flag, int, 0600);
 #endif
