@@ -105,6 +105,10 @@ static void power_up(int pm_reg, u32 pm_mask) {
 }
 /* Hack to Turn GFX islands up - END */
 
+#include "rgxpower.h"
+extern struct drm_device *gpDrmDevice;
+
+
 int drm_psb_debug;
 int drm_decode_flag = 0x0;
 int drm_psb_enable_pr2_cabc = 1;
@@ -159,6 +163,7 @@ int gamma_setting[129] = {0};
 int csc_setting[6] = {0};
 int gamma_number = 129;
 int csc_number = 6;
+struct timespec time_vsync_irq;
 
 static int psb_probe(struct pci_dev *pdev, const struct pci_device_id *ent);
 
@@ -2990,8 +2995,7 @@ static int psb_vsync_set_ioctl(struct drm_device *dev, void *data,
 						 pipe, dev_priv->vsync_enabled[pipe]);
 			}
 
-			getrawmonotonic(&now);
-			nsecs = timespec_to_ns(&now);
+			nsecs = timespec_to_ns(&time_vsync_irq);
 			arg->vsync.timestamp = (uint64_t)nsecs;
 			return ret;
 		}
@@ -3954,6 +3958,89 @@ static int psb_hdmi_proc_init(struct drm_minor *minor)
 
 #endif /* CONFIG_SUPPORT_HDMI */
 
+#ifdef CONFIG_SUPPORT_TRIGER_RGX_HWR
+ssize_t rgx_HWR_control_read(struct file *file, char *buffer,
+				      size_t count, loff_t *offset)
+{
+	return 0;
+}
+
+ssize_t rgx_HWR_control_write(struct file *file, const char *buffer,
+				      size_t count, loff_t *offset)
+{
+	char buf[2];
+	int  rgx_HWR_control;
+	struct drm_psb_private *dev_priv = NULL;
+
+	if (gpDrmDevice){
+		dev_priv = (struct drm_psb_private *)gpDrmDevice->dev_private;
+	}
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0))
+	struct drm_minor *minor =
+		(struct drm_minor *) PDE_DATA(file_inode(file));
+#else
+	struct drm_minor *minor =
+		(struct drm_minor *) PDE(file->f_path.dentry->d_inode)->data;
+#endif
+	struct drm_device *dev = minor->dev;
+
+	if (count != sizeof(buf)) {
+		return -EINVAL;
+	} else {
+		if (copy_from_user(buf, buffer, count))
+			return -EINVAL;
+
+		if (buf[count-1] != '\n')
+			return -EINVAL;
+
+		rgx_HWR_control = buf[0] - '0';
+
+		switch (rgx_HWR_control) {
+		case 0x1:
+			RGXTrigHWR(dev_priv->prgx_irqData);
+			break;
+		default:
+			printk(KERN_ALERT "invalid parameters\n");
+		}
+	}
+	return count;
+}
+static int rgx_HWR_control_proc_open(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static int rgx_HWR_control_proc_close(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static struct file_operations rgx_HWR_control_proc_fops = {
+	.owner	= THIS_MODULE,
+	.open	= rgx_HWR_control_proc_open,
+	.read	= rgx_HWR_control_read,
+	.write	= rgx_HWR_control_write,
+	.release= rgx_HWR_control_proc_close,
+};
+
+static int rgx_HWR_control_proc_init(struct drm_minor *minor)
+{
+	struct proc_dir_entry *rgx_HWR_control_setting;
+
+	rgx_HWR_control_setting = proc_create_data(RGX_PROC_ENTRY,
+				0644, minor->proc_root,
+				&rgx_HWR_control_proc_fops, minor);
+
+	if (!rgx_HWR_control_setting)
+		return -1;
+
+	return 0;
+}
+
+#endif /* CONFIG_SUPPORT_TRIGER_RGX_HWR */
+
+
 /* When a client dies:
  *    - Check for and clean up flipped page state
  */
@@ -4003,6 +4090,11 @@ static int psb_proc_init(struct drm_minor *minor)
 #ifdef CONFIG_SUPPORT_HDMI
 	psb_hdmi_proc_init(minor);
 #endif
+
+#ifdef CONFIG_SUPPORT_TRIGER_RGX_HWR
+	rgx_HWR_control_proc_init(minor);
+#endif
+
 	csc_setting = proc_create_data(CSC_PROC_ENTRY, 0644, minor->proc_root, &psb_csc_proc_fops, minor);
 
 	return 0;

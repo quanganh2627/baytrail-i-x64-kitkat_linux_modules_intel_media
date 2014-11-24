@@ -329,6 +329,12 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 {
 	struct drm_psb_private *dev_priv = dev->dev_private;
 	struct msvdx_private *msvdx_priv = dev_priv->msvdx_private;
+#ifdef CONFIG_SLICE_HEADER_PARSING
+    unsigned long irq_flags;
+    int frame_finished = 0;
+    int seq_flag = 0, shp_ctx_count = 0;
+    struct psb_video_ctx *pos, *n;
+#endif
 
 	mutex_lock(&g_ospm_mutex);
 	if (force_off)
@@ -347,6 +353,25 @@ void ospm_apm_power_down_msvdx(struct drm_device *dev, int force_off)
 		PSB_DEBUG_PM("g_videodec_access_count has been set.\n");
 		goto out;
 	}
+
+#ifdef CONFIG_SLICE_HEADER_PARSING
+    spin_lock_irqsave(&dev_priv->video_ctx_lock, irq_flags);
+    list_for_each_entry_safe(pos, n, &dev_priv->video_ctx, head) {
+        if (pos->slice_extract_flag) {
+            shp_ctx_count++;
+            seq_flag = (pos->frame_end_seq == (msvdx_priv->msvdx_current_sequence & (~0xf))) ? 1 : 0;
+            if(seq_flag && pos->frame_boundary) {
+                frame_finished = 1;
+                break;
+            }
+        }
+    }
+    spin_unlock_irqrestore(&dev_priv->video_ctx_lock, irq_flags);
+    
+    if (shp_ctx_count != 0 && !frame_finished)
+        goto out;
+
+#endif
 
 #ifdef CONFIG_MDFD_VIDEO_DECODE
 	if (psb_check_msvdx_idle(dev))

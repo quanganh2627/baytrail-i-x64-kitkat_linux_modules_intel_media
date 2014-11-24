@@ -49,6 +49,8 @@
 
 extern struct drm_device *gpDrmDevice;
 extern int drm_psb_smart_vsync;
+extern struct timespec time_vsync_irq;
+
 /*
  * inline functions
  */
@@ -468,6 +470,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	}
 
 	if (pipe_stat_val & PIPE_VBLANK_STATUS) {
+		getrawmonotonic(&time_vsync_irq);
 		dev_priv->vsync_pipe |= (1 << pipe);
 		drm_handle_vblank(dev, pipe);
 		queue_work(dev_priv->vsync_wq, &dev_priv->vsync_event_work);
@@ -479,6 +482,7 @@ static void mid_pipe_event_handler(struct drm_device *dev, uint32_t pipe)
 	}
 
 	if (pipe_stat_val & PIPE_TE_STATUS) {
+		getrawmonotonic(&time_vsync_irq);
 		dev_priv->te_pipe = pipe;
 		update_te_counter(dev, pipe);
 		drm_handle_vblank(dev, pipe);

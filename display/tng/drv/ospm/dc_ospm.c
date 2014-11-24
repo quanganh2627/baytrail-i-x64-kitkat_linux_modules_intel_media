@@ -93,6 +93,9 @@ static bool disp_a_power_up(struct drm_device *dev,
 		if (!ret)
 			apply_TNG_A0_workarounds(OSPM_DISPLAY_ISLAND, 0);
 	}
+	/* ANN A0 workarounds */
+	if (IS_ANN(dev))
+		apply_ANN_A0_workarounds(OSPM_DISPLAY_ISLAND, 0);
 
 	PSB_DEBUG_PM("Power on island %x, returned %d\n", p_island->island, ret);
 

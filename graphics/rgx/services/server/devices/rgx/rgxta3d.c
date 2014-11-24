@@ -2484,8 +2484,12 @@ IMG_EXPORT
 PVRSRV_ERROR PVRSRVRGXDestroyRenderContextKM(RGX_SERVER_RENDER_CONTEXT *psRenderContext)
 {
 	PVRSRV_ERROR				eError;
-
 	PVRSRV_RGXDEV_INFO 	*psDevInfo = psRenderContext->psDeviceNode->pvDevice;
+
+	/* remove node from list before calling destroy - as destory, if successful
+	 * will invalidate the node
+	 * must be re-added if destroy fails
+	 */
 	OSWRLockAcquireWrite(psDevInfo->hRenderCtxListLock, DEVINFO_RENDERLIST);
 	dllist_remove_node(&(psRenderContext->sListNode));
 	OSWRLockReleaseWrite(psDevInfo->hRenderCtxListLock);
@@ -2561,7 +2565,6 @@ e0:
 	OSWRLockAcquireWrite(psDevInfo->hRenderCtxListLock, DEVINFO_RENDERLIST);
 	dllist_add_to_tail(&(psDevInfo->sRenderCtxtListHead), &(psRenderContext->sListNode));
 	OSWRLockReleaseWrite(psDevInfo->hRenderCtxListLock);
-
 	return eError;
 }
 
@@ -3257,6 +3260,36 @@ IMG_VOID CheckForStalledRenderCtxt(PVRSRV_RGXDEV_INFO *psDevInfo,
 	dllist_foreach_node(&(psDevInfo->sRenderCtxtListHead),
 						CheckForStalledRenderCtxtCommand, pfnDumpDebugPrintf);
 	OSWRLockReleaseRead(psDevInfo->hRenderCtxListLock);
+}
+
+static IMG_BOOL CheckForStalledClientRenderCtxtCommand(PDLLIST_NODE psNode, IMG_PVOID pvCallbackData)
+{
+	PVRSRV_ERROR *peError = (PVRSRV_ERROR*)pvCallbackData;
+	RGX_SERVER_RENDER_CONTEXT 		*psCurrentServerRenderCtx = IMG_CONTAINER_OF(psNode, RGX_SERVER_RENDER_CONTEXT, sListNode);
+	RGX_SERVER_RC_TA_DATA			*psRenderCtxTAData = &(psCurrentServerRenderCtx->sTAData);
+	RGX_SERVER_COMMON_CONTEXT		*psCurrentServerTACommonCtx = psRenderCtxTAData->psServerCommonContext;
+	RGX_SERVER_RC_3D_DATA			*psRenderCtx3DData = &(psCurrentServerRenderCtx->s3DData);
+	RGX_SERVER_COMMON_CONTEXT		*psCurrentServer3DCommonCtx = psRenderCtx3DData->psServerCommonContext;
+
+	if (PVRSRV_ERROR_CCCB_STALLED == CheckStalledClientCommonContext(psCurrentServerTACommonCtx))
+	{
+		*peError = PVRSRV_ERROR_CCCB_STALLED;
+	}
+	if (PVRSRV_ERROR_CCCB_STALLED == CheckStalledClientCommonContext(psCurrentServer3DCommonCtx))
+	{
+		*peError = PVRSRV_ERROR_CCCB_STALLED;
+	}
+
+	return IMG_TRUE;
+}
+IMG_BOOL CheckForStalledClientRenderCtxt(PVRSRV_RGXDEV_INFO *psDevInfo)
+{
+	PVRSRV_ERROR eError = PVRSRV_OK;
+	OSWRLockAcquireRead(psDevInfo->hRenderCtxListLock, DEVINFO_RENDERLIST);
+	dllist_foreach_node(&(psDevInfo->sRenderCtxtListHead),
+						CheckForStalledClientRenderCtxtCommand, &eError);
+	OSWRLockReleaseRead(psDevInfo->hRenderCtxListLock);
+	return (PVRSRV_ERROR_CCCB_STALLED == eError)? IMG_TRUE: IMG_FALSE;
 }
 
 IMG_EXPORT PVRSRV_ERROR 
