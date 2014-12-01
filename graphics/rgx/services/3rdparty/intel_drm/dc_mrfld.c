@@ -1491,7 +1491,9 @@ static IMG_VOID DC_MRFLD_ContextConfigure(IMG_HANDLE hDisplayContext,
 	if (!ui32PipeCount) {
 		/* Called from DCDisplayContextDestroy()
 		 * Retire the current config  */
+		mutex_lock(&gpsDevice->sFlipQueueLock);
 		DCDisplayConfigurationRetired(hConfigData);
+		mutex_unlock(&gpsDevice->sFlipQueueLock);
 		return;
 	}
 

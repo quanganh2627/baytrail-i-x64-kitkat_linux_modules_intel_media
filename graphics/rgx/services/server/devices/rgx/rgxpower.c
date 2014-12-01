@@ -59,6 +59,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "process_stats.h"
 #include "dfrgx_interface.h"
+#include <linux/kct.h>
 
 extern IMG_UINT32 g_ui32HostSampleIRQCount;
 
@@ -567,8 +568,9 @@ static PVRSRV_ERROR RGXStop(PVRSRV_RGXDEV_INFO	*psDevInfo)
 	if (eError != PVRSRV_OK)
 	{
 		PVR_DPF((PVR_DBG_ERROR,"RGXStop: RGXRunScript failed (%d)", eError));
-		panic("RGXStop() fiailed");
-		return eError;
+		printk(KERN_ALERT "RGXStop() failed");
+		kct_log(CT_EV_CRASH, "GFX", "RGXSTOP", 0, "", "", "", "", "", "", "",
+			CT_ADDITIONAL_APLOG);
 	}
 
 
@@ -687,6 +689,52 @@ static IMG_VOID _RGXFWCBEntryAdd(PVRSRV_DEVICE_NODE	*psDeviceNode, IMG_UINT64 ui
 	}
 }
 
+extern PVRSRV_DATA	*gpsPVRSRVData;
+
+static
+PVRSRV_ERROR IMG_CALLCONV PollForValueKM2 (PVRSRV_RGXDEV_INFO	*psDevInfo,
+										  IMG_UINT32			ui32Mask,
+										  IMG_UINT32			ui32Timeoutus,
+										  IMG_UINT32			ui32PollPeriodus,
+										  IMG_BOOL				bAllowPreemption)
+{
+	IMG_UINT32	ui32ActualValue = 0xFFFFFFFFU; /* Initialiser only required to prevent incorrect warning */
+
+	if (bAllowPreemption)
+	{
+		PVR_ASSERT(ui32PollPeriodus >= 1000);
+	}
+
+	LOOP_UNTIL_TIMEOUT(ui32Timeoutus)
+	{
+		ui32ActualValue = (g_ui32HostSampleIRQCount & ui32Mask);
+		if(ui32ActualValue == psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount)
+		{
+			return PVRSRV_OK;
+		}
+
+		if (gpsPVRSRVData->eServicesState != PVRSRV_SERVICES_STATE_OK)
+		{
+			return PVRSRV_ERROR_TIMEOUT;
+		}
+
+		if (bAllowPreemption)
+		{
+			OSSleepms(ui32PollPeriodus / 1000);
+		}
+		else
+		{
+			OSWaitus(ui32PollPeriodus);
+		}
+	} END_LOOP_UNTIL_TIMEOUT();
+
+	PVR_DPF((PVR_DBG_ERROR,"PollForValueKM: Timeout. Expected 0x%x but found 0x%x (mask 0x%x).",
+			psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount, ui32ActualValue, ui32Mask));
+
+	return PVRSRV_ERROR_TIMEOUT;
+}
+
+
 /*
 	RGXPrePowerState
 */
@@ -739,10 +787,12 @@ PVRSRV_ERROR RGXPrePowerState (IMG_HANDLE				hDevHandle,
 			if (psFWTraceBuf->ePowState == RGXFWIF_POW_OFF)
 			{
 #if !defined(NO_HARDWARE)
-				/* Wait for the pending META to host interrupts to come back. */
-				eError = PVRSRVPollForValueKM(&g_ui32HostSampleIRQCount,
-									          psDevInfo->psRGXFWIfTraceBuf->ui32InterruptCount,
-									          0xffffffff);
+
+				eError = PollForValueKM2(psDevInfo,
+									          0xffffffff,
+									          MAX_HW_TIME_US,
+									          MAX_HW_TIME_US/WAIT_TRY_COUNT,
+									          IMG_TRUE);
 #endif /* NO_HARDWARE */
 
 				if (eError != PVRSRV_OK)

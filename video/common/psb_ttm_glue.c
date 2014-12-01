@@ -498,24 +498,20 @@ int psb_video_getparam(struct drm_device *dev, void *data,
 			break;
 		video_ctx = psb_find_videoctx(dev_priv, file_priv->filp);
 		if (video_ctx) {
-                       if (video_ctx->ctx_type != ctx_type) {
-                               video_ctx->ctx_type = ctx_type;
-#ifdef CONFIG_SLICE_HEADER_PARSING
-                               video_ctx->cur_sequence = 0xffffffff;
-                               video_ctx->frame_end_seq = 0xffffffff;
-                               if (ctx_type & VA_RT_FORMAT_PROTECTED) {
-                                       video_ctx->slice_extract_flag = 1;
-                                       video_ctx->frame_boundary = 1;
-                                       video_ctx->frame_end_seq = 0xffffffff;
-                               }
-                               if (ctx_type & VA_RT_FORMAT_PROTECTED)
-                                       ied_enabled = 1;
-#endif
-                       }
-
 			PSB_DEBUG_GENERAL(
 				"Video: update video ctx old value 0x%08llx\n",
 				video_ctx->ctx_type);
+			if (video_ctx->ctx_type != ctx_type) {
+#ifdef CONFIG_SLICE_HEADER_PARSING
+				if ((ctx_type & VA_RT_FORMAT_PROTECTED) &&
+					!(video_ctx->ctx_type & VA_RT_FORMAT_PROTECTED)) {
+					video_ctx->slice_extract_flag = 1;
+					video_ctx->frame_boundary = 1;
+					video_ctx->frame_end_seq = 0xffffffff;
+					ied_enabled = 1;
+				}
+#endif
+			}
 			video_ctx->ctx_type = ctx_type;
 			PSB_DEBUG_GENERAL(
 				"Video: update video ctx new value 0x%08llx\n",
