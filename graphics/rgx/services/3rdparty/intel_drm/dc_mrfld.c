@@ -58,6 +58,23 @@ static DC_MRFLD_DEVICE *gpsDevice;
 /* Timeout for Flip Watchdog */
 #define FLIP_TIMEOUT (HZ/4)
 
+/* Maxfifo mode set */
+
+#define PRIMARY_BIT  0
+#define OVERLARY_BIT 1
+#define CURSOR_BIT   2
+
+enum {
+	NONE_MAXFIFO		= 0X00,
+	PRIMARY_ONLY		= 0x01,
+	OVERLANY_ONLY		= 0x02,
+	PRIMARY_OVERLARY	= 0X03,
+	CURSOR_ONLY		= 0x04,
+	PRIMARY_CURSOR		= 0x05,
+	OVERLARY_CURSOR		= 0x06,
+	PRIMARY_OVERLARY_CURSOR	= 0x07
+};
+
 struct power_off_req {
 	struct delayed_work work;
 	struct plane_state *pstate;
@@ -645,7 +662,9 @@ static int get_maxfifo_s0i1_mode(DC_MRFLD_FLIP *psFlip)
 {
 	bool overlay_a_only;
 	bool primary_a_only;
+	bool has_cursor;
 	int mode = -1;
+	unsigned char mode_select = NONE_MAXFIFO;
 
 	if (need_exit_maxfifo_mode(psFlip))
 		return -1;
@@ -653,15 +672,30 @@ static int get_maxfifo_s0i1_mode(DC_MRFLD_FLIP *psFlip)
 	/* get maxfifo entry mode for different flip combinations */
 	primary_a_only = (psFlip->uiPrimaryFlip == 1);
 	overlay_a_only = (psFlip->uiOverlayFlip == 1);
+	has_cursor = (psFlip->uiCursorFlip > 0);
 
-	if (primary_a_only && !overlay_a_only)
-		mode = 0x0;
-	else if (primary_a_only && overlay_a_only)
-		mode = 0x1;
-	else if (!primary_a_only && overlay_a_only)
+	mode_select = ( primary_a_only << PRIMARY_BIT )
+		      | ( overlay_a_only << OVERLARY_BIT )
+		      | ( has_cursor << CURSOR_BIT );
+
+	switch( mode_select ){
+	case PRIMARY_ONLY:
+		mode = 0x00;
+		break;
+	case PRIMARY_OVERLARY:
+	case PRIMARY_CURSOR:
+	case OVERLARY_CURSOR:
+		mode = 0x01;
+		break;
+	case OVERLANY_ONLY:
 		mode = 0x02;
+		break;
+	default:
+		mode = -1;
+		break;
+	}
 
-	PSB_DEBUG_MAXFIFO("can enter maxfifo mode: %d\n", mode);
+	PSB_DEBUG_MAXFIFO("can enter maxfifo mode_select:%d mode: %d\n", mode_select, mode);
 	return mode;
 }
 
@@ -935,6 +969,7 @@ static void _Dispatch_Flip(DC_MRFLD_FLIP *psFlip)
 			case DC_CURSOR_PLANE:
 				index = psSurfCustom->ctx.cs_ctx.index;
 				pipe = psSurfCustom->ctx.cs_ctx.pipe;
+				psFlip->uiCursorFlip |= 1 << index;
 				break;
 			default:
 				DRM_ERROR("Unknown plane type %d\n",
