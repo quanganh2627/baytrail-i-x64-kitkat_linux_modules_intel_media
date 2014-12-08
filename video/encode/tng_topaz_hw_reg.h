@@ -2172,7 +2172,7 @@ int tng_topaz_wait_for_register(
 	struct drm_psb_private *dev_priv,
 	uint32_t checkfunc,
 	uint32_t addr, uint32_t value,
-	uint32_t enable);
+	uint32_t enable, bool is_atomic);
 void tng_topaz_mmu_flushcache(struct drm_psb_private *dev_priv);
 
 uint32_t psb_get_default_pd_addr(struct psb_mmu_driver *driver);

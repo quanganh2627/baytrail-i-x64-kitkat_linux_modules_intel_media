@@ -500,7 +500,8 @@ int tng_topaz_wait_for_register(
 	uint32_t check_func,
 	uint32_t addr,
 	uint32_t value,
-	uint32_t mask)
+	uint32_t mask,
+	bool is_atomic)
 {
 #ifdef KPDUMP
 	printk(KERN_ERR "POL :REG_TOPAZHP_MULTICORE:0x%x 0x%x 0x%x\n",
@@ -523,14 +524,16 @@ int tng_topaz_wait_for_register(
 	}
 
 	/* # poll topaz register for certain times */
-	while (count) {
+	while (--count) {
 		MM_READ32(addr, 0, &tmp);
 
 		if (func(value, tmp, mask))
 			return 0;
 
-		cpu_relax();
-		--count;
+		if (is_atomic)
+			udelay(100);
+		else
+			usleep_range(1000, 1000);
 	}
 
 	/* # now waiting is timeout, return 1 indicat failed */
@@ -712,8 +715,8 @@ int tng_topaz_init(struct drm_device *dev)
 
 	INIT_LIST_HEAD(&topaz_priv->topaz_queue);
 	mutex_init(&topaz_priv->topaz_mutex);
+	mutex_init(&topaz_priv->ctx_mutex);
 	spin_lock_init(&topaz_priv->topaz_lock);
-	spin_lock_init(&topaz_priv->ctx_spinlock);
 
 	topaz_priv->topaz_busy = 0;
 	topaz_priv->topaz_fw_loaded = 0;
@@ -1178,7 +1181,7 @@ int tng_topaz_setup_fw(
 	ret = tng_topaz_wait_for_register(
 		dev_priv, CHECKFUNC_ISEQUAL,
 		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_BOOTSTATUS << 2),
-		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff);
+		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff, 1);
 	if (ret) {
 		DRM_ERROR("Firmware failed to complete its setup\n");
 		return ret;
@@ -1288,7 +1291,7 @@ int tng_topaz_fw_run(
 	ret = tng_topaz_wait_for_register(
 		dev_priv, CHECKFUNC_ISEQUAL,
 		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_BOOTSTATUS << 2),
-		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff);
+		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff, 1);
 
 #ifdef MRFLD_B0_DEBUG
 	/* read 104 */
@@ -1383,7 +1386,7 @@ int mtx_upload_fw(struct drm_device *dev,
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 			REG_OFFSET_TOPAZ_DMAC + IMG_SOC_DMAC_IRQ_STAT(0),
 			F_ENCODE(1, IMG_SOC_TRANSFER_FIN),
-			F_ENCODE(1, IMG_SOC_TRANSFER_FIN));
+			F_ENCODE(1, IMG_SOC_TRANSFER_FIN), 1);
 	if (ret) {
 		DRM_ERROR("Transfer text by DMA timeout\n");
 		/* tng_error_dump_reg(dev_priv); */
@@ -1416,7 +1419,7 @@ int mtx_upload_fw(struct drm_device *dev,
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 			REG_OFFSET_TOPAZ_DMAC + IMG_SOC_DMAC_IRQ_STAT(0),
 			F_ENCODE(1, IMG_SOC_TRANSFER_FIN),
-			F_ENCODE(1, IMG_SOC_TRANSFER_FIN));
+			F_ENCODE(1, IMG_SOC_TRANSFER_FIN), 1);
 	if (ret) {
 		DRM_ERROR("Transfer data by DMA timeout\n");
 		/* tng_error_dump_reg(dev_priv); */
@@ -1572,7 +1575,7 @@ int32_t mtx_write_core_reg(
 	/* wait for operation finished */
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		REG_OFFSET_TOPAZ_MTX + MTX_CR_MTX_REGISTER_READ_WRITE_REQUEST,
-		MASK_MTX_MTX_DREADY, MASK_MTX_MTX_DREADY);
+		MASK_MTX_MTX_DREADY, MASK_MTX_MTX_DREADY, 1);
 	if (ret) {
 		DRM_ERROR("Wait for register timeout");
 		return ret;
@@ -1603,7 +1606,7 @@ int32_t mtx_read_core_reg(
 	/* Wait for done */
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		REG_OFFSET_TOPAZ_MTX + MTX_CR_MTX_REGISTER_READ_WRITE_REQUEST,
-		MASK_MTX_MTX_DREADY, MASK_MTX_MTX_DREADY);
+		MASK_MTX_MTX_DREADY, MASK_MTX_MTX_DREADY, 1);
 	if (ret) {
 		DRM_ERROR("Wait for register timeout");
 		return ret;
@@ -1758,7 +1761,7 @@ int32_t mtx_dma_read(struct drm_device *dev, struct ttm_buffer_object *dst_bo,
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		REG_OFFSET_TOPAZ_DMAC + IMG_SOC_DMAC_IRQ_STAT(0),
 		F_ENCODE(1, IMG_SOC_TRANSFER_FIN),
-		F_ENCODE(1, IMG_SOC_TRANSFER_FIN));
+		F_ENCODE(1, IMG_SOC_TRANSFER_FIN), 1);
 	if (ret) {
 		/* tng_error_dump_reg(dev_priv); */
 		DRM_ERROR("Waiting register timeout");
@@ -1811,7 +1814,7 @@ static int mtx_dma_write(
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		REG_OFFSET_TOPAZ_DMAC + IMG_SOC_DMAC_IRQ_STAT(0),
 		F_ENCODE(1, IMG_SOC_TRANSFER_FIN),
-		F_ENCODE(1, IMG_SOC_TRANSFER_FIN));
+		F_ENCODE(1, IMG_SOC_TRANSFER_FIN), 1);
 	if (ret) {
 		/* tng_error_dump_reg(dev_priv); */
 		DRM_ERROR("Waiting register timeout");

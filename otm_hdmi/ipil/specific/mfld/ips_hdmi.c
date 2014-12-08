@@ -351,7 +351,7 @@ void ips_disable_hdmi(hdmi_device_t *dev)
 		return;
 	}
 
-	if (!ospm_power_using_hw_begin(OSPM_DISPLAY_ISLAND, OSPM_UHB_FORCE_POWER_ON)) {
+	if (!ospm_power_using_hw_begin(OSPM_DISPLAY_ISLAND, OSPM_UHB_ONLY_IF_ON)) {
 		return;
 	}
 	/* Disable display plane */

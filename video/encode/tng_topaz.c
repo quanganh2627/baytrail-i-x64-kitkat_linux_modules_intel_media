@@ -166,7 +166,7 @@ uint32_t tng_wait_for_ctrl(struct drm_device *dev, uint32_t control)
 	int32_t ret = 0;
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_TOHOST << 2),
-		control, 0x80000000);
+		control, 0x80000000, 1);
 	if (ret)
 		DRM_ERROR("Wait for register timeout");
 
@@ -185,7 +185,7 @@ uint32_t tng_serialize_enter(struct drm_device *dev)
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		MTX_SCRATCHREG_IDLE,
 		F_ENCODE(FW_IDLE_STATUS_IDLE, FW_IDLE_REG_STATUS),
-		MASK_FW_IDLE_REG_STATUS);
+		MASK_FW_IDLE_REG_STATUS, 1);
 	if (ret)
 		DRM_ERROR("Wait for register timeout");
 
@@ -205,7 +205,7 @@ void tng_serialize_exit(struct drm_device *dev, uint32_t enter_token)
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_NOTEQUAL,
 		MTX_SCRATCHREG_IDLE,
 		F_ENCODE(enter_token, FW_IDLE_REG_RECEIVED_COMMANDS),
-		MASK_FW_IDLE_REG_RECEIVED_COMMANDS);
+		MASK_FW_IDLE_REG_RECEIVED_COMMANDS, 1);
 	if (ret)
 		DRM_ERROR("Wait for register timeout");
 }
@@ -308,7 +308,7 @@ int32_t dispatch_wb_message_polling(
 		ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_NOTEQUAL,
 			TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
 				(MTX_SCRATCHREG_TOHOST << 2),
-			topaz_priv->consumer, MASK_WB_PRODUCER);
+			topaz_priv->consumer, MASK_WB_PRODUCER, 1);
 		if (ret) {
 			wb_msg = (struct IMG_WRITEBACK_MSG *)
 				video_ctx->wb_addr[topaz_priv->consumer];
@@ -335,7 +335,7 @@ int32_t dispatch_wb_message_polling(
 		ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_NOTEQUAL,
 			TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
 				(MTX_SCRATCHREG_TOHOST << 2),
-			topaz_priv->consumer, MASK_WB_PRODUCER);
+			topaz_priv->consumer, MASK_WB_PRODUCER, 1);
 		if (ret) {
 			DRM_ERROR("Wait for register timeout");
 			return ret;
@@ -418,7 +418,7 @@ int32_t dispatch_wb_message_irq(struct drm_device *dev)
 		ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_NOTEQUAL,
 			TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
 				(MTX_SCRATCHREG_TOHOST << 2),
-			topaz_priv->consumer, MASK_WB_PRODUCER);
+			topaz_priv->consumer, MASK_WB_PRODUCER, 1);
 		if (ret)
 			return ret;
 
@@ -481,7 +481,7 @@ int32_t tng_wait_on_sync(
 		ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_NOTEQUAL,
 			TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
 				(MTX_SCRATCHREG_TOHOST << 2),
-			topaz_priv->consumer, MASK_WB_PRODUCER);
+			topaz_priv->consumer, MASK_WB_PRODUCER, 1);
 		if (ret) {
 
 			DRM_ERROR("Polling timeout\n");
@@ -501,7 +501,7 @@ int32_t tng_wait_on_sync(
 		ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_NOTEQUAL,
 			TOPAZHP_TOP_CR_FIRMWARE_REG_1 +
 				(MTX_SCRATCHREG_TOHOST << 2),
-			topaz_priv->consumer, MASK_WB_PRODUCER);
+			topaz_priv->consumer, MASK_WB_PRODUCER, 1);
 		if (ret)
 			return ret;
 		*/
@@ -597,11 +597,9 @@ bool tng_topaz_interrupt(void *pvData)
 	topaz_priv->consumer = tng_get_consumer(dev);
 	topaz_priv->producer = tng_get_producer(dev);
 
-	spin_lock_irqsave(&(topaz_priv->ctx_spinlock), flags);
 	/* Encode ctx has already been destroyed by user-space process */
 	if (NULL == topaz_priv->irq_context) {
 		PSB_DEBUG_TOPAZ("TOPAZ: ctx destroyed before ISR.\n");
-		spin_unlock_irqrestore(&(topaz_priv->ctx_spinlock), flags);
 		return true;
 	}
 
@@ -646,15 +644,14 @@ bool tng_topaz_interrupt(void *pvData)
 #endif
 	*topaz_priv->topaz_sync_addr = wb_msg->ui32WritebackVal;
 	video_ctx->handle_sequence_needed = false;
-	spin_unlock_irqrestore(&(topaz_priv->ctx_spinlock), flags);
 
 	PSB_DEBUG_TOPAZ("TOPAZ: Set seq %08x, " \
-		"dqueue cmd and schedule other work queue\n",
-		wb_msg->ui32WritebackVal);
+		"dqueue cmd and schedule other work queue in %dms)\n",
+		wb_msg->ui32WritebackVal, drm_topaz_pmlatency);
 	psb_fence_handler(dev, LNC_ENGINE_ENCODE);
 
 	/* Launch the task anyway */
-	schedule_delayed_work(&topaz_priv->topaz_suspend_work, 0);
+	schedule_delayed_work(&topaz_priv->topaz_suspend_work, drm_topaz_pmlatency);
 
 	return true;
 }
@@ -1115,7 +1112,7 @@ static int32_t tng_topaz_wait_for_completion(struct drm_psb_private *dev_priv)
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		REG_OFFSET_TOPAZ_MTX + MTX_CR_MTX_ENABLE,
 		MASK_MTX_MTX_TOFF,
-		MASK_MTX_MTX_TOFF | MASK_MTX_MTX_ENABLE);
+		MASK_MTX_MTX_TOFF | MASK_MTX_MTX_ENABLE, 1);
 	if (ret)
 		DRM_ERROR("TOPAZ: Wait for MTX completion time out\n");
 
@@ -1543,7 +1540,7 @@ int32_t tng_topaz_restore_mtx_state_b0(struct drm_device *dev)
 	ret = tng_topaz_wait_for_register(
 		dev_priv, CHECKFUNC_ISEQUAL,
 		TOPAZHP_TOP_CR_FIRMWARE_REG_1 + (MTX_SCRATCHREG_BOOTSTATUS<<2),
-		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff);
+		TOPAZHP_FW_BOOT_SIGNAL, 0xffffffff, 1);
 	if (ret) {
 		DRM_ERROR("Restore Firmware failed\n");
 		return ret;
@@ -1582,7 +1579,7 @@ static int  tng_poll_hw_inactive(struct drm_device *dev)
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		MTX_SCRATCHREG_IDLE,
 		F_ENCODE(FW_IDLE_STATUS_IDLE, FW_IDLE_REG_STATUS),
-		MASK_FW_IDLE_REG_STATUS);
+		MASK_FW_IDLE_REG_STATUS, 0);
 	if (ret)
 		DRM_ERROR("Wait for register timeout");
 
@@ -1598,7 +1595,7 @@ static int mtx_wait_for_completion(struct drm_psb_private *dev_priv)
 	ret = tng_topaz_wait_for_register(dev_priv, CHECKFUNC_ISEQUAL,
 		REG_OFFSET_TOPAZ_MTX + MTX_CR_MTX_ENABLE,
 		MASK_MTX_MTX_TOFF,
-		MASK_MTX_MTX_TOFF | MASK_MTX_MTX_ENABLE);
+		MASK_MTX_MTX_TOFF | MASK_MTX_MTX_ENABLE, 1);
 	if (ret)
 		DRM_ERROR("TOPAZ: Wait for MTX completion time out\n");
 
@@ -1623,8 +1620,7 @@ int tng_topaz_save_mtx_state(struct drm_device *dev)
 	PSB_DEBUG_TOPAZ("tng_topaz_save_mtx_state: start\n");
 
 #ifdef TOPAZHP_IRQ_ENABLED
-	spin_lock_irqsave(&topaz_priv->topaz_lock, irq_flags);
-	spin_lock(&topaz_priv->ctx_spinlock);
+	mutex_lock(&topaz_priv->ctx_mutex);
 
 	/* In case the context has been removed in
 	 * tng_topaz_remove_ctx()
@@ -1740,8 +1736,7 @@ int tng_topaz_save_mtx_state(struct drm_device *dev)
 
 out:
 #ifdef TOPAZHP_IRQ_ENABLED
-	spin_unlock(&topaz_priv->ctx_spinlock);
-	spin_unlock_irqrestore(&topaz_priv->topaz_lock, irq_flags);
+	mutex_unlock(&topaz_priv->ctx_mutex);
 #endif
 	/* topaz_priv->topaz_mtx_saved = 1; */
 	PSB_DEBUG_TOPAZ("TOPAZ: Save MTX status return\n");
@@ -3632,14 +3627,12 @@ int tng_topaz_remove_ctx(
 
 	topaz_priv = dev_priv->topaz_private;
 
-	spin_lock_irqsave(&(topaz_priv->ctx_spinlock), flags);
+	mutex_lock(&topaz_priv->ctx_mutex);
+
 	if (video_ctx == topaz_priv->irq_context)
 		topaz_priv->irq_context = NULL;
 	if (video_ctx == topaz_priv->cur_context)
 		topaz_priv->cur_context = NULL;
-	spin_unlock_irqrestore(&(topaz_priv->ctx_spinlock), flags);
-
-	mutex_lock(&topaz_priv->topaz_mutex);
 
 	/* topaz_priv->topaz_busy = 0; */
 	/* video_ctx = NULL; */
@@ -3670,7 +3663,7 @@ int tng_topaz_remove_ctx(
 
 	if (video_ctx == NULL) {
 		DRM_ERROR("Invalid video context\n");
-		mutex_unlock(&topaz_priv->topaz_mutex);
+		mutex_unlock(&topaz_priv->ctx_mutex);
 		return -1;
 	}
 
@@ -3756,7 +3749,7 @@ int tng_topaz_remove_ctx(
 		dev_priv->topaz_ctx = NULL;
 	}
 
-	mutex_unlock(&topaz_priv->topaz_mutex);
+	mutex_unlock(&topaz_priv->ctx_mutex);
 
 	return 0;
 }
