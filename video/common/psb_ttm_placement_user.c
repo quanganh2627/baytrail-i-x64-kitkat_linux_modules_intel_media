@@ -148,16 +148,15 @@ static void ttm_tt_free_user_pages(struct ttm_buffer_object *bo)
 	}
 
 */
-	pages = kzalloc(bo->num_pages * sizeof(struct page *), GFP_KERNEL);
-	if (unlikely(pages == NULL)) {
-		printk(KERN_ERR "TTM bo free: kzalloc failed\n");
-		return ;
-	}
-
+	/* The following potentially big allocation SHALL never fail or some memory
+	  will leak increasing the memory pressure!
+	*/
+	pages = kzalloc(bo->num_pages * sizeof(struct page *), GFP_KERNEL | __GFP_NOFAIL);
 	ret = drm_prime_sg_to_page_addr_arrays(bo->sg, pages,
 						 NULL, bo->num_pages);
 	if (ret) {
-		printk(KERN_ERR "sg to pages: kzalloc failed\n");
+		printk(KERN_ERR "sg to pages failed\n");
+		kfree(pages);
 		return ;
 	}
 
@@ -544,6 +543,8 @@ int ttm_pl_ub_create_ioctl(struct ttm_object_file *tfile,
 		pages = kzalloc(num_pages * sizeof(struct page *), GFP_KERNEL);
 		if (unlikely(pages == NULL)) {
 			printk(KERN_ERR "kzalloc pages failed\n");
+			ttm_mem_global_free(mem_glob, acc_size);
+			kfree(user_bo);
 			return -ENOMEM;
 		}
 
@@ -553,6 +554,8 @@ int ttm_pl_ub_create_ioctl(struct ttm_object_file *tfile,
 			up_read(&current->mm->mmap_sem);
 			kfree(pages);
 			printk(KERN_ERR "find_vma failed\n");
+			ttm_mem_global_free(mem_glob, acc_size);
+			kfree(user_bo);
 			return -EFAULT;
 		}
 		before_flags = vma->vm_flags;
@@ -570,12 +573,16 @@ int ttm_pl_ub_create_ioctl(struct ttm_object_file *tfile,
 			kfree(pages);
 			pages = 0;
 			printk(KERN_ERR "get_user_pages err.\n");
+			ttm_mem_global_free(mem_glob, acc_size);
+			kfree(user_bo);
 			return -ENOMEM;
 		}
 		sg = drm_prime_pages_to_sg(pages, num_pages);
 		if (unlikely(sg == NULL)) {
 			kfree(pages);
 			printk(KERN_ERR "drm_prime_pages_to_sg err.\n");
+			ttm_mem_global_free(mem_glob, acc_size);
+			kfree(user_bo);
 			return -ENOMEM;
 		}
 		kfree(pages);
@@ -649,6 +656,8 @@ out:
 out_err:
 	ttm_bo_unref(&tmp);
 	ttm_bo_unref(&bo);
+	ttm_mem_global_free(mem_glob, acc_size);
+	kfree(user_bo);
 	return ret;
 }
 
