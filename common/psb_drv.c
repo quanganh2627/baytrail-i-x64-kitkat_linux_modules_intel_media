@@ -3683,16 +3683,6 @@ static int psb_register_rw_ioctl(struct drm_device *dev, void *data,
 				arg->display.vtotal_a = dev_priv->saveVTOTAL_A;
 			if (arg->display_read_mask & REGRWBITS_VTOTAL_B)
 				arg->display.vtotal_b = dev_priv->saveVTOTAL_B;
-			if (arg->display_read_mask & REGRWBITS_PIPEASTAT)
-				arg->display.pipestat_a = PSB_RVDC32(PIPEASTAT);
-			if (arg->display_read_mask & REGRWBITS_INT_MASK)
-				arg->display.int_mask =
-						PSB_RVDC32(PSB_INT_MASK_R);
-			if (arg->display_read_mask & REGRWBITS_INT_ENABLE)
-				arg->display.int_enable =
-						PSB_RVDC32(PSB_INT_ENABLE_R);
-			if (arg->display_read_mask & REGRWBITS_DISPLAY_ALL)
-				psb_display_reg_dump(dev);
 		}
 	}
 
